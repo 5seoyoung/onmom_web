@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import type { Metadata } from "next";
+import { AnalyzeScreen } from "@/features/analyze/AnalyzeScreen";
+import { ANALYZE_TEXT } from "@/features/analyze/analyzeModel";
+
+export const metadata: Metadata = { title: ANALYZE_TEXT.title };
 
 export default function Page() {
-  return <ScreenPlaceholder title="회복 단계 분석" spec="01 §3-8 · 02 §4" screenshot="analyze.png" />;
+  return <AnalyzeScreen />;
 }

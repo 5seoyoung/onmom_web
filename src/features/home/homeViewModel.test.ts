@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { MoodCheckRecord, PersistedState, SymptomRecord } from "@/domain/types";
 import { initialState } from "@/store/defaults";
+import { chatBackHref } from "@/features/chat/chatModel";
 import {
+  HOME_CHAT_HREF,
   HOME_TEXT,
   MOOD_CALLS,
   buildHomeViewModel,
@@ -332,5 +334,13 @@ describe("화면 문구 — Swift·content.json 원문", () => {
       "온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다. 진단·치료에 관한 판단은 반드시 의료진과 상담하세요.",
     );
     expect(HOME_TEXT.moodDisclaimer).toBe("이 안내는 진단이 아니에요. 기분 살피기 답을 바탕으로 띄웠어요.");
+  });
+});
+
+describe("상단 AI 상담 버튼", () => {
+  it("챗 화면의 뒤로가 홈으로 오도록 ?from=home을 싣는다(HomeView.swift:50-56 — 시트를 닫으면 홈)", () => {
+    const url = new URL(HOME_CHAT_HREF, "https://example.test/onmom_web/");
+    expect(url.pathname.endsWith("/chat/")).toBe(true);
+    expect(chatBackHref(url.search)).toBe("/");
   });
 });

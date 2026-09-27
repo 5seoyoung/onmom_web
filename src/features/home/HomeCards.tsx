@@ -22,6 +22,7 @@ import type { HomeStageCard } from "@/rules/exercise";
 import type { RecoveryMetric } from "@/rules/redflag";
 import type { WeightPlan } from "@/rules/weight";
 import {
+  HOME_CHAT_HREF,
   HOME_TEXT,
   MOOD_CALLS,
   RECOVERY_STEPS,
@@ -83,7 +84,7 @@ export function HomeTopBar() {
     <header className="flex items-center justify-between gap-2 py-1">
       <h1 className="text-[1.375rem] font-bold text-primary">{HOME_TEXT.brand}</h1>
       <Link
-        href="/chat/"
+        href={HOME_CHAT_HREF}
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-coral-tint px-3 text-[0.8125rem] font-semibold text-primary"
       >
         <MessageCircle aria-hidden className="size-3.5 shrink-0" strokeWidth={2.5} />

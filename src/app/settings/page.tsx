@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import { SettingsScreen } from "@/features/settings/SettingsScreen";
 
 export default function Page() {
-  return <ScreenPlaceholder title="설정" spec="01 §3-15" screenshot="settings.png" />;
+  return <SettingsScreen />;
 }
