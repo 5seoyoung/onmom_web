@@ -1,0 +1,58 @@
+# GitHub Pages 배포 — main에 push하면 테스트 → 정적 빌드(out/) → Pages 배포.
+# 저장소 Settings → Pages → Build and deployment → Source: "GitHub Actions" 로 한 번 설정해야 한다.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          # 프로젝트 페이지면 "/onmom_web", 커스텀 도메인을 연결하면 "" (configure-pages가 알려준다)
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # 공개값만 — 정적 사이트 번들에 그대로 들어간다. 저장소 Settings → Secrets and variables → Actions → Variables 에서 관리.
+          NEXT_PUBLIC_VIDEO_URL: ${{ vars.NEXT_PUBLIC_VIDEO_URL }}
+          NEXT_PUBLIC_LLM_URL: ${{ vars.NEXT_PUBLIC_LLM_URL }}
+          NEXT_PUBLIC_ACCOUNT_URL: ${{ vars.NEXT_PUBLIC_ACCOUNT_URL }}
+          NEXT_PUBLIC_ONMOM_APP_KEY: ${{ vars.NEXT_PUBLIC_ONMOM_APP_KEY }}
+          NEXT_PUBLIC_KAKAO_JS_KEY: ${{ vars.NEXT_PUBLIC_KAKAO_JS_KEY }}
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

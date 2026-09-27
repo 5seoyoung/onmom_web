@@ -1,0 +1,135 @@
+// 브라우저 저장 — iOS UserDefaults 자리. 저장 형식은 04 PersistedState JSON 그대로.
+//
+// 모든 접근은 try/catch — 사생활 보호 모드·저장소 차단·용량 초과여도 앱은 메모리에서 계속 동작한다
+// (appStore가 상태를 메모리에 들고 있고, 저장 실패는 storageAvailable=false로만 알린다).
+//
+// ⚠️ 서버 동기화(계정 API /me/state)는 아직 붙이지 않는다 — 규칙이 미정이다(감사 #13·#15·#18·#19·#20).
+// 붙일 때는 PersistenceAdapter를 감싸는 구현을 따로 만들고, 다음을 먼저 정한다:
+//   - GET 결과(200/404)를 받기 전 PUT 금지, 게스트 데이터 병합 여부(#13)
+//   - 온보딩 동의(consentAccepted·consent_version) 전 전송 금지(#15·#20)
+//   - withdraw 실패 시 로컬 삭제를 멈출지(#18), 실계정 로그아웃 시 브라우저 캐시 삭제(#19)
+
+import type { PersistedState } from "@/domain/types";
+import type { Account } from "./account";
+
+/** 이 접두의 키는 eraseAll이 전부 지운다 — 개인 데이터를 브라우저에 두는 모듈은 반드시 이 접두를 쓸 것. */
+export const STORAGE_PREFIX = "onmom.web.";
+export const STATE_KEY = "onmom.web.state.v1";
+export const GUEST_ID_KEY = "onmom.web.account.guestID";
+export const ACCOUNT_KEY = "onmom.web.account.current";
+/** 쓰기 가능 여부 확인용 — 다른 탭 변경 알림에서는 무시한다(무시하지 않으면 탭끼리 서로 다시 읽기를 반복한다). */
+const PROBE_KEY = "onmom.web.probe";
+
+/** window.localStorage와 같은 모양(테스트에서는 메모리 구현을 넣는다) */
+export interface StorageLike {
+  readonly length: number;
+  key(index: number): string | null;
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/** 저장소 경계 — appStore는 이 인터페이스만 안다. 읽기는 파싱된 JSON(unknown)을 돌려주고 해석은 decode가 한다. */
+export interface PersistenceAdapter {
+  /** 지금 쓰기가 되는가(사생활 보호 모드·차단이면 false) */
+  isAvailable(): boolean;
+  loadState(): unknown;
+  /** false = 저장 실패(메모리에서만 유지됨) */
+  saveState(state: PersistedState): boolean;
+  loadAccount(): unknown;
+  /** null이면 키를 지운다(로그아웃) */
+  saveAccount(account: Account | null): boolean;
+  loadGuestID(): string | null;
+  saveGuestID(id: string): boolean;
+  /** STORAGE_PREFIX 키 전부 삭제 — 상태·계정·게스트 id·다른 모듈의 설정값까지(AppStore.swift:128-131) */
+  eraseAll(): void;
+}
+
+/** 브라우저 localStorage — 서버 렌더링 중이거나 접근이 막혀 있으면 null */
+export function browserLocalStorage(): StorageLike | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null; // SecurityError(쿠키·사이트 데이터 차단)
+  }
+}
+
+export function createStoragePersistence(getStorage: () => StorageLike | null): PersistenceAdapter {
+  function read(key: string): string | null {
+    try {
+      return getStorage()?.getItem(key) ?? null;
+    } catch {
+      return null;
+    }
+  }
+  function write(key: string, value: string | null): boolean {
+    try {
+      const s = getStorage();
+      if (!s) return false;
+      if (value === null) s.removeItem(key);
+      else s.setItem(key, value);
+      return true;
+    } catch {
+      return false; // QuotaExceededError 등
+    }
+  }
+  function readJSON(key: string): unknown {
+    const text = read(key);
+    if (text === null) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null; // 손상된 값 — decode가 기본값으로 시작한다
+    }
+  }
+
+  return {
+    isAvailable: () => write(PROBE_KEY, "1") && write(PROBE_KEY, null),
+    loadState: () => readJSON(STATE_KEY),
+    saveState: (state) => write(STATE_KEY, JSON.stringify(state)),
+    loadAccount: () => readJSON(ACCOUNT_KEY),
+    saveAccount: (account) => write(ACCOUNT_KEY, account === null ? null : JSON.stringify(account)),
+    loadGuestID: () => read(GUEST_ID_KEY),
+    saveGuestID: (id) => write(GUEST_ID_KEY, id),
+    eraseAll() {
+      try {
+        const s = getStorage();
+        if (!s) return;
+        // 지우면서 돌면 인덱스가 밀리므로 키를 먼저 모은다.
+        const keys: string[] = [];
+        for (let i = 0; i < s.length; i++) {
+          const k = s.key(i);
+          if (k !== null && k.startsWith(STORAGE_PREFIX)) keys.push(k);
+        }
+        for (const k of keys) s.removeItem(k);
+      } catch {
+        // 저장소를 못 쓰면 지울 것도 없다
+      }
+    },
+  };
+}
+
+/** 메모리 저장소 — 테스트용, 또는 브라우저 밖에서 같은 코드를 돌릴 때 */
+export function createMemoryStorage(): StorageLike {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    key: (i) => [...map.keys()][i] ?? null,
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => void map.set(k, String(v)),
+    removeItem: (k) => void map.delete(k),
+  };
+}
+
+/** 다른 탭이 저장소를 바꾸면 알린다(window "storage" 이벤트 — 쓴 탭 자신에게는 오지 않는다). 반환값은 해제 함수. */
+export function watchBrowserStorage(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = (e: StorageEvent) => {
+    // key === null은 localStorage.clear()
+    if (e.key === null || (e.key.startsWith(STORAGE_PREFIX) && e.key !== PROBE_KEY)) onChange();
+  };
+  window.addEventListener("storage", handler);
+  return () => window.removeEventListener("storage", handler);
+}

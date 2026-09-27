@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* 디자인 토큰 — iOS Theme.swift / 06_DESIGN.md.
+   라이트 모드 하나(iOS도 라이트 고정). 코랄은 CTA·핵심 강조에만.
+   ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다.
+      텍스트 전용 색 토큰 도입은 CPO 결정 대기(08) — 결정 전까지 iOS 값을 그대로 둔다. */
+@theme {
+  --color-primary: #fb6f6f;
+  --color-coral-tint: #fff0f0;
+  --color-secondary: #ffb9c1;
+  --color-accent: #f8d8a3;
+  --color-neutral: #191f28;
+  --color-background: #f9fafb;
+  --color-surface: #ffffff;
+  --color-state-normal: #15c47e;
+  --color-state-watch: #ffb020;
+  --color-state-alert: #fb6f6f;
+  --color-text-primary: #191f28;
+  --color-text-secondary: #4e5968;
+  --color-text-subtle: #8b95a1;
+  --color-divider: #f2f4f6;
+
+  --radius-card: 1.25rem; /* 20 */
+  --radius-button: 0.875rem; /* 14 */
+  --radius-chip: 0.75rem; /* 12 */
+
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+/* 글씨 크기는 전부 rem — 사용자의 브라우저 글씨 크기·확대를 따른다(iOS Dynamic Type 대응과 같은 원칙). */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+/* 포커스 링은 항상 보이게 */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
