@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import type { Metadata } from "next";
+import { GuideScreen } from "@/features/guide/GuideScreen";
+import { GUIDE_TEXT } from "@/features/guide/guideContent";
+
+export const metadata: Metadata = { title: GUIDE_TEXT.title };
 
 export default function Page() {
-  return <ScreenPlaceholder title="회복 가이드" spec="01 §3-9 · 03" screenshot="guide.png" />;
+  return <GuideScreen />;
 }

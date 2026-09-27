@@ -30,3 +30,5 @@ export type { EvidenceToken } from "./evidence";
 export { METRIC_STATUS_LABEL, severityLabel, splitFirstSentence } from "./labels";
 export { clampNrs, formatNrs, parseMeasurement, formatMeasurement, sanitizeDecimalInput } from "./numbers";
 export { cx } from "./cx";
+export { SubPageHeader } from "./SubPageHeader";
+export type { SubPageHeaderProps } from "./SubPageHeader";

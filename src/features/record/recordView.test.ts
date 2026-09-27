@@ -1,0 +1,221 @@
+import { existsSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import type { MoodCheckRecord, SymptomRecord } from "@/domain/types";
+import { questionForDay } from "@/rules/mood";
+import { RECORD_NORMAL_RESULT } from "@/rules/record";
+import {
+  INITIAL_SYMPTOM_FORM,
+  RECENT_RECORDS_LIMIT,
+  RECORD_TEXT,
+  RISK_TOGGLES,
+  answeredMoodText,
+  formatRecordDateTime,
+  moodCardModel,
+  recentRecordRows,
+  recordLayout,
+  recordShowsLochia,
+  recordSubtitle,
+  submitSymptomCheck,
+} from "./recordView";
+
+const kst = (local: string) => new Date(`${local}:00+09:00`);
+const NOW = kst("2026-09-23T12:00");
+const swiftPath = (file: string) => fileURLToPath(new URL(`../../../web/reference/swift/${file}`, import.meta.url));
+// iOS 원본(web/)은 공개 저장소에 없다 — 로컬에 있을 때만 Swift 원문과 대조하고, CI에서는 건너뛴다.
+const HAS_SWIFT = existsSync(swiftPath("RecordFlowView.swift"));
+
+describe.skipIf(!HAS_SWIFT)("문구는 Swift 원문 그대로(원칙 5)", () => {
+  const source = HAS_SWIFT ? readFileSync(swiftPath("RecordFlowView.swift"), "utf8") : "";
+
+  it.each(Object.entries(RECORD_TEXT))("%s", (_key, text) => {
+    expect(source).toContain(`"${text}"`);
+  });
+
+  it("답한 뒤 문구 틀은 RecordFlowView.swift:70과 같다", () => {
+    expect(source).toContain(`"${answeredMoodText("\\(answered.answer.label)")}"`);
+  });
+
+  it("위험 신호 없음 카드는 Swift 두 줄과 같다(content.json record_normal)", () => {
+    expect(source).toContain(`"${RECORD_NORMAL_RESULT.title}"`);
+    expect(source).toContain(`"${RECORD_NORMAL_RESULT.body}"`);
+  });
+});
+
+it("발열 제목은 ℃(U+2103) 한 글자", () => {
+  expect(RECORD_TEXT.feverTitle).toBe("발열 (38.0℃ 이상)");
+});
+
+describe("폼 초기값 · 위험 증상 순서", () => {
+  it("전부 꺼짐, 통증 0(손대지 않으면 통증 없음으로 기록)", () => {
+    expect(INITIAL_SYMPTOM_FORM).toEqual({
+      lochiaIncreased: false,
+      lochiaRed: false,
+      feverEvent: false,
+      painNrs: 0,
+      woundPainWorsening: false,
+      dizzinessFainting: false,
+      chestPainBreathing: false,
+      calfPainSwelling: false,
+    });
+  });
+
+  it("위험 증상 4개는 Swift 순서", () => {
+    expect(RISK_TOGGLES.map((t) => t.label)).toEqual([
+      "수술부위·회음부 통증 급격 악화",
+      "어지러움·실신·균형장애",
+      "흉통·가슴 압박·호흡곤란",
+      "한쪽 종아리 통증·부종",
+    ]);
+  });
+});
+
+describe("머리 부제 — 산후 n일차 · {분만}", () => {
+  it("출산일 63일 전 · 제왕절개 → 스크린샷과 같은 모양", () => {
+    expect(recordSubtitle({ deliveryDate: "2026-07-22", deliveryMethod: "cesarean" }, NOW)).toBe("산후 63일차 · 제왕절개");
+  });
+
+  it("분만 방식이 없으면 '분만'", () => {
+    expect(recordSubtitle({ deliveryDate: "2026-09-18", deliveryMethod: null }, NOW)).toBe("산후 5일차 · 분만");
+  });
+
+  it("출산일이 없으면 일차를 지어내지 않는다 — 분만 방식만, 둘 다 없으면 부제 없음", () => {
+    expect(recordSubtitle({ deliveryDate: null, deliveryMethod: "vaginal" }, NOW)).toBe("자연분만");
+    expect(recordSubtitle({ deliveryDate: null, deliveryMethod: null }, NOW)).toBeNull();
+  });
+});
+
+describe("오로 질문은 산후 10일부터", () => {
+  it("9일 → 안내문, 10일 → 토글", () => {
+    expect(recordShowsLochia("2026-09-14", NOW)).toBe(false);
+    expect(recordShowsLochia("2026-09-13", NOW)).toBe(true);
+  });
+
+  it("출산일이 없으면(0일로 봄) 묻지 않는다", () => {
+    expect(recordShowsLochia(null, NOW)).toBe(false);
+  });
+});
+
+describe("[확인하기] — 판정 + 저장할 기록", () => {
+  it("아무것도 켜지 않으면 신호 없음, 기록은 그래도 저장(판정 시각·산후 일수 포함, id 없음)", () => {
+    const { newRecord, result } = submitSymptomCheck(INITIAL_SYMPTOM_FORM, "2026-09-13", NOW);
+    expect(result.hospitalSignal).toBeNull();
+    expect(newRecord).toEqual({
+      date: NOW.toISOString(),
+      lochiaIncreased: false,
+      lochiaRed: false,
+      feverEvent: false,
+      painNrs: 0,
+      redFlagCode: null,
+      postpartumDays: 10,
+    });
+    expect("id" in newRecord).toBe(false);
+  });
+
+  it("10일 전: 화면에 없는 오로 값은 켜져 있어도 저장·판정하지 않는다", () => {
+    const form = { ...INITIAL_SYMPTOM_FORM, lochiaIncreased: true, lochiaRed: true };
+    const { newRecord, result } = submitSymptomCheck(form, "2026-09-18", NOW);
+    expect(result.hospitalSignal).toBeNull();
+    expect(newRecord.lochiaIncreased).toBe(false);
+    expect(newRecord.lochiaRed).toBe(false);
+  });
+
+  it("10일 이후 오로 증가 + 선홍색 → pph_suspect", () => {
+    const form = { ...INITIAL_SYMPTOM_FORM, lochiaIncreased: true, lochiaRed: true };
+    const { newRecord, result } = submitSymptomCheck(form, "2026-09-11", NOW);
+    expect(result.hospitalSignal?.code).toBe("pph_suspect");
+    expect(result.hospitalSignal?.evidenceChips).toContain("src:임산부수첩 2023");
+    expect(newRecord.redFlagCode).toBe("pph_suspect");
+  });
+
+  it("위험 증상 토글은 판정에만 쓰고 기록 필드로 남지 않는다", () => {
+    const { newRecord, result } = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, dizzinessFainting: true }, "2026-09-01", NOW);
+    expect(result.hospitalSignal?.code).toBe("neuro_flag");
+    expect(newRecord.redFlagCode).toBe("neuro_flag");
+    expect(Object.keys(newRecord)).not.toContain("dizzinessFainting");
+  });
+
+  it("통증 8 이상 → severe_pain", () => {
+    const { result } = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, painNrs: 8 }, "2026-09-01", NOW);
+    expect(result.hospitalSignal?.code).toBe("severe_pain");
+  });
+});
+
+describe("화면 배치", () => {
+  const signal = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, feverEvent: true }, "2026-09-01", NOW).result;
+  const normal = submitSymptomCheck(INITIAL_SYMPTOM_FORM, "2026-09-01", NOW).result;
+
+  it("입력 단계: 최근 기록은 기록이 있을 때만", () => {
+    expect(recordLayout(null, 0)).toEqual({ phase: "form", showsRecent: false });
+    expect(recordLayout(null, 3)).toEqual({ phase: "form", showsRecent: true });
+  });
+
+  it("병원 신호 → 레드플래그 카드 + 가까운 산부인과(질문·최근 기록은 숨김)", () => {
+    const layout = recordLayout(signal, 3);
+    expect(layout.phase).toBe("result");
+    expect(layout).toMatchObject({ showsClinics: true, redFlag: { code: "fever_infection" } });
+  });
+
+  it("신호 없음 → 위험 신호 없음 카드만", () => {
+    expect(recordLayout(normal, 3)).toEqual({ phase: "result", redFlag: null, showsClinics: false });
+  });
+});
+
+describe("최근 기록 — 최신 5건 · 날짜 · 위험신호 없음/병원 신호", () => {
+  const rec = (i: number, local: string, redFlagCode: string | null): SymptomRecord => ({
+    id: `r${i}`,
+    date: kst(local).toISOString(),
+    lochiaIncreased: false,
+    lochiaRed: false,
+    feverEvent: false,
+    painNrs: 0,
+    redFlagCode,
+    postpartumDays: 10,
+  });
+
+  it("앞 5건만, 순서 그대로", () => {
+    const history = Array.from({ length: 7 }, (_, i) => rec(i, `2026-09-${String(23 - i).padStart(2, "0")}T09:00`, null));
+    const rows = recentRecordRows(history);
+    expect(rows).toHaveLength(RECENT_RECORDS_LIMIT);
+    expect(rows.map((r) => r.id)).toEqual(["r0", "r1", "r2", "r3", "r4"]);
+  });
+
+  it("글자로도 상태를 말한다", () => {
+    const rows = recentRecordRows([rec(1, "2026-09-23T15:05", "fever_infection"), rec(2, "2026-09-22T00:05", null)]);
+    expect(rows[0]).toMatchObject({ flagged: true, label: "병원 신호", dateText: "9월 23일 오후 3:05" });
+    expect(rows[1]).toMatchObject({ flagged: false, label: "위험신호 없음", dateText: "9월 22일 오전 12:05" });
+  });
+
+  it("읽을 수 없는 날짜는 빈 글자(지어내지 않음)", () => {
+    expect(formatRecordDateTime("not-a-date")).toBe("");
+  });
+});
+
+describe("오늘의 한 가지 질문", () => {
+  const check = (local: string, answer: MoodCheckRecord["answer"]): MoodCheckRecord => ({
+    id: local,
+    date: kst(local).toISOString(),
+    questionID: 1,
+    answer,
+  });
+
+  it("오늘 답이 없으면 오늘의 문항 + 답 3개(네/글쎄요/아니요)", () => {
+    const model = moodCardModel([check("2026-09-22T21:00", "yes")], NOW);
+    expect(model.kind).toBe("ask");
+    if (model.kind !== "ask") return;
+    expect(model.question).toEqual(questionForDay(NOW));
+    expect(model.answers.map((a) => a.label)).toEqual(["네", "글쎄요", "아니요"]);
+  });
+
+  it("오늘 답했으면 그 답을 말한다", () => {
+    const model = moodCardModel([check("2026-09-23T08:00", "no")], NOW);
+    expect(model).toEqual({ kind: "answered", text: "오늘은 「아니요」라고 답했어요. 내일 또 물어볼게요." });
+  });
+
+  it("같은 날엔 같은 문항(자정 전후로만 바뀜)", () => {
+    expect(moodCardModel([], kst("2026-09-23T00:00"))).toEqual(moodCardModel([], kst("2026-09-23T23:59")));
+    const a = moodCardModel([], kst("2026-09-23T23:59"));
+    const b = moodCardModel([], kst("2026-09-24T00:00"));
+    expect(a.kind === "ask" && b.kind === "ask" && a.question.id !== b.question.id).toBe(true);
+  });
+});

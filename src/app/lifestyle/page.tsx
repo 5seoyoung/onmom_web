@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import type { Metadata } from "next";
+import { LifestyleScreen } from "@/features/lifestyle/LifestyleScreen";
+import { LIFESTYLE_TEXT } from "@/features/lifestyle/lifestyleContent";
+
+export const metadata: Metadata = { title: LIFESTYLE_TEXT.title };
 
 export default function Page() {
-  return <ScreenPlaceholder title="생활 권고" spec="01 §3-13" screenshot="lifestyle.png" />;
+  return <LifestyleScreen />;
 }

@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import type { Metadata } from "next";
+import { RecordScreen } from "@/features/record/RecordScreen";
+import { RECORD_TEXT } from "@/features/record/recordView";
+
+export const metadata: Metadata = { title: RECORD_TEXT.title };
 
 export default function Page() {
-  return <ScreenPlaceholder title="이상 증상 빠른 기록" spec="01 §3-5 · 02 §1" screenshot="record.png" />;
+  return <RecordScreen />;
 }

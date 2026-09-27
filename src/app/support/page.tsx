@@ -1,5 +1,9 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import type { Metadata } from "next";
+import { SupportProgramScreen } from "@/features/support/SupportProgramScreen";
+import { SUPPORT_TEXT } from "@/rules/support";
+
+export const metadata: Metadata = { title: SUPPORT_TEXT.title };
 
 export default function Page() {
-  return <ScreenPlaceholder title="지원사업 추천" spec="01 §3-14" screenshot="support.png" />;
+  return <SupportProgramScreen />;
 }

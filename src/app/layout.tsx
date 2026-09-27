@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { StoreProvider } from "@/store/StoreProvider";
+import { AppGate } from "@/features/flow/AppGate";
 
 export const metadata: Metadata = {
   title: "온맘",
@@ -23,7 +24,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             저장소는 마운트 후 첫 구독 때 읽으므로 정적 HTML에는 사용자 데이터가 들어가지 않는다. */}
         <StoreProvider>
           {/* 모바일 우선 — 태블릿·데스크톱에서도 폰 폭(최대 480px) 중앙 유지 */}
-          <div className="mx-auto flex min-h-dvh w-full max-w-[30rem] flex-col bg-background">{children}</div>
+          <div className="mx-auto flex min-h-dvh w-full max-w-[30rem] flex-col bg-background">
+            {/* 앱 관문 — 로그인 전 → /login/, 온보딩 전 → /onboarding/, 그 외 → 메인(RootView.swift:10-17).
+                저장소를 읽기 전에는 보호된 화면을 그리지 않는다(개인정보처리방침·/dev/*는 늘 연다). */}
+            <AppGate>{children}</AppGate>
+          </div>
         </StoreProvider>
       </body>
     </html>

@@ -1,5 +1,5 @@
-import { ScreenPlaceholder } from "@/components/dev/ScreenPlaceholder";
+import { PrivacyPolicyScreen } from "@/features/privacy/PrivacyPolicyScreen";
 
 export default function Page() {
-  return <ScreenPlaceholder title="개인정보처리방침" spec="07 · reference/docs/PRIVACY_POLICY.md" />;
+  return <PrivacyPolicyScreen />;
 }
