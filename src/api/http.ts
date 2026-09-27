@@ -6,7 +6,7 @@
 //   2026-09-23 현재 영상 서버는 CORS가 없다(preflight 405 — 검수 #12). 백엔드 수정 사항이라 여기서는 정직하게 실패로 올린다.
 // - 자동 재시도는 하지 않는다(검수 #57). 다시 시도는 화면의 [다시 시도] 버튼 몫이다.
 
-import { config as appConfig } from "@/config";
+import { config as appConfig, supabaseFunctionsUrl } from "@/config";
 
 /** 호출에 쓰는 설정. 테스트는 env를 바꾸지 않고 이 값을 주입한다. */
 export type BackendConfig = {
@@ -14,6 +14,15 @@ export type BackendConfig = {
   llmURL: string | null;
   accountURL: string | null;
   appKey: string | null;
+  /**
+   * Supabase Edge Functions 주소(https://<ref>.supabase.co/functions/v1). 있으면 영상·AI는 예전 주소 대신 함수를 부른다.
+   * Supabase가 설정되지 않은 빌드는 null — 지금까지와 같다.
+   */
+  functionsURL: string | null;
+  /** Supabase 공개 키(Publishable) — 함수 요청의 apikey 헤더. 공개값이다. */
+  supabaseKey: string | null;
+  /** AI 상담 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED) — 꺼져 있으면 함수 chat을 부르지 않는다 */
+  aiChatEnabled: boolean;
 };
 
 export const defaultBackendConfig: BackendConfig = {
@@ -21,6 +30,9 @@ export const defaultBackendConfig: BackendConfig = {
   llmURL: appConfig.llmURL,
   accountURL: appConfig.accountURL,
   appKey: appConfig.appKey,
+  functionsURL: supabaseFunctionsUrl(),
+  supabaseKey: appConfig.supabaseAnonKey,
+  aiChatEnabled: appConfig.aiChatEnabled,
 };
 
 export const APP_KEY_HEADER = "x-onmom-key";
@@ -56,7 +68,10 @@ function originOf(url: string | null): string | null {
   }
 }
 
-/** 요청 URL의 origin이 설정된 온맘 백엔드 중 하나와 같은가 */
+/**
+ * 요청 URL의 origin이 설정된 온맘 백엔드 중 하나와 같은가(x-onmom-key를 붙일 곳).
+ * Supabase 함수는 넣지 않는다 — 함수는 apikey·Authorization으로 받고, 모르는 헤더는 CORS에서 막힌다.
+ */
 export function isOwnBackendUrl(url: string, cfg: BackendConfig = defaultBackendConfig): boolean {
   const target = originOf(url);
   if (!target) return false;

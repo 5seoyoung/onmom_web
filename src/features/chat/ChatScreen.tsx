@@ -2,21 +2,30 @@
 
 // AI 상담 — ChatView.swift를 옮긴 화면(01 §3-11, chat.png).
 // 서버(LLM)가 설정돼 있으면 patient_edu 프리셋으로 묻고, 미설정·실패면 앱 내 규칙 안내(폴백)로 답하며 그 사실을 배너로 알린다.
+// 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(aiConsent.ts) — 첫 질문을 보내면 동의 카드가 뜨고,
+// [동의하고 계속하기]면 그 질문을 AI에, [동의하지 않기]면 앱 내 안내로 답한다. 동의 전에는 서버에 아무것도 보내지 않는다.
 // 음성 입력은 웹에서 만들지 않는다(결정 D3). 대화는 이 화면 메모리에만 둔다(저장하지 않음).
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
-// PC(넓은 화면): 머리·배너·대화·입력창을 같은 가운데 기둥(최대 44rem)에 맞춘다. 스크롤 영역은 전체 폭이라 스크롤 막대는 가장자리에 있다.
-// 폰 기둥(30rem)에서는 기둥이 곧 화면 폭이라 그대로다.
+// PC(lg 이상): 머리·배너·대화·입력창을 같은 기둥에 맞춘다 — 다른 읽기 화면과 같은 폭(최대 48rem)·같은 왼쪽 선·같은 위 여백
+// (components/shell/pageFrame.ts). 가운데 정렬하지 않는다. 사이드바에 있는 화면이라 PC에서는 [뒤로]를 숨긴다.
+// 스크롤 영역은 전체 폭이라 스크롤 막대는 가장자리에 있다. 폰 기둥(30rem)에서는 기둥이 곧 화면 폭이라 그대로다.
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Info, LoaderCircle } from "lucide-react";
-import { llmComplete } from "@/api/llm";
+import { LLM_FUNCTION_MAX_MESSAGE_CHARS, llmComplete } from "@/api/llm";
+import { PAGE_EDGE_TOP, PAGE_EDGE_X, READING_WIDTH } from "@/components/shell/pageFrame";
 import { SubPageHeader, cx } from "@/components/ui";
 import { isLLMBackendConfigured } from "@/config";
-import { buildChatContext, CHAT_FALLBACK_BANNER, CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
+import { CHAT_FALLBACK_BANNER, CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
 import { useAppStore } from "@/store/useAppStore";
+import { AiConsentCard } from "./AiConsentCard";
+import { aiMode, useAiConsent } from "./aiConsent";
 import {
+  CHAT_DECLINED_BANNER,
   canSendChat,
   chatBackHref,
+  chatLlmContext,
+  chatSendAction,
   chatScreenState,
   initialChatMessages,
   normalizeChatDraft,
@@ -38,18 +47,25 @@ const THINKING_SR_LABEL = "답변을 준비하고 있어요";
 
 const noopSubscribe = () => () => {};
 
-/** 대화 기둥 — 머리·배너·말풍선·입력창이 같은 폭(최대 44rem)으로 가운데 정렬된다 */
-const CHAT_COLUMN = "mx-auto w-full max-w-[44rem]";
+/** 대화 기둥 — 머리·배너·말풍선·입력창이 같은 폭. PC는 읽기 화면 폭(최대 48rem), 왼쪽 정렬 */
+const CHAT_COLUMN = cx("w-full", READING_WIDTH);
 
 export function ChatScreen() {
-  const { hydrated, state } = useAppStore();
-  const llmConfigured = isLLMBackendConfigured();
+  const { hydrated, state, account } = useAppStore();
+  const { consented, accept } = useAiConsent(account?.id ?? null);
+  /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
+  const [declined, setDeclined] = useState(false);
+  const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
+  /** 서버에 물을 수 있는가(동의를 묻는 중 포함) — 배너·FAQ는 이 값을 본다 */
+  const llmConfigured = mode !== "off";
 
   const [messages, setMessages] = useState<ChatBubbleMessage[]>(initialChatMessages);
   const [draft, setDraft] = useState("");
   const [thinking, setThinking] = useState(false);
   /** 마지막 답이 규칙 폴백이었는가 — 아직 답이 없으면 null(서버 미설정이면 처음부터 배너) */
   const [lastReplyFromFallback, setLastReplyFromFallback] = useState<boolean | null>(null);
+  /** 동의를 기다리는 대화 — 첫 질문을 보냈는데 아직 AI 국외 이전 동의를 고르지 않았다 */
+  const [awaitingConsent, setAwaitingConsent] = useState<ChatBubbleMessage[] | null>(null);
 
   const nextId = useRef(1);
   const inflight = useRef<AbortController | null>(null);
@@ -69,7 +85,8 @@ export function ChatScreen() {
     thinking,
     lastReplyFromFallback,
   });
-  const canSend = canSendChat({ draft, thinking, hydrated });
+  const busy = thinking || awaitingConsent !== null;
+  const canSend = canSendChat({ draft, thinking: busy, hydrated });
 
   // 화면을 떠나면 진행 중인 서버 요청을 끊는다(늦게 온 답은 버린다).
   useEffect(() => {
@@ -82,34 +99,64 @@ export function ChatScreen() {
     if (!el) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo({ top: el.scrollHeight, behavior: reduce ? "auto" : "smooth" });
-  }, [messages.length, thinking]);
+  }, [messages.length, thinking, awaitingConsent]);
 
   function send(raw: string) {
     const text = normalizeChatDraft(raw);
-    if (!canSendChat({ draft: text, thinking, hydrated }) || inflight.current) return;
+    if (!canSendChat({ draft: text, thinking: busy, hydrated }) || inflight.current) return;
 
     const history: ChatBubbleMessage[] = [...messages, { id: nextId.current++, role: "user", text }];
     setMessages(history);
     setDraft("");
-    setThinking(true);
+    const action = chatSendAction(mode, text);
+    // 아직 동의를 고르지 않았다 — 서버에 보내지 않고 동의 카드를 띄운다(위기 표현이면 기다리게 하지 않고 바로 앱 안내)
+    if (action === "consent") {
+      setAwaitingConsent(history);
+      return;
+    }
+    requestAnswer(history, action === "ai", declined);
+  }
 
+  /**
+   * 답 구하기 — useAi면 서버(LLM)에 묻고, 아니면 앱 내 안내(규칙 폴백)로 답한다.
+   * declinedNow: 이번에 AI 국외 이전에 동의하지 않았다(거절 직후에는 state가 아직 바뀌지 않았으므로 값으로 받는다).
+   */
+  function requestAnswer(history: ChatBubbleMessage[], useAi: boolean, declinedNow: boolean) {
+    setThinking(true);
     const controller = new AbortController();
     inflight.current = controller;
-    // 서버에 함께 보내는 산모 컨텍스트(ChatView.swift:188-196) — 서버가 설정돼 있을 때만 쓰인다.
-    const context = buildChatContext({ profile: state.profile, symptomHistory: state.symptomHistory, now: new Date() });
 
     void requestChatReply(history, {
-      llmConfigured,
+      llmConfigured: useAi,
       complete: llmComplete,
-      context,
+      // 서버에 함께 보내는 산모 정보 — 산후 주차·분만 방식·수유 여부만(서버에 물을 때만 쓰인다)
+      context: useAi ? chatLlmContext(state.profile, new Date()) : null,
       signal: controller.signal,
+      declined: declinedNow,
     }).then((reply) => {
       if (controller.signal.aborted) return;
       inflight.current = null;
       setThinking(false);
-      setLastReplyFromFallback(reply.fromFallback);
+      // 위기 안내는 AI 연결 여부와 무관한 고정 답이다 — 배너("AI 서버에 연결되지 않아")를 새로 띄우거나 내리지 않는다
+      if (!reply.crisis) setLastReplyFromFallback(reply.fromFallback);
       setMessages((prev) => [...prev, { id: nextId.current++, role: "assistant", text: reply.text }]);
     });
+  }
+
+  function onAcceptAi() {
+    accept();
+    const history = awaitingConsent;
+    setAwaitingConsent(null);
+    if (history) requestAnswer(history, true, false);
+    inputRef.current?.focus({ preventScroll: true });
+  }
+
+  function onDeclineAi() {
+    setDeclined(true);
+    const history = awaitingConsent;
+    setAwaitingConsent(null);
+    if (history) requestAnswer(history, false, true);
+    inputRef.current?.focus({ preventScroll: true });
   }
 
   function onSubmit(event: FormEvent) {
@@ -136,14 +183,15 @@ export function ChatScreen() {
 
   return (
     <main className="@container flex h-dvh flex-col">
-      <div className={cx(CHAT_COLUMN, "px-6 pt-2")}>
-        <SubPageHeader title={TITLE} backHref={backHref} />
+      <div className={cx(CHAT_COLUMN, "px-6 pt-2", PAGE_EDGE_TOP)}>
+        <SubPageHeader title={TITLE} backHref={backHref} hideBackWithSidebar />
       </div>
 
-      {showBanner ? <FallbackNotice /> : null}
+      {/* 이번에 AI 동의를 거절했으면 "연결되지 않아"가 아니라 "동의하지 않아" */}
+      {showBanner ? <FallbackNotice text={declined ? CHAT_DECLINED_BANNER : CHAT_FALLBACK_BANNER} /> : null}
 
       <div ref={logRef} className="flex-1 overflow-y-auto">
-        <div className={cx(CHAT_COLUMN, "p-4")}>
+        <div className={cx(CHAT_COLUMN, "p-4", PAGE_EDGE_X)}>
           {/* role="log": 새 말풍선을 화면 낭독기가 차례로 읽는다 */}
           <div role="log">
             <ol className="flex flex-col gap-2">
@@ -176,6 +224,12 @@ export function ChatScreen() {
             </section>
           ) : null}
 
+          {awaitingConsent ? (
+            <div className="pt-3">
+              <AiConsentCard onAccept={onAcceptAi} onDecline={onDeclineAi} focusOnMount />
+            </div>
+          ) : null}
+
           {thinking ? (
             <div role="status" className="flex pl-4 pt-2">
               <LoaderCircle aria-hidden className="size-5 text-primary motion-safe:animate-spin" />
@@ -187,7 +241,7 @@ export function ChatScreen() {
 
       <form
         onSubmit={onSubmit}
-        className={cx(CHAT_COLUMN, "flex items-end gap-2 bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]")}
+        className={cx(CHAT_COLUMN, "flex items-end gap-2 bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]", PAGE_EDGE_X)}
       >
         <textarea
           ref={inputRef}
@@ -195,6 +249,9 @@ export function ChatScreen() {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           rows={1}
+          // 서버(Edge Function chat)가 받는 한 메시지 상한 — 넘으면 요청을 보내지 못하고 "연결되지 않아" 답이 나간다.
+          // UTF-16 길이 ≥ 글자(코드 포인트) 수라 이 상한 안이면 함수의 글자 수 검사도 통과한다. AI를 쓰지 않는 빌드는 그대로.
+          maxLength={llmConfigured ? LLM_FUNCTION_MAX_MESSAGE_CHARS : undefined}
           placeholder={INPUT_PLACEHOLDER}
           aria-label={INPUT_PLACEHOLDER}
           enterKeyHint="send"
@@ -218,13 +275,17 @@ export function ChatScreen() {
   );
 }
 
-// 서버 대신 앱 내 안내로 답하고 있음 — "AI가 답한 것처럼" 보이지 않게(ChatView.swift:61-74). 문구: content.json disclaimers.chat_banner
-function FallbackNotice() {
+// 서버 대신 앱 내 안내로 답하고 있음 — "AI가 답한 것처럼" 보이지 않게(ChatView.swift:61-74).
+// 문구: content.json disclaimers.chat_banner, AI 동의를 거절했으면 chatModel CHAT_DECLINED_BANNER
+function FallbackNotice({ text }: { text: string }) {
   return (
-    // 폰: 화면 폭 띠 / 넓은 화면: 대화 기둥 폭의 둥근 안내 상자
-    <div role="status" className={cx(CHAT_COLUMN, "flex items-start gap-1.5 bg-state-watch/10 px-4 py-2 @3xl:rounded-button")}>
-      <Info aria-hidden className="mt-0.75 size-3.5 shrink-0 fill-state-watch text-white" />
-      <p className="min-w-0 text-[0.8125rem] text-text-secondary">{CHAT_FALLBACK_BANNER}</p>
+    // 폰: 화면 폭 띠 / 넓은 화면: 대화 기둥 폭의 둥근 안내 상자.
+    // PC(lg)는 제목·말풍선과 같은 왼쪽 선에 두고(바깥 여백), 제목과의 간격을 다른 화면의 머리 → 첫 카드 간격과 같게 한다.
+    <div className={cx(CHAT_COLUMN, PAGE_EDGE_X, "lg:pt-4")}>
+      <div role="status" className="flex items-start gap-1.5 bg-state-watch/10 px-4 py-2 @3xl:rounded-button">
+        <Info aria-hidden className="mt-0.75 size-3.5 shrink-0 fill-state-watch text-white" />
+        <p className="min-w-0 text-[0.8125rem] text-text-secondary">{text}</p>
+      </div>
     </div>
   );
 }

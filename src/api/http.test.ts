@@ -23,8 +23,13 @@ describe("isOwnBackendUrl", () => {
   });
 
   it("비어 있는 설정은 어떤 URL과도 맞지 않는다", () => {
-    const empty = { videoURL: null, llmURL: null, accountURL: null, appKey: "k" };
+    const empty = { ...testConfig, videoURL: null, llmURL: null, accountURL: null, appKey: "k" };
     expect(isOwnBackendUrl("https://video.onmom.test/videos", empty)).toBe(false);
+  });
+
+  it("Supabase 함수 주소는 온맘 백엔드로 보지 않는다(x-onmom-key를 붙이지 않는다)", () => {
+    const cfg = { ...testConfig, functionsURL: "https://proj.supabase.test/functions/v1", supabaseKey: "sb_publishable_x" };
+    expect(isOwnBackendUrl("https://proj.supabase.test/functions/v1/videos", cfg)).toBe(false);
   });
 });
 

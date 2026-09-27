@@ -12,6 +12,7 @@ import {
   STEPS,
   ctaNoteFor,
   paragraphText,
+  sectionTitle,
   startAction,
   type LandingBuild,
 } from "./landingContent";
@@ -87,7 +88,7 @@ describe("서비스 소개 문구", () => {
     }
   });
 
-  it("웹 저장 안내는 사실대로 — 게스트는 이 브라우저에만, 카카오 로그인은 빌드에 따라 '준비 중' ↔ 서버 저장", () => {
+  it("웹 저장 안내는 사실대로 — 설정 없는 빌드는 게스트 기록이 이 브라우저에만, 서버 저장 빌드는 게스트·카카오 모두 동의 뒤 서버(서울)", () => {
     const storage = FEATURES.find((f) => f.icon === "storage")!;
     const textIn = (build: LandingBuild) => storage.body.map((p) => paragraphText(p, build)).join(" ");
 
@@ -97,12 +98,30 @@ describe("서비스 소개 문구", () => {
     expect(bare).toContain("서버로 전송되지 않습니다");
     expect(bare).toMatch(/카카오 로그인은 준비 중.*예정/);
 
-    const kakao = textIn({ ...BARE_BUILD, kakaoLoginReady: true });
-    expect(kakao).toContain("이 브라우저에만");
-    expect(kakao).toContain("카카오로 로그인하면 기록을 서버에 저장");
-    expect(kakao).not.toMatch(/준비 중|예정/);
-    // 서버 저장 동의 화면이 아직 없다 — 켜진 빌드 문구는 동의를 약속하지 않는다
-    expect(kakao).not.toContain("동의");
+    // 서버 저장 빌드(카카오 로그인 = Supabase) — AI 켜짐과 무관하게 같은 문구
+    for (const llmReady of [false, true]) {
+      const server = textIn({ ...BARE_BUILD, kakaoLoginReady: true, llmReady });
+      expect(server).toMatch(/게스트로 시작해도, 카카오로 로그인해도/);
+      expect(server).toContain("동의를 받은 뒤");
+      expect(server).toContain("대한민국 서울");
+      expect(server).toContain("삭제할 수 있어요");
+      expect(server).toContain("다른 기기에서도");
+      // 게스트도 서버에 저장되므로 "이 브라우저에만"·"전송되지 않습니다"는 거짓
+      expect(server).not.toContain("이 브라우저에만");
+      expect(server).not.toContain("전송되지 않습니다");
+      expect(server).not.toMatch(/준비 중|예정/);
+    }
+
+    // 제목도 빌드별 — 설정 없는 빌드(지금 배포)는 지금 제목 그대로, 서버 저장 빌드는 동의 뒤 저장(브라우저라고 말하지 않는다)
+    for (const build of ALL_BUILDS) {
+      const title = sectionTitle(storage, build);
+      if (build.kakaoLoginReady) {
+        expect(title).toBe("건강 정보는 동의한 뒤에만 저장해요");
+        expect(title).not.toMatch(/브라우저|기기/);
+      } else {
+        expect(title).toBe("건강 정보는 이 브라우저에");
+      }
+    }
 
     // "이 기기에만"(iOS 문구)은 웹에서 사실이 아니다
     expect(EVERY_TEXT.join(" ")).not.toContain("이 기기에만");
@@ -117,16 +136,32 @@ describe("서비스 소개 문구", () => {
       const text = all({ clinicSearchReady: true, kakaoLoginReady, llmReady: true });
       expect(text).not.toContain("서버로 전송되지 않습니다");
       expect(text).not.toContain("AI는 판단하지 않아요");
-      // 규칙이 판단하는 것(병원 신호·운동)과 게스트 저장 위치는 그대로 말한다
+      // 규칙이 판단하는 것(병원 신호·운동)은 그대로 말한다
       expect(text).toContain("미리 정해 둔 규칙으로 안내해요");
-      expect(text).toContain("이 브라우저에만 저장됩니다");
     }
+    // 저장 위치: 서버 저장이 없는 빌드는 이 브라우저, 있는 빌드는 서버
+    expect(all({ clinicSearchReady: true, kakaoLoginReady: false, llmReady: true })).toContain("이 브라우저에만 저장됩니다");
+    expect(all({ clinicSearchReady: true, kakaoLoginReady: true, llmReady: true })).toContain("온맘 서버(대한민국 서울)에 저장돼요");
   });
 
-  it("빌드별 문구 — 한 문단에 변형은 하나, 어떤 빌드에서도 모든 카드에 본문이 있다", () => {
+  it("카드 제목 — 서버 저장 빌드용 제목이 없는 카드는 모든 빌드에서 같은 제목", () => {
+    for (const s of [...FEATURES, ...PRINCIPLES]) {
+      if (s.titleWhenKakaoLogin !== undefined) expect(s.titleWhenKakaoLogin.trim()).not.toBe("");
+      for (const build of ALL_BUILDS) {
+        expect(sectionTitle(s, build)).toBe(build.kakaoLoginReady && s.titleWhenKakaoLogin !== undefined ? s.titleWhenKakaoLogin : s.title);
+      }
+    }
+    expect([...FEATURES, ...PRINCIPLES].filter((s) => s.titleWhenKakaoLogin !== undefined).map((s) => s.icon)).toEqual(["storage"]);
+  });
+
+  it("빌드별 문구 — 한 문단에 두 변형이 있으면 카카오(서버 저장) 문구가 이기고, 그 문구는 AI 켜짐에서도 사실 · 모든 빌드에서 모든 카드에 본문", () => {
     for (const p of [...FEATURES, ...PRINCIPLES].flatMap((s) => s.body)) {
-      expect(p.whenKakaoLogin !== undefined && p.whenLlm !== undefined, p.text).toBe(false);
       for (const v of [p.whenKakaoLogin, p.whenLlm]) if (v !== undefined) expect(v.trim()).not.toBe("");
+      if (p.whenKakaoLogin !== undefined && p.whenLlm !== undefined) {
+        // AI가 켜지면 거짓이 되는 말(whenLlm이 기본 문구에서 뺀 말)을 카카오 문구가 하지 않는다
+        expect(p.whenKakaoLogin).not.toContain("전송되지 않습니다");
+        expect(paragraphText(p, { clinicSearchReady: false, kakaoLoginReady: true, llmReady: true })).toBe(p.whenKakaoLogin);
+      }
     }
     for (const build of ALL_BUILDS) {
       for (const s of [...FEATURES, ...PRINCIPLES]) {
@@ -167,15 +202,17 @@ describe("startAction — 시작 버튼", () => {
     ["login", ROUTES.login, LANDING_TEXT.start],
     ["onboarding", ROUTES.onboarding, LANDING_TEXT.start], // 온보딩을 이어서
     ["main", ROUTES.home, LANDING_TEXT.openApp],
+    // 다시 동의가 필요한 앱 사용자 — 앱 홈으로, 관문이 다시 동의 화면으로 보낸다
+    ["consent", ROUTES.home, LANDING_TEXT.openApp],
   ];
   it.each(cases)("%s → %s", (screen, href, label) => {
     const a = startAction(screen);
     expect(a.href).toBe(href);
     expect(a.label).toBe(label);
-    expect(a.opensApp).toBe(screen === "main");
+    expect(a.opensApp).toBe(screen === "main" || screen === "consent");
   });
 
   it("앱 홈은 /home/ — 서비스 소개(/)로 되돌아오지 않는다", () => {
-    for (const s of ["loading", "login", "onboarding", "main"] as const) expect(startAction(s).href).not.toBe(ROUTES.landing);
+    for (const s of ["loading", "login", "onboarding", "consent", "main"] as const) expect(startAction(s).href).not.toBe(ROUTES.landing);
   });
 });

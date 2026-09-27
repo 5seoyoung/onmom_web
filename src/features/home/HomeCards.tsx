@@ -82,7 +82,8 @@ function Chevron() {
 // 음성 입력은 웹에서 만들지 않는다(D3) — 마이크 없이 "AI 상담"(글로 묻는 상담) 화면을 연다(CPO 결정 2026-09-27).
 export function HomeTopBar() {
   return (
-    <header className="flex items-center justify-between gap-2 py-1 lg:justify-end">
+    // PC: 위 여백 없이(py-0) — [AI 상담] 줄이 사이드바 로고 줄·다른 화면의 [뒤로] 줄과 같은 높이에 온다(pageFrame)
+    <header className="flex items-center justify-between gap-2 py-1 lg:justify-end lg:py-0">
       {/* "온맘"을 누르면 소개 페이지로. PC는 사이드 메뉴에 로고가 있어 글자를 숨기고 제목만 스크린 리더에 남긴다. */}
       <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">
         <Link href={ROUTES.landing} className="-mx-1 inline-flex min-h-11 items-center rounded-button px-1">

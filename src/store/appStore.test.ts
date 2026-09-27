@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import { initialState } from "./defaults";
 import { createAppStore, rootScreenFor } from "./appStore";
 import {
@@ -423,5 +424,51 @@ describe("다른 탭 변경", () => {
     expect(store.getSnapshot().account?.provider).toBe("guest");
     expect(store.getSnapshot().state.hasOnboarded).toBe(true);
     unsubscribe();
+  });
+});
+
+describe("동의의 판(domain/consent.ts) — 관문의 다시 동의 화면", () => {
+  it("서버 저장이 설정되지 않은 빌드(requireCurrentConsent=false)는 지금까지와 같다 — 판 없는 동의로 메인", () => {
+    const { store } = setup();
+    store.load();
+    store.actions.signInGuest();
+    store.actions.completeOnboarding();
+    expect(store.getSnapshot().state.profile.consentVersion).toBeNull(); // 완료가 판을 지어내지 않는다
+    expect(rootScreenFor(store.getSnapshot(), false)).toBe("main");
+  });
+
+  it("설정된 빌드는 온보딩을 마쳤어도 지금 판의 동의가 없으면 consent — 동의하면 main(온보딩 완료는 그대로)", () => {
+    const { store, storage } = setup();
+    store.load();
+    store.actions.signInGuest();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("onboarding"); // 온보딩 전이면 온보딩이 먼저
+    store.actions.completeOnboarding();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
+
+    store.actions.acceptConsent();
+    const profile = store.getSnapshot().state.profile;
+    expect(profile).toMatchObject({ consentAccepted: true, consentVersion: CURRENT_CONSENT_VERSION, consentAcceptedAt: NOW.toISOString() });
+    expect(store.getSnapshot().state.hasOnboarded).toBe(true);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("main");
+    expect(saved(storage).profile.consentVersion).toBe(CURRENT_CONSENT_VERSION); // 저장된다
+  });
+
+  it("예전 판의 동의는 지금 판이 아니다 — 온보딩 화면이 남긴 지금 판 동의는 완료 뒤에도 그대로", () => {
+    const { store } = setup();
+    store.load();
+    store.actions.signInGuest();
+    store.actions.updateProfile({ consentAccepted: true, consentVersion: "web-2026-01-01", consentAcceptedAt: NOW.toISOString() });
+    store.actions.completeOnboarding();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
+
+    store.actions.updateProfile({ consentVersion: CURRENT_CONSENT_VERSION });
+    store.actions.completeOnboarding(); // 다시 불러도 판을 지우지 않는다
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("main");
+  });
+
+  it("로그아웃 상태면 동의와 무관하게 로그인 화면", () => {
+    const { store } = setup();
+    store.load();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("login");
   });
 });

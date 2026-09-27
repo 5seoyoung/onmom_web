@@ -24,21 +24,37 @@ export type GateDecision =
   /** 맞는 주소로 바꾼다(그동안 아무것도 그리지 않는다) */
   | { kind: "redirect"; to: string };
 
-/** 각 화면의 대표 주소 — main은 앱 홈 탭(서비스 소개 "/"가 아니다). */
+/**
+ * 각 화면의 대표 주소 — main은 앱 홈 탭(서비스 소개 "/"가 아니다).
+ * consent(다시 동의 — 서버 저장이 설정된 빌드에서 지금 판의 동의가 없음)는 온보딩 주소 + ?consent=1: 온보딩 화면이 동의 단계만 보인다.
+ * (쿼리는 끝 슬래시 뒤 — trailingSlash. 화면은 쿼리가 없어도 온보딩을 마친 사람이면 다시 동의로 연다.)
+ */
 export const SCREEN_PATH: Readonly<Record<Exclude<RootScreen, "loading">, string>> = {
   login: ROUTES.login,
   onboarding: ROUTES.onboarding,
+  consent: `${ROUTES.onboarding}?consent=1`,
   main: ROUTES.home,
 };
 
-/** 늘 여는 주소(끝 슬래시 없이 비교) */
-const PUBLIC_PATHS: ReadonlySet<string> = new Set([ROUTES.landing, ROUTES.privacy, ROUTES.authCallback].map(normalizePathname));
+/**
+ * 늘 여는 주소(끝 슬래시 없이 비교) — 서비스 소개, 개인정보처리방침, 로그인 콜백, 관리자 화면.
+ * 관리자 화면은 로그인·온보딩과 무관하게 그리고, 권한은 화면이 Supabase is_admin()으로 확인한다(데이터는 서버 함수가 막는다).
+ */
+const PUBLIC_PATHS: ReadonlySet<string> = new Set([ROUTES.landing, ROUTES.privacy, ROUTES.authCallback, ROUTES.admin].map(normalizePathname));
+
+/** 화면 → 그 화면을 그리는 주소 묶음. 다시 동의는 온보딩 주소에서 그린다. */
+const ROUTE_OF_SCREEN: Readonly<Record<Exclude<RootScreen, "loading">, RouteKind>> = {
+  login: "login",
+  onboarding: "onboarding",
+  consent: "onboarding",
+  main: "main",
+};
 
 /**
  * 주소 → 화면 묶음.
  * - / — 서비스 소개(랜딩), /privacy/ — 로그인·온보딩에서도 여는 문서(LoginView.swift:80, OnboardingFlowView.swift:305),
- *   /auth/callback/ — 로그인 공급자에서 돌아오는 주소: 늘 연다
- * - /login/, /onboarding/ — 그 화면일 때만
+ *   /auth/callback/ — 로그인 공급자에서 돌아오는 주소, /admin/ — 관리자 화면: 늘 연다
+ * - /login/, /onboarding/ — 그 화면일 때만(/onboarding/은 다시 동의 화면이기도 하다)
  * - 그 외(src/app/(app)의 탭·하위 화면, 없는 주소) — 로그인과 온보딩을 마친 뒤에만
  */
 export function routeKindFor(pathname: string | null | undefined): RouteKind {
@@ -53,6 +69,6 @@ export function gateDecision(screen: RootScreen, pathname: string | null | undef
   const route = routeKindFor(pathname);
   if (route === "public") return { kind: "render" };
   if (screen === "loading") return { kind: "wait" };
-  if (route === screen) return { kind: "render" };
+  if (route === ROUTE_OF_SCREEN[screen]) return { kind: "render" };
   return { kind: "redirect", to: SCREEN_PATH[screen] };
 }

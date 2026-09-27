@@ -2,42 +2,35 @@
 
 // 로그인 — LoginView.swift. 위 여백 · 로고/이름/한 줄 소개 · 아래 여백 · 버튼 묶음(간격 lg).
 // 웹 차이: Apple 로그인 없음(D2).
-// 카카오 로그인은 Supabase 설정(NEXT_PUBLIC_SUPABASE_URL·ANON_KEY)이 있을 때만 켜진다 — docs/SUPABASE_SETUP.md.
+// 카카오 로그인은 Supabase 설정(NEXT_PUBLIC_SUPABASE_URL·PUBLISHABLE_KEY)이 있을 때만 켜진다 — docs/SUPABASE_SETUP.md.
 //   켜짐: 누르면 카카오 동의 화면으로 이동 → /auth/callback/ 에서 로그인을 마친다(features/flow/AuthCallbackScreen).
 //   꺼짐: 버튼을 끄고 "준비 중"을 붙인다(D2, 네트워크 없음).
-// [게스트로 시작] → 계정이 생기면 앱 관문(AppGate)이 온보딩(또는 이미 마쳤으면 홈)으로 보낸다.
+// [게스트로 시작] → src/auth signInGuest: 설정이 있으면 Supabase 익명 계정(Turnstile 사이트 키가 있으면 사람 확인 뒤 — 보통은 보이지
+//   않고 끝나고, 필요할 때만 화면 아래에 확인 상자가 뜬다), 없거나 실패하면 지금처럼 이 브라우저 전용 게스트.
+//   계정이 생기면 앱 관문(AppGate)이 온보딩(또는 이미 마쳤으면 홈)으로 보낸다. 익명 계정을 만드는 동안 두 버튼을 잠근다.
+// 방침 링크 위 한 줄(loginText.ts loginConsentText): 설정 없는 빌드는 원문("로그인 시 … 동의하게 됩니다"), 서버 저장 빌드는 알림만 —
+//   민감정보(건강 정보) 동의는 온보딩 동의 단계에서 따로 받는다.
 // 폭: 폰 = 폰 폭 기둥, PC = 가운데 카드(페이지의 CardColumn). 카드 안에서는 위아래 빈칸(flex-1)이 로고를 가운데 둔다.
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
-import { signInWithKakao } from "@/auth";
+import { useAccountSession } from "@/auth";
 import { SecondaryButton } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import { ROUTES } from "@/routes";
-import { useAppStore } from "@/store/useAppStore";
 import { PrivacyPolicyDialog } from "@/features/privacy/PrivacyPolicyDialog";
 import { BrandLogo } from "./BrandLogo";
-
-export const LOGIN_TEXT = {
-  brand: "온맘", // 원문: LoginView.swift:26
-  tagline: "산모의 회복을, 하나의 흐름으로", // 원문: LoginView.swift:28
-  kakao: "카카오로 시작하기", // 원문: LoginView.swift:45
-  // 웹 신규 문구 — CPO 확인 필요 (D2: 카카오 로그인은 Supabase 설정 전까지 비활성)
-  kakaoPending: "준비 중",
-  /** 카카오 동의 화면으로 보내지 못했을 때 */
-  kakaoFailed: "카카오 로그인 창을 열지 못했어요. 잠시 후 다시 시도해주세요.", // 원문: KakaoLoginService.swift:29
-  guest: "게스트로 시작", // 원문: LoginView.swift:65
-  consent: "로그인 시 개인정보·민감정보 처리 방침에 동의하게 됩니다.", // 원문: LoginView.swift:77
-  policy: "개인정보처리방침 보기", // 원문: LoginView.swift:79
-} as const;
+import { LOGIN_TEXT, loginConsentText } from "./loginText";
 
 export function LoginScreen() {
-  const { actions } = useAppStore();
+  const session = useAccountSession();
   const [policyOpen, setPolicyOpen] = useState(false);
   // 빌드 때 정해지는 값(NEXT_PUBLIC_*)이라 서버 HTML과 브라우저가 같다.
   const kakaoEnabled = isSupabaseConfigured();
   const [signingIn, setSigningIn] = useState(false);
+  /** 게스트 시작 중(익명 계정 만들기) — 끝나면 계정이 생겨 관문이 이 화면을 떠난다 */
+  const [startingGuest, setStartingGuest] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // 카카오 화면에서 [뒤로]로 돌아오면(bfcache 복원) 버튼을 다시 켠다.
@@ -52,11 +45,24 @@ export function LoginScreen() {
   async function startKakao() {
     setSigningIn(true);
     setLoginError(null);
-    const result = await signInWithKakao();
+    const result = await session.signInWithKakao();
     if (result.ok) return; // 브라우저가 카카오 동의 화면으로 이동한다 — 버튼은 꺼 둔다(두 번 누르기 방지)
     setSigningIn(false);
     setLoginError(LOGIN_TEXT.kakaoFailed);
   }
+
+  /** 늘 게스트 계정이 생긴다(익명 계정이 안 되면 이 브라우저 전용) — 실패 안내는 없다. */
+  async function startGuest() {
+    setStartingGuest(true);
+    setLoginError(null);
+    try {
+      await session.signInGuest();
+    } finally {
+      setStartingGuest(false);
+    }
+  }
+
+  const busy = signingIn || startingGuest;
 
   return (
     <main className="flex flex-1 flex-col gap-6 bg-background">
@@ -77,7 +83,7 @@ export function LoginScreen() {
         {/* 카카오 옐로 #FEE500 · 글자 rgb(0.15, 0.11, 0.05) — LoginView.swift:47-53 */}
         <button
           type="button"
-          disabled={!kakaoEnabled || signingIn}
+          disabled={!kakaoEnabled || busy}
           aria-busy={signingIn || undefined}
           onClick={kakaoEnabled ? () => void startKakao() : undefined}
           className="flex min-h-11 w-full items-center justify-center gap-2 rounded-button bg-[#FEE500] px-4 py-4 text-[1.0625rem] font-semibold text-[#261C0D] disabled:cursor-not-allowed disabled:opacity-50"
@@ -94,10 +100,12 @@ export function LoginScreen() {
           </p>
         ) : null}
 
-        <SecondaryButton onClick={() => actions.signInGuest()}>{LOGIN_TEXT.guest}</SecondaryButton>
+        <SecondaryButton onClick={() => void startGuest()} disabled={busy} aria-busy={startingGuest || undefined}>
+          {LOGIN_TEXT.guest}
+        </SecondaryButton>
 
         <div className="flex flex-col items-center text-center">
-          <p className="text-[0.8125rem] text-text-secondary">{LOGIN_TEXT.consent}</p>
+          <p className="text-[0.8125rem] text-text-secondary">{loginConsentText(kakaoEnabled)}</p>
           <button
             type="button"
             onClick={() => setPolicyOpen(true)}

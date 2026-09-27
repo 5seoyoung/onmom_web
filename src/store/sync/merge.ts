@@ -10,7 +10,11 @@
 //   — 두 기기에서 동시에 고쳤을 때(충돌 뒤 다시 합치기), 올리기 전에 페이지를 닫았다 다시 열 때 이 브라우저의 고친 값을
 //   서버 값으로 덮지 않게.
 // - 마음 카드 접어두기 기한은 둘 중 늦은 쪽. 데이터 주인은 로그인한 계정.
+// - 동의(consentAccepted·consentVersion·consentAcceptedAt)는 한 묶음으로 다룬다: 위 규칙으로 고른 프로필에 지금 판의 동의가 없고
+//   다른 쪽에 있으면 그쪽 묶음을 쓴다 — 같은 계정의 주인이 한 기기에서 지금 판에 동의했으면 계정의 동의다(예: 게스트로 동의한 뒤
+//   이미 있던 카카오 계정으로 옮김). 다른 사람일 수 있는 가져온 기록은 합친 뒤 동기화 엔진이 동의를 지운다(engine.ts guardAdopted).
 
+import { hasCurrentConsent } from "@/domain/consent";
 import {
   MOOD_CHECKS_LIMIT,
   SYMPTOM_HISTORY_LIMIT,
@@ -40,7 +44,7 @@ export function mergeStates(server: PersistedState, local: PersistedState, opts:
   const personal = base === null ? firstMergePersonal(server, local) : threeWayPersonal(server, local, base);
   return {
     hasOnboarded: server.hasOnboarded || local.hasOnboarded,
-    profile: personal.profile,
+    profile: withCurrentConsent(personal.profile, server.profile, local.profile),
     symptomHistory: mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst).slice(0, SYMPTOM_HISTORY_LIMIT),
     communityPosts: mergePosts(server.communityPosts, local.communityPosts),
     maternity: personal.maternity,
@@ -77,6 +81,21 @@ function pickChanged<T extends object>(server: T, local: T, base: T): T {
     if (local[k] !== base[k]) out[k] = local[k];
   }
   return out;
+}
+
+// MARK: 동의
+
+type ConsentFields = Pick<UserProfile, "consentAccepted" | "consentVersion" | "consentAcceptedAt">;
+
+function consentOf(p: UserProfile): ConsentFields {
+  return { consentAccepted: p.consentAccepted, consentVersion: p.consentVersion, consentAcceptedAt: p.consentAcceptedAt };
+}
+
+/** 고른 프로필에 지금 판의 동의가 없으면, 있는 쪽(이 브라우저 → 서버 순)의 동의 묶음을 쓴다. 칸을 섞지 않는다. */
+function withCurrentConsent(picked: UserProfile, server: UserProfile, local: UserProfile): UserProfile {
+  if (hasCurrentConsent(picked)) return picked;
+  const donor = hasCurrentConsent(local) ? local : hasCurrentConsent(server) ? server : null;
+  return donor === null ? picked : { ...picked, ...consentOf(donor) };
 }
 
 // MARK: 목록

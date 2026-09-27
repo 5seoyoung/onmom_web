@@ -14,7 +14,8 @@
 // 결과가 뜨면 맨 위로 올리고 결과로 초점을 옮긴다 — PC에서도 결과가 오른쪽 열 맨 위라 스크롤 없이 보인다.
 
 import { useRef, useState } from "react";
-import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton, cx } from "@/components/ui";
 import type { MoodAnswer } from "@/domain/types";
 import type { SymptomForm } from "@/rules/record";
 import type { RedFlagResult } from "@/rules/redflag";
@@ -76,7 +77,7 @@ export function RecordScreen() {
 
   if (!ready) {
     return (
-      <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-6">
+      <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
         <ScreenHeader title={RECORD_TEXT.title} />
       </main>
     );
@@ -86,7 +87,7 @@ export function RecordScreen() {
   const columns = recordColumns(layout.phase);
 
   return (
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-6">
+    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
       <ScreenHeader title={RECORD_TEXT.title} subtitle={recordSubtitle(state.profile, today) ?? undefined} />
       <div ref={bodyRef} tabIndex={-1} className={columns.body}>
         {/* 왼쪽 열 — 입력 폼. 결과 단계의 폰에서는 숨긴다(iOS: 결과가 폼 자리를 차지).

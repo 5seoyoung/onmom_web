@@ -11,7 +11,8 @@
 // 폰 기둥(최대 30rem)에서는 카드 3장 + [저장]이 한 줄로 쌓인다(iOS 순서 그대로 — 읽는 순서·탭 순서도 같다).
 
 import { useId, useRef, useState } from "react";
-import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle, cx } from "@/components/ui";
 import { toLocalDateString } from "@/domain/date";
 import type { MaternityRecord } from "@/domain/types";
 import { useAppStore } from "@/store/useAppStore";
@@ -39,7 +40,8 @@ export function ProfileEditScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 md — MoreView.swift:160-168
-    <main className="@container flex w-full max-w-[60rem] flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+    // PC 틀은 pageFrame(격자 화면 — 두 열 폼). 더 깊은 화면이라 PC에서도 [취소]가 맨 위 줄에 있다.
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.wide)}>
       <LeaveSubPageHeader
         title={PROFILE_EDIT_TEXT.title}
         backHref={SETTINGS_HREF}

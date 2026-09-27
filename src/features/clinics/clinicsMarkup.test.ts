@@ -2,6 +2,7 @@
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { READING_BLOCK } from "@/components/shell/pageFrame";
 import { ClinicRow } from "./ClinicRow";
 import { clinicRowView, CLINICS_TEXT } from "./clinicsView";
 import { NearbyClinics } from "./NearbyClinics";
@@ -42,8 +43,8 @@ describe("NearbyClinics — 놓이는 자리의 폭(layout)", () => {
     expect(stack).not.toContain("lg:");
   });
 
-  it("wide는 PC(lg)에서만 입력·안내를 읽기 좋은 폭으로 — 폰 마크업은 기본과 같다", () => {
-    expect(wide).toContain("lg:max-w-[40rem]");
+  it("wide는 PC(lg)에서만 입력·안내를 읽기 폭(읽기 화면의 글줄과 같은 READING_BLOCK)으로 — 폰 마크업은 기본과 같다", () => {
+    expect(wide).toContain(READING_BLOCK);
     expect(phoneOnly(wide)).toBe(stack);
   });
 });

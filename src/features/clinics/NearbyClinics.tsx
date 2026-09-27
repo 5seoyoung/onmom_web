@@ -4,13 +4,15 @@
 // 동네 입력 카드 → 안내문 → (찾는 중 | 오류 카드 | 지도 + 병원 목록). 기기 위치 권한은 쓰지 않는다.
 // 동네 값은 부모가 프로필(profile.neighborhood)과 묶어 넘긴다(RecordFlowView.swift:273-276, RegionResourcesView.swift:11).
 // 카카오 JS 키가 없으면 입력·안내문은 그대로 두고 "준비 중" 카드만 보인다(D6).
-// PC(lg 이상), 넓은 자리(layout="wide" — 지역 연계 화면): 입력·안내는 읽기 좋은 폭(최대 40rem), 병원 목록은 두 열.
+// PC(lg 이상), 넓은 자리(layout="wide" — 지역 연계 화면): 입력·안내는 읽기 폭(READING_BLOCK — 읽기 화면의 글줄과 같은 45rem),
+// 병원 목록은 두 열.
 // 지도 높이는 그대로 둔다(크기가 바뀌면 SDK relayout이 필요하다).
 // 기록 결과처럼 좁은 열 안에서는 기본값(layout="stack") — 폰과 같은 한 줄이다.
 
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Hourglass, LoaderCircle, MapPinOff, Search } from "lucide-react";
 import { isClinicSearchConfigured, searchNearbyClinics } from "@/api/clinics";
+import { READING_BLOCK } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, cx } from "@/components/ui";
 import { config } from "@/config";
 import { ClinicMap } from "./ClinicMap";
@@ -34,7 +36,7 @@ export interface NearbyClinicsProps {
 
 /** PC(lg)에서 넓은 자리일 때만 붙는 클래스 — 폰은 어느 쪽이든 같다 */
 const WIDE = {
-  field: "lg:max-w-[40rem]",
+  field: READING_BLOCK,
   list: "lg:grid lg:grid-cols-2",
 } as const;
 

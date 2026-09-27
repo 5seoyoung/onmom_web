@@ -7,7 +7,8 @@
 // 저장 규칙(trim·작성자 스냅샷·최신순)은 store가 한다 — 여기서는 넘기기만.
 
 import { useId, useRef, useState, type KeyboardEvent } from "react";
-import { Card } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { Card, cx } from "@/components/ui";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitPost } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
@@ -42,8 +43,9 @@ export function JournalWriteScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 md — CommunityView.swift:122-141
-    // PC: 읽기 좋은 폭(최대 42rem) 기둥(왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게), 내용 칸은 더 길게. 폰 기둥(30rem)에서는 그대로.
-    <main className="@container flex w-full max-w-[42rem] flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+    // PC 틀은 pageFrame(읽기 화면 — 최대 48rem, 왼쪽 정렬), 내용 칸은 더 길게. 더 깊은 화면이라 PC에서도 [취소]가 맨 위 줄에 있다.
+    // 폰 기둥(30rem)에서는 그대로.
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.reading)}>
       <LeaveSubPageHeader
         title={JOURNAL_TEXT.composeTitle}
         backHref={JOURNAL_HREF}
@@ -54,7 +56,8 @@ export function JournalWriteScreen() {
             type="button"
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="flex min-h-11 items-center rounded-button px-2 text-base font-semibold text-primary disabled:cursor-not-allowed disabled:text-text-subtle"
+            // PC: 제목 줄(32px) 가운데에 맞추고 머리 높이를 다른 화면과 같게(-my-1.5 — 누르는 영역 44px는 그대로)
+            className="flex min-h-11 items-center rounded-button px-2 text-base font-semibold text-primary disabled:cursor-not-allowed disabled:text-text-subtle lg:-my-1.5"
           >
             {JOURNAL_TEXT.submit}
           </button>

@@ -9,8 +9,11 @@
 // 오른쪽 "자세히·기록"(지표·단계·체중·빠른 기록). 열은 DOM에서도 왼쪽 묶음 → 오른쪽 묶음 순서라
 // 읽는 순서·Tab 순서가 iOS 카드 순서와 같다(보이는 위치만 두 열). 상단 바·면책은 전체 폭.
 // 열 묶음은 폰에서도 같은 간격(gap-4)의 세로 flex라 폰 화면은 이전과 같다.
+// PC 틀은 pageFrame(탭 화면) — 좌우는 PC에서만 다른 화면과 같은 24(폰은 HomeView의 20 그대로).
 
 import { useMemo, useRef } from "react";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { cx } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
 import {
   AnalyzeEntryCard,
@@ -45,7 +48,7 @@ export function HomeScreen() {
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-2">
+    <main className={cx("flex flex-1 flex-col gap-4 px-5 pb-6 pt-2", PAGE_FRAME.wide)}>
       <HomeTopBar />
       {vm ? (
         <>

@@ -9,10 +9,11 @@ import type {
   RecoveryGoal,
   UserProfile,
 } from "@/domain/types";
-import type { DeleteAccountResult, SignOutResult } from "@/auth";
+import type { DeleteAccountResult, KakaoSignInResult, SignOutResult } from "@/auth";
 import type { AccountProvider } from "@/store/account";
 import { ROUTES } from "@/routes";
 import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, neighborhoodValue } from "@/features/profile/profileView";
+import { STORAGE_REGION } from "@/features/privacy/dataItems";
 
 export const SETTINGS_TEXT = {
   title: "설정", // 원문: MoreView.swift:92
@@ -33,7 +34,7 @@ export const SETTINGS_TEXT = {
   comingSoon: "준비 중", // 웹 신규 문구 — CPO 확인 필요 (D4: 웹 알림 미구현 표시)
   // 개인정보·안전 — D9와 같은 이유로 iOS 원문 그대로
   privacy: "개인정보·안전", // 원문: MoreView.swift:72
-  // 원문: MoreView.swift:73
+  // 원문: MoreView.swift:73 — 설정 없는 빌드만 그대로. 서버 저장 빌드는 privacyBodyFor가 "내 기기에만" 문장을 바꾼다.
   privacyBody:
     "본 앱은 진단 기기가 아니며, 모든 권고는 의료진 상담을 권유합니다. 건강 데이터는 내 기기에만 저장됩니다. 챗봇 등 일부 기능 사용 시 질문 내용이 답변 생성을 위해 서버로 전송돼요.",
   privacyPolicy: "개인정보처리방침", // 원문: MoreView.swift:78
@@ -59,14 +60,60 @@ export function signOutMessage(provider: AccountProvider | null | undefined): st
     : "기록은 이 기기에 남아 있어요. 같은 계정으로 다시 로그인하면 이어서 볼 수 있지만, 다른 계정이나 게스트로 들어오면 새로 시작해요."; // 원문: MoreView.swift:101
 }
 
-// MARK: 서버 계정 — 카카오 로그인(Supabase)이 켜진 빌드의 카카오 계정
-// 로그아웃·계정 삭제가 서버를 거친다(src/auth signOutEverywhere·deleteAccountEverywhere). 게스트·설정 없음은 iOS처럼 이 브라우저에서만.
-// iOS에는 서버 계정이 없어 원문이 없다 — 아래 문구는 모두 웹 신규.
+// MARK: 서버 계정 — 사용자 관리(Supabase)가 켜진 빌드의 카카오·게스트(익명) 계정
+// 로그아웃·계정 삭제·카카오 연결이 서버를 거친다(src/auth). 설정 없음은 iOS처럼 이 브라우저에서만.
+// iOS에는 서버 계정이 없어 원문이 없다 — 아래 문구는 원문 표시가 없으면 모두 웹 신규.
 
-/** 로그아웃·계정 삭제가 서버를 거치는가 — Supabase가 설정된 빌드의 카카오 계정만. */
-export function usesServerAccount(provider: AccountProvider | null | undefined, supabaseConfigured: boolean): boolean {
-  return supabaseConfigured && provider === "kakao";
+/**
+ * 계정 카드의 모양
+ * - "local": 설정 없는 빌드(또는 모르는 공급자) — 지금까지와 같다: 로그아웃(기록은 남음)·계정 삭제(이 브라우저만).
+ * - "guest": 설정 있는 빌드의 게스트(Supabase 익명 계정 — 익명 로그인이 안 돼 아직 이 브라우저 전용인 게스트도 같게) —
+ *            로그아웃이 없다(익명 계정은 로그아웃하면 다시 찾을 수 없다). [카카오 계정 연결]·[이 기기에서 기록 지우기(계정 삭제)].
+ * - "kakao": 설정 있는 빌드의 카카오 — 로그아웃(남은 변경을 올린 뒤)·계정 삭제(서버 먼저).
+ */
+export type AccountMode = "local" | "guest" | "kakao";
+
+export function accountModeFor(provider: AccountProvider | null | undefined, supabaseConfigured: boolean): AccountMode {
+  if (!supabaseConfigured) return "local";
+  if (provider === "guest") return "guest";
+  if (provider === "kakao") return "kakao";
+  return "local";
 }
+
+/** 로그아웃·계정 삭제가 서버를 거치는가(확인 창이 서버 문구를 쓰는가) — 설정 있는 빌드의 카카오·게스트. */
+export function usesServerAccount(provider: AccountProvider | null | undefined, supabaseConfigured: boolean): boolean {
+  return accountModeFor(provider, supabaseConfigured) !== "local";
+}
+
+/** 계정 카드에 보이는 동작 */
+export interface AccountCardActions {
+  signOut: boolean;
+  linkKakao: boolean;
+  /** 삭제 버튼 제목 */
+  deleteLabel: string;
+  /** 로그아웃이 없는 까닭(게스트) — 없으면 null */
+  notice: string | null;
+}
+
+export function accountCardActions(mode: AccountMode): AccountCardActions {
+  if (mode === "guest") {
+    return { signOut: false, linkKakao: true, deleteLabel: GUEST_ACCOUNT_TEXT.deleteAccount, notice: GUEST_ACCOUNT_TEXT.noSignOut };
+  }
+  return { signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null };
+}
+
+export const GUEST_ACCOUNT_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요 (게스트의 카카오 연결 — 같은 계정에 카카오를 붙인다. 문구는 작업 지시의 CPO 표현)
+  linkKakao: "카카오 계정 연결",
+  // 웹 신규 문구 — CPO 확인 필요 (위 버튼의 설명 줄 — 작업 지시의 CPO 표현)
+  linkKakaoHint: "기록을 잃지 않고 다른 기기에서도 이어 쓰기",
+  // 웹 신규 문구 — CPO 확인 필요 (게스트의 계정 삭제 버튼 — 작업 지시의 CPO 표현. 설명 줄은 원문 deleteAccountHint)
+  deleteAccount: "이 기기에서 기록 지우기(계정 삭제)",
+  // 웹 신규 문구 — CPO 확인 필요 (게스트에게 로그아웃이 없는 까닭 — 익명 계정은 로그아웃하면 다시 들어갈 방법이 없다)
+  noSignOut: "게스트는 로그아웃하면 기록을 다시 찾을 수 없어요. 기록을 지키려면 카카오 계정을 연결해 주세요.",
+  /** 카카오 화면으로 보내지 못했다(연결 설정 꺼짐·네트워크) */
+  linkFailed: "카카오 로그인 창을 열지 못했어요. 잠시 후 다시 시도해주세요.", // 원문: KakaoLoginService.swift:29
+} as const;
 
 export const SERVER_ACCOUNT_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (카카오 로그아웃 확인 창: 서버에 다 올라갔으면 이 브라우저 사본을 지운다 — 감사 #19)
@@ -87,7 +134,23 @@ export const SERVER_ACCOUNT_TEXT = {
   signingOut: "로그아웃하고 있어요",
   // 웹 신규 문구 — CPO 확인 필요
   deleting: "계정을 삭제하고 있어요",
+  // 웹 신규 문구 — CPO 확인 필요 (서버 저장 빌드의 설정 "개인정보·안전" — MoreView.swift:73의 "건강 데이터는 내 기기에만 저장됩니다."를
+  // 바꾼 한 문장. 온보딩 동의 부제(consentText.ts SERVER_CONSENT_TEXT.subtitle)와 같은 사실)
+  privacyStorage: `건강 데이터는 동의를 받은 뒤에만 온맘 서버(${STORAGE_REGION})에 저장돼요.`,
 } as const;
+
+/** iOS 개인정보·안전 본문 중 서버 저장 빌드에서 사실이 아닌 문장(MoreView.swift:73) */
+const PRIVACY_DEVICE_ONLY_SENTENCE = "건강 데이터는 내 기기에만 저장됩니다.";
+
+/**
+ * 설정 "개인정보·안전" 카드 본문. 설정 없는 빌드는 iOS 원문 그대로.
+ * 서버 저장 빌드(Supabase 설정 있음)는 건강 기록이 동의 뒤 서버(서울)에 저장되므로 "내 기기에만 저장" 한 문장만 바꾼다 —
+ * 온보딩 서버 저장 동의(features/onboarding/consentText.ts)와 어긋나지 않게. 나머지 문장(진단 기기 아님·챗봇 전송)은 원문.
+ */
+export function privacyBodyFor(supabaseConfigured: boolean): string {
+  if (!supabaseConfigured) return SETTINGS_TEXT.privacyBody;
+  return SETTINGS_TEXT.privacyBody.replace(PRIVACY_DEVICE_ONLY_SENTENCE, SERVER_ACCOUNT_TEXT.privacyStorage);
+}
 
 /** 로그아웃 확인 창 본문 — 서버 계정이면 서버 안내, 아니면 iOS 문구(signOutMessage). */
 export function signOutConfirmMessage(provider: AccountProvider | null | undefined, serverAccount: boolean): string {
@@ -104,12 +167,16 @@ export function deleteFailureMessage(reason: "failed" | "noSession"): string {
   return reason === "noSession" ? SERVER_ACCOUNT_TEXT.deleteNoSession : SERVER_ACCOUNT_TEXT.deleteFailed;
 }
 
-/** 로그아웃·계정 삭제를 누른 뒤 화면이 할 일 — done: 끝(계정이 없어지면 관문이 로그인 화면으로), unsynced: 경고 창, failed: 안내 */
-export type AccountActionOutcome = { kind: "done" } | { kind: "unsynced" } | { kind: "failed"; message: string };
+/**
+ * 로그아웃·계정 삭제·카카오 연결을 누른 뒤 화면이 할 일 — done: 끝(계정이 없어지면 관문이 로그인 화면으로),
+ * redirecting: 브라우저가 카카오 화면으로 이동한다(버튼을 잠근 채 둔다), unsynced: 경고 창, failed: 안내
+ */
+export type AccountActionOutcome = { kind: "done" } | { kind: "redirecting" } | { kind: "unsynced" } | { kind: "failed"; message: string };
 
 /**
  * 로그아웃. Supabase가 없는 빌드는 지금까지처럼 스토어에서 바로(기록은 남는다 — iOS와 같음).
- * 있는 빌드는 signOutEverywhere(게스트는 같은 결과, 카카오는 남은 변경을 올린 뒤) — 못 올렸으면 unsynced(아무것도 하지 않았다).
+ * 있는 빌드는 signOutEverywhere(카카오는 남은 변경을 올린 뒤) — 못 올렸으면 unsynced(아무것도 하지 않았다).
+ * 있는 빌드의 게스트는 로그아웃하지 않는다(화면에 버튼이 없다).
  */
 export async function performSignOut(deps: {
   supabaseConfigured: boolean;
@@ -122,12 +189,20 @@ export async function performSignOut(deps: {
     return { kind: "done" };
   }
   const result = await deps.signOutEverywhere(deps.force ? { force: true } : undefined);
-  return result.ok ? { kind: "done" } : { kind: "unsynced" };
+  if (result.ok) return { kind: "done" };
+  // 게스트는 로그아웃하지 않는다(화면에 버튼이 없다 — 혹시 불리면 까닭만 알린다)
+  return result.reason === "guest" ? { kind: "failed", message: GUEST_ACCOUNT_TEXT.noSignOut } : { kind: "unsynced" };
+}
+
+/** 게스트의 [카카오 계정 연결] — 성공하면 카카오 화면으로 이동한다(돌아오면 로그인 콜백이 연결을 마친다). */
+export async function performLinkKakao(deps: { signInWithKakao: () => Promise<KakaoSignInResult> }): Promise<AccountActionOutcome> {
+  const result = await deps.signInWithKakao();
+  return result.ok ? { kind: "redirecting" } : { kind: "failed", message: GUEST_ACCOUNT_TEXT.linkFailed };
 }
 
 /**
  * 계정 삭제. Supabase가 없는 빌드는 이 브라우저만 비운다(MoreView.swift:113-118).
- * 있는 빌드는 deleteAccountEverywhere — 카카오 계정은 서버를 먼저 지우고, 실패하면 아무것도 지우지 않아 안내만 한다.
+ * 있는 빌드는 deleteAccountEverywhere — 카카오·익명 게스트 계정은 서버를 먼저 지우고, 실패하면 아무것도 지우지 않아 안내만 한다.
  */
 export async function performDeleteAccount(deps: {
   supabaseConfigured: boolean;

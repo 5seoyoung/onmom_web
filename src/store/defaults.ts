@@ -12,6 +12,8 @@ export function defaultProfile(): UserProfile {
     returnToWorkDate: null,
     isBreastfeeding: true,
     consentAccepted: false,
+    consentVersion: null,
+    consentAcceptedAt: null,
     heightCm: 0,
     currentWeightKg: 0,
     prePregnancyWeightKg: 0,

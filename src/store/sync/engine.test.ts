@@ -1,17 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
-import { createAppStore, type AppStore } from "../appStore";
+import { createAppStore, rootScreenFor, type AppStore } from "../appStore";
 import { initialState } from "../defaults";
 import { createMemoryStorage, createStoragePersistence, STORAGE_PREFIX, type StorageLike } from "../persistence";
 import { createSyncEngine, type SyncEngine } from "./engine";
-import { createStorageSyncMarks, SERVER_STORAGE_CONSENT_VERSION, SYNC_BASE_KEY, SYNC_CONSENT_KEY, type SyncMarks } from "./marks";
+import { createStorageSyncMarks, SYNC_ADOPTED_KEY, SYNC_BASE_KEY, type SyncMarks } from "./marks";
 import { STATE_SCHEMA_VERSION } from "./remote";
 import { FakeRemote } from "./testUtils";
 
 const ACCOUNT = { id: "kakao-1001", name: null, provider: "kakao" } as const;
 const NOW = new Date("2026-09-27T12:00:00+09:00");
+/** 스토어의 시계 — 동의 시각과 가져온 시각의 앞뒤를 나누려고 움직인다 */
+let clock = NOW;
+function tick(minutes: number) {
+  clock = new Date(clock.getTime() + minutes * 60_000);
+}
 
-/** 스토어 → 같은 저장소를 쓰는 동기화 표시(합치기 기준·서버 저장 동의) */
+/** 스토어 → 같은 저장소를 쓰는 동기화 표시(합치기 기준·가져온 기록) */
 const marksOf = new WeakMap<AppStore, SyncMarks>();
 
 /** memory를 넘기면 같은 브라우저 저장소로 "페이지를 다시 연" 스토어를 만든다. */
@@ -19,7 +25,7 @@ function setupStore(memory: StorageLike = createMemoryStorage()): AppStore {
   let n = 0;
   const store = createAppStore({
     persistence: createStoragePersistence(() => memory),
-    now: () => NOW,
+    now: () => clock,
     newId: () => `id-${++n}`,
   });
   store.load();
@@ -30,13 +36,22 @@ function marks(store: AppStore): SyncMarks {
   return marksOf.get(store)!;
 }
 
+/** 서버 행 — 지금 판에 동의한 사람이 만든 것(동의 없이는 행이 생기지 않는다) */
 function onboardedServerState(over: Partial<PersistedState> = {}): PersistedState {
   const s = initialState();
   return {
     ...s,
     hasOnboarded: true,
     ownerAccountID: ACCOUNT.id,
-    profile: { ...s.profile, consentAccepted: true, deliveryDate: "2026-08-01", deliveryMethod: "cesarean", heightCm: 161 },
+    profile: {
+      ...s.profile,
+      consentAccepted: true,
+      consentVersion: CURRENT_CONSENT_VERSION,
+      consentAcceptedAt: "2026-09-01T00:00:00.000Z",
+      deliveryDate: "2026-08-01",
+      deliveryMethod: "cesarean",
+      heightCm: 161,
+    },
     ...over,
   };
 }
@@ -60,6 +75,7 @@ function start(store: AppStore, remote: FakeRemote, opts: { onPageHide?: (l: () 
 }
 
 beforeEach(() => {
+  clock = NOW;
   vi.useFakeTimers();
 });
 afterEach(() => {
@@ -107,15 +123,15 @@ describe("첫 읽기 전에는 쓰지 않는다(감사 #13)", () => {
     await vi.advanceTimersByTimeAsync(1_000);
     expect(remote.writes()).toEqual([]);
 
-    marks(store).acceptConsent(ACCOUNT.id); // 서버 저장 동의(온보딩이 남긴다)
+    store.actions.acceptConsent(); // 지금 판의 동의(온보딩 동의 단계가 남긴다)
     await vi.advanceTimersByTimeAsync(3_000); // 재시도 → 읽기 성공(행 없음) → 동의했으니 만든다
     expect(remote.calls).toEqual(["fetch", "fetch", "insert"]);
     expect(e.status()).toBe("synced");
   });
 });
 
-describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () => {
-  it("행이 없고 온보딩 동의 전이면 기다렸다가, 서버 저장 동의와 함께 온보딩을 마치면 처음 만든다", async () => {
+describe("지금 판의 동의 전에는 서버로 보내지 않는다(감사 #15·#20, domain/consent.ts)", () => {
+  it("행이 없고 온보딩 동의 전이면 기다렸다가, 지금 판에 동의하고 온보딩을 마치면 처음 만든다", async () => {
     const store = setupStore();
     store.actions.signIn(ACCOUNT);
     const remote = new FakeRemote();
@@ -130,18 +146,20 @@ describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () =
     await vi.advanceTimersByTimeAsync(10_000);
     expect(remote.writes()).toEqual([]);
 
-    marks(store).acceptConsent(ACCOUNT.id); // 새 온보딩 3단계: 서버 저장 동의
+    // 온보딩 3단계(서버 저장 동의 문구): 동의 칸을 지금 판으로 저장한 뒤 완료
+    store.actions.updateProfile({ consentAccepted: true, consentVersion: CURRENT_CONSENT_VERSION, consentAcceptedAt: clock.toISOString() });
     store.actions.completeOnboarding();
     await vi.advanceTimersByTimeAsync(1_499);
     expect(remote.writes()).toEqual([]); // 1.5초 모아 보내기
     await vi.advanceTimersByTimeAsync(1);
     expect(remote.writes()).toEqual(["insert"]);
     expect(remote.serverState().profile.consentAccepted).toBe(true);
+    expect(remote.serverState().profile.consentVersion).toBe(CURRENT_CONSENT_VERSION);
     expect(remote.serverState().ownerAccountID).toBe(ACCOUNT.id);
     expect(e.status()).toBe("synced");
   });
 
-  it("온보딩 동의(\"내 기기에만 저장\")만으로는 행을 만들지 않는다 — 서버 저장 동의 뒤에 만든다", async () => {
+  it("판 없는 동의(\"내 기기에만 저장\" — 서버 저장이 없던 빌드)만으로는 행을 만들지 않는다 — 지금 판에 동의한 뒤에 만든다", async () => {
     const store = setupStore();
     store.actions.signIn(ACCOUNT);
     const remote = new FakeRemote();
@@ -155,21 +173,22 @@ describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () =
     expect(e.status()).toBe("waitingConsent");
     // 기록이 이 브라우저에만 있다 — 로그아웃이 지우지 않게 flush는 false
     expect(await e.flush(1_000)).toBe(false);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent"); // 관문이 다시 동의 화면으로 보낸다
 
-    marks(store).acceptConsent(ACCOUNT.id);
+    store.actions.acceptConsent();
     e.retryNow();
     await vi.advanceTimersByTimeAsync(0);
     expect(remote.writes()).toEqual(["insert"]);
     expect(remote.serverState().symptomHistory).toHaveLength(1);
     expect(e.status()).toBe("synced");
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("main");
   });
 
-  it("예전 판의 서버 저장 동의로는 새 행을 만들지 않는다(문구가 바뀌면 다시 받는다 — 감사 #20)", async () => {
-    const memory = createMemoryStorage();
-    const store = setupStore(memory);
+  it("예전 판의 동의로는 새 행을 만들지 않는다(문구가 바뀌면 다시 받는다 — 감사 #20)", async () => {
+    const store = setupStore();
     store.actions.signIn(ACCOUNT);
+    store.actions.updateProfile({ consentAccepted: true, consentVersion: "web-2026-01-01", consentAcceptedAt: clock.toISOString() });
     store.actions.completeOnboarding();
-    memory.setItem(SYNC_CONSENT_KEY, JSON.stringify({ accountId: ACCOUNT.id, consentVersion: SERVER_STORAGE_CONSENT_VERSION - 1, adopted: false }));
     const remote = new FakeRemote();
     const e = start(store, remote);
     await vi.advanceTimersByTimeAsync(10_000);
@@ -177,24 +196,42 @@ describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () =
     expect(e.status()).toBe("waitingConsent");
   });
 
-  it("다른 계정의 서버 저장 동의 표시는 쓰지 않는다", async () => {
+  it("서버에 행이 있다는 것만으로는 올리지 않는다 — 동의는 행이 아니라 프로필에 있다(예전 판으로 만든 행)", async () => {
     const store = setupStore();
     store.actions.signIn(ACCOUNT);
-    store.actions.completeOnboarding();
-    marks(store).acceptConsent("kakao-2002");
     const remote = new FakeRemote();
-    start(store, remote);
-    await vi.advanceTimersByTimeAsync(10_000);
+    const old = onboardedServerState();
+    remote.setServer({ ...old, profile: { ...old.profile, consentVersion: "web-2026-01-01" } });
+    const e = start(store, remote);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent"); // 읽기는 한다 — 다시 동의 화면으로
+    store.actions.addMoodCheck({ questionID: 1, answer: "no" });
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(remote.writes()).toEqual([]);
+    expect(e.status()).toBe("waitingConsent");
+
+    store.actions.acceptConsent();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(remote.writes()).toEqual(["update"]);
+    expect(remote.serverState().profile.consentVersion).toBe(CURRENT_CONSENT_VERSION);
+    expect(remote.serverState().moodChecks).toHaveLength(1);
   });
 
-  it("게스트 기록을 가져온 로그인 — 행이 없으면 다시 동의할 때까지 만들지 않는다", async () => {
-    const store = setupStore();
+  /** 이 브라우저에서 지금 판에 동의하고 쓰던 게스트 — 로그아웃한 뒤 누군가 카카오로 로그인한다(공용 PC) */
+  function guestLeftRecords(store: AppStore) {
     store.actions.signInGuest();
+    store.actions.acceptConsent();
     store.actions.completeOnboarding();
     store.actions.addMoodCheck({ questionID: 1, answer: "yes" });
-    marks(store).markAdopted(ACCOUNT.id); // 로그인 콜백이 가져오기 전에 남긴다(src/auth/session.ts)
+    store.actions.signOut();
+    tick(10);
+    marks(store).markAdopted(ACCOUNT.id, clock.toISOString()); // 로그인이 가져오기 전에 남긴다(src/auth/session.ts)
     store.actions.signIn(ACCOUNT); // 게스트 기록은 이 계정으로 귀속(state.ts)
+  }
+
+  it("게스트 기록을 가져온 로그인 — 행이 없으면 다시 동의할 때까지 만들지 않는다(게스트의 예전 동의로는 안 된다)", async () => {
+    const store = setupStore();
+    guestLeftRecords(store);
     const remote = new FakeRemote();
 
     const e = start(store, remote);
@@ -202,21 +239,22 @@ describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () =
     expect(remote.calls).toEqual(["fetch"]);
     expect(e.status()).toBe("waitingConsent");
     expect(store.getSnapshot().state.moodChecks).toHaveLength(1); // 이 브라우저에는 그대로
+    // 가져온 기록의 동의 도장을 지워 관문이 다시 동의 화면으로 보낸다
+    expect(store.getSnapshot().state.profile.consentVersion).toBeNull();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
 
-    marks(store).acceptConsent(ACCOUNT.id); // 다시 동의
+    tick(1);
+    store.actions.acceptConsent(); // 다시 동의
     e.retryNow();
     await vi.advanceTimersByTimeAsync(0);
     expect(remote.calls).toEqual(["fetch", "insert"]);
     expect(remote.serverState().moodChecks).toHaveLength(1);
+    expect(marks(store).adoptedAt(ACCOUNT.id)).toBeNull(); // 다시 동의했으니 표시를 지운다
   });
 
-  it("게스트 기록을 가져온 로그인 — 행이 있어도 다시 동의할 때까지 서버 행에 섞지 않는다(공용 PC)", async () => {
+  it("게스트 기록을 가져온 로그인 — 행이 있어도(그 계정의 예전 동의가 있어도) 다시 동의할 때까지 서버 행에 섞지 않는다(공용 PC)", async () => {
     const store = setupStore();
-    store.actions.signInGuest();
-    store.actions.completeOnboarding();
-    store.actions.addMoodCheck({ questionID: 1, answer: "yes" });
-    marks(store).markAdopted(ACCOUNT.id);
-    store.actions.signIn(ACCOUNT);
+    guestLeftRecords(store);
     const remote = new FakeRemote();
     remote.setServer(onboardedServerState({ symptomHistory: [symptom("server-rec", "2026-09-20T01:00:00.000Z")] }));
 
@@ -230,12 +268,61 @@ describe("동의 전에는 서버로 보내지 않는다(감사 #15·#20)", () =
     expect(remote.serverState().moodChecks).toHaveLength(0);
     expect(e.status()).toBe("waitingConsent");
     expect(await e.flush(1_000)).toBe(false);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
 
-    marks(store).acceptConsent(ACCOUNT.id);
+    tick(1);
+    store.actions.acceptConsent();
     e.retryNow();
     await vi.advanceTimersByTimeAsync(0);
     expect(remote.writes()).toEqual(["update"]);
     expect(remote.serverState().moodChecks).toHaveLength(1);
+  });
+
+  it("서버 행의 동의가 가져온 시각보다 뒤여도(다른 기기의 시계가 빠름·가져온 뒤 다른 기기에서 동의) 이 브라우저의 동의가 아니다 — 올리지 않는다", async () => {
+    const store = setupStore();
+    guestLeftRecords(store);
+    const adoptedAt = marks(store).adoptedAt(ACCOUNT.id)!;
+    const later = new Date(Date.parse(adoptedAt) + 5 * 60_000).toISOString();
+    const remote = new FakeRemote();
+    const serverState = onboardedServerState();
+    remote.setServer({ ...serverState, profile: { ...serverState.profile, consentAcceptedAt: later } });
+
+    const e = start(store, remote);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(remote.writes()).toEqual([]);
+    expect(e.status()).toBe("waitingConsent");
+    expect(marks(store).adoptedAt(ACCOUNT.id)).toBe(adoptedAt); // 표시는 그대로
+    expect(store.getSnapshot().state.profile.consentVersion).toBeNull();
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
+
+    // 이 브라우저에서 기록을 더해도 동의 전에는 올리지 않는다
+    store.actions.addMoodCheck({ questionID: 3, answer: "no" });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(remote.writes()).toEqual([]);
+
+    tick(1);
+    store.actions.acceptConsent(); // 이 브라우저에서 다시 동의
+    e.retryNow();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remote.writes()).toEqual(["update"]);
+    expect(marks(store).adoptedAt(ACCOUNT.id)).toBeNull();
+  });
+
+  it("가져온 기록 표시는 새로고침 뒤에도 남는다 — 저장소를 못 쓰면 이 페이지 메모리에", async () => {
+    const memory = createMemoryStorage();
+    const store = setupStore(memory);
+    guestLeftRecords(store);
+    expect(JSON.parse(memory.getItem(SYNC_ADOPTED_KEY)!)).toMatchObject({ accountId: ACCOUNT.id });
+    expect(SYNC_ADOPTED_KEY.startsWith(STORAGE_PREFIX)).toBe(true);
+    const reopened = setupStore(memory);
+    expect(marks(reopened).adoptedAt(ACCOUNT.id)).not.toBeNull();
+    expect(marks(reopened).adoptedAt("kakao-2002")).toBeNull(); // 다른 계정 것은 아니다
+
+    const blocked = createStorageSyncMarks(() => null);
+    blocked.markAdopted(ACCOUNT.id, clock.toISOString());
+    expect(blocked.adoptedAt(ACCOUNT.id)).toBe(clock.toISOString());
+    blocked.clearAdopted(ACCOUNT.id);
+    expect(blocked.adoptedAt(ACCOUNT.id)).toBeNull();
   });
 });
 
@@ -345,8 +432,8 @@ describe("서버에 행이 있을 때", () => {
   it("읽기 전용이 된 뒤에는 flush·retryNow도 쓰지 않는다 — 행이 없어져도 옛 형식으로 새로 만들지 않는다", async () => {
     const store = setupStore();
     store.actions.signIn(ACCOUNT);
+    store.actions.acceptConsent();
     store.actions.completeOnboarding();
-    marks(store).acceptConsent(ACCOUNT.id);
     const remote = new FakeRemote();
     remote.setServer(onboardedServerState(), STATE_SCHEMA_VERSION + 1);
     const e = start(store, remote);
@@ -455,7 +542,7 @@ describe("페이지를 다시 열 때 — 올리기 전에 닫혀도 이 브라�
     start(store, remote);
     await vi.advanceTimersByTimeAsync(0);
     expect(memory.getItem(SYNC_BASE_KEY)).not.toBeNull();
-    expect(SYNC_BASE_KEY.startsWith(STORAGE_PREFIX) && SYNC_CONSENT_KEY.startsWith(STORAGE_PREFIX)).toBe(true);
+    expect(SYNC_BASE_KEY.startsWith(STORAGE_PREFIX) && SYNC_ADOPTED_KEY.startsWith(STORAGE_PREFIX)).toBe(true);
     store.actions.deleteAccount();
     expect(memory.getItem(SYNC_BASE_KEY)).toBeNull();
   });

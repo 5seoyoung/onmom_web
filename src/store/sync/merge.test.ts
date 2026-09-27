@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
 import {
   MOOD_CHECKS_LIMIT,
   SYMPTOM_HISTORY_LIMIT,
@@ -158,5 +159,27 @@ describe("mergeStates — 충돌 뒤 다시 합치기(base 있음)", () => {
     const local = onboarded({ profile: { ...base.profile, currentWeightKg: 58 } });
     const merged = mergeStates(server, local, { accountId: ACCOUNT });
     expect(merged.profile.currentWeightKg).toBe(0);
+  });
+});
+
+describe("mergeStates — 동의(판·시각)는 한 묶음", () => {
+  const current = { consentAccepted: true, consentVersion: CURRENT_CONSENT_VERSION, consentAcceptedAt: "2026-09-28T01:00:00.000Z" };
+  const old = { consentAccepted: true, consentVersion: "web-2026-01-01", consentAcceptedAt: "2026-01-01T00:00:00.000Z" };
+
+  it("고른 쪽(서버)에 지금 판의 동의가 없고 이 브라우저에 있으면 이 브라우저의 동의 묶음 — 예: 게스트로 동의한 뒤 이미 있던 카카오 계정으로 옮김", () => {
+    const server = onboarded({ profile: { ...onboarded().profile, ...old, heightCm: 158 } });
+    const local = onboarded({ profile: { ...onboarded().profile, ...current, heightCm: 170 } });
+    const merged = mergeStates(server, local, { accountId: ACCOUNT });
+    expect(merged.profile.heightCm).toBe(158); // 프로필은 첫 합치기 규칙대로 서버
+    expect(merged.profile).toMatchObject(current);
+    expect(hasCurrentConsent(merged.profile)).toBe(true);
+  });
+
+  it("이 브라우저에 없고 서버에 있으면 서버의 묶음, 둘 다 없으면 고른 쪽 그대로(칸을 섞지 않는다)", () => {
+    const server = state({ profile: { ...initialState().profile, ...current } });
+    const local = onboarded({ profile: { ...onboarded().profile, ...old } });
+    expect(mergeStates(server, local, { accountId: ACCOUNT }).profile).toMatchObject(current);
+    const neither = mergeStates(onboarded({ profile: { ...onboarded().profile, ...old } }), onboarded(), { accountId: ACCOUNT });
+    expect(neither.profile).toMatchObject(old);
   });
 });

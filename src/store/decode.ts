@@ -113,6 +113,9 @@ export function decodeProfile(raw: unknown, fallback: UserProfile = defaultProfi
     returnToWorkDate: nullable(raw.returnToWorkDate, decodeCalendarDate, f.returnToWorkDate),
     isBreastfeeding: bool(raw.isBreastfeeding, f.isBreastfeeding),
     consentAccepted: bool(raw.consentAccepted, f.consentAccepted),
+    // 동의의 판·시각(domain/consent.ts) — 없으면(예전 저장·iOS) null = 지금 판의 동의 없음
+    consentVersion: nullable(raw.consentVersion, nonEmptyString, f.consentVersion),
+    consentAcceptedAt: nullable(raw.consentAcceptedAt, decodeInstant, f.consentAcceptedAt),
     heightCm: num(raw.heightCm, f.heightCm),
     currentWeightKg: num(raw.currentWeightKg, f.currentWeightKg),
     prePregnancyWeightKg: num(raw.prePregnancyWeightKg, f.prePregnancyWeightKg),

@@ -2,9 +2,9 @@
 
 | 파일 | 하는 일 | 설정이 비면 |
 |---|---|---|
-| `http.ts` | fetch + 타임아웃 + `x-onmom-key`(온맘 백엔드 origin에만) | — |
-| `video.ts` | `GET {VIDEO_URL}/videos?include=<route 태그>&limit=500` (iOS VideoDBClient) | `notConfigured` + iOS 원문 "준비 중" |
-| `llm.ts` | `POST {LLM_URL}/chat` — preset만 보내고 `system`은 보내지 않음 (iOS LLMClient) | `notConfigured` |
+| `http.ts` | fetch + 타임아웃 + `x-onmom-key`(온맘 백엔드 origin에만 — Supabase 함수에는 붙이지 않음) | — |
+| `video.ts` | Supabase가 있으면 Edge Function `GET {supabase}/functions/v1/videos?include=<route 태그>&limit=500`(apikey), 없으면 `GET {VIDEO_URL}/videos…` (iOS VideoDBClient) | `notConfigured` + iOS 원문 "준비 중" |
+| `llm.ts` | Supabase가 있으면 Edge Function `POST …/functions/v1/chat`(로그인 토큰 + apikey, `NEXT_PUBLIC_AI_CHAT_ENABLED=true`일 때만), 없으면 `POST {LLM_URL}/chat` — preset만 보내고 `system`은 보내지 않음 (iOS LLMClient) | `notConfigured` |
 | `clinics.ts` | 가까운 산부인과: 순수 로직(거리·정렬·6곳·표기) + 흐름 | `notConfigured` (`message: null`) |
 | `kakaoMaps.ts` | 카카오 지도 JS SDK 지연 로드 + 지오코딩·키워드 검색 | — |
 | `safeUrl.ts` | 외부 링크 허용 목록(https + youtube/youtu.be/place.map.kakao.com), `rel="noopener noreferrer"` | — |
@@ -13,11 +13,14 @@
 예외는 하나 — 설정된 상태에서 `fetchVideos("")`는 호출자 버그라 `TypeError`를 던진다(두 라우트 영상이 섞이므로). 미설정이면 먼저 `notConfigured`.
 자동 재시도는 없다 — 다시 시도는 화면 버튼 몫(검수 #57).
 
+서버 쪽 함수(Deno)와 둘 사이의 약속(요청·응답·한도·개인정보)은 [`docs/SUPABASE_FUNCTIONS.md`](../../docs/SUPABASE_FUNCTIONS.md).
+AI로 보내는 산모 정보는 **산후 주차·분만 방식·수유 여부**뿐이고(`LLMContext`), 화면은 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(`features/chat/aiConsent.ts`).
+
 ## 지금 막혀 있는 것
 
-- **CORS** — 2026-09-23 현재 영상 서버는 CORS 헤더가 없고 preflight(OPTIONS)가 405다(검수 #12).
-  브라우저에서는 `network`(연결 실패)로 끝난다. 백엔드에 `CORSMiddleware`(웹 origin 명시, GET/POST/PUT/OPTIONS,
-  `content-type`·`x-onmom-key` 허용, 와일드카드 금지)가 들어가야 풀린다. 앱 키를 설정하면 GET도 preflight를 타므로 OPTIONS 처리가 꼭 필요하다.
+- **CORS(Supabase가 없는 빌드만)** — 2026-09-23 현재 영상 서버는 CORS 헤더가 없고 preflight(OPTIONS)가 405다(검수 #12).
+  예전 경로(`NEXT_PUBLIC_VIDEO_URL` 직접 호출)는 브라우저에서 `network`(연결 실패)로 끝난다.
+  Supabase가 설정된 빌드는 Edge Function `videos`가 대신 불러 CORS 문제가 없다.
 
 ## 아직 구현하지 않은 것 — 계정 API · 카카오 로그인
 

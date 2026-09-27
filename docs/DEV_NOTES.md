@@ -1,6 +1,7 @@
 # 개발 메모
 
 2026-09-23 기준으로 규칙·저장·UI·외부 연동 모듈을 합치며 쓰고, 2026-09-27 화면 구현(§6)과 주소 재구성(§4 주소 지도 — "/"는 서비스 소개, 앱 홈은 "/home/"), 서비스 소개·폰/PC 반응형 껍데기·카카오 로그인(Supabase) 통합(§7)을 더했습니다.
+2026-09-28 실서비스 전환(게스트 = Supabase 익명 계정, 동의의 판, 영상·AI 서버 함수, 관리자 화면)을 §8에 더했습니다. §7의 서버 저장 동의 설명(7-0·7-3·7-4)은 §8이 대신합니다.
 `[#n]`은 인수인계 검수 문서(비공개, `docs/private/handoff-audit-2026-09-23.md`)의 항목 번호입니다.
 결정이 나면 해당 줄을 지우고 코드·테스트를 고칩니다. 규칙 값이 바뀌면 `src/rules/version.ts`의 버전도 올립니다.
 
@@ -138,14 +139,15 @@
 | `/` | `landing` | `page.tsx` → `features/landing/LandingPage.tsx` | 공개 — 늘 그림, 이동 없음 | 전체 폭 |
 | `/privacy/` | `privacy` | `privacy/page.tsx` | 공개 | 카드 기둥(`CardColumn`) |
 | `/auth/callback/` | `authCallback` | `auth/callback/page.tsx` → `features/flow/AuthCallbackScreen.tsx` | 공개 — 카카오 로그인(Supabase)에서 돌아오는 주소. 설정이 없는 빌드에서도 파일은 있고, 열면 실패 안내 | 카드 기둥 |
+| `/admin/` | `admin` | `admin/page.tsx` → `features/admin/AdminScreen.tsx` | 공개 — 관문이 옮기지 않음(로그인·온보딩과 무관). 권한은 화면이 Supabase `is_admin()`으로 확인하고 데이터는 서버 함수가 막음(§8). 메뉴에 링크하지 않음. 공개 주소라 예전 게스트를 익명 계정으로 옮기지 않음 | 전체 폭(본문 최대 64rem 가운데 — §9) |
 | `/login/` | `login` | `login/page.tsx` | 로그인 전만. 로그인했으면 `rootScreenFor`대로 `/onboarding/` 또는 `/home/` | 카드 기둥 |
-| `/onboarding/` | `onboarding` | `onboarding/page.tsx` | 로그인했고 온보딩 전만 | 카드 기둥 |
+| `/onboarding/` | `onboarding` | `onboarding/page.tsx` | 로그인했고 온보딩 전만. **다시 동의**(Supabase 빌드에서 온보딩을 마쳤지만 지금 판의 동의가 없음 — `rootScreenFor` "consent")도 이 주소: `SCREEN_PATH.consent` = `/onboarding/?consent=1`, 화면은 `hasOnboarded`로 동의 단계만 그림 | 카드 기둥 |
 | `/home/` `/exercise/` `/record/` `/journal/` `/journal/write/` `/journal/post/?id=` `/profile/` | `home` `exercise` `record` `journal` `journalWrite` `journalPost` `profile` | `(app)/(tabs)/…` (탭바 레이아웃) | main — 로그인·온보딩을 마친 뒤만 | 앱 껍데기(`AppShell`) |
 | `/analyze/` `/guide/` `/lifestyle/` `/support/` `/substance/` `/chat/` `/region/` `/settings/` `/settings/profile/` | `analyze` `guide` `lifestyle` `support` `substance` `chat` `region` `settings` `settingsProfile` | `(app)/…` | main | 앱 껍데기 |
 | 그 밖 | — | Next 404(`404.html`) | main으로 봄 — 로그인 전이면 `/login/`, 뒤면 404 | 전체 폭 |
 
 - **레이아웃**: 루트 `layout.tsx`는 `StoreProvider` + `AppGate`만 두고 폭을 정하지 않습니다. 앱 화면은 `(app)/layout.tsx`의 `components/shell/AppShell.tsx`(폰 = 폰 폭 기둥 + 떠 있는 탭바, PC = 왼쪽 사이드바 + 넓은 본문), 로그인·온보딩·처리방침·콜백은 `components/shell/CardColumn.tsx`(폰 = 폰 폭 기둥, PC = 가운데 카드)를 씁니다. 자세한 폭 규칙은 §7-2. (옛 `components/MobileColumn.tsx`는 쓰는 곳이 없어 지웠습니다.)
-- **관문**: 공개 주소(`/`·`/privacy/`·`/auth/callback/`)는 저장소를 읽기 전에도 정적 HTML 그대로 그립니다. 그 밖은 읽기 전에는 아무것도 그리지 않습니다. `SCREEN_PATH.main`은 `ROUTES.home`입니다.
+- **관문**: 공개 주소(`/`·`/privacy/`·`/auth/callback/`·`/admin/`)는 저장소를 읽기 전에도 정적 HTML 그대로 그립니다. 그 밖은 읽기 전에는 아무것도 그리지 않습니다. `SCREEN_PATH.main`은 `ROUTES.home`입니다.
 - **`(app)` 묶음 = main**: `src/routes.test.ts`가 `src/app`의 모든 `page.tsx`에 `ROUTES` 값이 있는지, 모든 `ROUTES` 값에 페이지가 있는지(콜백 제외), `(app)` 안 페이지는 관문이 main으로, 밖 페이지는 main이 아닌 것으로 보는지 확인합니다. 새 화면은 `ROUTES`에 먼저 더하고, 로그인 뒤 화면이면 `(app)` 안에 둡니다.
 - `/dev/components` 카탈로그는 지웠습니다(§3 CPO 14).
 
@@ -191,7 +193,7 @@
 | 화면 | 경로 | 폴더 | 요점 |
 |---|---|---|---|
 | 서비스 소개 | `/` | `landing` | 머리(로고·PC 섹션 링크·시작 버튼) · 두 칸 히어로(PC) · 한 줄 사명 · 주요 기능 6 · 이용 방법 3 · 지키는 것 4 · 마지막 권유(안내 줄은 버튼 아래) · 바닥글(면책·처리방침). 전체 폭. 시작 버튼은 하이드레이션 뒤 `/login/`·`/onboarding/`·`/home/`로 바뀌고, 앱을 쓰는 사람에게는 안내 줄을 숨김. 카카오·AI·산부인과 찾기 문장은 빌드 설정마다 다름 — §7-1 |
-| 앱 관문 | 전체(`layout.tsx`) | `flow` | `rootScreenFor`로 로그인 → 온보딩 → 탭(`/home/`). `/`·`/privacy/`·`/auth/callback/`은 늘 열림. 그 밖은 읽기 전에는 아무것도 그리지 않음 |
+| 앱 관문 | 전체(`layout.tsx`) | `flow` | `rootScreenFor`로 로그인 → 온보딩 → (Supabase 빌드: 다시 동의 `/onboarding/?consent=1`) → 탭(`/home/`). `/`·`/privacy/`·`/auth/callback/`·`/admin/`은 늘 열림. 그 밖은 읽기 전에는 아무것도 그리지 않음 |
 | 로그인 | `/login/` | `flow` | 카카오 버튼 비활성 + "준비 중"(D2 — Supabase 설정이 있는 빌드는 활성, §7-3), [게스트로 시작], 처리방침 시트 |
 | 온보딩 4단계 | `/onboarding/` | `onboarding` | 출산일(오늘까지)·분만·수유 → 목표(복직일·체중 선택) → 동의. 입력은 [온맘 시작하기] 때 한 번에 저장(동의 전 저장 금지, 감사 #15) |
 | 홈 | `/home/` | `home` | 히어로(출산일 있을 때만 n일차)·회복 상태·마음 카드·분석 링크·지표·지금 단계·체중 목표·빠른 기록·면책. 레드플래그면 "확인 필요"+단계 카드 대신 "운동 안내를 멈췄어요", 체중 카드 숨김, 마음 카드는 유지(D1) |
@@ -268,6 +270,8 @@
 
 ## 7. 서비스 소개 · 폰/PC 반응형 · 카카오 로그인(Supabase) (2026-09-27 통합)
 
+> 2026-09-28: 7-0의 "서버 저장" 줄, 7-3의 서버 저장 동의(`acceptServerStorageConsent`·`SERVER_STORAGE_CONSENT_VERSION` — 지금은 없음), 7-4 체크리스트는 **§8이 기준**입니다(동의 화면·동의의 판·웹 처리방침 초안이 생겼고, 게스트도 Supabase 익명 계정).
+
 요청: "웹이니 서비스를 소개하는 메인 페이지, 실제 사용을 위한 로그인과 접속, 폰·PC 화면 크기에 맞게 바뀌는 화면. 가짜 목업이 아니다."
 세 갈래(서비스 소개·앱 껍데기·Supabase)를 따로 만들고 검수·수정한 뒤 여기서 합쳤습니다.
 
@@ -299,7 +303,7 @@
 | PC(64rem 이상) | 왼쪽 16rem 사이드바(로고·탭 5·"더보기" 서비스 7·면책, 스크롤해도 제자리) + 본문 최대 64rem. 탭바 숨김. 키보드용 "본문 바로가기" | 배경 위 가운데 카드(최대 28rem, 창 높이에 맞춤) | 머리 섹션 링크, 두 칸 히어로, 기능 3열·단계 3열·원칙 4열, 본문 최대 72rem |
 - 메뉴 정의는 한 곳(`appNav.ts`) — 탭바와 사이드바가 같이 쓰고, 서비스 7개는 프로필 허브(`PROFILE_MENU`)를 그대로 가져옵니다. 폰에는 탭바, PC에는 사이드바만 보여 "주요 메뉴" nav는 늘 하나입니다.
 - 껍데기는 위아래 여백을 두지 않습니다 — 각 화면이 자기 여백을 갖습니다. AI 상담(`h-dvh`)이 PC에서 창보다 길어지지 않게 하려는 것이라, 껍데기에 세로 여백을 다시 넣으면 안 됩니다.
-- PC 화면별: 기록 = 두 칸(왼쪽 폼, 오른쪽 결과·오늘의 질문·최근 기록) — 결과가 떠 있는 동안 폼은 잠기고 [확인하기]는 사라짐(iOS와 같은 흐름, 결과와 폼이 어긋나거나 같은 기록이 겹쳐 저장되지 않게). 설정·글쓰기·글 상세(42rem)·약물 체크(40rem)·프로필 편집(60rem)은 읽기 좋은 폭으로 **왼쪽 정렬**(다른 화면과 머리 위치가 같게). AI 상담은 44rem 가운데, 창 높이를 채움.
+- PC 화면별: 기록 = 두 칸(왼쪽 폼, 오른쪽 결과·오늘의 질문·최근 기록) — 결과가 떠 있는 동안 폼은 잠기고 [확인하기]는 사라짐(iOS와 같은 흐름, 결과와 폼이 어긋나거나 같은 기록이 겹쳐 저장되지 않게). 읽기·입력 화면의 폭과 머리 위치는 **§9 PC 화면 틀**이 기준(2026-09-28 — 예전 40·42·44·60rem 제각각과 AI 상담 가운데 정렬을 없앰). AI 상담은 창 높이를 채움.
 - 폰 화면은 바뀌지 않았습니다(각 담당이 전후 스크린샷을 픽셀 비교).
 
 ### 7-3. 카카오 로그인 · 서버 저장 · 설정 연결
@@ -376,3 +380,133 @@
 - **회복 단계 분석(PC)**: 폼도 결과처럼 왼쪽 정렬(최대 40rem) — 단계가 바뀔 때 머리가 옆으로 튀지 않게(화면 QA).
 - **PC 사이드 메뉴 — 낮은 창**: 창 높이 52rem 이하에서 로고·묶음·면책 간격만 줄인다(메뉴 항목 높이 2.75rem 유지). 640px 미만에서는 사이드 메뉴 자체가 스크롤된다.
 - **가이드 전화번호**: `1577-0199`처럼 하이픈에서 줄바뀌지 않게 번호만 한 덩어리로 묶는다(`splitPhoneNumbers`, 글자는 그대로).
+
+## 8. 실서비스 전환 (2026-09-28 통합)
+
+요청(CPO, 2026-09-28): Supabase로 실제 사용자 관리 — **게스트 = Supabase 익명 사용자**(동의 뒤에만 서버 저장), 나중에 카카오로 로그인하면 같은 계정(`linkIdentity`), 가까운 산부인과는 카카오 지도, 운동 영상은 서버 함수 프록시(영상 서버에 CORS 없음), AI 상담은 서버 함수 → Anthropic, 관리자 화면은 집계·계정 메타데이터만. **Supabase 값이 없는 빌드(지금 배포)는 지금과 똑같이** 브라우저 전용 게스트로 동작.
+다섯 갈래(계정·동의/개인정보·서버 함수·관리자·CI/문서)를 따로 만들고 검수·수정한 뒤 여기서 합쳤습니다. 설정 방법은 `docs/SUPABASE_SETUP.md`, 켜기 전 법·운영·제품 점검은 `docs/LAUNCH_CHECKLIST.md`, 함수는 `docs/SUPABASE_FUNCTIONS.md`, 동의·방침 초안은 `docs/privacy/CONSENT_AND_POLICY_DRAFT.md`.
+
+### 8-0. 구조
+```
+브라우저 — GitHub Pages 정적 사이트(/onmom_web, 서버 코드 없음)
+│   빌드 값(공개): NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY — 둘 중 하나라도 없으면 아래 Supabase 화살표가 모두 없다
+│                  NEXT_PUBLIC_KAKAO_JS_KEY(지도, Supabase와 별개) · NEXT_PUBLIC_TURNSTILE_SITE_KEY(선택) · NEXT_PUBLIC_AI_CHAT_ENABLED(기본 꺼짐)
+│
+├─▶ Supabase Auth(서울) ─ 게스트: signInAnonymously(+Turnstile 토큰, 선택)
+│        │               카카오: OAuth PKCE — 새 사용자 signInWithOAuth, 게스트는 linkIdentity
+│        └─▶ 카카오 로그인(kauth.kakao.com) — REST 키·클라이언트 시크릿은 Supabase 대시보드에만
+│
+├─▶ Supabase DB(서울, RLS) ─ user_states: 한 사람 = 한 행(건강 기록 JSON + consent_version·consent_accepted_at 칸)
+│        │                    ↑ 첫 읽기 전에는 쓰지 않고, 지금 판의 동의(hasCurrentConsent) 전에는 올리지 않음
+│        ├ delete_my_account()  — 계정 삭제(서버 먼저, 성공해야 브라우저를 비움)
+│        ├ admins · is_admin() · admin_overview() · admin_list_users() — /admin/(집계·계정 메타데이터만)
+│        └ llm_usage · llm_consume_quota() — AI 한도(사용자 id·시각만, 2일 뒤 삭제, 브라우저 접근 없음)
+│
+├─▶ Supabase Edge Functions
+│        ├ videos (verify_jwt=false, 사용자 식별값 없음) ──▶ 영상 서버 hackathon-video-api.onrender.com
+│        └ chat   (함수 안에서 getUser로 토큰 확인 · 위기 표현 선필터 · 한도) ──▶ Anthropic(미국, claude-opus-5)
+│                  브라우저는 NEXT_PUBLIC_AI_CHAT_ENABLED=true + 이 계정의 AI 국외 이전 동의 뒤에만 부름.
+│                  보내는 것: 같은 대화의 최근 메시지(최대 20개, 위기 표현 턴 제외) + 산후 주차·분만 방식·수유 여부
+│
+└─▶ 카카오 지도 JS SDK(dapi.kakao.com) — 입력한 동네 주소 → 좌표 → 반경 20km 병원(HP8) 검색 · 지도
+```
+비밀 값(Anthropic 키, DB 비밀번호, Supabase 액세스 토큰, 카카오 REST 키·시크릿, Turnstile 비밀 키)은 코드·저장소에 없습니다 — GitHub Secrets → Supabase 함수 비밀값, 또는 대시보드에만. 함수의 서버 키는 Supabase가 넣어 주는 `SUPABASE_SECRET_KEYS`("default")를 먼저, 없으면 예전 `SUPABASE_SERVICE_ROLE_KEY`(`_shared/auth.ts pickServerKey`).
+
+### 8-1. 모듈과 파일
+| 갈래 | 파일 | 요점 |
+|---|---|---|
+| 계정 | `src/auth/**`(`session.ts`·`authFlow.ts`·`turnstile.ts`·`kakaoAccount.ts`·`remote.ts`·`useAuth.ts`), `src/store/sync/**`, `features/flow/{AppGate,LoginScreen,loginText,AuthCallbackScreen,callbackRoute}`, `features/settings` | 게스트 = 익명 계정("guest-<Supabase id>"). 익명 로그인이 안 되면(꺼짐·한도·CAPTCHA·오프라인) 이 브라우저 전용 게스트로 시작하고 **앱 화면**을 열 때 다시 옮김(공개 화면은 옮기지 않음 — `allowGuestUpgrade`). 게스트 → 카카오는 `linkIdentity`, 취소 말고 모든 거절은 "카카오로 로그인 → 익명 사용자 삭제(서버에 카카오가 안 붙었을 때만) → `mergeStates`로 합침". 설정: 게스트 = [카카오 계정 연결]·삭제(로그아웃 없음), 카카오 = 로그아웃·삭제(서버 먼저) |
+| 동의·개인정보 | `domain/consent.ts`, `features/onboarding/{consentText,ServerConsentStep,OnboardingFlow,onboardingModel}`, `features/privacy/{dataItems,webPolicyText,policy}` | Supabase 빌드의 온보딩 동의 = 필수 (a) 개인정보 수집·이용 (b) 민감정보(건강정보) 처리 (c) 만 14세 이상 — 따로따로, 전부 켜야 시작. (d) AI 국외 이전은 **안내만**(동의는 AI를 처음 쓸 때). 법이 명확히 표시하라는 줄은 크게·굵게·밑줄. [동의하지 않고 나가기] → 확인 창 → 계정 삭제. `/privacy/`는 웹 방침 초안("초안 — 법률 검토 전") |
+| 서버 함수 | `supabase/functions/**`, `src/api/{llm,video,http}.ts`, `features/chat/{aiConsent,AiConsentCard,chatModel,ChatScreen}`, `features/substance` | `llmComplete`·`fetchVideos`는 Supabase가 있으면 함수를, 없으면 예전처럼 `NEXT_PUBLIC_LLM_URL`·`NEXT_PUBLIC_VIDEO_URL`. 위기 표현(content.json + 서버 목록)은 어떤 모드에서도 규칙 답(1577-0199/109/119)으로, AI로 보내지 않고 나중 요청에서도 뺌. 약물 체크는 표 먼저, 표에 없는 항목만 AI("AI 답변" 표시) |
+| 관리자 | `src/app/admin/page.tsx`, `features/admin/**`, `supabase/migrations/0002_admin.sql` | `public.admins`에 있는 카카오 사용자만(익명 사용자는 명단에 있어도 거절). 숫자 카드 5·최근 30일 신규 막대(표로 보기)·사용자 목록 20개씩. 이메일·닉네임·건강 기록 없음 |
+| CI·문서 | `.github/workflows/{supabase,deploy}.yml`, `supabase/config.toml`, `.env.example`, `docs/{SUPABASE_SETUP,SUPABASE_FUNCTIONS,LAUNCH_CHECKLIST}.md` | "Supabase" 워크플로(main만): 값 확인 → `npm test` → link → `db push`(0001→0003) → 함수 비밀값(빈 값은 건너뜀, 지우지 않음) → videos·chat 배포 → chat 로그인 확인. 사이트 배포는 Variables만 읽음 |
+
+**마이그레이션**: `0001_user_states`(표·RLS 본인 행·`delete_my_account()`·동의 칸 — 예전 판 표에는 칸을 더함) → `0002_admin`(0001의 동의 칸이 없으면 멈춤) → `0003_llm_usage`. 모두 여러 번 실행해도 같은 결과.
+
+### 8-2. 동의 계약(모든 모듈 공통)
+- `UserProfile.consentVersion`·`consentAcceptedAt`(기본 `null`). `CURRENT_CONSENT_VERSION = "web-2026-09-28"`, `hasCurrentConsent(profile)` = `consentAccepted && consentVersion === CURRENT_CONSENT_VERSION`.
+- `rootScreenFor`: Supabase 빌드에서 로그인·온보딩을 마쳤는데 `!hasCurrentConsent` → `"consent"` → 관문이 `/onboarding/?consent=1`로(모든 앱 주소에서). 온보딩 화면은 `hasOnboarded`면 동의 단계만 그리고, [동의하고 계속하기] 뒤 `/home/`. 설정 없는 빌드는 이 단계가 없음(판을 보지 않음).
+- 서버 업로드는 `hasCurrentConsent`일 때만. 이 브라우저에 남아 있던 다른 사람일 수 있는 기록을 가져왔으면(`marks.ts`) 서버의 동의 시각과 무관하게 이 브라우저에서 다시 동의해야 올림.
+- 문구를 바꾸면 판을 올림 — `consentStep.test.ts`(온보딩 (a)~(c)·부제·안내 줄)와 `aiConsent.test.ts`(AI 카드·전문)가 글자의 지문을 판에 묶어 둠. AI 동의는 따로 `AI_CONSENT_VERSION = "web-2026-09-28.2"`, 이 브라우저의 계정별 localStorage(`onmom.web.aiConsent.v1`).
+
+### 8-3. 동작 — 설정 없음 vs 있음
+| 상황 | 설정 없음(지금 배포) | Supabase 값 있음 |
+|---|---|---|
+| 서비스 소개 | 저장 카드 "건강 정보는 이 브라우저에" | "건강 정보는 동의한 뒤에만 저장해요"(`sectionTitle`), 카카오 켜짐 문장 |
+| 로그인 | 카카오 "준비 중", iOS 원문 안내 줄 | 카카오 켜짐(→ Supabase authorize, PKCE), 안내 줄은 알림만("건강 정보는 따로 동의를 받은 뒤에만 서버에 저장돼요.") |
+| 게스트로 시작 | 브라우저 전용, 요청 없음 | 익명 계정. 못 만들면 브라우저 전용으로 이어지고 다음 앱 화면에서 다시 시도(오류 창 없음 — 기록은 잃지 않음) |
+| 온보딩 동의 | iOS 한 토글 | 필수 3개 + AI 안내 + [동의하지 않고 나가기] |
+| 예전 게스트(판 없는 동의) | 그대로 | 앱 주소를 열면 `/onboarding/?consent=1` |
+| 운동 영상 | `NEXT_PUBLIC_VIDEO_URL`이 있으면 직접, 없으면 준비 중 | 함수 `videos` |
+| AI 상담·약물 AI | 준비 중 배너·규칙 답 | `NEXT_PUBLIC_AI_CHAT_ENABLED=true`일 때만 → 처음 쓸 때 AI 국외 이전 동의 카드 → 함수 `chat` |
+| 설정 | iOS 문구·로그아웃·삭제(브라우저) | 개인정보 문구 서버판, 게스트 = 카카오 연결·삭제, 카카오 = 로그아웃·삭제(서버 먼저) |
+| `/admin/` | "권한이 없어요" + 설정 없는 빌드 안내, 요청 없음 | 로그인 전·게스트·일반 사용자 = "권한이 없어요"(내 계정 ID), 관리자 = 집계 |
+| 산부인과 찾기 | 카카오 JS 키가 있으면 동작(Supabase와 별개) | 같음 |
+
+### 8-4. 지금 상태 (2026-09-28 03:30 확인)
+| 무엇 | 상태 |
+|---|---|
+| 공개 사이트 | 바뀌지 않음(설정 없는 빌드) — 아래 스모크 ① |
+| Supabase Auth 설정 | 공개 `/auth/v1/settings`로 확인: **익명 로그인 ON, 카카오 ON, Email OFF, 가입 허용** — SETUP B-1·B-2 일부는 이미 됨. 공개 값으로 확인할 수 없는 것: **Allow manual linking**, **Allow users without an email**, **URL Configuration**(Site URL·Redirect URLs), 카카오 키·시크릿 값(카카오 authorize로 이동은 함) |
+| DB | 마이그레이션 **미적용** — `user_states` 없음(`PGRST205`). SETUP D-1 필요 |
+| 함수 | **미배포** — `/functions/v1/videos` 404. SETUP D-1 필요 |
+| GitHub Variables·Secrets | 없음(C-1·C-2·C-3) |
+| 카카오 지도 | 실제 JavaScript 키로 `http://localhost:3000` 빌드에서 확인 — "서울 강남구 역삼동" → 산부인과 목록(314m…)·지도·핀, 폰·PC, 콘솔 오류 0(스모크 ③). 공개 사이트는 Variable `NEXT_PUBLIC_KAKAO_JS_KEY` + D-2로 켜짐 |
+| 시험 흔적 | 스모크 ②가 운영 프로젝트에 **익명 사용자 1명**을 만들었습니다(2026-09-28 03:22 KST 무렵, 건강 기록 없음 — 표가 아직 없음). **Authentication → Users**에서 지워 주세요(SETUP F-14와 같은 정리) |
+
+### 8-5. 주인이 할 일 (순서는 SETUP이 기준)
+1. **B** Supabase 대시보드: B-1 **Allow manual linking ON** 확인(익명 로그인·가입은 이미 ON), B-2 카카오 REST API 키·Client Secret·**Allow users without an email ON**, B-3 Site URL `https://5seoyoung.github.io/onmom_web/`·Redirect URLs 두 개, B-4 Publishable key 복사(Secret key `default`는 건드리지 않음). 카카오 A-7 동의항목 3개 "선택 동의"(KOE205 방지)·A-8 시크릿 활성화.
+2. **C-1·C-2** GitHub Secrets(`SUPABASE_ACCESS_TOKEN`·`SUPABASE_DB_PASSWORD`, AI는 나중에 `ANTHROPIC_API_KEY`)와 Variable `SUPABASE_PROJECT_REF` → **D-1** "Supabase" 워크플로(main) — 표 0001~0003·함수 videos·chat. Summary 경고 확인.
+3. `LAUNCH_CHECKLIST` 1~3단계(법·개인정보·운영·제품) — 특히 1-10(동의 전 익명 계정), 동의·방침 초안 법률 검토, Auth 감사 로그 보관, 백업 보관 기간.
+4. **C-3** Variables `NEXT_PUBLIC_SUPABASE_URL`·`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`·`NEXT_PUBLIC_KAKAO_JS_KEY`(지도만 먼저 켜도 됨)·`NEXT_PUBLIC_AI_CHAT_ENABLED=false` → **D-2** 사이트 배포.
+5. **E** 카카오로 로그인 → `/admin/`의 내 계정 ID → `insert into public.admins …`. **F** 휴대폰·PC 확인 14항목(F-4는 같은 UID 또는 새 UID + 익명 사용자 삭제, 둘 다 정상).
+6. AI는 LAUNCH_CHECKLIST 5단계(CAPTCHA B-6 먼저, `CHAT_HOURLY_LIMIT=10` 권장, Anthropic 연락처·보유 기간 문구) 뒤에만 `true`.
+
+### 8-6. 웹 신규 문구 (CPO 확인 필요 — 코드에 `// 웹 신규 문구 — CPO 확인 필요`)
+| 파일 | 문구 | 보이는 곳 |
+|---|---|---|
+| `features/onboarding/consentText.ts` | **파일 전체**(법률 검토 전 초안): 부제 "건강 정보는 민감정보라, 동의를 받은 뒤에만 온맘 서버(대한민국 서울)에 저장해요." · 안내 2줄 · (a)(b)(c) 제목·요약·전문(보유 기간·접속 기록·AI 이용 시각 2일 포함) · 배지 "필수"/"안내" · "자세히" · "동의하지 않고 나가기" · "개인정보 처리 방식이 바뀌어 다시 동의를 받아요." · "동의하고 계속하기" · (d) "AI 상담 이용 시 국외 이전 안내" 전문 | 온보딩 동의·다시 동의(Supabase 빌드) |
+| `features/privacy/dataItems.ts`·`webPolicyText.ts` | **웹 개인정보처리방침 초안 전체**(수집 항목·수탁사·국외 이전·보유 기간·파기·권리·13절 동의하지 않고 나가기 등) | `/privacy/`·방침 시트(Supabase 빌드) |
+| `features/flow/loginText.ts` | "건강 정보는 따로 동의를 받은 뒤에만 서버에 저장돼요." | 로그인(Supabase 빌드) |
+| `features/settings/settingsView.ts` | "카카오 계정 연결" / "기록을 잃지 않고 다른 기기에서도 이어 쓰기" / "이 기기에서 기록 지우기(계정 삭제)" / "게스트는 로그아웃하면 기록을 다시 찾을 수 없어요. 기록을 지키려면 카카오 계정을 연결해 주세요." / "건강 데이터는 동의를 받은 뒤에만 온맘 서버(대한민국 서울)에 저장돼요." | 설정(Supabase 빌드) |
+| `features/landing/landingContent.ts` | "건강 정보는 동의한 뒤에만 저장해요" / "게스트로 시작해도, 카카오로 로그인해도 … 동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장돼요. …" / "카카오로 로그인하면 다른 기기에서도 기록을 이어 쓸 수 있어요." | 서비스 소개(Supabase 빌드) |
+| `features/chat/AiConsentCard.tsx` | "AI 답변 국외 이전 동의" / "AI 답변을 받으려면 질문 내용과 산후 주차·분만 방식·수유 여부가 미국 Anthropic으로 전송되는 데 동의가 필요해요. …" / "동의하지 않기"(동의 버튼은 "동의하고 계속하기") | AI 상담·약물 체크(AI 켜짐) |
+| `features/chat/chatModel.ts` | "AI 답변에 동의하지 않아"(배너·기본 답의 "지금은 AI 서버에 연결되지 않아"만 바꿈) | AI 상담(AI 동의 거절 뒤) |
+| `features/admin/adminModel.ts` | `ADMIN_TEXT` 전체(제목 "온맘 관리자", "권한이 없어요", 오류·안내, 숫자 카드·표 이름, "카카오", 쪽 "21–40 / 전체 N명" 등 9곳) | `/admin/`(운영자용) |
+| `supabase/functions/_shared/safety.ts` | 서버 위기 키워드 추가: 사라지고만싶·없어지고만싶·(내가/제가/나는/저는)+사라졌으면/없어졌으면·세상에서사라지/없어지 — **임상 검토** | chat 함수·AI 상담 선필터 |
+
+운영자용 워크플로 알림("AI 상담 — 로그인 확인 불가" 등)은 사용자에게 보이지 않아 표에서 뺐습니다.
+
+### 8-7. 결정·위험 (남은 것)
+- **동의 전 익명 계정**: 게스트로 시작하는 순간 계정 ID·가입/접속 시각·Auth 로그 IP가 Supabase에 생김(LAUNCH_CHECKLIST 1-10 법률 승인, 안 되면 익명 로그인을 동의 뒤로). 예전 브라우저 전용 게스트도 앱 화면을 열면 옮겨짐.
+- **게스트 → 카카오가 늘 "같은 ID"는 아님**: 카카오 이메일이 확인된 계정만 `linkIdentity`가 성공. 이메일이 없거나 확인 안 됨·일시 서버 오류 등 취소 말고 모든 거절은 새 카카오 사용자로 로그인 + 게스트 기록 합침 + 익명 사용자 삭제(서버에 카카오가 안 붙은 것을 확인한 뒤에만). 사용자 SMTP를 켜면 이메일 미확인 카카오 사용자에게 Supabase 확인 메일이 갈 수 있음.
+- **AI 국외 이전 동의**: 카드에 받는 자 연락처·구체 보유 기간이 없음(CPO가 Anthropic 약관으로 정할 값 — 넣으면 `AI_CONSENT_VERSION` 올림). 동의 기록이 이 브라우저 localStorage에만 있어 서버에 증빙이 없음. 이전 항목 문구 "질문 내용"은 실제로 같은 대화의 최근 메시지(이전 질문·AI 답, 최대 20개)를 보냄 — 설정 안내 H·LAUNCH_CHECKLIST는 정확히 적었지만 카드·방침은 CPO 결정 문구 그대로. 법률 검토에서 맞출지 결정.
+- **위기 표현**: content.json의 "사라지고"가 AI 모드에서 "붓기가 사라지고 나서…"도 위기 답으로 보냄. 설정 없는 빌드에서도 서버 목록에만 있는 표현("극단적 선택" 등)에 위기 답이 나감(의도 — 안전 우선).
+- **동의 표시 방식**: "자세히"로 접힌 전문이 법의 "명확히 표시"를 충족하는지, "동의하지 않음 = 계정 삭제"가 괜찮은지 — 법률 검토. 조항 번호는 코드 주석에 "검토 필요".
+- **계정 삭제의 흔적**: 카카오 "연결 끊기"를 부르지 않음(Admin 키 필요), Supabase Auth 감사 로그 보관·백업 보관 기간(LAUNCH_CHECKLIST).
+- **관리자 SQL**은 CI에서 텍스트로만 검사(실제 DB 실행은 로컬 PGlite로 한 번). 사용자 목록의 마지막 저장일은 메타데이터지만 CPO 확인.
+- **chat 배포 확인**은 게이트웨이의 잘못된 토큰 응답을 실제 프로젝트로 확인하지 못함 — 틀리면 "확인 못 함" 경고(조용히 통과하지는 않음).
+- **워크플로 테스트 게이트**: 관계없는 테스트가 실패해도 DB·함수 배포가 멈춤(의도).
+- AI 동의 카드가 전문을 펼쳐 폰 화면 대부분을 차지함.
+- **실제 카카오 로그인·연결·동기화·삭제는 아직 끝에서 끝까지 돌려 보지 않음**(대시보드 B·D-1 전). F단계를 빠짐없이.
+
+### 8-8. 확인한 것 (2026-09-28 통합)
+- 통합에서 고친 것: `src/rules/chat.test.ts` 프로필 픽스처에 동의 칸 2개(타입 오류로 `typecheck`·배포가 막혀 있었음) · `LandingPage.tsx`가 `sectionTitle(section, build)`로 그림(Supabase 빌드의 저장 카드 제목) + 건너뛰던 테스트를 늘 돌게 · `ServerConsentStep`의 낡은 주석 · `supabase/config.toml` 서버 키 주석 · `SUPABASE_SETUP.md`(0-1·B-4 Legacy 키·E 관리자 화면 항목·F-4·H 게스트→카카오) · `LAUNCH_CHECKLIST.md` 2-7 · 이 문서 §4(`/admin/`·다시 동의 주소).
+- `npm run typecheck` 통과 · `npm run lint` 통과 · `npm test` 72파일 1378개 통과(건너뜀 0) · `npm run build`·`BASE_PATH=/onmom_web npm run build` 통과(정적 페이지 25개, `/admin/` 포함). 마지막 `out/`은 설정 없는 `/onmom_web` 빌드이고 Supabase 주소·키가 번들에 없음.
+- 헤드리스 Chrome 스모크(스크립트는 저장소 밖):
+  - ① 설정 없는 `/onmom_web` 빌드 25/25 — 랜딩 → 시작하기 → 로그인(카카오 준비 중·iOS 안내 줄) → 게스트 → 온보딩(iOS 한 토글) → `/home/` 63일차, 기록 어지러움 → 레드플래그 카드·산부인과 준비 중 → 홈 "확인 필요"·운동 탭 멈춤, 챗 배너·폴백 답, 코데인 → 피하세요(AI 칩 없음), 설정 iOS 문구, `/admin/` 권한 없음(설정 없는 빌드), 계정 삭제 → `/login/`·`onmom.web.*` 0개, PC 사이드바, 콘솔 오류 0·4xx 0·**localhost 밖 요청 0**.
+  - ② 공개값 두 개만 넣은 `/onmom_web` 빌드, 실제 프로젝트: 랜딩 서버판 제목·안내 줄, 공개 화면에서 익명 가입 요청 0, `/admin/` 로그인 전 "권한이 없어요", 카카오 버튼 켜짐 → `…/auth/v1/authorize?provider=kakao`(PKCE S256, `redirect_to=…/onmom_web/auth/callback/` — 요청은 끊음), [게스트로 시작] → `POST /auth/v1/signup` **200(익명 로그인이 이미 켜져 있음)** → 온보딩, 첫 읽기 `GET user_states` 404(표 없음)에도 깨지지 않음, 서버 동의 단계(필수 3·AI 안내·거절 버튼, 동의 전 시작 잠김) — 여기서 멈춤(운영 DB에 쓰지 않게) 17/17.
+    익명 로그인이 꺼진 경우는 `signup`을 422 `anonymous_provider_disabled`로 흉내 내어(REST 쓰기는 모두 차단) 30/30: 브라우저 전용 게스트로 이어져 동의 → `/home/`, 서버 쓰기 0, 운동 탭 → `functions/v1/videos` 404 → "영상을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."(원문), AI 상담 준비 중·chat 호출 0, `/admin/` 게스트 권한 없음·익명 가입 재시도 없음, 설정 서버판 문구·[카카오 계정 연결]·삭제 → `/login/`·비움, **예전 게스트(설정 없는 빌드에서 온보딩) → `/home/`·`/record/` 모두 `/onboarding/?consent=1` → 다시 동의 → `/home/` 63일차 그대로**, 콘솔 오류 0.
+  - ③ 카카오 JavaScript 키만 넣은 빌드를 `localhost:3000`에: 역삼동 → 산부인과 목록·지도·핀(폰·PC) 7/7.
+- 확인 뒤 `.env*` 파일 없이 보통 빌드(`BASE_PATH=/onmom_web`, 설정 없음)로 되돌렸습니다.
+
+## 9. PC 화면 틀 통일 · 서비스 소개 로고 (2026-09-28 디자인 정리)
+
+요청(주인): PC에서 사이드바 "더보기" 화면마다 [뒤로] 위치가 달라지고 작은 어긋남이 있음 → 한 가지 틀로. 서비스 소개 머리의 "온맘" 로고를 누르면 맨 위로.
+- **틀 한 곳**: `components/shell/pageFrame.ts`(`PAGE_FRAME.wide`·`.reading`, `READING_BLOCK`). 앱 화면(`(app)` 16개)의 `<main>`이 모두 이 값을 붙인다(`pageFrame.test.ts`가 소스로 확인). 값은 전부 `lg:` — **폰·태블릿은 그대로**(402×874 전후 25화면 픽셀 비교 동일, 다른 곳은 시드 시각 글자뿐).
+- **PC 규칙**: 왼쪽 선 = 껍데기 2rem + 화면 1.5rem(1440 창에서 모든 제목·카드 x=392 — 전에는 388·392·520이 섞임). 위 1.5rem(창 높이 52rem 이하는 0.75rem, 사이드바와 같은 기준) — 제목은 모두 y=32(전: 탭 16, 서비스 60), 제목 24 bold(프로필 34 → PC 24, 기록장 1024 창의 17 → 24). 아래 3rem. 폭: 읽기 화면(설정·약물 체크·글쓰기·글 상세·분석 폼·AI 상담) 최대 48rem 왼쪽 정렬, 격자 화면(가이드·생활·지원사업·지역·프로필 편집·분석 결과·탭) 껍데기 전부(64rem), 넓은 화면 안 한 줄 블록(동네 입력·운동 안내) 45rem = 읽기 글줄. 두 열 간격 16으로 통일(지원사업 24·기록장 12였음). AI 상담 기둥은 가운데(44rem) → 왼쪽 48rem, 배너·말풍선·입력창도 같은 왼쪽 선.
+- **[뒤로]**: 사이드바에 있는 서비스 7개는 PC(lg)에서 숨김(`SubPageHeader hideBackWithSidebar`). 더 깊은 화면(프로필 편집·글쓰기·글 상세·분석)은 PC에서도 맨 위 줄 같은 자리(x=384, y=24 — 사이드바 로고 줄과 같은 높이). 폰·태블릿은 전과 같이 모두 보임.
+- **관리자**(`/admin/` 대시보드, 사이드바 없음): 본문 72rem → 64rem 가운데, 좌우 3.5rem(= 앱 넓은 화면과 같은 912px 글줄), 제목 y=32, 카드 간격 16. 권한 없음 화면은 로그인·콜백처럼 가운데 그대로.
+- **서비스 소개 로고**(`features/landing/LandingHomeLink.tsx`·`landingTop.ts`): 서비스 소개에서 누르면 맨 위로 부드럽게(움직임 줄이기면 바로), 주소의 `#섹션`은 지움(방문 기록은 늘리지 않음), 초점은 로고에 그대로. 전에는 Next Link가 같은 주소에서 스크롤을 유지해 아무 일도 없었음. 다른 화면의 로고(사이드바·로그인·홈 머리)는 보통 링크 — 새 화면 맨 위에서 열림(Next 기본).
+- 새 문구 없음. 확인: 폰 402×874·PC 1440×900·1366×657·1024×768, 설정 없는 빌드와 Supabase 빌드(가짜 주소 — 다시 동의·설정 게스트 칸·관리자 권한 없음)에서 캡처(저장소 밖).
+

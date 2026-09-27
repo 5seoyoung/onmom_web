@@ -1,17 +1,19 @@
 // 운동 탭 본문 조각 — 조회 상태별 블록과 영상 카드(ExerciseView.swift:50-257). 데이터는 exerciseModel이 만든다.
 // PC(lg 이상): 영상 카드는 두 열 격자(같은 줄 카드는 높이를 맞추고 [영상 보기]를 아래에 붙인다),
-// 안내 블록(레드플래그·영상 준비 중·연결 실패·프로필 필요)은 읽기 좋은 폭(최대 40rem)에 둔다. 폰은 이전과 같다.
+// 안내 블록(레드플래그·영상 준비 중·연결 실패·프로필 필요)은 읽기 폭(READING_BLOCK — 읽기 화면의 글줄과 같은 45rem)에 둔다.
+// 폰은 이전과 같다.
 
 import { useId } from "react";
 import { ChevronRight, Hourglass, LoaderCircle, PersonStanding, UserRoundSearch, WifiOff } from "lucide-react";
 import { EXTERNAL_LINK_PROPS } from "@/api/safeUrl";
+import { READING_BLOCK } from "@/components/shell/pageFrame";
 import { Card, DisclaimerBanner, EmptyState, StatusBadge, cx } from "@/components/ui";
 import { EXERCISE_TEXT } from "@/rules/exercise";
 import type { ExerciseBody, VideoCardModel } from "./exerciseModel";
 import { FilledOctagonAlert } from "./FilledOctagonAlert";
 
-/** 안내 블록의 PC 최대 폭 — 한 줄이 너무 길어지지 않게 */
-const BLOCK_WIDTH = "lg:max-w-[40rem]";
+/** 안내 블록의 PC 최대 폭 — 한 줄이 너무 길어지지 않게(읽기 화면의 글줄과 같은 폭) */
+const BLOCK_WIDTH = READING_BLOCK;
 
 /**
  * 본문. 조회 상태 블록(불러오는 중·영상 준비 중·연결 실패·영상 없음)은 늘 있는 live region 안에서 바뀐다 —

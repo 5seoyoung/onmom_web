@@ -43,7 +43,7 @@ const DATE_INPUT_CLASS =
   "min-h-11 min-w-32 shrink-0 rounded-[0.5rem] bg-background px-3 text-[0.9375rem] font-medium text-text-primary";
 
 /** 단계 머리 — 제목 20 bold neutral, 부제 14 medium textSecondary, 간격 sm(OnboardingFlowView.swift:362-376). */
-function StepHeader({ title, subtitle, headingRef, headingId }: { title: string; subtitle: string; headingRef: HeadingRef; headingId?: string }) {
+export function StepHeader({ title, subtitle, headingRef, headingId }: { title: string; subtitle: string; headingRef: HeadingRef; headingId?: string }) {
   return (
     <div className="flex flex-col gap-2">
       <h1 ref={headingRef} id={headingId} tabIndex={-1} className="text-xl font-bold text-neutral">
@@ -219,7 +219,7 @@ export function GoalStep({ draft, onChange, headingRef }: StepProps) {
   );
 }
 
-// MARK: - 3 동의
+// MARK: - 3 동의 (Supabase 설정이 없는 빌드 — iOS 원문. 서버 저장 빌드는 ServerConsentStep.tsx)
 
 // lock.shield.fill / arrow.up.right.circle.fill / cross.case.fill(OnboardingFlowView.swift:308-312)
 const CONSENT_ICONS: readonly LucideIcon[] = [ShieldLock, CircleArrowOutUpRight, BriefcaseMedical];

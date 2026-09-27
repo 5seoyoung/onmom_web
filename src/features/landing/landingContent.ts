@@ -40,7 +40,7 @@ export const LANDING_TEXT = {
   ctaTitle: "산모의 회복을, 하나의 흐름으로", // 원문: LoginView.swift:28
   // 웹 신규 문구 — CPO 확인 필요 (지금 웹에서 되는 로그인 방법 — D2. 카카오 로그인이 꺼진 빌드)
   ctaNote: "지금은 게스트로 시작할 수 있어요. 카카오 로그인은 준비 중이에요.",
-  // 웹 신규 문구 — CPO 확인 필요 (카카오 로그인이 켜진 빌드 — NEXT_PUBLIC_SUPABASE_URL·ANON_KEY)
+  // 웹 신규 문구 — CPO 확인 필요 (카카오 로그인이 켜진 빌드 — NEXT_PUBLIC_SUPABASE_URL·PUBLISHABLE_KEY)
   ctaNoteKakao: "게스트 또는 카카오 계정으로 시작할 수 있어요.",
 
   privacy: "개인정보처리방침", // 원문: MoreView.swift:78
@@ -106,13 +106,16 @@ export interface LandingParagraph {
    * clinicSearch: 가까운 산부인과 찾기(카카오 JS 키, D6)
    */
   requires?: "clinicSearch";
-  /** 카카오 로그인이 켜진 빌드에서 대신 쓰는 문구 */
+  /** 카카오 로그인(= Supabase 서버 저장)이 켜진 빌드에서 대신 쓰는 문구 — AI 켜짐 여부와 무관하게 이것이 쓰인다 */
   whenKakaoLogin?: string;
   /** AI 서버가 켜진 빌드에서 대신 쓰는 문구 — 기본 문구 중 AI가 켜지면 거짓이 되는 부분을 뺀 것 */
   whenLlm?: string;
 }
 
-/** 이 빌드에서 보일 문구 — 한 문단에 두 변형이 함께 있지는 않다(landingContent.test.ts가 확인). */
+/**
+ * 이 빌드에서 보일 문구 — 카카오 로그인(서버 저장) 문구가 AI 문구보다 먼저다. 한 문단에 둘이 함께 있으면
+ * 카카오 문구가 AI 켜짐에서도 사실이어야 한다(landingContent.test.ts가 확인).
+ */
 export function paragraphText(p: LandingParagraph, build: LandingBuild): string {
   if (build.kakaoLoginReady && p.whenKakaoLogin !== undefined) return p.whenKakaoLogin;
   if (build.llmReady && p.whenLlm !== undefined) return p.whenLlm;
@@ -126,8 +129,16 @@ export function ctaNoteFor(build: Pick<LandingBuild, "kakaoLoginReady">): string
 
 export interface LandingSection {
   icon: LandingIcon;
+  /** 기본 제목 — 서버 기능이 하나도 켜지지 않은 빌드(BARE_BUILD)에서 사실인 말 */
   title: string;
+  /** 카카오 로그인(= Supabase 서버 저장)이 켜진 빌드에서 대신 쓰는 제목 — 그리는 쪽은 sectionTitle로 고른다 */
+  titleWhenKakaoLogin?: string;
   body: ReadonlyArray<LandingParagraph>;
+}
+
+/** 이 빌드에서 보일 카드 제목 — 문단(paragraphText)과 같은 규칙: 서버 저장 빌드면 그 빌드용 제목 */
+export function sectionTitle(s: Pick<LandingSection, "title" | "titleWhenKakaoLogin">, build: Pick<LandingBuild, "kakaoLoginReady">): string {
+  return build.kakaoLoginReady && s.titleWhenKakaoLogin !== undefined ? s.titleWhenKakaoLogin : s.title;
 }
 
 /** 주요 기능 — App Store 앱 설명의 ■ 여섯 항목(순서 그대로). */
@@ -197,12 +208,20 @@ export const FEATURES: ReadonlyArray<LandingSection> = [
   },
   {
     icon: "storage",
-    // 웹 신규 문구 — CPO 확인 필요 (APP_STORE.md "건강 정보는 내 기기에" → 웹은 브라우저 저장)
+    // 웹 신규 문구 — CPO 확인 필요 (APP_STORE.md "건강 정보는 내 기기에" → 웹은 브라우저 저장. 설정 없는 빌드(지금 배포) 그대로)
     title: "건강 정보는 이 브라우저에",
+    // 웹 신규 문구 — CPO 확인 필요 (서버 저장 빌드 — 게스트·카카오 모두 온보딩 동의 뒤 서버(서울 리전)에 저장한다.
+    // LandingPage가 sectionTitle(section, build)로 그려야 이 빌드에서 보인다)
+    titleWhenKakaoLogin: "건강 정보는 동의한 뒤에만 저장해요",
     body: [
       {
         // 웹 신규 문구 — CPO 확인 필요 (APP_STORE.md §3 문장에서 "게스트로 시작하면"을 더하고 "이 기기에만" → "이 브라우저에만")
         text: "게스트로 시작하면 증상 기록, 오늘의 질문 답변, 산모수첩 확인 항목, 체중, 기록장 글은 이 브라우저에만 저장되며 서버로 전송되지 않습니다. 언제든 설정에서 계정과 모든 데이터를 삭제할 수 있어요.",
+        // 웹 신규 문구 — CPO 확인 필요 (서버 저장 빌드 — 2026-09-28 결정: 게스트는 Supabase 익명 계정이라 게스트·카카오 모두
+        // 온보딩 동의(onboarding/consentText.ts) 뒤 서버(서울 리전)에 저장한다. AI 서버가 켜져도 이 문구가 우선한다(paragraphText) —
+        // "서버로 전송되지 않습니다"를 말하지 않으므로 AI 켜짐에도 사실이다)
+        whenKakaoLogin:
+          "게스트로 시작해도, 카카오로 로그인해도 증상 기록, 오늘의 질문 답변, 산모수첩 확인 항목, 체중, 기록장 글은 동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장돼요. 언제든 설정에서 계정과 모든 데이터를 삭제할 수 있어요.",
         // 웹 신규 문구 — CPO 확인 필요 (AI 연결 시 문구: AI 상담이 체중에서 계산한 BMI·최근 기록의 위험 신호 여부를
         // 서버로 보내므로(rules/chat.ts buildChatContext) "서버로 전송되지 않습니다"를 뺐다. 나머지 글자는 위와 같다)
         whenLlm:
@@ -211,9 +230,8 @@ export const FEATURES: ReadonlyArray<LandingSection> = [
       {
         // 웹 신규 문구 — CPO 확인 필요 (웹 저장 방향 08 "서버(계정 API)" — 카카오 로그인이 꺼진 빌드라 '예정'으로)
         text: "카카오 로그인은 준비 중이에요. 로그인이 열리면 동의를 받은 뒤 기록을 서버에 저장해, 여러 기기에서 이어 쓸 수 있게 할 예정이에요.",
-        // 웹 신규 문구 — CPO 확인 필요 (카카오 로그인이 켜진 빌드. "동의를 받은 뒤"는 서버 저장 동의 화면이 생길 때까지 쓰지 않는다 —
-        // 지금 동의는 온보딩의 "건강 정보는 내 기기에만 저장 (서버 계정 없음)"뿐이다)
-        whenKakaoLogin: "카카오로 로그인하면 기록을 서버에 저장해, 여러 기기에서 이어 쓸 수 있어요.",
+        // 웹 신규 문구 — CPO 확인 필요 (서버 저장 빌드. 게스트는 그 브라우저의 로그인 정보로만 다시 열 수 있어 여러 기기는 카카오만)
+        whenKakaoLogin: "카카오로 로그인하면 다른 기기에서도 기록을 이어 쓸 수 있어요.",
       },
     ],
   },
@@ -283,10 +301,13 @@ export const PRINCIPLES: ReadonlyArray<LandingSection> = [
 /**
  * [시작하기] 버튼이 어디로 가고 무엇이라 쓰는지 — 앱 관문(rootScreenFor)과 같은 판단.
  * 저장소를 읽기 전(정적 HTML·첫 렌더)과 로그인 전은 [시작하기] → 로그인. 온보딩 중이면 온보딩을 이어 한다.
+ * "consent"(온보딩을 마쳤지만 지금 판의 동의가 없음 — 서버 저장 빌드)는 앱을 쓰는 사람이라 [내 회복 기록 열기] → 앱 홈.
+ * 다시 동의 화면으로 보내는 것은 앱 관문이 한다(주소를 여기서 따로 정하지 않는다).
  */
 export function startAction(screen: RootScreen): { href: string; label: string; opensApp: boolean } {
   switch (screen) {
     case "main":
+    case "consent":
       return { href: ROUTES.home, label: LANDING_TEXT.openApp, opensApp: true };
     case "onboarding":
       return { href: ROUTES.onboarding, label: LANDING_TEXT.start, opensApp: false };

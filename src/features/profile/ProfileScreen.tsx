@@ -19,7 +19,8 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
-import { Card, SectionTitle } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { Card, SectionTitle, cx } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
 import {
   PROFILE_MENU,
@@ -50,10 +51,10 @@ export function ProfileScreen() {
   const nowMs = useNowMs();
 
   return (
-    // VStack(spacing: md) · 좌우 lg · 위 sm — ProfileView.swift:32-44
-    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
-      {/* .navigationTitle("프로필") — 큰 제목(34 bold) */}
-      <h1 className="pt-6 text-[2.125rem] leading-tight font-bold text-neutral">{PROFILE_TEXT.title}</h1>
+    // VStack(spacing: md) · 좌우 lg · 위 sm — ProfileView.swift:32-44. PC 틀은 pageFrame(탭 화면)
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.wide)}>
+      {/* .navigationTitle("프로필") — 큰 제목(34 bold). PC(lg)는 다른 화면의 제목(ScreenHeader 24 bold)과 같은 크기·같은 높이 */}
+      <h1 className="pt-6 text-[2.125rem] leading-tight font-bold text-neutral lg:pt-2 lg:text-2xl lg:leading-8">{PROFILE_TEXT.title}</h1>
 
       {hydrated && nowMs !== null ? (
         <div className="flex flex-col gap-4 @4xl:grid @4xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] @4xl:items-start @4xl:gap-6">

@@ -5,7 +5,8 @@
 
 import { useEffect, useState } from "react";
 import { fetchVideos } from "@/api/video";
-import { ScreenHeader } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { ScreenHeader, cx } from "@/components/ui";
 import type { DeliveryMethod, MaternityRecord, PersistedState } from "@/domain/types";
 import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
@@ -24,8 +25,8 @@ import {
 export function ExerciseScreen() {
   const { hydrated, state } = useAppStore();
   return (
-    // 좌우 lg(24) · 위 sm(8) · 항목 간격 md(16) — ExerciseView.swift:30-44
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-6">
+    // 좌우 lg(24) · 위 sm(8) · 항목 간격 md(16) — ExerciseView.swift:30-44. PC 틀은 pageFrame(탭 화면)
+    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
       {hydrated ? <ExerciseContent state={state} /> : <ScreenHeader title={EXERCISE_TEXT.headerTitle} />}
     </main>
   );

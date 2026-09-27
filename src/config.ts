@@ -35,10 +35,33 @@ export const config = {
   supabaseAnonKey: publicSupabaseKey(
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   ),
+  /**
+   * Cloudflare Turnstile 사이트 키(공개값) — 게스트(Supabase 익명 로그인)의 봇 막기(src/auth/turnstile.ts).
+   * Supabase 대시보드의 CAPTCHA(Turnstile 비밀 키)와 함께 켠다. 비밀 키는 여기 두지 않는다.
+   */
+  turnstileSiteKey: (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim() || null,
+  /**
+   * AI 상담 스위치 — "true"일 때만 켠다(Supabase가 설정된 빌드에서만 뜻이 있다). Anthropic 키(Supabase 함수 비밀)와
+   * 처리방침·동의 문구가 준비된 뒤에 켠다(docs/LAUNCH_CHECKLIST.md 5단계). 기본은 꺼짐.
+   */
+  aiChatEnabled: (process.env.NEXT_PUBLIC_AI_CHAT_ENABLED ?? "").trim() === "true",
 } as const;
 
-export const isVideoBackendConfigured = () => config.videoURL !== null;
-export const isLLMBackendConfigured = () => config.llmURL !== null;
+/**
+ * Supabase Edge Functions 주소(https://<ref>.supabase.co/functions/v1) — 영상 프록시(videos)·AI 상담(chat).
+ * Supabase가 설정되지 않았으면 null(함수를 부르지 않는다).
+ */
+export function supabaseFunctionsUrl(): string | null {
+  return isSupabaseConfigured() ? `${config.supabaseUrl}/functions/v1` : null;
+}
+
+/** 운동 영상 — Supabase가 있으면 Edge Function "videos"를 거치고, 없으면 예전처럼 NEXT_PUBLIC_VIDEO_URL을 직접 부른다. */
+export const isVideoBackendConfigured = () => isSupabaseConfigured() || config.videoURL !== null;
+/**
+ * AI 상담·약물 체크의 AI 답 — Supabase가 있으면 Edge Function "chat"을 쓰고 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)가 켜졌을 때만,
+ * 없으면 예전처럼 NEXT_PUBLIC_LLM_URL이 있을 때만.
+ */
+export const isLLMBackendConfigured = () => (isSupabaseConfigured() ? config.aiChatEnabled : config.llmURL !== null);
 export const isAccountBackendConfigured = () => config.accountURL !== null;
 /** 카카오 로그인·서버 저장(Supabase)을 켤 수 있는가 — 주소와 공개 키가 둘 다 있을 때만. */
 export const isSupabaseConfigured = () => config.supabaseUrl !== null && config.supabaseAnonKey !== null;

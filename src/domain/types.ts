@@ -22,6 +22,13 @@ export interface UserProfile {
   returnToWorkDate: LocalDateString | null;
   isBreastfeeding: boolean; // 기본 true
   consentAccepted: boolean; // 기본 false
+  /**
+   * 동의한 동의 문구의 판(src/domain/consent.ts CURRENT_CONSENT_VERSION). 동의 전·예전 판·서버 저장이 없던 빌드의 동의는 null.
+   * 서버로 올리는 것은 이 값이 지금 판일 때만(hasCurrentConsent).
+   */
+  consentVersion: string | null;
+  /** 그 동의를 받은 시각 — 동의 전이면 null */
+  consentAcceptedAt: IsoDateTimeString | null;
   /** 체중 관리(선택) — 0이면 미입력 */
   heightCm: number;
   currentWeightKg: number;

@@ -2,7 +2,8 @@
 // 순서: 머리(제목·부제) → 즉시 병원에 가야 할 신호 카드 → 가이드 카드 8장(출처 칩) → 출처 각주.
 // PC(넓은 화면, 컨테이너 쿼리 42rem 이상): 가이드 카드를 2열로. 병원 신호 카드와 각주는 늘 전체 폭. 폰 기둥에서는 한 줄.
 import { TriangleAlert } from "lucide-react";
-import { Card, EvidenceChip, SubPageHeader } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { Card, EvidenceChip, SubPageHeader, cx } from "@/components/ui";
 import { SfIcon } from "./SfIcon";
 import { GUIDE_TEXT, guideCardViews, guideRedFlags, splitPhoneNumbers, type GuideCardView } from "./guideContent";
 import { ROUTES } from "@/routes";
@@ -14,9 +15,9 @@ export function GuideScreen() {
   const cards = guideCardViews();
 
   return (
-    // VStack(spacing: md) · 좌우 lg · 끝 Spacer(minLength: lg) — GuideView.swift:83-92
-    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
-      <SubPageHeader title={GUIDE_TEXT.title} subtitle={GUIDE_TEXT.subtitle} backHref={ROUTES.profile} />
+    // VStack(spacing: md) · 좌우 lg · 끝 Spacer(minLength: lg) — GuideView.swift:83-92. PC 틀은 pageFrame(격자 화면)
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.wide)}>
+      <SubPageHeader title={GUIDE_TEXT.title} subtitle={GUIDE_TEXT.subtitle} backHref={ROUTES.profile} hideBackWithSidebar />
 
       {redFlags.length > 0 ? <RedFlagSignsCard flags={redFlags} /> : null}
 

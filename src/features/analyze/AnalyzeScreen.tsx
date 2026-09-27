@@ -3,11 +3,13 @@
 // 회복 단계 분석 — iOS AnalyzeFlowView.swift(폼 → 로딩 → 결과). 전체 화면 페이지, 뒤로 가기는 홈 탭(ROUTES.home).
 // [분석 시작]: 폼 값을 먼저 저장하고, 저장소에서 다시 읽은 값으로 분석한다(analyzeRun.ts, D10).
 // 저장소를 읽기 전(hydrated=false)에는 제목·안내문만 그린다 — 기본값으로 채운 폼이 번쩍이지 않게.
-// PC(lg 이상): 폼·로딩은 읽기 좋은 폭(최대 40rem) 기둥, 결과는 앱 본문 폭 전체(묶음을 나란히). 폰은 이전과 같다.
-// 기둥은 왼쪽 정렬 — 폼 → 결과로 넘어가도 머리(뒤로·제목)가 제자리에 있고, 다른 화면(설정·약물 체크 등)과 위치가 같게.
+// PC(lg 이상) 틀은 pageFrame: 폼·로딩은 읽기 화면(최대 48rem), 결과는 격자 화면(앱 본문 폭 전체 — 묶음을 나란히). 폰은 이전과 같다.
+// 둘 다 왼쪽 정렬·같은 위 여백 — 폼 → 결과로 넘어가도 머리(뒤로·제목)가 제자리에 있고, 다른 화면과 위치가 같다.
+// 더 깊은 화면(홈의 분석 카드에서 들어옴)이라 PC에서도 [뒤로]가 맨 위 줄에 있다.
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { fetchVideos } from "@/api/video";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { SubPageHeader, cx } from "@/components/ui";
 import type { EngineOutput } from "@/rules/recovery";
 import { isRedFlagActive } from "@/rules/record";
@@ -25,8 +27,6 @@ import {
 } from "./analyzeModel";
 import { saveAndAnalyze } from "./analyzeRun";
 
-/** 폼·로딩 단계의 PC 기둥 — 왼쪽 정렬, 최대 40rem(패딩 포함 폭은 이 값 안) */
-const FORM_COLUMN = "lg:w-full lg:max-w-[40rem]";
 
 type Phase =
   /** formKey가 바뀌면 폼을 새로 만들어 저장된 값으로 다시 채운다(iOS restart → prefillForm) */
@@ -94,7 +94,7 @@ export function AnalyzeScreen() {
 
   return (
     // 좌우 lg(24) — AnalyzeFlowView.swift:129-130 · AnalyzeResultView.swift:38-39
-    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", phase.kind !== "result" && FORM_COLUMN)}>
+    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", phase.kind === "result" ? PAGE_FRAME.wide : PAGE_FRAME.reading)}>
       <SubPageHeader
         title={ANALYZE_TEXT.title}
         // 안내문은 본문 크기 16(AnalyzeFlowView.swift:72-74) — SubPageHeader가 subtitleSize를 넘기지 않아 안쪽에서 키운다

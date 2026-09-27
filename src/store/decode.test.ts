@@ -123,10 +123,33 @@ describe("decodePersisted — 없는 키는 기본값", () => {
       returnToWorkDate: null,
       isBreastfeeding: true,
       consentAccepted: false,
+      consentVersion: null,
+      consentAcceptedAt: null,
       heightCm: 0,
       currentWeightKg: 0,
       prePregnancyWeightKg: 0,
       neighborhood: "",
+    });
+  });
+
+  it("동의의 판·시각 — 예전 저장·iOS 형식(칸 없음)은 null(= 지금 판의 동의 없음), 못 읽는 값도 null", () => {
+    const at = "2026-09-28T01:02:03.000Z";
+    expect(decodePersisted({ profile: { consentAccepted: true } }, deps()).profile).toMatchObject({
+      consentAccepted: true,
+      consentVersion: null,
+      consentAcceptedAt: null,
+    });
+    expect(decodePersisted({ profile: { consentAccepted: true, consentVersion: "web-2026-09-28", consentAcceptedAt: at } }, deps()).profile).toMatchObject({
+      consentVersion: "web-2026-09-28",
+      consentAcceptedAt: at,
+    });
+    expect(decodePersisted({ profile: { consentVersion: "", consentAcceptedAt: "어제" } }, deps()).profile).toMatchObject({
+      consentVersion: null,
+      consentAcceptedAt: null,
+    });
+    expect(decodePersisted({ profile: { consentVersion: 3, consentAcceptedAt: {} } }, deps()).profile).toMatchObject({
+      consentVersion: null,
+      consentAcceptedAt: null,
     });
   });
 

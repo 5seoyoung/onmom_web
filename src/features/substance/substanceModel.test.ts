@@ -7,7 +7,9 @@ import {
   checkSubstance,
   createLatestOnly,
   makeSubstanceLlmLookup,
+  shouldOfferAiConsent,
   substanceDeps,
+  substanceLlmContext,
   VERDICT_BADGE_CLASS,
   verdictBadge,
 } from "./substanceModel";
@@ -58,7 +60,7 @@ describe("판정 배지", () => {
 describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
   it("미설정이면 llmLookup이 없다 → 표만 본다, 서버 호출 없음", async () => {
     const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');
-    const deps = substanceDeps({ llmConfigured: false, complete, isBreastfeeding: true, dayCount: 10 });
+    const deps = substanceDeps({ llmConfigured: false, complete, isBreastfeeding: true, dayCount: 10, context: null });
     expect(deps.llmLookup).toBeUndefined();
     const r = await checkSubstance("모르는약", deps);
     expect(r).toMatchObject({ verdict: "unknown", source: "table", query: "모르는약" });
@@ -69,7 +71,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("설정돼 있어도 표에 있는 항목은 LLM에 묻지 않는다(검수 #1)", async () => {
     const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');
-    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 10 });
+    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 10, context: null });
     const r = await checkSubstance("아스피린", deps);
     expect(r).toMatchObject({ verdict: "avoid", source: "table" });
     expect(complete).not.toHaveBeenCalled();
@@ -77,7 +79,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("표에 없으면 LLM 답 — AI 답변 칩과 병기 문구", async () => {
     const complete = okText('```json\n{"verdict":"caution","detail":"근거가 제한적이에요.","sources":["LactMed"]}\n```');
-    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: false, dayCount: 23 });
+    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: false, dayCount: 23, context: null });
     const r = await checkSubstance(" 모르는약 ", deps);
     expect(r).toMatchObject({ verdict: "caution", source: "llm", query: "모르는약" });
     expect(r.evidenceChips).toEqual(["src:LactMed", "AI 답변"]);
@@ -86,7 +88,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("LLM 실패·형식 오류면 표의 정보 부족을 그대로 둔다", async () => {
     for (const complete of [failed(), okText("모르겠어요"), okText('{"verdict":"maybe","detail":"x","sources":[]}')]) {
-      const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 1 });
+      const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 1, context: null });
       const r = await checkSubstance("모르는약", deps);
       expect(r).toMatchObject({ verdict: "unknown", source: "table" });
       expect(complete).toHaveBeenCalledTimes(1);
@@ -95,30 +97,51 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 });
 
 describe("makeSubstanceLlmLookup — 요청 본문(SubstanceCheckView.swift:118-126)", () => {
-  it("preset substance · 512토큰 · 수유 여부와 산후 일수 컨텍스트 · signal 전달", async () => {
+  it("preset substance · 512토큰(예전 경로용) · 산모 정보는 넘긴 컨텍스트 그대로 · signal 전달", async () => {
     const complete = okText('{"verdict":"safe","detail":"d","sources":["FDA"]}');
     const signal = new AbortController().signal;
-    const lookup = makeSubstanceLlmLookup({ complete, isBreastfeeding: true, dayCount: 42, signal });
+    const context = { week: 6, breastfeeding: true };
+    const lookup = makeSubstanceLlmLookup({ complete, isBreastfeeding: true, dayCount: 42, context, signal });
     await expect(lookup("모르는약")).resolves.toEqual({ verdict: "safe", detail: "d", sources: ["FDA"] });
     const [req, opts] = complete.mock.calls[0] as unknown as [LLMRequest, { signal?: AbortSignal }];
+    // rules가 만드는 iOS 컨텍스트 문자열("모유수유 중, 산후 42일차")은 보내지 않는다
     expect(req).toEqual({
       messages: [{ role: "user", content: "모르는약" }],
       preset: "substance",
-      context: "모유수유 중, 산후 42일차",
+      context,
       maxTokens: 512,
     });
     expect(opts.signal).toBe(signal);
   });
 
-  it("수유 안 함 컨텍스트", async () => {
-    const complete = okText("{}");
-    await makeSubstanceLlmLookup({ complete, isBreastfeeding: false, dayCount: 0 })("x");
-    const [req] = complete.mock.calls[0] as unknown as [LLMRequest];
-    expect(req.context).toBe("모유수유 안 함, 산후 0일차");
-  });
-
   it("실패 결과는 null", async () => {
-    await expect(makeSubstanceLlmLookup({ complete: failed(), isBreastfeeding: true, dayCount: 1 })("x")).resolves.toBeNull();
+    await expect(
+      makeSubstanceLlmLookup({ complete: failed(), isBreastfeeding: true, dayCount: 1, context: null })("x"),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("substanceLlmContext — 수유 여부와 산후 주차만(분만 방식은 보내지 않는다)", () => {
+  const now = new Date(2026, 8, 27, 10);
+  it("출산일이 있으면 주차", () => {
+    expect(substanceLlmContext({ deliveryDate: "2026-08-16", isBreastfeeding: false }, now)).toEqual({ week: 6, breastfeeding: false });
+  });
+  it("출산일이 없으면 주차를 빼고 보낸다", () => {
+    expect(substanceLlmContext({ deliveryDate: null, isBreastfeeding: true }, now)).toEqual({ breastfeeding: true });
+  });
+});
+
+describe("shouldOfferAiConsent — AI 국외 이전 동의 카드", () => {
+  const unknownFromTable = { query: "모르는약", verdict: "unknown" as const, detail: "d", evidenceChips: [], source: "table" as const };
+  it("동의를 묻는 중(ask)이고 표에 없는 항목일 때만", () => {
+    expect(shouldOfferAiConsent(unknownFromTable, "ask")).toBe(true);
+    expect(shouldOfferAiConsent(unknownFromTable, "on")).toBe(false);
+    expect(shouldOfferAiConsent(unknownFromTable, "off")).toBe(false);
+    expect(shouldOfferAiConsent(null, "ask")).toBe(false);
+  });
+  it("표에 있는 항목·AI 답에는 묻지 않는다", () => {
+    expect(shouldOfferAiConsent({ ...unknownFromTable, verdict: "avoid" }, "ask")).toBe(false);
+    expect(shouldOfferAiConsent({ ...unknownFromTable, source: "llm" }, "ask")).toBe(false);
   });
 });
 

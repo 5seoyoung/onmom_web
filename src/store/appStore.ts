@@ -13,6 +13,8 @@ import type {
   SymptomRecord,
   UserProfile,
 } from "@/domain/types";
+import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
+import { isSupabaseConfigured } from "@/config";
 import { decodeAccount, displayName, isGuestID, makeGuestID, type Account } from "./account";
 import { decodePersisted } from "./decode";
 import { initialState } from "./defaults";
@@ -49,7 +51,17 @@ export interface AppActions {
    * 서버 탈퇴는 src/auth deleteAccountEverywhere가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
    */
   deleteAccount(): void;
+  /**
+   * 온보딩 3단계 동의 후 [온맘 시작하기]. 동의의 판·시각은 동의 문구를 보여 준 화면이 updateProfile로 먼저 남긴다
+   * (서버 저장 동의 문구 → 지금 판 CURRENT_CONSENT_VERSION, "내 기기에만 저장" 문구 → 판 없음). 여기서는 판을 정하지 않는다.
+   */
   completeOnboarding(): void;
+  /**
+   * 지금 판의 동의를 받았다(domain/consent.ts) — profile.consentVersion = CURRENT_CONSENT_VERSION, consentAcceptedAt = 지금.
+   * 온보딩 완료 여부는 그대로. 이 뒤부터 서버 동기화가 기록을 올린다(hasCurrentConsent).
+   * (온보딩 화면은 같은 값을 updateProfile로 남긴다 — 둘 다 같은 결과.)
+   */
+  acceptConsent(): void;
   updateProfile(patch: Partial<UserProfile>): void;
   updateMaternity(patch: Partial<MaternityRecord>): void;
   addSymptomRecord(input: NewSymptomRecord): SymptomRecord;
@@ -202,6 +214,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       ensureLoaded();
       commit(S.completeOnboarding(snapshot.state));
     },
+    acceptConsent() {
+      ensureLoaded();
+      commit(S.acceptConsent(snapshot.state, { version: CURRENT_CONSENT_VERSION, at: now().toISOString() }));
+    },
     updateProfile(patch) {
       ensureLoaded();
       commit(S.updateProfile(snapshot.state, patch));
@@ -289,11 +305,19 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
   };
 }
 
-/** 첫 화면 분기(RootView.swift:10-17) — 로그인 안 함 → 로그인, 온보딩 전 → 온보딩, 그 외 → 메인 탭. */
-export type RootScreen = "loading" | "login" | "onboarding" | "main";
+/**
+ * 첫 화면 분기(RootView.swift:10-17) — 로그인 안 함 → 로그인, 온보딩 전 → 온보딩, 그 외 → 메인 탭.
+ * "consent" = 로그인·온보딩을 마쳤지만 지금 판의 동의(domain/consent.ts)가 없다 — 서버 저장(Supabase)이 설정된 빌드에서만.
+ *   예전 게스트 기록(서버 저장이 없던 빌드에서 "내 기기에만 저장"에 동의), 동의 문구의 판이 바뀜, 다른 게스트 기록을 가져온 로그인.
+ *   앱 관문이 동의 단계만 있는 온보딩(/onboarding/?consent=1)으로 보낸다(features/flow/gate.ts SCREEN_PATH.consent).
+ */
+export type RootScreen = "loading" | "login" | "onboarding" | "consent" | "main";
 
-export function rootScreenFor(s: AppSnapshot): RootScreen {
+/** requireCurrentConsent — 지금 판의 동의를 요구하는가(기본: Supabase가 설정된 빌드). 설정이 없으면 지금까지와 같다. */
+export function rootScreenFor(s: AppSnapshot, requireCurrentConsent: boolean = isSupabaseConfigured()): RootScreen {
   if (!s.hydrated) return "loading";
   if (s.account === null) return "login";
-  return s.state.hasOnboarded ? "main" : "onboarding";
+  if (!s.state.hasOnboarded) return "onboarding";
+  if (requireCurrentConsent && !hasCurrentConsent(s.state.profile)) return "consent";
+  return "main";
 }

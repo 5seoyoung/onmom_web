@@ -2,17 +2,30 @@
 
 // 약물·음식 체크 — SubstanceCheckView.swift를 옮긴 화면(01 §3-10, substance.png).
 // 큐레이션 표(출처 표기) 우선, 표에 없는 항목만 LLM 서버에 묻는다 — 서버가 설정돼 있을 때만(지금은 표만).
+// 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(features/chat/aiConsent.ts): 동의 전에는 표만 보고, 표에 없는 항목이면
+// 결과 아래에 동의 카드를 띄운다. [동의하고 계속하기]면 같은 항목을 AI에 다시 묻는다.
 // 진단·처방이 아니다.
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { LoaderCircle, Search } from "lucide-react";
 import { llmComplete } from "@/api/llm";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, DisclaimerBanner, EvidenceChipList, PrimaryButton, SubPageHeader, cx } from "@/components/ui";
 import { isLLMBackendConfigured } from "@/config";
 import { postpartumDayCount } from "@/domain/date";
+import { AiConsentCard } from "@/features/chat/AiConsentCard";
+import { aiMode, useAiConsent } from "@/features/chat/aiConsent";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
 import { useAppStore } from "@/store/useAppStore";
-import { canCheckSubstance, checkSubstance, createLatestOnly, substanceDeps, verdictBadge } from "./substanceModel";
+import {
+  canCheckSubstance,
+  checkSubstance,
+  createLatestOnly,
+  shouldOfferAiConsent,
+  substanceDeps,
+  substanceLlmContext,
+  verdictBadge,
+} from "./substanceModel";
 import { ROUTES } from "@/routes";
 
 // 원문: SubstanceCheckView.swift:34
@@ -25,7 +38,11 @@ const TITLE = "약물·음식 체크";
 const LOADING_SR_LABEL = "확인하고 있어요";
 
 export function SubstanceCheckScreen() {
-  const { hydrated, state } = useAppStore();
+  const { hydrated, state, account } = useAppStore();
+  const { consented, accept } = useAiConsent(account?.id ?? null);
+  /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
+  const [declined, setDeclined] = useState(false);
+  const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<SubstanceResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -46,6 +63,11 @@ export function SubstanceCheckScreen() {
   function run(event?: FormEvent) {
     event?.preventDefault();
     if (!canCheckSubstance(query)) return;
+    lookup(query, mode === "on");
+  }
+
+  /** 한 번의 조회 — useAi면 표에 없는 항목을 서버(LLM)에 묻는다 */
+  function lookup(text: string, useAi: boolean) {
     // 이전 조회가 진행 중이면 취소 — 느린 이전 응답이 새 결과를 덮지 않게(SubstanceCheckView.swift:94-95)
     inflight.current?.abort();
     const controller = new AbortController();
@@ -53,14 +75,16 @@ export function SubstanceCheckScreen() {
     const token = latest.current.begin();
     setLoading(true);
 
+    const now = new Date();
     const deps = substanceDeps({
-      llmConfigured: isLLMBackendConfigured(),
+      llmConfigured: useAi,
       complete: llmComplete,
       isBreastfeeding: state.profile.isBreastfeeding,
-      dayCount: postpartumDayCount(state.profile.deliveryDate, new Date()),
+      dayCount: postpartumDayCount(state.profile.deliveryDate, now),
+      context: useAi ? substanceLlmContext(state.profile, now) : null,
       signal: controller.signal,
     });
-    void checkSubstance(query, deps).then((r) => {
+    void checkSubstance(text, deps).then((r) => {
       if (!latest.current.isCurrent(token)) return;
       inflight.current = null;
       setResult(r);
@@ -68,12 +92,19 @@ export function SubstanceCheckScreen() {
     });
   }
 
+  function onAcceptAi() {
+    accept();
+    // 방금 "정보 부족"이 나온 항목을 AI에 다시 묻는다
+    if (result) lookup(result.query, true);
+  }
+
   const header = substanceHeader(state.profile.isBreastfeeding);
+  const offerAiConsent = !loading && shouldOfferAiConsent(result, mode);
 
   return (
-    // PC: 읽기 좋은 폭(최대 40rem) 기둥 — 입력과 결과가 한눈에. 왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게. 폰 기둥(30rem)에서는 그대로.
-    <main className="flex w-full max-w-[40rem] flex-1 flex-col px-6 pt-2 pb-6">
-      <SubPageHeader title={TITLE} backHref={ROUTES.profile} />
+    // PC 틀은 pageFrame(읽기 화면 — 최대 48rem, 왼쪽 정렬): 입력과 결과가 한눈에, 머리 위치는 다른 화면과 같다. 폰 기둥(30rem)에서는 그대로.
+    <main className={cx("flex flex-1 flex-col px-6 pt-2 pb-6", PAGE_FRAME.reading)}>
+      <SubPageHeader title={TITLE} backHref={ROUTES.profile} hideBackWithSidebar />
 
       {/* 저장소를 읽기 전에는 수유 여부를 모른다 — 기본값 문구를 번쩍이지 않게 그리지 않는다 */}
       {hydrated ? (
@@ -122,6 +153,8 @@ export function SubstanceCheckScreen() {
               <ResultCard result={result} />
             ) : null}
           </div>
+
+          {offerAiConsent ? <AiConsentCard onAccept={onAcceptAi} onDecline={() => setDeclined(true)} /> : null}
 
           <DisclaimerBanner />
         </div>

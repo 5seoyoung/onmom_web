@@ -1,12 +1,13 @@
-// 서버 동기화 엔진 — 로그인한 실제 계정 하나의 앱 상태를 서버의 한 행과 맞춘다. 게스트는 동기화하지 않는다(만드는 쪽이 판단).
+// 서버 동기화 엔진 — 로그인한 계정 하나(카카오, 또는 Supabase 익명 계정인 게스트)의 앱 상태를 서버의 한 행과 맞춘다.
+// 어느 계정을 동기화할지는 만드는 쪽(src/auth/session.ts)이 정한다.
 //
 // 지키는 것
 // - 첫 읽기가 성공하기 전에는 절대 쓰지 않는다(감사 #13) — 서버에 있는 기록을 빈 상태로 덮지 않게.
-// - 서버 저장 동의 전에는 건강 정보를 서버로 보내지 않는다(감사 #15·#20, 판단은 mayUpload).
-//   온보딩 3단계의 profile.consentAccepted는 "내 기기에만 저장" 동의라 그것만으로는 보내지 않는다.
-//   · 행이 없으면: 서버 저장 동의(marks.ts — 온보딩이 acceptServerStorageConsent로 남김) + 온보딩 동의 뒤에 처음 만든다.
-//   · 행이 있으면: 그 행이 이 계정의 예전 서버 저장 동의다. 단, 게스트·주인 없는 기록을 가져온 브라우저는(공용 PC — 남의
-//     기록일 수 있다) 다시 동의할 때까지 서버 행에 섞지 않는다.
+// - 지금 판의 동의(domain/consent.ts hasCurrentConsent — profile.consentVersion) 전에는 건강 정보를 서버로 보내지 않는다
+//   (감사 #15·#20, 판단은 mayUpload). 서버에 행이 있어도 마찬가지다 — 동의는 행이 아니라 상태의 프로필에 있다.
+//   · 다른 사람일 수 있는 기록을 이 계정으로 가져왔으면(marks.ts adoptedAt — 공용 PC에서 로그아웃한 게스트의 기록 등)
+//     가져온 뒤 이 브라우저에서 받은 동의가 있어야 보낸다(판단은 합치기 전 이 브라우저의 상태로만 — 서버 행의 동의 시각은 보지 않는다).
+//     그 전에는 합친 상태의 동의 도장을 이 브라우저에서 지워 앱 관문이 다시 동의 화면으로 보내게 한다(서버 행의 동의가 가져온 기록까지 덮지 않게).
 // - 행이 있으면: 서버 + 이 브라우저를 합쳐(merge.ts) 이 브라우저에 적용하고, 서버와 다르면 올린다.
 //   합치기 기준(마지막으로 서버와 맞춘 프로필·산모수첩)은 이 브라우저에 저장해 두고 다음에 페이지를 열 때 쓴다 —
 //   올리기 전에 탭이 닫혀도 이 브라우저에서 고친 칸을 서버 값으로 되돌리지 않게.
@@ -19,10 +20,12 @@
 //
 // 한 번에 하나의 작업만 돈다(읽기·쓰기를 줄 세운다).
 
+import { hasCurrentConsent } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
 import type { AppStore } from "../appStore";
 import { decodePersisted, type DecodeDeps } from "../decode";
 import { randomId } from "../ids";
+import { withoutConsentStamp } from "../state";
 import { canonicalJSON } from "./canonical";
 import type { SyncMarks } from "./marks";
 import { mergeStates } from "./merge";
@@ -31,7 +34,7 @@ import { STATE_SCHEMA_VERSION, type RemoteStateStore } from "./remote";
 export type SyncStatus =
   /** 첫 읽기 중 — 아직 아무것도 쓰지 않았다 */
   | "loading"
-  /** 동의 전 — 서버로 보내지 않는다(온보딩 동의 전, 또는 서버 저장 동의 전: 새 행·가져온 게스트 기록) */
+  /** 동의 전 — 서버로 보내지 않는다(지금 판의 동의 전: 온보딩 전·예전 판·다시 동의받기 전의 가져온 기록) */
   | "waitingConsent"
   /** 바뀐 것이 있어 곧 올린다(모아 보내기 대기·전송 중) */
   | "pending"
@@ -54,9 +57,9 @@ export const SYNC_MAX_CONFLICT_RETRIES = 3;
 export interface SyncEngineOptions {
   store: AppStore;
   remote: RemoteStateStore;
-  /** 이 엔진이 맡은 계정 id("kakao-…") — 스토어의 계정이 이것과 다르면 멈춘다. */
+  /** 이 엔진이 맡은 계정 id("kakao-…" 또는 익명 게스트 "guest-<Supabase 사용자 id>") — 스토어의 계정이 이것과 다르면 멈춘다. */
   accountId: string;
-  /** 합치기 기준·서버 저장 동의 표시(marks.ts) — 브라우저에서는 localStorage, 테스트는 메모리 */
+  /** 합치기 기준·가져온 기록 표시(marks.ts) — 브라우저에서는 localStorage, 테스트는 메모리 */
   marks: SyncMarks;
   /**
    * 페이지가 가려질 때(visibilitychange → hidden, pagehide) 부를 함수를 등록한다. 반환값은 해제 함수.
@@ -84,7 +87,7 @@ export interface SyncEngine {
   retryNow(): void;
   /**
    * 기다리는 변경을 지금 올린다(로그아웃 전). timeoutMs 안에 서버가 이 브라우저와 같아지면 true.
-   * 온보딩 동의 전이라 저장된 기록이 없으면 true. 첫 읽기를 못 했거나, 올리지 못했거나, 서버 저장 동의 전이라
+   * 온보딩 동의 전이라 저장된 기록이 없으면 true. 첫 읽기를 못 했거나, 올리지 못했거나, 지금 판의 동의 전이라
    * 기록이 이 브라우저에만 있거나, 서버 형식이 더 새로워 읽기만 하는 중이면 false.
    */
   flush(timeoutMs: number): Promise<boolean>;
@@ -157,16 +160,36 @@ export function createSyncEngine(opts: SyncEngineOptions): SyncEngine {
   }
 
   /**
-   * 서버로 보내도 되는가(감사 #15·#20) — 온보딩 동의 + 서버 저장 동의.
-   * 서버 저장 동의는 이 브라우저의 동의 표시(지금 판), 또는 이미 있는 이 계정의 행(예전에 동의해 만든 것).
-   * 게스트·주인 없는 기록을 가져온 브라우저는 행이 있어도 다시 동의할 때까지 보내지 않는다.
-   * 첫 읽기 뒤에만 부른다(행이 있는지 알아야 해서).
+   * 가져온 기록이 아직 다시 동의받지 않았는가 — 가져온 시각(marks.ts) 뒤에 받은 동의가 없으면 true.
+   * 가져온 뒤 동의를 받았으면 표시를 지운다(다음부터는 보통 계정과 같다).
+   */
+  function adoptedPending(profile: PersistedState["profile"]): boolean {
+    const adoptedAt = marks.adoptedAt(accountId);
+    if (adoptedAt === null) return false;
+    const acceptedAt = profile.consentAcceptedAt === null ? Number.NaN : Date.parse(profile.consentAcceptedAt);
+    if (hasCurrentConsent(profile) && !Number.isNaN(acceptedAt) && acceptedAt >= Date.parse(adoptedAt)) {
+      marks.clearAdopted(accountId);
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * 서버로 보내도 되는가(감사 #15·#20) — 지금 판의 동의(domain/consent.ts). 가져온 기록은 가져온 뒤의 동의까지.
+   * 서버에 행이 있다는 것만으로는 보내지 않는다.
    */
   function mayUpload(payload: PersistedState): boolean {
-    if (!payload.profile.consentAccepted) return false;
-    const consent = marks.consent(accountId);
-    if (consent.given) return true;
-    return serverUpdatedAt !== null && !consent.adopted;
+    return hasCurrentConsent(payload.profile) && !adoptedPending(payload.profile);
+  }
+
+  /**
+   * 가져온 기록이 다시 동의받기 전이면 합친(또는 이 브라우저의) 상태의 동의 도장을 지운다 — 앱 관문이 다시 동의 화면으로 보낸다.
+   * 다시 동의받았는지는 이 브라우저의 상태(local)로만 판단한다 — 합친 상태의 동의는 서버 행(다른 기기)에서 왔을 수 있고,
+   * 그 시각이 가져온 시각보다 뒤여도(다른 기기의 시계가 빠름·가져온 뒤 다른 기기에서 동의) 이 브라우저에서 받은 동의가 아니다.
+   * 도장을 지운 뒤로는 이 브라우저에서 다시 동의하기 전까지 local에도 도장이 없어 mayUpload가 그대로 막는다.
+   */
+  function guardAdopted(local: PersistedState, next: PersistedState): PersistedState {
+    return adoptedPending(local.profile) ? withoutConsentStamp(next) : next;
   }
 
   /** 서버가 가진 상태를 기억한다 — 다음 합치기의 기준(이 페이지 안에서는 server, 다음 페이지에서는 저장된 두 칸). */
@@ -273,13 +296,18 @@ export function createSyncEngine(opts: SyncEngineOptions): SyncEngine {
         if (res.row === null) {
           rememberServer(null);
           serverUpdatedAt = null;
+          const guarded = guardAdopted(local, local);
+          if (guarded !== local) {
+            lastSeenLocal = guarded;
+            store.replaceState(guarded);
+          }
         } else {
           const serverState: PersistedState = { ...decodePersisted(res.row.state, decodeDeps()), ownerAccountID: accountId };
           // 기준 = 이 브라우저가 마지막으로 서버와 맞춘 상태 — 이 브라우저가 그 뒤 바꾼 칸을 지킨다.
           // 이 페이지에서 이미 맞췄으면(충돌 뒤 다시 읽기) 그때의 서버 상태, 처음이면 지난번 페이지가 저장해 둔 것.
           // 둘 다 없으면(새 브라우저·가져온 게스트 기록) 첫 합치기 규칙(서버가 온보딩을 마쳤으면 서버 프로필).
           const base = fetched ? (server?.state ?? null) : savedBase(local);
-          const merged = mergeStates(serverState, local, { accountId, base });
+          const merged = guardAdopted(local, mergeStates(serverState, local, { accountId, base }));
           rememberServer(serverState);
           serverUpdatedAt = res.row.updatedAt;
           if (canonicalJSON(merged) !== canonicalJSON(local)) {
@@ -342,7 +370,7 @@ export function createSyncEngine(opts: SyncEngineOptions): SyncEngine {
     const payload = payloadOf(local);
     // 온보딩 동의 전에는 저장된 건강 기록이 없다(온보딩 입력은 [온맘 시작하기] 때 저장) — 올릴 것이 없다.
     if (!payload.profile.consentAccepted) return true;
-    // 서버 저장 동의 전이면 기록이 이 브라우저에만 있다 → server와 달라 false(로그아웃이 지우지 않게).
+    // 지금 판의 동의 전이면 기록이 이 브라우저에만 있다 → server와 달라 false(로그아웃이 지우지 않게).
     // 첫 읽기 전이면 server가 없어 false.
     return server !== null && server.key === canonicalJSON(payload);
   }

@@ -162,15 +162,25 @@ describe("splitAfterComma", () => {
 });
 
 describe("서비스 소개(/) — 빌드별 문구", () => {
-  it("카카오 로그인이 켜진 빌드 — '준비 중'·'예정'이 사라지고 게스트·카카오로 시작 안내", () => {
+  it("카카오 로그인(서버 저장)이 켜진 빌드 — '준비 중'·'예정'이 사라지고, 게스트·카카오 모두 동의 뒤 서버(서울) 저장 안내", () => {
     const text = textOf(html({ clinicSearchReady: true, kakaoLoginReady: true, llmReady: false }));
     expect(text).not.toMatch(/준비 중|예정/);
     expect(text).toContain(LANDING_TEXT.ctaNoteKakao);
-    expect(text).toContain("카카오로 로그인하면 기록을 서버에 저장");
-    // 꺼진 빌드는 그대로 '준비 중'
+    expect(text).toContain("게스트로 시작해도, 카카오로 로그인해도");
+    expect(text).toContain("동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장돼요");
+    expect(text).not.toContain("이 브라우저에만");
+    // 꺼진 빌드는 그대로 '준비 중', 저장 카드 제목도 지금 배포 그대로
     const bare = textOf(html({ clinicSearchReady: true, kakaoLoginReady: false, llmReady: false }));
     expect(bare).toContain(LANDING_TEXT.ctaNote);
     expect(bare).toMatch(/카카오 로그인은 준비 중.*예정/);
+    expect(html(BARE_BUILD)).toMatch(/<h3[^>]*>건강 정보는 이 브라우저에<\/h3>/);
+  });
+
+  it("카카오 로그인(서버 저장)이 켜진 빌드 — 저장 카드 제목도 서버 저장 빌드용(landingContent.ts sectionTitle)", () => {
+    const storage = FEATURES.find((f) => f.icon === "storage")!;
+    const markup = html({ clinicSearchReady: true, kakaoLoginReady: true, llmReady: false });
+    expect(markup).toMatch(new RegExp(`<h3[^>]*>${storage.titleWhenKakaoLogin}</h3>`));
+    expect(markup).not.toContain(storage.title);
   });
 
   it("AI 서버가 켜진 빌드 — '서버로 전송되지 않습니다'·'AI는 판단하지 않아요'가 없다", () => {

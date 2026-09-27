@@ -42,11 +42,17 @@ jobs:
           NEXT_PUBLIC_LLM_URL: ${{ vars.NEXT_PUBLIC_LLM_URL }}
           NEXT_PUBLIC_ACCOUNT_URL: ${{ vars.NEXT_PUBLIC_ACCOUNT_URL }}
           NEXT_PUBLIC_ONMOM_APP_KEY: ${{ vars.NEXT_PUBLIC_ONMOM_APP_KEY }}
+          # 카카오 JavaScript 키(공개값) — 가까운 산부인과 지도. 카카오 콘솔의 JavaScript SDK 도메인으로 사용처가 제한된다.
           NEXT_PUBLIC_KAKAO_JS_KEY: ${{ vars.NEXT_PUBLIC_KAKAO_JS_KEY }}
-          # 카카오 로그인 + 서버 저장(Supabase, docs/SUPABASE_SETUP.md). 둘 다 있어야 켜진다.
-          # ANON_KEY는 공개 키(Publishable·anon)만. secret·service_role 키는 절대 넣지 않는다(넣으면 빌드가 멈춘다).
+          # 사용자 관리·카카오 로그인·서버 저장·영상/AI 프록시(Supabase, docs/SUPABASE_SETUP.md). URL·키 둘 다 있어야 켜진다.
+          # 비어 있으면 지금처럼 브라우저에만 저장하는 게스트로 동작한다.
+          # PUBLISHABLE_KEY는 공개 키(sb_publishable_… 또는 anon)만. secret·service_role 키는 절대 넣지 않는다(넣으면 빌드가 멈춘다).
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+          # Cloudflare Turnstile 사이트 키(공개값) — Supabase의 CAPTCHA를 켤 때만. 비밀 키는 Supabase 대시보드에만.
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          # AI 상담 켜기 — "true"일 때만. Edge Function 비밀값 ANTHROPIC_API_KEY와 CPO·법률 승인(docs/LAUNCH_CHECKLIST.md)이 먼저.
+          NEXT_PUBLIC_AI_CHAT_ENABLED: ${{ vars.NEXT_PUBLIC_AI_CHAT_ENABLED }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: out

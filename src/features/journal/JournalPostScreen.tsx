@@ -8,6 +8,8 @@ import { Suspense, useId, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CircleArrowUp, CircleUserRound, Clock } from "lucide-react";
 import type { CommunityPost } from "@/domain/types";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { cx } from "@/components/ui";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitComment } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
@@ -17,8 +19,8 @@ export function JournalPostScreen() {
   // iOS 내비게이션 pop처럼 — 목록에서 들어왔으면 뒤로(목록이 방문 기록에 두 번 쌓이지 않게)
   const exit = useLeaveSubPage(JOURNAL_HREF);
   return (
-    // PC: 읽기 좋은 폭(최대 42rem) 기둥, 왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게. 폰 기둥(30rem)에서는 그대로.
-    <main className="flex w-full max-w-[42rem] flex-1 flex-col gap-4 px-6 pt-2 pb-6">
+    // PC 틀은 pageFrame(읽기 화면 — 최대 48rem, 왼쪽 정렬). 더 깊은 화면이라 PC에서도 [뒤로]가 맨 위 줄에 있다. 폰 기둥(30rem)에서는 그대로.
+    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.reading)}>
       <LeaveSubPageHeader title={JOURNAL_TEXT.detailTitle} backHref={JOURNAL_HREF} onLeave={exit.leave} />
       <Suspense fallback={null}>
         <PostFromQuery />

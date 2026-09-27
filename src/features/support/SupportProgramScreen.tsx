@@ -9,6 +9,7 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Circle, CircleCheck, Hand, SquareArrowUpRight } from "lucide-react";
 import { EXTERNAL_LINK_PROPS } from "@/api/safeUrl";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, PrimaryButton, SectionTitle, SubPageHeader, cx } from "@/components/ui";
 import {
   SUPPORT_DOMAINS,
@@ -41,14 +42,15 @@ export function SupportProgramScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 20 · 위 md · 끝 Spacer(minLength: lg) — SupportProgramView.swift:107-149
-    <main className="@container flex flex-1 flex-col gap-4 px-5 pt-2 pb-10">
-      <SubPageHeader title={SUPPORT_TEXT.title} backHref={ROUTES.profile} />
+    // PC 틀은 pageFrame(격자 화면) — PC에서는 좌우도 다른 화면과 같은 24로 맞춰 왼쪽 선을 맞춘다(폰은 20 그대로).
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-5 pt-2 pb-10", PAGE_FRAME.wide)}>
+      <SubPageHeader title={SUPPORT_TEXT.title} backHref={ROUTES.profile} hideBackWithSidebar />
 
       <p className="text-[0.8125rem] text-text-subtle">{SUPPORT_TEXT.intro}</p>
 
       {/* 넓은 화면 격자: 체크리스트 묶음이 두 줄에 걸치고, 오른쪽 둘째 줄(1fr)이 남는 높이를 받아
-          공통 카드와 결과 사이가 벌어지지 않는다 */}
-      <div className="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-2 @3xl:grid-rows-[auto_1fr] @3xl:items-start @3xl:gap-x-6">
+          공통 카드와 결과 사이가 벌어지지 않는다. 열 간격 16 — 다른 화면의 두 열(홈·기록·가이드)과 카드 폭이 같게 */}
+      <div className="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-2 @3xl:grid-rows-[auto_1fr] @3xl:items-start @3xl:gap-x-4">
         <SolutionCard
           title={SUPPORT_TEXT.universalTitle}
           solutions={[SUPPORT_UNIVERSAL]}

@@ -1,0 +1,39 @@
+# 온맘 웹 — Supabase CLI 설정(연결된 원격 프로젝트용 최소 설정)
+#
+# 읽는 곳: GitHub Actions "Supabase" 워크플로(.github/workflows/supabase.yml)
+#   supabase link → supabase db push(migrations/) → supabase secrets set → supabase functions deploy videos chat
+# 설명서: docs/SUPABASE_SETUP.md
+#
+# ⚠️ 인증(Auth) 설정은 이 파일로 관리하지 않는다 — Supabase 대시보드가 기준이다(카카오·익명 로그인·수동 연결·
+#    Site URL·Redirect URLs·CAPTCHA). 그래서 이 파일에는 [auth]가 없다.
+#    `supabase config push`는 절대 실행하지 않는다: 여기 없는 [auth] 값이 CLI 기본값으로 원격을 덮어써
+#    카카오·익명 로그인이 꺼지고 Site URL이 로컬 주소로 바뀐다. 워크플로도 config push를 하지 않는다.
+# ⚠️ 공개 저장소다. 비밀(키·비밀번호)은 이 파일에 적지 않는다 — GitHub Secrets → Supabase 함수 비밀값으로만 간다.
+
+# CLI가 프로젝트를 구분하는 이름(로컬용). 원격 연결은 워크플로의 `supabase link --project-ref`가 한다.
+project_id = "movrwmoniopgetdmagon"
+
+[edge_runtime]
+# 호스팅 Edge Functions와 같은 Deno 2로 묶는다.
+deno_version = 2
+
+# 운동 영상 목록 프록시 — 영상 서버에 CORS가 없어 브라우저 대신 부른다.
+# 로그인 전에도 쓰는 공개 목록이고 사용자 정보를 다루지 않는다(사용자 식별값 없이 영상 조건만 전달) → 토큰 검사 없음.
+[functions.videos]
+verify_jwt = false
+
+# AI 상담(Anthropic 호출) — 함수가 Authorization 헤더의 토큰을 auth.getUser로 직접 확인한다(익명 게스트 포함).
+# 토큰이 없거나 틀리거나 계정이 지워졌으면 함수가 401로 끝내고, Anthropic을 부르지 않는다.
+# 플랫폼(게이트웨이) 검사를 끄는 이유:
+#   1) 게이트웨이 검사만으로는 API 키만 보낸 호출자를 사용자로 확인하지 못한다(Supabase 문서 "API keys").
+#      공개 키는 웹 번들에 들어 있어 누구나 가지므로, 사용자 확인은 어차피 함수 안에서 해야 한다.
+#   2) 함수 안의 getUser가 더 엄격하다 — 서명만 보지 않고 Auth 서버에 계정이 아직 있는지·세션이 살아 있는지 묻는다.
+#   3) 확인을 한 곳(함수)에서만 해, 거절 응답의 형식과 CORS 헤더를 함수가 정한다.
+# ⚠️ 함수의 토큰 확인을 지우거나 바꾸면 이 값을 true로 되돌린다 — 그러지 않으면 누구나 Anthropic 비용을 쓴다.
+# ⚠️ getUser·요청 한도는 Supabase가 함수에 넣어 주는 서버 키로 부른다 — SUPABASE_SECRET_KEYS(새 secret 키 JSON의 "default"),
+#    없으면 예전 SUPABASE_SERVICE_ROLE_KEY. 2025-11 이후 만든(또는 그 뒤 Restore한) 프로젝트에는 예전 키가 없고, 예전 키는
+#    2026년 말 삭제 예정이다(Supabase 문서 "API keys"·discussion #29260). 함수는 새 키를 먼저 읽는다
+#    (chat/index.ts → _shared/auth.ts pickServerKey). 키가 없으면 /chat은 모두 503 auth_unavailable — Supabase 워크플로의
+#    "배포 확인" 단계가 경고로 알린다. 대시보드의 Secret keys "default"를 지우거나 다시 만들지 않는다.
+[functions.chat]
+verify_jwt = false

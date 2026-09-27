@@ -118,6 +118,8 @@ describe("산모 컨텍스트 (ChatView.swift:188-196)", () => {
     returnToWorkDate: null,
     isBreastfeeding: true,
     consentAccepted: true,
+    consentVersion: null,
+    consentAcceptedAt: null,
     heightCm: 162,
     currentWeightKg: 64,
     prePregnancyWeightKg: 56,

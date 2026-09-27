@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { activePolicy } from "./policy";
 import { PolicySections, PolicyTitleBlock, PolicyWebNote } from "./PrivacyPolicy";
 import { PRIVACY_POLICY_CLOSE, PRIVACY_POLICY_NAV_TITLE } from "./policyText";
 
@@ -14,6 +15,7 @@ export interface PrivacyPolicyDialogProps {
 // 네이티브 <dialog>.showModal() — 포커스 가두기·Esc 닫기·뒤 화면 비활성을 브라우저가 맡는다.
 // 위쪽 막대: 가운데 제목 "개인정보처리방침", 오른쪽 [닫기](PrivacyPolicyView.swift:72-79).
 // PC(lg 이상 화면): 아래에서 올라오는 시트 대신 화면 가운데의 둥근 창(최대 40rem 폭 · 48rem 높이, 안에서 스크롤).
+// 본문은 이 빌드의 방침(policy.ts activePolicy — Supabase 설정이 있으면 웹 초안, 없으면 iOS 원문).
 export function PrivacyPolicyDialog({ open, onClose }: PrivacyPolicyDialogProps) {
   if (!open) return null;
   return <PolicySheet onClose={onClose} />;
@@ -22,6 +24,7 @@ export function PrivacyPolicyDialog({ open, onClose }: PrivacyPolicyDialogProps)
 function PolicySheet({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const policy = activePolicy();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -62,9 +65,9 @@ function PolicySheet({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="flex flex-col gap-6 p-6 pb-10">
-        <PolicyTitleBlock />
-        <PolicyWebNote />
-        <PolicySections headingLevel="h3" />
+        <PolicyTitleBlock policy={policy} />
+        <PolicyWebNote policy={policy} />
+        <PolicySections policy={policy} headingLevel="h3" />
       </div>
     </dialog>
   );

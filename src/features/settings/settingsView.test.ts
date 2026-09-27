@@ -3,13 +3,18 @@ import type { UserProfile } from "@/domain/types";
 import { defaultMaternity, defaultProfile, initialState } from "@/store/defaults";
 import { updateMaternity, updateProfile } from "@/store/state";
 import {
+  GUEST_ACCOUNT_TEXT,
   MATERNITY_TOGGLES,
   SERVER_ACCOUNT_TEXT,
+  accountCardActions,
+  accountModeFor,
+  performLinkKakao,
   SETTINGS_TEXT,
   deleteConfirmMessage,
   deleteFailureMessage,
   performDeleteAccount,
   performSignOut,
+  privacyBodyFor,
   signOutConfirmMessage,
   usesServerAccount,
   draftFromState,
@@ -41,11 +46,36 @@ describe("signOutMessage", () => {
   });
 });
 
-describe("서버 계정(카카오 + Supabase)의 로그아웃·계정 삭제 문구", () => {
-  it("서버를 거치는 것은 Supabase가 설정된 빌드의 카카오 계정만", () => {
+describe("계정 카드 — 빌드(Supabase 설정)·계정 종류별 동작", () => {
+  it("설정이 없으면 누구든 지금까지와 같다(로그아웃 + 계정 삭제, 이 브라우저에서만)", () => {
+    for (const provider of ["guest", "kakao", null, undefined] as const) {
+      expect(accountModeFor(provider, false)).toBe("local");
+    }
+    expect(accountCardActions("local")).toEqual({ signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null });
+  });
+
+  it("설정이 있는 빌드의 게스트(익명 계정): 로그아웃 없음 — [카카오 계정 연결] + [이 기기에서 기록 지우기(계정 삭제)] + 로그아웃이 없는 까닭", () => {
+    expect(accountModeFor("guest", true)).toBe("guest");
+    const a = accountCardActions("guest");
+    expect(a).toEqual({ signOut: false, linkKakao: true, deleteLabel: "이 기기에서 기록 지우기(계정 삭제)", notice: GUEST_ACCOUNT_TEXT.noSignOut });
+    expect(GUEST_ACCOUNT_TEXT.linkKakao).toBe("카카오 계정 연결");
+    expect(GUEST_ACCOUNT_TEXT.linkKakaoHint).toBe("기록을 잃지 않고 다른 기기에서도 이어 쓰기");
+    expect(a.notice).toContain("로그아웃하면 기록을 다시 찾을 수 없어요");
+  });
+
+  it("설정이 있는 빌드의 카카오: 로그아웃 + 계정 삭제(서버 먼저), 연결 버튼 없음", () => {
+    expect(accountModeFor("kakao", true)).toBe("kakao");
+    expect(accountCardActions("kakao")).toEqual({ signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null });
+    expect(accountModeFor("apple", true)).toBe("local"); // 모르는 공급자는 이 브라우저에서만
+  });
+});
+
+describe("서버 계정(Supabase 설정 빌드의 카카오·게스트)의 로그아웃·계정 삭제 문구", () => {
+  it("서버를 거치는 것은 Supabase가 설정된 빌드의 카카오·게스트(익명 계정)", () => {
     expect(usesServerAccount("kakao", true)).toBe(true);
+    expect(usesServerAccount("guest", true)).toBe(true);
     expect(usesServerAccount("kakao", false)).toBe(false);
-    expect(usesServerAccount("guest", true)).toBe(false);
+    expect(usesServerAccount("guest", false)).toBe(false);
     expect(usesServerAccount(null, true)).toBe(false);
     expect(usesServerAccount(undefined, true)).toBe(false);
   });
@@ -73,6 +103,22 @@ describe("서버 계정(카카오 + Supabase)의 로그아웃·계정 삭제 문
 
   it("못 올린 기록 경고는 기록이 이 브라우저에 남는다고 알린다(signOutEverywhere force — 지우지 않음)", () => {
     expect(SERVER_ACCOUNT_TEXT.unsyncedMessage).toContain("이 브라우저에만 남아요");
+  });
+});
+
+describe("개인정보·안전 카드 본문 — 빌드별로 사실만", () => {
+  it("설정 없는 빌드는 iOS 원문 그대로(MoreView.swift:73)", () => {
+    expect(privacyBodyFor(false)).toBe(SETTINGS_TEXT.privacyBody);
+    expect(privacyBodyFor(false)).toContain("내 기기에만");
+  });
+
+  it("서버 저장 빌드는 '내 기기에만 저장' 문장만 바꾼다 — 동의 뒤 서버(서울)에 저장, 나머지 문장은 원문", () => {
+    const body = privacyBodyFor(true);
+    expect(body).not.toContain("내 기기에만");
+    expect(body).toContain(SERVER_ACCOUNT_TEXT.privacyStorage);
+    expect(body).toContain("서울");
+    expect(body.startsWith("본 앱은 진단 기기가 아니며, 모든 권고는 의료진 상담을 권유합니다. ")).toBe(true);
+    expect(body.endsWith(" 챗봇 등 일부 기능 사용 시 질문 내용이 답변 생성을 위해 서버로 전송돼요.")).toBe(true);
   });
 });
 
@@ -119,6 +165,24 @@ describe("performSignOut · performDeleteAccount — 설정의 로그아웃·계
       await performDeleteAccount({ supabaseConfigured: true, deleteLocal, deleteAccountEverywhere: async () => ({ ok: true }) }),
     ).toEqual({ kind: "done" });
     expect(deleteLocal).not.toHaveBeenCalled();
+  });
+
+  it("있는 빌드의 게스트: 로그아웃을 부르면(버튼은 없다) 까닭만 알린다 — 아무것도 하지 않았다", async () => {
+    const signOutLocal = vi.fn();
+    const guest = vi.fn(async () => ({ ok: false as const, reason: "guest" as const }));
+    expect(await performSignOut({ supabaseConfigured: true, force: false, signOutLocal, signOutEverywhere: guest })).toEqual({
+      kind: "failed",
+      message: GUEST_ACCOUNT_TEXT.noSignOut,
+    });
+    expect(signOutLocal).not.toHaveBeenCalled();
+  });
+
+  it("[카카오 계정 연결] — 카카오 화면으로 이동하면 redirecting(버튼을 잠근 채), 못 열면 원문 안내", async () => {
+    expect(await performLinkKakao({ signInWithKakao: async () => ({ ok: true }) })).toEqual({ kind: "redirecting" });
+    expect(await performLinkKakao({ signInWithKakao: async () => ({ ok: false, reason: "failed" }) })).toEqual({
+      kind: "failed",
+      message: "카카오 로그인 창을 열지 못했어요. 잠시 후 다시 시도해주세요.",
+    });
   });
 });
 

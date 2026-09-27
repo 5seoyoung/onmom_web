@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchVideos, parseVideoResponse, VIDEO_MESSAGES } from "./video";
-import { hangingFetch, jsonResponse, lastCall, stubFetch, testConfig } from "./testUtils";
+import { hangingFetch, jsonResponse, lastCall, stubFetch, supabaseTestConfig, testConfig } from "./testUtils";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -144,5 +144,46 @@ describe("parseVideoResponse", () => {
 
   it("알 수 없는 필드는 무시한다", () => {
     expect(parseVideoResponse({ count: 1, videos: [{ ...serverVideo, extra: true }], next: null })).toHaveLength(1);
+  });
+});
+
+describe("fetchVideos — Supabase Edge Function videos(영상 서버에 CORS가 없어 함수를 거친다)", () => {
+  it("GET {functionsURL}/videos?include=&limit=500 — apikey(공개 키)만, 로그인 토큰·앱 키 없음", async () => {
+    const fetch = stubFetch(async () => jsonResponse(200, { count: 1, videos: [serverVideo] }));
+    const res = await fetchVideos("route_vaginal_delivery", { config: supabaseTestConfig });
+    const { url, init, headers } = lastCall(fetch);
+    expect(url).toBe("https://proj.supabase.test/functions/v1/videos?include=route_vaginal_delivery&limit=500");
+    expect(init.method).toBe("GET");
+    expect(headers.get("apikey")).toBe("sb_publishable_test");
+    expect(headers.get("accept")).toBe("application/json");
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.has("x-onmom-key")).toBe(false);
+    expect(res).toEqual({ ok: true, videos: [serverVideo] });
+  });
+
+  it("영상 서버 주소(NEXT_PUBLIC_VIDEO_URL)가 비어 있어도 함수로 묻는다", async () => {
+    const fetch = stubFetch(async () => jsonResponse(200, { count: 0, videos: [] }));
+    const res = await fetchVideos("route_cesarean_section", { config: { ...supabaseTestConfig, videoURL: null } });
+    expect(res).toEqual({ ok: true, videos: [] });
+    expect(lastCall(fetch).url.startsWith("https://proj.supabase.test/functions/v1/videos")).toBe(true);
+  });
+
+  it("함수가 영상 서버 실패를 502로 알리면 server + 원문", async () => {
+    stubFetch(async () => jsonResponse(502, { ok: false, code: "upstream_timeout" }));
+    const res = await fetchVideos("route_vaginal_delivery", { config: supabaseTestConfig });
+    expect(res).toMatchObject({ ok: false, kind: "server", message: VIDEO_MESSAGES.server, status: 502 });
+  });
+
+  it("잠든 영상 서버를 깨우는 동안 45초까지 기다린다", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", hangingFetch());
+    let settled = false;
+    const p = fetchVideos("route_vaginal_delivery", { config: supabaseTestConfig }).finally(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(44_999);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await p).toMatchObject({ ok: false, kind: "network", message: VIDEO_MESSAGES.network });
   });
 });

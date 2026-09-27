@@ -59,6 +59,14 @@ describe("ROUTES", () => {
     }
   });
 
+  it("관리자 화면은 /admin/ — (app) 묶음 밖이고, 관문이 로그인·온보딩으로 옮기지 않는다(공개 주소)", () => {
+    expect(ROUTES.admin).toBe("/admin/");
+    const admin = pageRoutes().find((r) => r.path === ROUTES.admin);
+    expect(admin?.inAppGroup).toBe(false);
+    // 권한은 화면이 Supabase is_admin()으로 확인한다 — 관문은 features/flow/gate.ts PUBLIC_PATHS에 ROUTES.admin을 둔다.
+    expect(routeKindFor(ROUTES.admin)).toBe("public");
+  });
+
   it("개발용 카탈로그(/dev/)는 없다", () => {
     expect(pageRoutes().some((r) => r.path.startsWith("/dev/"))).toBe(false);
   });

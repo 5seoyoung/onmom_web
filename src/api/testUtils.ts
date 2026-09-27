@@ -2,11 +2,23 @@
 import { vi } from "vitest";
 import type { BackendConfig } from "./http";
 
+/** Supabase가 없는 빌드(지금 배포)와 같은 설정 — 예전 주소를 직접 부른다 */
 export const testConfig: BackendConfig = {
   videoURL: "https://video.onmom.test",
   llmURL: "https://llm.onmom.test",
   accountURL: "https://account.onmom.test",
   appKey: "test-app-key",
+  functionsURL: null,
+  supabaseKey: null,
+  aiChatEnabled: false,
+};
+
+/** Supabase가 설정된 빌드 — 영상·AI는 Edge Function을 부른다(AI 스위치 켬) */
+export const supabaseTestConfig: BackendConfig = {
+  ...testConfig,
+  functionsURL: "https://proj.supabase.test/functions/v1",
+  supabaseKey: "sb_publishable_test",
+  aiChatEnabled: true,
 };
 
 export function jsonResponse(status: number, body: unknown): Response {

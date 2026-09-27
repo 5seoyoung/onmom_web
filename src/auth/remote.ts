@@ -1,6 +1,8 @@
 // 서버 저장소의 Supabase 구현 — public.user_states 한 행(supabase/migrations/0001_user_states.sql).
 // 행 수준 보안(RLS)이 "본인 행만" 읽고 쓰게 막는다. 여기서 user_id를 거르는 것은 편의일 뿐 보안 수단이 아니다.
 // updated_at은 서버 트리거가 매긴다 — 쓰기 조건(eq updated_at)으로 다른 기기의 쓰기를 덮지 않는다.
+// 동의의 판·시각은 상태 JSON 안(profile)에도 있지만 칸(consent_version·consent_accepted_at)에도 따로 쓴다 —
+// 관리자가 건강 기록(state)을 열지 않고 동의 현황만 셀 수 있게.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PersistedState } from "@/domain/types";
@@ -18,6 +20,11 @@ interface Row {
 
 function updatedAtOf(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
+}
+
+/** 행에 따로 두는 동의 칸 — 상태의 프로필에서 그대로 옮긴다 */
+export function consentColumns(state: PersistedState): { consent_version: string | null; consent_accepted_at: string | null } {
+  return { consent_version: state.profile.consentVersion, consent_accepted_at: state.profile.consentAcceptedAt };
 }
 
 export function createSupabaseRemote(client: SupabaseClient, userId: string): RemoteStateStore {
@@ -47,7 +54,7 @@ export function createSupabaseRemote(client: SupabaseClient, userId: string): Re
     async insert(state: PersistedState) {
       try {
         const { data, error } = await table()
-          .insert({ user_id: userId, state, schema_version: STATE_SCHEMA_VERSION })
+          .insert({ user_id: userId, state, schema_version: STATE_SCHEMA_VERSION, ...consentColumns(state) })
           .select("updated_at")
           .single();
         if (error) return { ok: false, conflict: error.code === UNIQUE_VIOLATION };
@@ -61,7 +68,7 @@ export function createSupabaseRemote(client: SupabaseClient, userId: string): Re
       try {
         // 조건부 쓰기 — 그사이 다른 기기가 썼으면 updated_at이 달라 0행이 바뀐다(= 충돌).
         const { data, error } = await table()
-          .update({ state, schema_version: STATE_SCHEMA_VERSION })
+          .update({ state, schema_version: STATE_SCHEMA_VERSION, ...consentColumns(state) })
           .eq("user_id", userId)
           .eq("updated_at", expectedUpdatedAt)
           .select("updated_at");

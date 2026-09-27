@@ -1,6 +1,12 @@
 // Video DB 조회 — iOS VideoDBClient.swift 이식.
-// GET {videoURL}/videos?include=<route 태그>&limit=500 → { count, videos: [{ video_id, title, url, description, tags }] }
+// GET …/videos?include=<route 태그>&limit=500 → { count, videos: [{ video_id, title, url, description, tags }] }
 // 서버는 태그만 거르고, 주차 게이팅·금기는 앱 규칙이 한다(ExerciseRules). 그래서 라우트 전체(limit 500)를 받는다.
+//
+// 어디로 묻나
+// - Supabase가 설정된 빌드: Edge Function "videos"(`{functionsURL}/videos`, apikey = 공개 키). 영상 서버(Render)에 CORS가 없어
+//   브라우저가 직접 부를 수 없기 때문이다. 함수는 잠든 영상 서버를 깨우느라 40초까지 기다리므로 웹도 그만큼 기다린다.
+//   로그인 토큰은 보내지 않는다 — 공개 목록이고, 누가 요청했는지 함수가 알 필요가 없다.
+// - 설정이 없는 빌드(지금 배포): 예전처럼 NEXT_PUBLIC_VIDEO_URL을 직접 부른다.
 //
 // 서버로 나가는 사용자 정보는 분만 방식 라우트 태그 하나뿐이다(URL 쿼리). 이 URL은 서버 접근 로그에 남으므로
 // 분석·모니터링 도구가 네트워크 URL을 수집한다면 온맘 API 요청은 제외하거나 쿼리를 지운다(검수 #49).
@@ -26,6 +32,11 @@ export const VIDEO_MESSAGES: Record<VideoFailureKind, string> = {
 };
 
 export const VIDEO_TIMEOUT_MS = 8_000; // VideoDBClient.swift:57
+/**
+ * Edge Function을 거칠 때 — 함수가 영상 서버를 최대 40초 기다리고(VIDEO_UPSTREAM_TIMEOUT_MS,
+ * supabase/functions/_shared/videos.ts) 그 뒤 502로 답하므로 조금 더 기다린다.
+ */
+export const VIDEO_PROXY_TIMEOUT_MS = 45_000;
 export const VIDEO_LIMIT = VIDEO_QUERY_LIMIT; // ExerciseRules.swift:134 — 값은 규칙 모듈 한 곳
 
 export type FetchVideosOptions = {
@@ -61,22 +72,27 @@ const fail = (kind: VideoFailureKind, status?: number): FetchVideosResult => ({
 
 /**
  * 분만 방식 라우트 태그(route_vaginal_delivery / route_cesarean_section)로 영상 목록을 받는다.
- * 태그 매핑은 규칙 모듈 몫이다.
+ * 태그 매핑은 규칙 모듈 몫이다. Supabase가 설정돼 있으면 Edge Function을, 아니면 NEXT_PUBLIC_VIDEO_URL을 부른다.
+ * 함수가 영상 서버 실패를 502로 알리면 server, 연결 실패·시간 초과는 network다.
  * 미설정 확인이 먼저다(iOS ExerciseRules.swift:132) — 미설정 빌드에서는 어떤 입력이든 notConfigured로 끝나고 던지지 않는다.
  * 설정된 상태에서 빈 태그는 호출자 버그다: 보내면 두 라우트 영상이 섞이므로 TypeError로 거부한다.
  */
 export async function fetchVideos(includeTag: string, opts: FetchVideosOptions = {}): Promise<FetchVideosResult> {
   const cfg = opts.config ?? defaultBackendConfig;
-  const url = joinBackendUrl(cfg.videoURL, "videos");
+  const proxy = joinBackendUrl(cfg.functionsURL, "videos");
+  const url = proxy ?? joinBackendUrl(cfg.videoURL, "videos");
   if (!url) return fail("notConfigured");
   if (includeTag.trim() === "") throw new TypeError("fetchVideos: includeTag is required");
   url.searchParams.append("include", includeTag);
   url.searchParams.append("limit", String(VIDEO_LIMIT));
 
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (proxy && cfg.supabaseKey) headers.apikey = cfg.supabaseKey;
+
   const res = await requestJson(url.toString(), {
     method: "GET",
-    headers: { Accept: "application/json" },
-    timeoutMs: opts.timeoutMs ?? VIDEO_TIMEOUT_MS,
+    headers,
+    timeoutMs: opts.timeoutMs ?? (proxy ? VIDEO_PROXY_TIMEOUT_MS : VIDEO_TIMEOUT_MS),
     signal: opts.signal,
     // iOS는 200만 성공으로 본다(VideoDBClient.swift:62)
     acceptStatus: (s) => s === 200,

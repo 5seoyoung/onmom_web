@@ -5,6 +5,7 @@
 import {
   MOOD_CHECKS_LIMIT,
   type CommunityPost,
+  type IsoDateTimeString,
   type MaternityRecord,
   type MoodCheckRecord,
   type PersistedState,
@@ -20,9 +21,30 @@ import * as RecordRules from "@/rules/record";
 
 // MARK: 온보딩·프로필
 
-/** 온보딩 3단계 동의 후 [온맘 시작하기] (AppStore.swift:103-107) */
+/** 동의 도장 — 동의한 문구의 판과 시각(domain/consent.ts) */
+export interface ConsentStamp {
+  version: string;
+  at: IsoDateTimeString;
+}
+
+/**
+ * 온보딩 3단계 동의 후 [온맘 시작하기] (AppStore.swift:103-107).
+ * 동의의 판·시각(consentVersion·consentAcceptedAt)은 여기서 정하지 않는다 — 동의 문구를 보여 준 화면이 updateProfile로 남긴다
+ * (서버 저장 동의 문구면 지금 판, "내 기기에만 저장" 문구면 판 없음). 이미 남긴 값은 그대로 둔다.
+ */
 export function completeOnboarding(s: PersistedState): PersistedState {
   return { ...s, hasOnboarded: true, profile: { ...s.profile, consentAccepted: true } };
+}
+
+/** 다시 동의(동의 문구의 판이 바뀌었거나, 게스트·예전 기록을 가져온 뒤) — 온보딩 완료 여부는 그대로 둔다. */
+export function acceptConsent(s: PersistedState, stamp: ConsentStamp): PersistedState {
+  return { ...s, profile: { ...s.profile, consentAccepted: true, consentVersion: stamp.version, consentAcceptedAt: stamp.at } };
+}
+
+/** 이 브라우저의 동의 도장을 지운다 — 가져온 기록을 다시 동의받기 전까지 올리지 않게(store/sync/engine). */
+export function withoutConsentStamp(s: PersistedState): PersistedState {
+  if (s.profile.consentVersion === null && s.profile.consentAcceptedAt === null) return s;
+  return { ...s, profile: { ...s.profile, consentVersion: null, consentAcceptedAt: null } };
 }
 
 /** undefined 값은 "바꾸지 않음"으로 본다. */

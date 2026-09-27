@@ -12,6 +12,12 @@ export const ROUTES = {
   privacy: "/privacy/",
   /** 로그인 공급자에서 돌아오는 주소 — 누구나(아직 페이지 없음, 카카오 로그인 준비 중) */
   authCallback: "/auth/callback/",
+  /**
+   * 관리자 화면(집계·계정 메타데이터만, 건강 기록 없음) — 메뉴에 링크하지 않는다.
+   * 앱 관문이 옮기지 않는 주소여야 한다(features/flow/gate.ts — 로그인·온보딩과 무관하게 그린다).
+   * 권한은 화면이 Supabase의 is_admin()으로 스스로 확인하고, 데이터는 서버 함수가 막는다(supabase/migrations/0002_admin.sql).
+   */
+  admin: "/admin/",
 
   login: "/login/",
   onboarding: "/onboarding/",

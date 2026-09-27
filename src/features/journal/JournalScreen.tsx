@@ -9,7 +9,8 @@
 import Link from "next/link";
 import { useId } from "react";
 import { Clock, CircleUserRound, Lock, MessageSquare, SquarePen } from "lucide-react";
-import { Card, EmptyState, SectionTitle } from "@/components/ui";
+import { PAGE_FRAME } from "@/components/shell/pageFrame";
+import { Card, EmptyState, SectionTitle, cx } from "@/components/ui";
 import type { CommunityPost } from "@/domain/types";
 import { useAppStore } from "@/store/useAppStore";
 import { JOURNAL_TEXT, JOURNAL_WRITE_HREF, commentCountLabel, formatPostDateTime, postHref } from "./journalView";
@@ -20,10 +21,11 @@ export function JournalScreen() {
   const { hydrated, state } = useAppStore();
 
   return (
-    // VStack(spacing: md) · 좌우 lg · 위 sm — CommunityView.swift:16-26
-    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
-      {/* .navigationTitle("기록장") + .inline — 가운데 17 semibold. 넓은 화면은 내비게이션 막대가 없으니 페이지 제목처럼 */}
-      <h1 className="flex min-h-11 items-center justify-center text-[1.0625rem] font-semibold text-neutral @2xl:justify-start @2xl:py-2 @2xl:text-2xl @2xl:font-bold">
+    // VStack(spacing: md) · 좌우 lg · 위 sm — CommunityView.swift:16-26. PC 틀은 pageFrame(탭 화면)
+    <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.wide)}>
+      {/* .navigationTitle("기록장") + .inline — 가운데 17 semibold. 넓은 화면은 내비게이션 막대가 없으니 페이지 제목처럼.
+          PC(lg, 사이드바가 보일 때)는 폭과 상관없이 다른 화면 제목과 같게 — 1024px 창에서는 본문이 42rem보다 좁다 */}
+      <h1 className="flex min-h-11 items-center justify-center text-[1.0625rem] font-semibold text-neutral @2xl:justify-start @2xl:py-2 @2xl:text-2xl @2xl:font-bold lg:justify-start lg:py-2 lg:text-2xl lg:font-bold">
         {JOURNAL_TEXT.title}
       </h1>
 
@@ -71,7 +73,8 @@ function PostList({ posts }: { posts: readonly CommunityPost[] }) {
   }
   return (
     // 폰: 한 줄(간격 sm) / 넓은 화면: 2열, 한 줄의 카드 높이를 맞춘다
-    <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2 @2xl:gap-3">
+    // 넓은 화면 두 열은 다른 화면의 카드 두 열(홈·기록·가이드)과 같은 간격 16 — 카드 폭이 같게
+    <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2 @2xl:gap-4">
       {posts.map((post) => (
         <li key={post.id}>
           <PostRow post={post} />

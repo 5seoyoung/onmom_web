@@ -31,10 +31,12 @@ import {
   STEPS,
   ctaNoteFor,
   paragraphText,
+  sectionTitle,
   type LandingBuild,
   type LandingIcon,
   type LandingSection,
 } from "./landingContent";
+import { LandingHomeLink } from "./LandingHomeLink";
 import { StartLink, StartNote } from "./StartLink";
 
 // 서비스 소개("/") — 누구나 보는 첫 주소. 앱(로그인·온보딩·탭)과 달리 폰 폭 기둥 없이 전체 폭을 쓴다.
@@ -113,10 +115,11 @@ function SiteHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-divider bg-background/90 backdrop-blur-md">
       <div className={cx(CONTAINER, "flex h-16 items-center justify-between gap-4")}>
-        <Link href={ROUTES.landing} className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-button px-1">
+        {/* 로고·온맘 — 여기(서비스 소개)서 누르면 맨 위로 부드럽게(움직임 줄이기면 바로), 섹션 조각(#…)은 지운다(landingTop.ts) */}
+        <LandingHomeLink className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-button px-1">
           <Logo eager className="size-9 rounded-[0.625rem]" />
           <span className="text-[1.1875rem] font-bold text-neutral">{LANDING_TEXT.brand}</span>
-        </Link>
+        </LandingHomeLink>
         <nav className="hidden md:block">
           <ul className="flex items-center gap-1">
             {NAV_ITEMS.map((item) => (
@@ -240,7 +243,7 @@ function SectionCardBody({ section, iconBox, build }: { section: LandingSection;
       <span aria-hidden className={cx("flex size-10 items-center justify-center rounded-xl text-primary md:size-12 md:rounded-2xl", iconBox)}>
         <Icon className="size-5 md:size-6" strokeWidth={2} />
       </span>
-      <h3 className="mt-4 text-[1.125rem] leading-snug font-bold text-neutral md:mt-5">{section.title}</h3>
+      <h3 className="mt-4 text-[1.125rem] leading-snug font-bold text-neutral md:mt-5">{sectionTitle(section, build)}</h3>
       {section.body.map((p) => (
         <div key={p.text} className="mt-2">
           <p className="text-[0.9375rem] leading-relaxed text-text-secondary">{paragraphText(p, build)}</p>
