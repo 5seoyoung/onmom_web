@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import { GuideScreen } from "./GuideScreen";
-import { GUIDE_TEXT, guideCardViews, guideRedFlags, sourceToken } from "./guideContent";
+import { GUIDE_TEXT, guideCardViews, guideRedFlags, sourceToken, splitPhoneNumbers } from "./guideContent";
 import { SF_ICON_FALLBACK, hasSfIcon, sfIcon } from "./sfIcons";
 
 // next.config의 trailingSlash: true를 흉내 낸다(빌드 때 주입되는 값 — 없으면 Link가 끝 슬래시를 뗀다).
@@ -21,8 +21,13 @@ const indexOf = (text: string) => {
   expect(i, text).toBeGreaterThanOrEqual(0);
   return i;
 };
-/** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로) */
-const textAt = (text: string) => indexOf(escapeHtml(text));
+/** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로). 전화번호는 한 줄로 묶는 span 안에 들어간다. */
+const textAt = (text: string) =>
+  indexOf(
+    splitPhoneNumbers(text)
+      .map((seg) => (seg.phone ? `<span class="whitespace-nowrap">${escapeHtml(seg.text)}</span>` : escapeHtml(seg.text)))
+      .join(""),
+  );
 
 describe("guideContent (GuideView.swift)", () => {
   it("Swift 원문 문구", () => {
@@ -124,5 +129,17 @@ describe("GuideScreen 마크업", () => {
   it("위험 신호 카드는 제목으로 이름이 붙은 영역", () => {
     expect(html).toContain('aria-labelledby="guide-red-flags"');
     expect(html).toContain(`id="guide-red-flags"`);
+  });
+});
+
+describe("전화번호 줄바꿈 방지", () => {
+  it("번호만 떼어 내고 글자는 그대로 둔다", () => {
+    const text = "정신건강복지센터(1577-0199) 또는 02-2276-2276으로 연락하세요.";
+    const segs = splitPhoneNumbers(text);
+    expect(segs.map((s) => s.text).join("")).toBe(text);
+    expect(segs.filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "02-2276-2276"]);
+  });
+  it("번호가 없으면 한 덩어리", () => {
+    expect(splitPhoneNumbers("오로 변화")).toEqual([{ text: "오로 변화", phone: false }]);
   });
 });

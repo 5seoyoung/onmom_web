@@ -3,6 +3,8 @@
 // 프로필 탭 — iOS ProfileView.swift. 내 정보를 바로 보고, 나머지 기능으로 이동하는 허브.
 // 순서: 큰 제목 → 머리(이름 · 산후 n일차 · n주차) → 내 정보 카드 → 기능 허브 7개(순서 고정).
 // 저장소를 읽기 전(hydrated=false)에는 제목만 그린다 — 기본값(미설정 등)이 번쩍이지 않게.
+// PC(넓은 화면, 컨테이너 쿼리): 42rem 이상이면 허브를 2열 타일로, 56rem 이상이면 왼쪽에 머리·내 정보, 오른쪽에 허브.
+// 폰 기둥(최대 30rem)에서는 iOS처럼 한 줄 목록이다. PC 사이드바에도 같은 메뉴가 있지만 여기 허브는 폰의 입구라 그대로 둔다.
 
 import Link from "next/link";
 import {
@@ -49,22 +51,24 @@ export function ProfileScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 sm — ProfileView.swift:32-44
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
       {/* .navigationTitle("프로필") — 큰 제목(34 bold) */}
       <h1 className="pt-6 text-[2.125rem] leading-tight font-bold text-neutral">{PROFILE_TEXT.title}</h1>
 
       {hydrated && nowMs !== null ? (
-        <>
-          <ProfileHeader name={displayName} line={postpartumLine(state.profile.deliveryDate, new Date(nowMs))} />
-          <InfoCard rows={profileInfoRows(state.profile)} flags={maternityFlags(state.maternity)} />
-          <ul className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4 @4xl:grid @4xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] @4xl:items-start @4xl:gap-6">
+          <div className="flex flex-col gap-4">
+            <ProfileHeader name={displayName} line={postpartumLine(state.profile.deliveryDate, new Date(nowMs))} />
+            <InfoCard rows={profileInfoRows(state.profile)} flags={maternityFlags(state.maternity)} />
+          </div>
+          <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2 @2xl:gap-3">
             {PROFILE_MENU.map((item) => (
               <li key={item.key}>
                 <MenuRow item={item} />
               </li>
             ))}
           </ul>
-        </>
+        </div>
       ) : null}
     </main>
   );
@@ -128,7 +132,8 @@ function InfoCard({ rows, flags }: { rows: ReturnType<typeof profileInfoRows>; f
 function MenuRow({ item }: { item: ProfileMenuItem }) {
   const Icon = MENU_ICON[item.key];
   return (
-    <Link href={item.href} className="flex min-h-11 items-center gap-4 rounded-card bg-surface p-4">
+    // h-full — 2열 타일에서 한 줄의 높이를 맞춘다(한 줄 목록에서는 차이 없음)
+    <Link href={item.href} className="flex h-full min-h-11 items-center gap-4 rounded-card bg-surface p-4">
       <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
         <Icon className="size-5" />
       </span>

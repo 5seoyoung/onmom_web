@@ -1,4 +1,6 @@
 // 분석 결과 — iOS AnalyzeResultView.swift. 무엇을 그릴지는 analyzeResultModel(analyzeModel.ts)이 정한다.
+// PC(lg 이상): 가능/주의/금지 묶음을 두 열로 나란히(splitResultBlocks), 추천 영상은 두 열, 하단 버튼은 한 줄에 둘.
+// 폰은 이전과 같은 세로 한 줄이다. DOM 순서는 iOS 순서 그대로라 읽는 순서·Tab 순서가 같다.
 
 import Link from "next/link";
 import { useId } from "react";
@@ -16,7 +18,14 @@ import {
 } from "@/components/ui";
 import { FilledOctagonAlert } from "@/features/exercise/FilledOctagonAlert";
 import type { AnalysisTone } from "@/rules/recovery";
-import type { AnalyzeResultModel, RecGroupModel, ResultVideos } from "./analyzeModel";
+import {
+  splitResultBlocks,
+  type AnalyzeResultModel,
+  type RecGroupModel,
+  type ResultBlock,
+  type ResultVideos,
+} from "./analyzeModel";
+import { ROUTES } from "@/routes";
 
 export interface AnalyzeResultProps {
   model: AnalyzeResultModel;
@@ -39,24 +48,44 @@ export function AnalyzeResult({ model, onRestart }: AnalyzeResultProps) {
 
       <ProfileCard profile={model.profile} />
 
-      {model.blocks.map((block) =>
-        block.kind === "group" ? (
-          <RecGroup key={block.group.key} group={block.group} />
-        ) : (
-          <ExerciseStoppedCard key="exercise-stopped" title={block.title} body={block.body} />
-        ),
-      )}
+      <RecBlocks blocks={model.blocks} />
 
       {model.videos !== null ? <VideoSection videos={model.videos} /> : null}
 
       {/* 하단 액션 — 위 sm(8), 간격 sm(8)(AnalyzeResultView.swift:191-197) */}
-      <div className="flex flex-col gap-2 pt-2">
-        <Link href="/" className={primaryButtonClass}>
+      <div className="flex flex-col gap-2 pt-2 lg:flex-row lg:gap-4">
+        <Link href={ROUTES.home} className={primaryButtonClass}>
           {model.done}
         </Link>
         <SecondaryButton onClick={onRestart}>{model.restart}</SecondaryButton>
       </div>
     </div>
+  );
+}
+
+// MARK: - 가능 / 주의 / 금지 배치
+
+/**
+ * 폰: 세로 한 줄(간격 16, 이전과 같음). PC(lg): 두 열 — 순서를 지키며 높이가 비슷하게 나눈다(splitResultBlocks).
+ * 세 열은 사이드바 옆 본문(최대 64rem)에서 한 칸이 폰 카드보다 좁아져 긴 항목이 여러 줄로 꺾여 두 열로 둔다.
+ */
+function RecBlocks({ blocks }: { blocks: readonly ResultBlock[] }) {
+  if (blocks.length === 0) return null;
+  const { left, right } = splitResultBlocks(blocks);
+  const column = "flex min-w-0 flex-col gap-4";
+  return (
+    <div className={cx("flex flex-col gap-4", right.length > 0 && "lg:grid lg:grid-cols-2 lg:items-start")}>
+      <div className={column}>{left.map(renderBlock)}</div>
+      {right.length > 0 ? <div className={column}>{right.map(renderBlock)}</div> : null}
+    </div>
+  );
+}
+
+function renderBlock(block: ResultBlock) {
+  return block.kind === "group" ? (
+    <RecGroup key={block.group.key} group={block.group} />
+  ) : (
+    <ExerciseStoppedCard key="exercise-stopped" title={block.title} body={block.body} />
   );
 }
 
@@ -149,7 +178,7 @@ function VideoSection({ videos }: { videos: ResultVideos }) {
   return (
     <Card as="section" className="flex flex-col gap-4">
       <SectionTitle>{videos.title}</SectionTitle>
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
         {videos.videos.map((v) => {
           const inner = (
             <>

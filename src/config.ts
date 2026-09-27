@@ -22,8 +22,52 @@ export const config = {
   /** 카카오 JavaScript 키 — 공개값(카카오 개발자 콘솔에서 사이트 도메인 제한). REST 키는 여기 두지 않는다. */
   kakaoJsKey: (process.env.NEXT_PUBLIC_KAKAO_JS_KEY ?? "").trim() || null,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
+  /**
+   * Supabase 프로젝트 주소(https://<ref>.supabase.co) — 카카오 로그인 + 사용자별 서버 저장(docs/SUPABASE_SETUP.md).
+   * 이 값과 아래 키가 둘 다 있어야 켜진다. 비면 카카오 버튼은 "준비 중"이고 Supabase로 요청을 보내지 않는다.
+   */
+  supabaseUrl: url(process.env.NEXT_PUBLIC_SUPABASE_URL),
+  /**
+   * Supabase 공개 키(Publishable key `sb_publishable_…` 또는 예전 anon 키) — 번들에 들어가는 공개값이다.
+   * 데이터는 행 수준 보안(RLS: 본인 행만)이 지킨다. secret 키·service_role 키는 절대 넣지 않는다(넣으면 빌드가 멈춘다).
+   * 변수 이름은 Supabase Connect 화면과 같은 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY. 예전 이름(…_ANON_KEY)도 받는다.
+   */
+  supabaseAnonKey: publicSupabaseKey(
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  ),
 } as const;
 
 export const isVideoBackendConfigured = () => config.videoURL !== null;
 export const isLLMBackendConfigured = () => config.llmURL !== null;
 export const isAccountBackendConfigured = () => config.accountURL !== null;
+/** 카카오 로그인·서버 저장(Supabase)을 켤 수 있는가 — 주소와 공개 키가 둘 다 있을 때만. */
+export const isSupabaseConfigured = () => config.supabaseUrl !== null && config.supabaseAnonKey !== null;
+
+/**
+ * Supabase 키가 비밀 키처럼 보이면 true — `sb_secret_…`, 또는 JWT의 role이 service_role.
+ * 이런 키는 RLS를 건너뛰어 모든 사용자의 건강 기록을 읽고 지울 수 있다. 정적 번들에 들어가면 누구나 꺼내 쓴다.
+ */
+export function isSecretSupabaseKey(key: string): boolean {
+  if (key.startsWith("sb_secret_")) return true;
+  const parts = key.split(".");
+  if (parts.length !== 3) return false;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(b64.padEnd(b64.length + ((4 - (b64.length % 4)) % 4), "="))) as unknown;
+    return typeof json === "object" && json !== null && (json as { role?: unknown }).role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
+/** 공개 키만 받는다. 비밀 키면 빌드(정적 페이지 생성)가 여기서 멈춰 번들이 배포되지 않는다. */
+function publicSupabaseKey(v: string | undefined): string | null {
+  const key = (v ?? "").trim();
+  if (key.length === 0) return null;
+  if (isSecretSupabaseKey(key)) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY(또는 …_ANON_KEY)에 비밀 키(secret·service_role)가 들어 있습니다. 공개 키(Publishable 또는 anon)로 바꾸고, 이 비밀 키는 Supabase 대시보드에서 바로 폐기하세요.",
+    );
+  }
+  return key;
+}

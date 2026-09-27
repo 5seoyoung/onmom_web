@@ -13,6 +13,7 @@ import {
   type ChatMessage,
   type ChatReplyResult,
 } from "@/rules/chat";
+import { ROUTES } from "@/routes";
 
 /** src/api/llm.ts `llmComplete`와 같은 모양 — 테스트에서 가짜로 바꿔 넣는다. */
 export type LlmCompleteFn = (req: LLMRequest, opts?: LLMOptions) => Promise<LLMResult>;
@@ -72,8 +73,8 @@ export function shouldSendOnEnter(e: { key: string; shiftKey: boolean; isComposi
  * 뒤로 갈 곳. iOS는 홈(말로 물어보기 → 시트)과 프로필 메뉴(푸시) 두 곳에서 연다.
  * 주소에 `?from=home`이 있으면 홈, 아니면 프로필.
  */
-export function chatBackHref(search: string): "/" | "/profile/" {
-  return new URLSearchParams(search).get("from") === "home" ? "/" : "/profile/";
+export function chatBackHref(search: string): typeof ROUTES.home | typeof ROUTES.profile {
+  return new URLSearchParams(search).get("from") === "home" ? ROUTES.home : ROUTES.profile;
 }
 
 /**

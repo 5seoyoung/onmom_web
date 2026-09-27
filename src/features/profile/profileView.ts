@@ -5,6 +5,7 @@ import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/d
 import type { DeliveryMethod, LocalDateString, MaternityRecord, RecoveryGoal, UserProfile } from "@/domain/types";
 import { DELIVERY_TITLE } from "@/rules/exercise";
 import { bmi, formatOneDecimal } from "@/rules/weight";
+import { ROUTES } from "@/routes";
 
 export const PROFILE_TEXT = {
   title: "프로필", // 원문: ProfileView.swift:48
@@ -99,11 +100,11 @@ export interface ProfileMenuItem {
 
 /** 기능 허브 7개 — 순서 고정(ProfileView.swift:18-26). */
 export const PROFILE_MENU: readonly ProfileMenuItem[] = [
-  { key: "support", title: "지원사업 추천", subtitle: "내 상황에 맞는 산모 지원사업", href: "/support/" }, // 원문: ProfileView.swift:19
-  { key: "lifestyle", title: "생활 권고", subtitle: "수면·영양·정신건강", href: "/lifestyle/" }, // 원문: ProfileView.swift:20
-  { key: "substance", title: "약물·음식 체크", subtitle: "수유 중 안전 분류", href: "/substance/" }, // 원문: ProfileView.swift:21
-  { key: "chat", title: "AI 상담", subtitle: "산후 회복 질문하기", href: "/chat/" }, // 원문: ProfileView.swift:22
-  { key: "region", title: "지역 연계", subtitle: "내 동네 가까운 산부인과 찾기", href: "/region/" }, // 원문: ProfileView.swift:23
-  { key: "guide", title: "회복 가이드", subtitle: "검증된 가이드라인", href: "/guide/" }, // 원문: ProfileView.swift:24
-  { key: "settings", title: "설정", subtitle: "계정·알림·개인정보", href: "/settings/" }, // 원문: ProfileView.swift:25
+  { key: "support", title: "지원사업 추천", subtitle: "내 상황에 맞는 산모 지원사업", href: ROUTES.support }, // 원문: ProfileView.swift:19
+  { key: "lifestyle", title: "생활 권고", subtitle: "수면·영양·정신건강", href: ROUTES.lifestyle }, // 원문: ProfileView.swift:20
+  { key: "substance", title: "약물·음식 체크", subtitle: "수유 중 안전 분류", href: ROUTES.substance }, // 원문: ProfileView.swift:21
+  { key: "chat", title: "AI 상담", subtitle: "산후 회복 질문하기", href: ROUTES.chat }, // 원문: ProfileView.swift:22
+  { key: "region", title: "지역 연계", subtitle: "내 동네 가까운 산부인과 찾기", href: ROUTES.region }, // 원문: ProfileView.swift:23
+  { key: "guide", title: "회복 가이드", subtitle: "검증된 가이드라인", href: ROUTES.guide }, // 원문: ProfileView.swift:24
+  { key: "settings", title: "설정", subtitle: "계정·알림·개인정보", href: ROUTES.settings }, // 원문: ProfileView.swift:25
 ];

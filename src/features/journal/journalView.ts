@@ -2,6 +2,7 @@
 // 글·댓글 저장 규칙(제목 필수·trim·최신순)은 store/state.ts(canSubmitPost·canSubmitComment·addPost·addComment)가 단일 출처다.
 
 import type { CommunityComment, CommunityPost } from "@/domain/types";
+import { ROUTES } from "@/routes";
 
 export const JOURNAL_TEXT = {
   title: "기록장", // 원문: CommunityView.swift:29
@@ -25,15 +26,15 @@ export const JOURNAL_TEXT = {
   commentSubmit: "댓글 등록", // 원문: CommunityView.swift:231
 } as const;
 
-export const JOURNAL_HREF = "/journal/";
-export const JOURNAL_WRITE_HREF = "/journal/write/";
+export const JOURNAL_HREF = ROUTES.journal;
+export const JOURNAL_WRITE_HREF = ROUTES.journalWrite;
 
 /**
  * 글 상세 주소. 정적 export라 글마다 경로를 미리 만들 수 없어(글은 브라우저에만 있다) 쿼리로 넘긴다.
  * trailingSlash: true — 경로는 "/"로 끝낸다.
  */
 export function postHref(id: string): string {
-  return `/journal/post/?id=${encodeURIComponent(id)}`;
+  return `${ROUTES.journalPost}?id=${encodeURIComponent(id)}`;
 }
 
 /** 목록의 글 — 없으면 null("삭제된 글이에요."). */

@@ -5,7 +5,7 @@
 import { useMemo, useRef, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SubPageHeader, type SubPageHeaderProps } from "@/components/ui";
-import { canLeaveWithHistoryBack, type HistorySnapshot } from "./subPageExit";
+import { canLeaveWithHistoryBack, canLeaveWithHistoryBackToAny, type HistorySnapshot } from "./subPageExit";
 
 interface NavigationLike {
   currentEntry: { index: number } | null;
@@ -48,8 +48,9 @@ export interface SubPageExit {
 /**
  * 하위 화면 떠나기. 한 화면에서 한 번만 움직인다 — 두 번 누르면 back()이 두 칸 가 버리므로.
  * 취소·등록·저장이 같은 객체를 써서 [취소] 뒤의 [저장] 같은 늦은 누름도 막는다.
+ * backFrom: 앞 화면이 여럿인 화면에서 back()해도 되는 앞 화면 주소들(모듈 상수로 넘긴다). 없으면 parentHref일 때만 back().
  */
-export function useLeaveSubPage(parentHref: string): SubPageExit {
+export function useLeaveSubPage(parentHref: string, backFrom?: readonly string[]): SubPageExit {
   const router = useRouter();
   const leaving = useRef(false);
   return useMemo(
@@ -57,12 +58,14 @@ export function useLeaveSubPage(parentHref: string): SubPageExit {
       leave() {
         if (leaving.current) return;
         leaving.current = true;
-        if (canLeaveWithHistoryBack(readHistorySnapshot(parentHref))) router.back();
+        const snapshot = readHistorySnapshot(parentHref);
+        const canBack = backFrom ? canLeaveWithHistoryBackToAny(snapshot, backFrom) : canLeaveWithHistoryBack(snapshot);
+        if (canBack) router.back();
         else router.replace(parentHref);
       },
       isLeaving: () => leaving.current,
     }),
-    [router, parentHref],
+    [router, parentHref, backFrom],
   );
 }
 

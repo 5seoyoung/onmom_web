@@ -13,6 +13,7 @@ import {
   formatRecordDateTime,
   moodCardModel,
   recentRecordRows,
+  recordColumns,
   recordLayout,
   recordShowsLochia,
   recordSubtitle,
@@ -157,7 +158,48 @@ describe("화면 배치", () => {
   });
 
   it("신호 없음 → 위험 신호 없음 카드만", () => {
-    expect(recordLayout(normal, 3)).toEqual({ phase: "result", redFlag: null, showsClinics: false });
+    expect(recordLayout(normal, 3)).toEqual({ phase: "result", redFlag: null, showsClinics: false, showsRecent: true });
+  });
+
+  it("결과 단계에도 최근 기록 여부를 준다(PC 두 열에서 결과 옆에 보임)", () => {
+    expect(recordLayout(normal, 0)).toMatchObject({ phase: "result", showsRecent: false });
+    expect(recordLayout(signal, 1)).toMatchObject({ phase: "result", showsRecent: true });
+  });
+});
+
+describe("열 배치 — 폰은 iOS처럼 결과가 폼 자리를, PC(lg)는 폼 옆에 결과", () => {
+  const shownOnPhone = (cls: string) => /(^|\s)flex(\s|$)/.test(cls) && !/(^|\s)hidden(\s|$)/.test(cls);
+  const shownOnPc = (cls: string) => shownOnPhone(cls) || /(^|\s)lg:flex(\s|$)/.test(cls);
+
+  it("입력 단계: 폼·질문·최근 기록이 폰과 PC 모두에 보인다", () => {
+    const c = recordColumns("form");
+    for (const cls of [c.form, c.side, c.sideExtras]) {
+      expect(shownOnPhone(cls)).toBe(true);
+      expect(shownOnPc(cls)).toBe(true);
+    }
+  });
+
+  it("결과 단계: 폰은 폼·질문·최근 기록을 숨기고(display:none), PC는 그대로 둔다", () => {
+    const c = recordColumns("result");
+    for (const cls of [c.form, c.sideExtras]) {
+      expect(shownOnPhone(cls)).toBe(false);
+      expect(shownOnPc(cls)).toBe(true);
+    }
+    expect(shownOnPhone(c.side)).toBe(true); // 결과 자리
+  });
+
+  it("입력 단계: 폼은 열려 있고 [확인하기]가 있다", () => {
+    expect(recordColumns("form")).toMatchObject({ formLocked: false, showsSubmit: true });
+  });
+
+  it("결과 단계: 폼은 잠기고 [확인하기]는 없다 — PC에서 답과 결과가 어긋나거나 같은 기록이 겹쳐 저장되지 않게", () => {
+    expect(recordColumns("result")).toMatchObject({ formLocked: true, showsSubmit: false });
+  });
+
+  it("PC(lg)에서 두 열, 폰에서는 세로 한 줄", () => {
+    const { body } = recordColumns("form");
+    expect(body).toMatch(/(^|\s)flex-col(\s|$)/);
+    expect(body).toMatch(/(^|\s)lg:grid-cols-2(\s|$)/);
   });
 });
 

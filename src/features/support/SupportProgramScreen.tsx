@@ -3,6 +3,8 @@
 // 지원사업 추천 — iOS SupportProgramView.swift.
 // 순서: 안내문 → 모든 산모 공통 카드 → 6영역 체크리스트(16문항) → [추천 받기](1개 이상 체크 시) → 체크한 영역의 해결책 카드 → 하단 안내.
 // 체크 상태는 이 화면에만 있고 저장하지 않는다(iOS @State와 같음). 사용자 저장 데이터를 읽지 않아 하이드레이션 대기가 없다.
+// PC(넓은 화면, 컨테이너 쿼리 48rem 이상): 왼쪽 체크리스트 + [추천 받기], 오른쪽 공통 카드 + 추천 결과.
+// 문서 순서는 폰과 같다(공통 카드 → 체크리스트 → 버튼 → 결과) — 격자 위치만 바꾸므로 읽는 순서·탭 순서가 그대로다.
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Circle, CircleCheck, Hand, SquareArrowUpRight } from "lucide-react";
@@ -18,6 +20,7 @@ import {
   type SupportSolution,
 } from "@/rules/support";
 import { supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
+import { ROUTES } from "@/routes";
 
 // 웹 신규 문구 — CPO 확인 필요: 새 탭으로 열리는 링크임을 스크린리더에 알리는 숨은 글자(화면에는 안 보임)
 const NEW_TAB_HINT = " (새 창)";
@@ -38,53 +41,63 @@ export function SupportProgramScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 20 · 위 md · 끝 Spacer(minLength: lg) — SupportProgramView.swift:107-149
-    <main className="flex flex-1 flex-col gap-4 px-5 pt-2 pb-10">
-      <SubPageHeader title={SUPPORT_TEXT.title} backHref="/profile/" />
+    <main className="@container flex flex-1 flex-col gap-4 px-5 pt-2 pb-10">
+      <SubPageHeader title={SUPPORT_TEXT.title} backHref={ROUTES.profile} />
 
       <p className="text-[0.8125rem] text-text-subtle">{SUPPORT_TEXT.intro}</p>
 
-      <SolutionCard title={SUPPORT_TEXT.universalTitle} solutions={[SUPPORT_UNIVERSAL]} />
+      {/* 넓은 화면 격자: 체크리스트 묶음이 두 줄에 걸치고, 오른쪽 둘째 줄(1fr)이 남는 높이를 받아
+          공통 카드와 결과 사이가 벌어지지 않는다 */}
+      <div className="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-2 @3xl:grid-rows-[auto_1fr] @3xl:items-start @3xl:gap-x-6">
+        <SolutionCard
+          title={SUPPORT_TEXT.universalTitle}
+          solutions={[SUPPORT_UNIVERSAL]}
+          className="@3xl:col-start-2 @3xl:row-start-1"
+        />
 
-      {SUPPORT_DOMAINS.map((domain) => (
-        <Card key={domain.id}>
-          <fieldset>
-            {/* legend를 float로 빼서 일반 블록처럼 배치한다(카드 안 VStack spacing md) */}
-            <SectionTitle as="legend" className="float-left mb-4 p-0">
-              {domain.title}
-            </SectionTitle>
-            <div className="clear-both flex flex-col gap-4">
-              {domain.questions.map((question) => (
-                <QuestionRow
-                  key={question.id}
-                  question={question}
-                  checked={checked.has(question.id)}
-                  onToggle={() => setChecked((prev) => toggleSupportQuestion(prev, question.id))}
-                />
-              ))}
-            </div>
-          </fieldset>
-        </Card>
-      ))}
-
-      <PrimaryButton disabled={!canRecommend} onClick={recommend}>
-        {SUPPORT_TEXT.recommendButton}
-      </PrimaryButton>
-
-      {results.visible ? (
-        <>
-          {results.showNothingChecked ? (
-            <p className="text-[0.8125rem] text-text-subtle">{SUPPORT_TEXT.nothingChecked}</p>
-          ) : null}
-          {results.domains.map((domain) => (
-            <SolutionCard
-              key={domain.id}
-              title={domain.title}
-              headingId={supportResultHeadingId(domain.id)}
-              solutions={domain.solutions}
-            />
+        <div className="flex flex-col gap-4 @3xl:col-start-1 @3xl:row-span-2 @3xl:row-start-1">
+          {SUPPORT_DOMAINS.map((domain) => (
+            <Card key={domain.id}>
+              <fieldset>
+                {/* legend를 float로 빼서 일반 블록처럼 배치한다(카드 안 VStack spacing md) */}
+                <SectionTitle as="legend" className="float-left mb-4 p-0">
+                  {domain.title}
+                </SectionTitle>
+                <div className="clear-both flex flex-col gap-4">
+                  {domain.questions.map((question) => (
+                    <QuestionRow
+                      key={question.id}
+                      question={question}
+                      checked={checked.has(question.id)}
+                      onToggle={() => setChecked((prev) => toggleSupportQuestion(prev, question.id))}
+                    />
+                  ))}
+                </div>
+              </fieldset>
+            </Card>
           ))}
-        </>
-      ) : null}
+
+          <PrimaryButton disabled={!canRecommend} onClick={recommend}>
+            {SUPPORT_TEXT.recommendButton}
+          </PrimaryButton>
+        </div>
+
+        {results.visible ? (
+          <div className="flex flex-col gap-4 @3xl:col-start-2 @3xl:row-start-2">
+            {results.showNothingChecked ? (
+              <p className="text-[0.8125rem] text-text-subtle">{SUPPORT_TEXT.nothingChecked}</p>
+            ) : null}
+            {results.domains.map((domain) => (
+              <SolutionCard
+                key={domain.id}
+                title={domain.title}
+                headingId={supportResultHeadingId(domain.id)}
+                solutions={domain.solutions}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <p className="text-[0.6875rem] text-text-subtle">{SUPPORT_TEXT.footer}</p>
     </main>
@@ -121,14 +134,17 @@ function SolutionCard({
   title,
   headingId,
   solutions,
+  className,
 }: {
   title: string;
   /** 추천 결과 카드만 — [추천 받기] 뒤 초점을 받을 수 있게 id·tabIndex를 단다 */
   headingId?: string;
   solutions: readonly SupportSolution[];
+  /** 넓은 화면의 격자 위치 */
+  className?: string;
 }) {
   return (
-    <Card className="flex flex-col gap-2">
+    <Card className={cx("flex flex-col gap-2", className)}>
       <SectionTitle id={headingId} tabIndex={headingId ? -1 : undefined} className="rounded-chip">
         {title}
       </SectionTitle>

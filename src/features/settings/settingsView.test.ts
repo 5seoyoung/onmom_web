@@ -1,10 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { UserProfile } from "@/domain/types";
 import { defaultMaternity, defaultProfile, initialState } from "@/store/defaults";
 import { updateMaternity, updateProfile } from "@/store/state";
 import {
   MATERNITY_TOGGLES,
+  SERVER_ACCOUNT_TEXT,
   SETTINGS_TEXT,
+  deleteConfirmMessage,
+  deleteFailureMessage,
+  performDeleteAccount,
+  performSignOut,
+  signOutConfirmMessage,
+  usesServerAccount,
   draftFromState,
   draftProblem,
   draftToPatches,
@@ -31,6 +38,87 @@ describe("signOutMessage", () => {
       "계정 정보와 이 기기에 저장된 프로필·증상 기록·글이 모두 삭제됩니다. 이 작업은 되돌릴 수 없어요.",
     );
     expect(SETTINGS_TEXT.deleteMessage).not.toContain("Apple");
+  });
+});
+
+describe("서버 계정(카카오 + Supabase)의 로그아웃·계정 삭제 문구", () => {
+  it("서버를 거치는 것은 Supabase가 설정된 빌드의 카카오 계정만", () => {
+    expect(usesServerAccount("kakao", true)).toBe(true);
+    expect(usesServerAccount("kakao", false)).toBe(false);
+    expect(usesServerAccount("guest", true)).toBe(false);
+    expect(usesServerAccount(null, true)).toBe(false);
+    expect(usesServerAccount(undefined, true)).toBe(false);
+  });
+
+  it("서버 계정이 아니면 iOS 문구 그대로", () => {
+    expect(signOutConfirmMessage("guest", false)).toBe(signOutMessage("guest"));
+    expect(signOutConfirmMessage("kakao", false)).toBe(signOutMessage("kakao"));
+    expect(deleteConfirmMessage(false)).toBe(SETTINGS_TEXT.deleteMessage);
+  });
+
+  it("서버 계정이면 '이 기기에 남아 있어요'라고 하지 않고, 삭제는 서버 기록까지라고 알린다", () => {
+    expect(signOutConfirmMessage("kakao", true)).toBe(SERVER_ACCOUNT_TEXT.signOutMessage);
+    expect(signOutConfirmMessage("kakao", true)).not.toContain("이 기기에 남아");
+    expect(deleteConfirmMessage(true)).toContain("서버");
+    expect(deleteConfirmMessage(true)).toContain("되돌릴 수 없어요");
+  });
+
+  it("삭제 실패 안내는 이유별로 다르고, 둘 다 아무것도 지우지 않았다고 말한다", () => {
+    expect(deleteFailureMessage("failed")).toBe(SERVER_ACCOUNT_TEXT.deleteFailed);
+    expect(deleteFailureMessage("noSession")).toBe(SERVER_ACCOUNT_TEXT.deleteNoSession);
+    for (const reason of ["failed", "noSession"] as const) {
+      expect(deleteFailureMessage(reason)).toContain("아무것도 삭제되지 않았어요");
+    }
+  });
+
+  it("못 올린 기록 경고는 기록이 이 브라우저에 남는다고 알린다(signOutEverywhere force — 지우지 않음)", () => {
+    expect(SERVER_ACCOUNT_TEXT.unsyncedMessage).toContain("이 브라우저에만 남아요");
+  });
+});
+
+describe("performSignOut · performDeleteAccount — 설정의 로그아웃·계정 삭제 연결", () => {
+  it("Supabase가 없는 빌드: 지금처럼 스토어에서 바로, 서버 함수는 부르지 않는다", async () => {
+    const signOutLocal = vi.fn();
+    const signOutEverywhere = vi.fn();
+    expect(await performSignOut({ supabaseConfigured: false, force: false, signOutLocal, signOutEverywhere })).toEqual({ kind: "done" });
+    expect(signOutLocal).toHaveBeenCalledTimes(1);
+    expect(signOutEverywhere).not.toHaveBeenCalled();
+
+    const deleteLocal = vi.fn();
+    const deleteAccountEverywhere = vi.fn();
+    expect(await performDeleteAccount({ supabaseConfigured: false, deleteLocal, deleteAccountEverywhere })).toEqual({ kind: "done" });
+    expect(deleteLocal).toHaveBeenCalledTimes(1);
+    expect(deleteAccountEverywhere).not.toHaveBeenCalled();
+  });
+
+  it("있는 빌드: 로그아웃은 signOutEverywhere — 못 올렸으면 unsynced, [그래도 로그아웃]은 force", async () => {
+    const signOutLocal = vi.fn();
+    const unsynced = vi.fn(async () => ({ ok: false as const, reason: "unsynced" as const }));
+    expect(await performSignOut({ supabaseConfigured: true, force: false, signOutLocal, signOutEverywhere: unsynced })).toEqual({
+      kind: "unsynced",
+    });
+    expect(unsynced).toHaveBeenCalledWith(undefined);
+
+    const forced = vi.fn(async () => ({ ok: true as const, localDataErased: false }));
+    expect(await performSignOut({ supabaseConfigured: true, force: true, signOutLocal, signOutEverywhere: forced })).toEqual({ kind: "done" });
+    expect(forced).toHaveBeenCalledWith({ force: true });
+    expect(signOutLocal).not.toHaveBeenCalled();
+  });
+
+  it("있는 빌드: 삭제는 deleteAccountEverywhere — 실패하면 이유별 안내, 스토어는 건드리지 않는다", async () => {
+    const deleteLocal = vi.fn();
+    for (const reason of ["failed", "noSession"] as const) {
+      const outcome = await performDeleteAccount({
+        supabaseConfigured: true,
+        deleteLocal,
+        deleteAccountEverywhere: async () => ({ ok: false, reason }),
+      });
+      expect(outcome).toEqual({ kind: "failed", message: deleteFailureMessage(reason) });
+    }
+    expect(
+      await performDeleteAccount({ supabaseConfigured: true, deleteLocal, deleteAccountEverywhere: async () => ({ ok: true }) }),
+    ).toEqual({ kind: "done" });
+    expect(deleteLocal).not.toHaveBeenCalled();
   });
 });
 

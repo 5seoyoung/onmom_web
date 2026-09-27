@@ -35,21 +35,29 @@ describe("routeKindFor", () => {
     expect(routeKindFor("/onboarding/")).toBe("onboarding");
   });
 
-  it("개인정보처리방침과 개발용 카탈로그는 늘 연다", () => {
+  it("서비스 소개·개인정보처리방침·로그인 콜백은 늘 연다", () => {
+    expect(routeKindFor("/")).toBe("public");
+    expect(routeKindFor("")).toBe("public");
     expect(routeKindFor("/privacy/")).toBe("public");
     expect(routeKindFor("/privacy")).toBe("public");
-    expect(routeKindFor("/dev/components/")).toBe("public");
-    expect(routeKindFor("/dev")).toBe("public");
+    expect(routeKindFor("/auth/callback/")).toBe("public");
+    expect(routeKindFor("/auth/callback")).toBe("public");
+  });
+
+  it("개발용 카탈로그(/dev/*)는 없어졌다 — 다른 없는 주소처럼 메인", () => {
+    expect(routeKindFor("/dev/components/")).toBe("main");
+    expect(routeKindFor("/dev")).toBe("main");
   });
 
   it("그 외는 메인(탭·하위 화면·없는 주소)", () => {
-    for (const p of ["/", "/exercise/", "/record/", "/journal/", "/profile/", "/analyze/", "/settings/", "/chat/", "/nope/"]) {
+    for (const p of ["/home/", "/exercise/", "/record/", "/journal/", "/journal/post/", "/profile/", "/analyze/", "/settings/", "/settings/profile/", "/chat/", "/nope/"]) {
       expect(routeKindFor(p)).toBe("main");
     }
     // 접두만 같은 주소는 다른 화면
     expect(routeKindFor("/login-help/")).toBe("main");
-    expect(routeKindFor("/developer/")).toBe("main");
     expect(routeKindFor("/privacy/extra/")).toBe("main");
+    expect(routeKindFor("/auth/")).toBe("main");
+    expect(routeKindFor("/auth/callback/x/")).toBe("main");
   });
 });
 
@@ -57,23 +65,25 @@ describe("gateDecision", () => {
   it("저장소를 읽기 전에는 보호된 화면을 그리지 않는다", () => {
     const screen = rootScreenFor({ ...snap({}), hydrated: false });
     expect(screen).toBe("loading");
-    expect(gateDecision(screen, "/")).toEqual({ kind: "wait" });
+    expect(gateDecision(screen, "/home/")).toEqual({ kind: "wait" });
     expect(gateDecision(screen, "/login/")).toEqual({ kind: "wait" });
     expect(gateDecision(screen, "/onboarding/")).toEqual({ kind: "wait" });
     expect(gateDecision(screen, "/settings/")).toEqual({ kind: "wait" });
   });
 
-  it("공개 화면은 읽기 전에도 그린다", () => {
-    expect(gateDecision("loading", "/privacy/")).toEqual({ kind: "render" });
-    expect(gateDecision("login", "/privacy/")).toEqual({ kind: "render" });
-    expect(gateDecision("onboarding", "/dev/components/")).toEqual({ kind: "render" });
+  it("공개 화면은 읽기 전에도, 어느 단계에서도 그대로 그린다(이동 없음)", () => {
+    for (const screen of ["loading", "login", "onboarding", "main"] as const) {
+      for (const p of ["/", "/privacy/", "/auth/callback/"]) {
+        expect(gateDecision(screen, p)).toEqual({ kind: "render" });
+      }
+    }
   });
 
   it("로그인 전: 로그인 화면만, 나머지는 /login/으로", () => {
     const screen = rootScreenFor(snap({}));
     expect(screen).toBe("login");
     expect(gateDecision(screen, "/login/")).toEqual({ kind: "render" });
-    expect(gateDecision(screen, "/")).toEqual({ kind: "redirect", to: "/login/" });
+    expect(gateDecision(screen, "/home/")).toEqual({ kind: "redirect", to: "/login/" });
     expect(gateDecision(screen, "/onboarding/")).toEqual({ kind: "redirect", to: "/login/" });
     expect(gateDecision(screen, "/record/")).toEqual({ kind: "redirect", to: "/login/" });
   });
@@ -83,16 +93,17 @@ describe("gateDecision", () => {
     expect(screen).toBe("onboarding");
     expect(gateDecision(screen, "/onboarding/")).toEqual({ kind: "render" });
     expect(gateDecision(screen, "/login/")).toEqual({ kind: "redirect", to: "/onboarding/" });
-    expect(gateDecision(screen, "/")).toEqual({ kind: "redirect", to: "/onboarding/" });
+    expect(gateDecision(screen, "/home/")).toEqual({ kind: "redirect", to: "/onboarding/" });
   });
 
-  it("온보딩을 마쳤으면 메인. 로그인·온보딩 주소는 홈으로", () => {
+  it("온보딩을 마쳤으면 메인. 로그인·온보딩 주소는 홈 탭(/home/)으로", () => {
     const screen = rootScreenFor(snap({ account: guest, hasOnboarded: true }));
     expect(screen).toBe("main");
-    expect(gateDecision(screen, "/")).toEqual({ kind: "render" });
+    expect(SCREEN_PATH.main).toBe("/home/");
+    expect(gateDecision(screen, "/home/")).toEqual({ kind: "render" });
     expect(gateDecision(screen, "/exercise/")).toEqual({ kind: "render" });
-    expect(gateDecision(screen, "/login/")).toEqual({ kind: "redirect", to: "/" });
-    expect(gateDecision(screen, "/onboarding")).toEqual({ kind: "redirect", to: "/" });
+    expect(gateDecision(screen, "/login/")).toEqual({ kind: "redirect", to: "/home/" });
+    expect(gateDecision(screen, "/onboarding")).toEqual({ kind: "redirect", to: "/home/" });
   });
 
   it("로그아웃하면 온보딩을 마쳤어도 로그인 화면(RootView.swift:10-11)", () => {
@@ -103,7 +114,7 @@ describe("gateDecision", () => {
 
   it("이동한 곳에서는 다시 이동하지 않는다(되돌이 없음)", () => {
     for (const screen of ["login", "onboarding", "main"] as const) {
-      for (const from of ["/", "/login/", "/onboarding/", "/record/", "/x/"]) {
+      for (const from of ["/", "/home/", "/login/", "/onboarding/", "/record/", "/x/"]) {
         const d = gateDecision(screen, from);
         if (d.kind === "redirect") {
           expect(d.to).toBe(SCREEN_PATH[screen]);

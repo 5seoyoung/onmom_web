@@ -7,6 +7,8 @@
 // 그래서 폼에 제출 버튼을 두지 않는다: 입력 칸이 여럿이라 Enter·모바일 완료 키의 암묵적 제출이 일어나지 않는다(HTML 규칙).
 // 돌아가기는 시트를 닫듯 — 앱 안에서 왔으면 뒤로(설정이 방문 기록에 두 번 쌓이지 않게), 주소로 바로 왔으면 설정으로 replace.
 // 출산일은 비울 수 없고 오늘보다 뒤일 수 없다 — 네이티브 입력 검증(required·max)을 [저장] 때 직접 불러 알린다(D11·D12).
+// PC(넓은 화면, 컨테이너 쿼리 48rem 이상): 왼쪽 기본 정보, 오른쪽 체중·재활 고려사항, [저장]은 오른쪽 아래.
+// 폰 기둥(최대 30rem)에서는 카드 3장 + [저장]이 한 줄로 쌓인다(iOS 순서 그대로 — 읽는 순서·탭 순서도 같다).
 
 import { useId, useRef, useState } from "react";
 import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle } from "@/components/ui";
@@ -37,7 +39,7 @@ export function ProfileEditScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 md — MoreView.swift:160-168
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+    <main className="@container flex w-full max-w-[60rem] flex-1 flex-col gap-4 px-6 pt-2 pb-10">
       <LeaveSubPageHeader
         title={PROFILE_EDIT_TEXT.title}
         backHref={SETTINGS_HREF}
@@ -91,9 +93,15 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
 
   return (
     // 제출은 막아 둔다(암묵적 제출이 어떤 경로로든 오면 무시) — 저장은 아래 [저장] 버튼의 onClick만
-    <form ref={formRef} onSubmit={(e) => e.preventDefault()} noValidate className="flex flex-col gap-4">
+    // 넓은 화면: 2열 — 기본 정보가 두 줄에 걸치고, 오른쪽 둘째 줄(1fr)이 남는 높이를 받아 카드 사이가 벌어지지 않는다
+    <form
+      ref={formRef}
+      onSubmit={(e) => e.preventDefault()}
+      noValidate
+      className="flex flex-col gap-4 @3xl:grid @3xl:grid-cols-2 @3xl:grid-rows-[auto_1fr_auto] @3xl:items-start @3xl:gap-x-6"
+    >
       {/* 기본 정보 — 간격 md (MoreView.swift:194-235) */}
-      <Card as="section" aria-labelledby="edit-basics" className="flex flex-col gap-4">
+      <Card as="section" aria-labelledby="edit-basics" className="flex flex-col gap-4 @3xl:row-span-2">
         <SectionTitle id="edit-basics">{PROFILE_EDIT_TEXT.basics}</SectionTitle>
 
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -211,7 +219,7 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
       </Card>
 
       {/* iOS는 내비게이션 막대의 [저장]. 웹은 긴 폼 끝에 둔다(위로 다시 올라가지 않게). */}
-      <PrimaryButton type="button" onClick={handleSave}>
+      <PrimaryButton type="button" onClick={handleSave} className="@3xl:col-start-2">
         {PROFILE_EDIT_TEXT.save}
       </PrimaryButton>
     </form>

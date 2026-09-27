@@ -75,7 +75,7 @@ describe("보내기", () => {
 
 describe("chatBackHref", () => {
   it("?from=home이면 홈, 아니면 프로필", () => {
-    expect(chatBackHref("?from=home")).toBe("/");
+    expect(chatBackHref("?from=home")).toBe("/home/");
     expect(chatBackHref("")).toBe("/profile/");
     expect(chatBackHref("?from=profile")).toBe("/profile/");
   });

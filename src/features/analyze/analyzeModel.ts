@@ -218,3 +218,27 @@ export function analyzeResultModel(output: EngineOutput, activeRedFlag: boolean)
     restart: ANALYSIS_TEXT.restart,
   };
 }
+
+/**
+ * PC(lg) 두 열 배치 — 가능/주의/금지 묶음을 순서를 지킨 채 왼쪽·오른쪽 두 묶음으로 나눈다.
+ * 격자 행으로 두면 짧은 카드 옆에 큰 빈칸이 생겨, 열마다 세로로 쌓고 높이(제목 1 + 항목 수)가 비슷해지는 자리에서 자른다.
+ * DOM 순서는 왼쪽 → 오른쪽 그대로라 읽는 순서·Tab 순서가 iOS와 같다. 폰은 이 나눔과 관계없이 세로 한 줄이다.
+ * 묶음이 하나면 오른쪽은 비어 있다(한 열).
+ */
+export function splitResultBlocks(blocks: readonly ResultBlock[]): { left: ResultBlock[]; right: ResultBlock[] } {
+  if (blocks.length < 2) return { left: [...blocks], right: [] };
+  const weight = (b: ResultBlock) => (b.kind === "group" ? 1 + b.group.items.length : 1);
+  const total = blocks.reduce((sum, b) => sum + weight(b), 0);
+  let best = 1;
+  let bestMax = Infinity;
+  let prefix = 0;
+  for (let k = 1; k < blocks.length; k++) {
+    prefix += weight(blocks[k - 1]);
+    const tallest = Math.max(prefix, total - prefix);
+    if (tallest < bestMax) {
+      bestMax = tallest;
+      best = k;
+    }
+  }
+  return { left: blocks.slice(0, best), right: blocks.slice(best) };
+}

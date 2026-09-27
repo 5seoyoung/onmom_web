@@ -13,6 +13,7 @@ import { postpartumDayCount } from "@/domain/date";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
 import { useAppStore } from "@/store/useAppStore";
 import { canCheckSubstance, checkSubstance, createLatestOnly, substanceDeps, verdictBadge } from "./substanceModel";
+import { ROUTES } from "@/routes";
 
 // 원문: SubstanceCheckView.swift:34
 const PLACEHOLDER = "예: 타이레놀, 카페인, 이부프로펜";
@@ -70,8 +71,9 @@ export function SubstanceCheckScreen() {
   const header = substanceHeader(state.profile.isBreastfeeding);
 
   return (
-    <main className="flex flex-1 flex-col px-6 pt-2 pb-6">
-      <SubPageHeader title={TITLE} backHref="/profile/" />
+    // PC: 읽기 좋은 폭(최대 40rem) 기둥 — 입력과 결과가 한눈에. 왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게. 폰 기둥(30rem)에서는 그대로.
+    <main className="flex w-full max-w-[40rem] flex-1 flex-col px-6 pt-2 pb-6">
+      <SubPageHeader title={TITLE} backHref={ROUTES.profile} />
 
       {/* 저장소를 읽기 전에는 수유 여부를 모른다 — 기본값 문구를 번쩍이지 않게 그리지 않는다 */}
       {hydrated ? (

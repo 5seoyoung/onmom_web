@@ -30,6 +30,7 @@ import {
   type RecoveryStateCard as RecoveryStateCardModel,
   type StateTone,
 } from "./homeViewModel";
+import { ROUTES } from "@/routes";
 
 // Tailwind가 클래스를 찾을 수 있게 조합을 전부 적어 둔다.
 const TONE_CIRCLE: Record<StateTone, string> = {
@@ -81,8 +82,14 @@ function Chevron() {
 // 음성 입력은 웹에서 만들지 않는다(D3) — 마이크 없이 "AI 상담"(글로 묻는 상담) 화면을 연다(CPO 결정 2026-09-27).
 export function HomeTopBar() {
   return (
-    <header className="flex items-center justify-between gap-2 py-1">
-      <h1 className="text-[1.375rem] font-bold text-primary">{HOME_TEXT.brand}</h1>
+    <header className="flex items-center justify-between gap-2 py-1 lg:justify-end">
+      {/* "온맘"을 누르면 소개 페이지로. PC는 사이드 메뉴에 로고가 있어 글자를 숨기고 제목만 스크린 리더에 남긴다. */}
+      <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">
+        <Link href={ROUTES.landing} className="-mx-1 inline-flex min-h-11 items-center rounded-button px-1">
+          {HOME_TEXT.brand}
+        </Link>
+      </h1>
+      <h1 className="hidden lg:block lg:sr-only">{HOME_TEXT.brand}</h1>
       <Link
         href={HOME_CHAT_HREF}
         className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-coral-tint px-3 text-[0.8125rem] font-semibold text-primary"
@@ -132,7 +139,7 @@ export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) 
   if (model.kind === "empty") {
     // 기록이 없으면 상태를 지어내지 않고 기록을 권한다 — 탭하면 기록 화면(iOS는 기록 시트)
     return (
-      <Link href="/record/" className={cardLinkClass}>
+      <Link href={ROUTES.record} className={cardLinkClass}>
         <Card className="flex items-center gap-4">
           <div aria-hidden className="flex size-13 shrink-0 items-center justify-center rounded-full bg-coral-tint">
             <SquarePen className="size-5.5 text-primary" strokeWidth={2.5} />
@@ -206,7 +213,7 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
       </ul>
       <div className="flex gap-2">
         <Link
-          href="/support/"
+          href={ROUTES.support}
           className="flex min-h-11 flex-1 items-center justify-center rounded-chip bg-background px-2 py-2.5 text-center text-[0.9375rem] font-semibold text-neutral"
         >
           {HOME_TEXT.moodSupport}
@@ -227,7 +234,7 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
 // MARK: 회복 단계 분석 진입 (HomeView.swift:324-350)
 export function AnalyzeEntryCard({ ref }: { ref?: Ref<HTMLAnchorElement> }) {
   return (
-    <Link href="/analyze/" ref={ref} className={cardLinkClass}>
+    <Link href={ROUTES.analyze} ref={ref} className={cardLinkClass}>
       <Card className="flex items-center gap-4">
         <div aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-full bg-coral-tint">
           <ScanText className="size-5 text-primary" strokeWidth={2.5} />
@@ -327,7 +334,7 @@ export function WeightPlanCard({ plan }: { plan: WeightPlan }) {
 export function QuickRecordButton() {
   return (
     <Link
-      href="/record/"
+      href={ROUTES.record}
       className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-button bg-coral-tint px-4 py-4 text-base font-semibold text-primary"
     >
       <CirclePlus aria-hidden className="size-5 shrink-0 fill-primary text-coral-tint" />

@@ -17,7 +17,8 @@ export function JournalPostScreen() {
   // iOS 내비게이션 pop처럼 — 목록에서 들어왔으면 뒤로(목록이 방문 기록에 두 번 쌓이지 않게)
   const exit = useLeaveSubPage(JOURNAL_HREF);
   return (
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-6">
+    // PC: 읽기 좋은 폭(최대 42rem) 기둥, 왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게. 폰 기둥(30rem)에서는 그대로.
+    <main className="flex w-full max-w-[42rem] flex-1 flex-col gap-4 px-6 pt-2 pb-6">
       <LeaveSubPageHeader title={JOURNAL_TEXT.detailTitle} backHref={JOURNAL_HREF} onLeave={exit.leave} />
       <Suspense fallback={null}>
         <PostFromQuery />

@@ -13,6 +13,7 @@ export interface PrivacyPolicyDialogProps {
 // 주소를 옮기지 않고 띄운다: 온보딩 입력값은 동의 전이라 저장하지 않고 화면에만 들고 있으므로, 페이지를 떠나면 사라진다.
 // 네이티브 <dialog>.showModal() — 포커스 가두기·Esc 닫기·뒤 화면 비활성을 브라우저가 맡는다.
 // 위쪽 막대: 가운데 제목 "개인정보처리방침", 오른쪽 [닫기](PrivacyPolicyView.swift:72-79).
+// PC(lg 이상 화면): 아래에서 올라오는 시트 대신 화면 가운데의 둥근 창(최대 40rem 폭 · 48rem 높이, 안에서 스크롤).
 export function PrivacyPolicyDialog({ open, onClose }: PrivacyPolicyDialogProps) {
   if (!open) return null;
   return <PolicySheet onClose={onClose} />;
@@ -44,7 +45,7 @@ function PolicySheet({ onClose }: { onClose: () => void }) {
       onClick={(e) => {
         if (e.target === e.currentTarget) e.currentTarget.close();
       }}
-      className="fixed inset-0 mx-auto mt-auto mb-0 h-[calc(100dvh-2.5rem)] max-h-none w-full max-w-[30rem] overflow-y-auto overscroll-contain rounded-t-card bg-background p-0 text-text-primary backdrop:bg-neutral/40"
+      className="fixed inset-0 mx-auto mt-auto mb-0 h-[calc(100dvh-2.5rem)] max-h-none w-full max-w-[30rem] overflow-y-auto overscroll-contain rounded-t-card bg-background p-0 text-text-primary backdrop:bg-neutral/40 lg:mb-auto lg:h-[min(48rem,calc(100dvh-4rem))] lg:max-w-[40rem] lg:rounded-card"
     >
       <div className="sticky top-0 z-10 grid min-h-14 grid-cols-[1fr_auto_1fr] items-center border-b border-divider bg-background px-4">
         <span aria-hidden />

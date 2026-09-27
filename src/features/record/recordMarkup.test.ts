@@ -81,6 +81,25 @@ describe("입력 폼", () => {
     expect(count(html, 'bg-primary"')).toBe(1);
     expect(count(html, 'aria-checked="true"')).toBe(2);
   });
+
+  it("잠금(결과 단계 — PC에서만 보임): 스위치 7·슬라이더·내 동네 입력이 모두 비활성, 기본은 모두 활성", () => {
+    const render = (disabled?: boolean) =>
+      renderToStaticMarkup(
+        h(SymptomFormCards, {
+          form: INITIAL_SYMPTOM_FORM,
+          onChange: noop,
+          showsLochia: true,
+          neighborhood: "",
+          onNeighborhoodChange: noop,
+          disabled,
+        }),
+      );
+    const locked = render(true);
+    expect(count(locked, 'disabled=""')).toBe(9);
+    expect(/<input[^>]*type="range"[^>]*>/.exec(locked)?.[0]).toContain('disabled=""');
+    expect(/<input[^>]*type="text"[^>]*>/.exec(locked)?.[0]).toContain('disabled=""');
+    expect(count(render(), 'disabled=""')).toBe(0);
+  });
 });
 
 describe("결과", () => {

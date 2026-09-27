@@ -78,7 +78,7 @@ function Flow({ profile, today, actions }: { profile: UserProfile; today: string
   const back = previousStep(step);
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main className="mx-auto flex w-full max-w-[30rem] flex-1 flex-col">
       <div className="flex items-center px-6 pt-4">
         <div className="flex w-11 shrink-0">
           {back !== null ? (

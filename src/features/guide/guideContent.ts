@@ -52,3 +52,24 @@ export function guideCardViews(cards: readonly GuideCardSource[] = content.guide
     sourceToken: sourceToken(card.source),
   }));
 }
+
+// 전화번호가 "1577-" / "0199"처럼 하이픈에서 줄바뀌지 않게 번호만 따로 떼어 준다(화면에서 한 덩어리로 묶는다).
+const PHONE_RE = /\d{2,4}-\d{3,4}(?:-\d{4})?/g;
+
+export interface TextSegment {
+  text: string;
+  phone: boolean;
+}
+
+export function splitPhoneNumbers(text: string): TextSegment[] {
+  const out: TextSegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(PHONE_RE)) {
+    const at = m.index ?? 0;
+    if (at > last) out.push({ text: text.slice(last, at), phone: false });
+    out.push({ text: m[0], phone: true });
+    last = at + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), phone: false });
+  return out;
+}

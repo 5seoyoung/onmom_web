@@ -16,6 +16,8 @@ export interface SymptomFormCardsProps {
   /** 내 동네(프로필 값) */
   neighborhood: string;
   onNeighborhoodChange: (value: string) => void;
+  /** 결과 단계(PC에서만 보임) — 판정에 쓴 답을 보여 주기만 한다. 고치려면 [다시 입력]. */
+  disabled?: boolean;
 }
 
 /** 카드 안 토글 사이 구분선(Divider — divider 색 1px) */
@@ -23,7 +25,14 @@ function RowDivider() {
   return <div aria-hidden className="h-px w-full bg-divider" />;
 }
 
-export function SymptomFormCards({ form, onChange, showsLochia, neighborhood, onNeighborhoodChange }: SymptomFormCardsProps) {
+export function SymptomFormCards({
+  form,
+  onChange,
+  showsLochia,
+  neighborhood,
+  onNeighborhoodChange,
+  disabled = false,
+}: SymptomFormCardsProps) {
   const lochiaId = useId();
   const riskId = useId();
   const neighborhoodId = useId();
@@ -38,12 +47,14 @@ export function SymptomFormCards({ form, onChange, showsLochia, neighborhood, on
             <Toggle
               label={RECORD_TEXT.lochiaIncreased}
               checked={form.lochiaIncreased}
+              disabled={disabled}
               onCheckedChange={(v) => onChange({ lochiaIncreased: v })}
             />
             <RowDivider />
             <Toggle
               label={RECORD_TEXT.lochiaRed}
               checked={form.lochiaRed}
+              disabled={disabled}
               onCheckedChange={(v) => onChange({ lochiaRed: v })}
             />
           </>
@@ -57,12 +68,18 @@ export function SymptomFormCards({ form, onChange, showsLochia, neighborhood, on
           label={<span className="font-semibold">{RECORD_TEXT.feverTitle}</span>}
           description={RECORD_TEXT.feverDescription}
           checked={form.feverEvent}
+          disabled={disabled}
           onCheckedChange={(v) => onChange({ feverEvent: v })}
         />
       </Card>
 
       <Card>
-        <NrsSlider label={RECORD_TEXT.painTitle} value={form.painNrs} onValueChange={(v) => onChange({ painNrs: v })} />
+        <NrsSlider
+          label={RECORD_TEXT.painTitle}
+          value={form.painNrs}
+          disabled={disabled}
+          onValueChange={(v) => onChange({ painNrs: v })}
+        />
       </Card>
 
       <Card as="section" aria-labelledby={riskId} className="flex flex-col gap-2">
@@ -70,7 +87,13 @@ export function SymptomFormCards({ form, onChange, showsLochia, neighborhood, on
         {RISK_TOGGLES.map(({ key, label }, i) => (
           <div key={key} className="flex flex-col gap-2">
             {i > 0 ? <RowDivider /> : null}
-            <Toggle variant="alert" label={label} checked={form[key]} onCheckedChange={(v) => onChange({ [key]: v })} />
+            <Toggle
+              variant="alert"
+              label={label}
+              checked={form[key]}
+              disabled={disabled}
+              onCheckedChange={(v) => onChange({ [key]: v })}
+            />
           </div>
         ))}
       </Card>
@@ -81,11 +104,12 @@ export function SymptomFormCards({ form, onChange, showsLochia, neighborhood, on
           type="text"
           value={neighborhood}
           onChange={(e) => onNeighborhoodChange(e.target.value)}
+          disabled={disabled}
           placeholder={RECORD_TEXT.neighborhoodPlaceholder}
           aria-labelledby={neighborhoodId}
           aria-describedby={neighborhoodHelpId}
           autoCapitalize="none"
-          className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle"
+          className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle disabled:cursor-not-allowed disabled:opacity-50"
         />
         <p id={neighborhoodHelpId} className="text-[0.8125rem] text-text-secondary">
           {RECORD_TEXT.neighborhoodHelp}

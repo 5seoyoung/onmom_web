@@ -44,7 +44,10 @@ export interface AppActions {
   signIn(account: Account): void;
   /** 로그아웃 — 계정만 지운다. 데이터는 남고, 다음에 다른 실제 계정·게스트가 들어오면 그때 지운다(iOS와 같음). */
   signOut(): void;
-  /** 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id 등 "onmom.web." 키 전부 삭제. 서버 탈퇴는 미구현. */
+  /**
+   * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id 등 "onmom.web." 키 전부 삭제.
+   * 서버 탈퇴는 src/auth deleteAccountEverywhere가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
+   */
   deleteAccount(): void;
   completeOnboarding(): void;
   updateProfile(patch: Partial<UserProfile>): void;
@@ -65,6 +68,11 @@ export interface AppStore {
   getServerSnapshot(): AppSnapshot;
   /** 저장소를 (다시) 읽는다 — 첫 구독 때 자동으로 부른다. */
   load(): void;
+  /**
+   * 서버 동기화 전용(store/sync) — 서버 상태와 합친 결과로 이 브라우저의 상태를 통째로 바꾸고 저장한다.
+   * 화면은 쓰지 않는다(actions가 아님). 계정은 바꾸지 않는다 — 호출 전에 계정이 맞는지 동기화 쪽이 확인한다.
+   */
+  replaceState(next: PersistedState): void;
   readonly actions: AppActions;
 }
 
@@ -273,6 +281,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     getSnapshot: () => snapshot,
     getServerSnapshot: () => UNLOADED,
     load,
+    replaceState(next) {
+      ensureLoaded();
+      commit(next);
+    },
     actions,
   };
 }

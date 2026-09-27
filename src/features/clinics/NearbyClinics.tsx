@@ -4,11 +4,14 @@
 // 동네 입력 카드 → 안내문 → (찾는 중 | 오류 카드 | 지도 + 병원 목록). 기기 위치 권한은 쓰지 않는다.
 // 동네 값은 부모가 프로필(profile.neighborhood)과 묶어 넘긴다(RecordFlowView.swift:273-276, RegionResourcesView.swift:11).
 // 카카오 JS 키가 없으면 입력·안내문은 그대로 두고 "준비 중" 카드만 보인다(D6).
+// PC(lg 이상), 넓은 자리(layout="wide" — 지역 연계 화면): 입력·안내는 읽기 좋은 폭(최대 40rem), 병원 목록은 두 열.
+// 지도 높이는 그대로 둔다(크기가 바뀌면 SDK relayout이 필요하다).
+// 기록 결과처럼 좁은 열 안에서는 기본값(layout="stack") — 폰과 같은 한 줄이다.
 
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Hourglass, LoaderCircle, MapPinOff, Search } from "lucide-react";
 import { isClinicSearchConfigured, searchNearbyClinics } from "@/api/clinics";
-import { Card, SectionTitle } from "@/components/ui";
+import { Card, SectionTitle, cx } from "@/components/ui";
 import { config } from "@/config";
 import { ClinicMap } from "./ClinicMap";
 import { ClinicRow } from "./ClinicRow";
@@ -25,9 +28,18 @@ export interface NearbyClinicsProps {
   /** 내 동네(프로필에 저장된 값) */
   address: string;
   onAddressChange: (address: string) => void;
+  /** 놓이는 자리의 폭 — "wide"면 PC(lg)에서 목록 두 열. 기본 "stack"(좁은 열·폰과 같은 한 줄) */
+  layout?: "stack" | "wide";
 }
 
-export function NearbyClinics({ address, onAddressChange }: NearbyClinicsProps) {
+/** PC(lg)에서 넓은 자리일 때만 붙는 클래스 — 폰은 어느 쪽이든 같다 */
+const WIDE = {
+  field: "lg:max-w-[40rem]",
+  list: "lg:grid lg:grid-cols-2",
+} as const;
+
+export function NearbyClinics({ address, onAddressChange, layout = "stack" }: NearbyClinicsProps) {
+  const wide = layout === "wide";
   const titleId = useId();
   const configured = isClinicSearchConfigured();
   // 처음 나타날 때의 동네·상태 — 저장된 동네가 있으면 바로 찾는다(NearbyClinicsView.swift:70-72)
@@ -54,7 +66,7 @@ export function NearbyClinics({ address, onAddressChange }: NearbyClinicsProps) 
 
   return (
     <div className="flex w-full flex-col gap-4">
-      <Card>
+      <Card className={cx(wide && WIDE.field)}>
         <form role="search" aria-labelledby={titleId} onSubmit={handleSubmit} className="flex flex-col gap-2">
           <SectionTitle id={titleId}>{CLINICS_TEXT.addressTitle}</SectionTitle>
           <div className="flex items-center gap-2">
@@ -80,7 +92,7 @@ export function NearbyClinics({ address, onAddressChange }: NearbyClinicsProps) 
         </form>
       </Card>
 
-      <div className="w-full">
+      <div className={cx("w-full", wide && WIDE.field)}>
         <p className="text-[0.8125rem] text-text-secondary">{CLINICS_TEXT.intro}</p>
         {/* 상태(찾는 중·오류·준비 중)는 늘 있는 live region 안에서 바뀐다 — 스크린리더가 검색 결과 상태를 듣게.
             비어 있을 때 간격이 생기지 않도록 위 간격(16)은 안쪽 요소가 갖는다. */}
@@ -105,9 +117,9 @@ export function NearbyClinics({ address, onAddressChange }: NearbyClinicsProps) 
           {config.kakaoJsKey !== null ? (
             <ClinicMap kakaoJsKey={config.kakaoJsKey} center={view.center} clinics={view.clinics} />
           ) : null}
-          <ul className="flex flex-col gap-4">
+          <ul className={cx("flex flex-col gap-4", wide && WIDE.list)}>
             {view.clinics.map((c) => (
-              <li key={c.id}>
+              <li key={c.id} className="min-w-0">
                 <ClinicRow row={clinicRowView(c)} />
               </li>
             ))}

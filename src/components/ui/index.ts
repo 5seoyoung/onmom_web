@@ -1,5 +1,4 @@
 // 온맘 공용 UI(디자인 시스템) — iOS Theme.swift · Components.swift · AnalyzeComponents.swift를 옮긴 것.
-// 미리보기: /dev/components
 export { Card, SectionTitle } from "./Card";
 export type { CardProps, SectionTitleProps } from "./Card";
 export { ScreenHeader } from "./ScreenHeader";

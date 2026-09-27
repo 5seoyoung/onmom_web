@@ -17,6 +17,7 @@ import {
 } from "@/rules/record";
 import { metrics, type RecoveryMetric } from "@/rules/redflag";
 import { weightPlan, type WeightPlan } from "@/rules/weight";
+import { ROUTES } from "@/routes";
 
 // MARK: - 화면 문구 (Swift 원문)
 
@@ -45,7 +46,7 @@ export const HOME_TEXT = {
  * 상단 "AI 상담" 버튼이 여는 주소. iOS는 홈에서 시트로 열고 닫으면 홈으로 돌아온다(HomeView.swift:50-56).
  * 챗 화면은 `?from=home`이 있을 때만 뒤로를 홈으로 보낸다(features/chat chatBackHref) — 없으면 프로필로 간다.
  */
-export const HOME_CHAT_HREF = "/chat/?from=home";
+export const HOME_CHAT_HREF = `${ROUTES.chat}?from=home`;
 
 /** 마음 연계 카드의 전화 두 줄 — 원문: HomeView.swift:282-283 */
 export const MOOD_CALLS: readonly { name: string; number: string }[] = [

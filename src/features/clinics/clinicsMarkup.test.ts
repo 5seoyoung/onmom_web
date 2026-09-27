@@ -31,6 +31,23 @@ describe("NearbyClinics — 카카오 키 없음(D6)", () => {
   });
 });
 
+describe("NearbyClinics — 놓이는 자리의 폭(layout)", () => {
+  const props = { address: "서울 동대문구 회기동", onAddressChange: noop };
+  const stack = renderToStaticMarkup(h(NearbyClinics, props));
+  const wide = renderToStaticMarkup(h(NearbyClinics, { ...props, layout: "wide" as const }));
+  /** 클래스에서 PC(lg:) 변형만 지운다 — 폰에서 보이는 모양 */
+  const phoneOnly = (html: string) => html.replace(/ lg:[^\s"]+/g, "");
+
+  it("기본(좁은 열)은 PC 변형이 없다", () => {
+    expect(stack).not.toContain("lg:");
+  });
+
+  it("wide는 PC(lg)에서만 입력·안내를 읽기 좋은 폭으로 — 폰 마크업은 기본과 같다", () => {
+    expect(wide).toContain("lg:max-w-[40rem]");
+    expect(phoneOnly(wide)).toBe(stack);
+  });
+});
+
 describe("ClinicRow", () => {
   const base = {
     id: "1",

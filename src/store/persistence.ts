@@ -3,11 +3,10 @@
 // 모든 접근은 try/catch — 사생활 보호 모드·저장소 차단·용량 초과여도 앱은 메모리에서 계속 동작한다
 // (appStore가 상태를 메모리에 들고 있고, 저장 실패는 storageAvailable=false로만 알린다).
 //
-// ⚠️ 서버 동기화(계정 API /me/state)는 아직 붙이지 않는다 — 규칙이 미정이다(감사 #13·#15·#18·#19·#20).
-// 붙일 때는 PersistenceAdapter를 감싸는 구현을 따로 만들고, 다음을 먼저 정한다:
-//   - GET 결과(200/404)를 받기 전 PUT 금지, 게스트 데이터 병합 여부(#13)
-//   - 온보딩 동의(consentAccepted·consent_version) 전 전송 금지(#15·#20)
-//   - withdraw 실패 시 로컬 삭제를 멈출지(#18), 실계정 로그아웃 시 브라우저 캐시 삭제(#19)
+// 서버 동기화(카카오 계정, Supabase)는 이 어댑터를 바꾸지 않고 위에 얹는다 — store/sync(엔진·합치기)와 src/auth.
+// 브라우저 저장은 늘 먼저 되고, 동기화 엔진이 스토어 변경을 받아 서버에 올린다(첫 읽기 전 쓰기 금지 #13,
+// 서버 저장 동의 전 전송 금지 #15, 삭제 실패 시 로컬 유지 #18, 로그아웃 시 브라우저 사본 삭제 #19).
+// 서버 저장 동의의 판(#20)·합치기 기준은 store/sync/marks.ts가 "onmom.web.sync.*" 키에 둔다(eraseAll이 함께 지운다).
 
 import type { PersistedState } from "@/domain/types";
 import type { Account } from "./account";

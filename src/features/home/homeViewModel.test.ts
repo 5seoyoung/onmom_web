@@ -341,6 +341,6 @@ describe("상단 AI 상담 버튼", () => {
   it("챗 화면의 뒤로가 홈으로 오도록 ?from=home을 싣는다(HomeView.swift:50-56 — 시트를 닫으면 홈)", () => {
     const url = new URL(HOME_CHAT_HREF, "https://example.test/onmom_web/");
     expect(url.pathname.endsWith("/chat/")).toBe(true);
-    expect(chatBackHref(url.search)).toBe("/");
+    expect(chatBackHref(url.search)).toBe("/home/");
   });
 });

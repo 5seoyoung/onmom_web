@@ -13,6 +13,7 @@ import {
   isValidDeliveryDate,
   maternityPatchFromForm,
   profilePatchFromForm,
+  splitResultBlocks,
   todayInputValue,
   videoFetchResultFrom,
   type AnalyzeFormValues,
@@ -246,5 +247,45 @@ describe("결과 화면", () => {
     expect(model.hospitalSignal).toBe(signal);
     expect(model.blocks).toEqual([]);
     expect(model.videos).toBeNull();
+  });
+});
+
+describe("PC 두 열 배치 — 순서를 지키며 높이가 비슷하게", () => {
+  type Block = ReturnType<typeof analyzeResultModel>["blocks"][number];
+  const group = (key: "allowed" | "caution" | "forbidden", n: number): Block => ({
+    kind: "group",
+    group: {
+      key,
+      title: key,
+      tone: "normal",
+      items: Array.from({ length: n }, (_, i) => ({ item: `${key}${i}`, label: `${key}${i}`, evidenceChips: [] })),
+    },
+  });
+  const stopped: Block = { kind: "exerciseStopped", title: "t", body: "b" };
+  const keys = (bs: Block[]) => bs.map((b) => (b.kind === "group" ? b.group.key : "stopped"));
+
+  it("묶음이 하나 이하면 한 열", () => {
+    expect(splitResultBlocks([])).toEqual({ left: [], right: [] });
+    expect(keys(splitResultBlocks([group("caution", 2)]).right)).toEqual([]);
+  });
+
+  it("가능이 길면 왼쪽에 가능, 오른쪽에 주의·금지", () => {
+    const { left, right } = splitResultBlocks([group("allowed", 3), group("caution", 1), group("forbidden", 2)]);
+    expect(keys(left)).toEqual(["allowed"]);
+    expect(keys(right)).toEqual(["caution", "forbidden"]);
+  });
+
+  it("레드플래그(가능 자리 멈춤 안내)면 멈춤·주의 | 금지", () => {
+    const { left, right } = splitResultBlocks([stopped, group("caution", 1), group("forbidden", 2)]);
+    expect(keys(left)).toEqual(["stopped", "caution"]);
+    expect(keys(right)).toEqual(["forbidden"]);
+  });
+
+  it("합치면 늘 원래 순서(읽는 순서 = iOS 순서)", () => {
+    const blocks = [group("allowed", 1), group("caution", 5), group("forbidden", 1)];
+    const { left, right } = splitResultBlocks(blocks);
+    expect([...left, ...right]).toEqual(blocks);
+    expect(left.length).toBeGreaterThan(0);
+    expect(right.length).toBeGreaterThan(0);
   });
 });

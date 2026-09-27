@@ -1,4 +1,6 @@
 // 운동 탭 본문 조각 — 조회 상태별 블록과 영상 카드(ExerciseView.swift:50-257). 데이터는 exerciseModel이 만든다.
+// PC(lg 이상): 영상 카드는 두 열 격자(같은 줄 카드는 높이를 맞추고 [영상 보기]를 아래에 붙인다),
+// 안내 블록(레드플래그·영상 준비 중·연결 실패·프로필 필요)은 읽기 좋은 폭(최대 40rem)에 둔다. 폰은 이전과 같다.
 
 import { useId } from "react";
 import { ChevronRight, Hourglass, LoaderCircle, PersonStanding, UserRoundSearch, WifiOff } from "lucide-react";
@@ -8,6 +10,9 @@ import { EXERCISE_TEXT } from "@/rules/exercise";
 import type { ExerciseBody, VideoCardModel } from "./exerciseModel";
 import { FilledOctagonAlert } from "./FilledOctagonAlert";
 
+/** 안내 블록의 PC 최대 폭 — 한 줄이 너무 길어지지 않게 */
+const BLOCK_WIDTH = "lg:max-w-[40rem]";
+
 /**
  * 본문. 조회 상태 블록(불러오는 중·영상 준비 중·연결 실패·영상 없음)은 늘 있는 live region 안에서 바뀐다 —
  * 스피너가 결과로 바뀌거나 [다시 시도] 뒤 상태가 바뀌면 스크린리더가 듣게(iOS VoiceOver는 화면 변화를 알린다).
@@ -16,7 +21,7 @@ import { FilledOctagonAlert } from "./FilledOctagonAlert";
 export function ExerciseBodyView({ body, onRetry }: { body: ExerciseBody; onRetry: () => void }) {
   return (
     <>
-      <div aria-live="polite" className="empty:hidden">
+      <div aria-live="polite" className={cx("empty:hidden", BLOCK_WIDTH)}>
         {body.kind !== "plan" ? <StatusBlock body={body} onRetry={onRetry} /> : null}
       </div>
       {body.kind === "plan" ? (
@@ -91,9 +96,9 @@ function PlanSection({ title, count, cards }: { title: string; count: number; ca
         <span className="text-base font-bold text-neutral">{title}</span>
         <span className="text-[0.8125rem] text-text-secondary">{count}</span>
       </h2>
-      <ul className="flex flex-col gap-4">
+      <ul className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
         {cards.map((card) => (
-          <li key={card.id}>
+          <li key={card.id} className="min-w-0">
             <VideoCard card={card} />
           </li>
         ))}
@@ -107,7 +112,7 @@ function PlanSection({ title, count, cards }: { title: string; count: number; ca
 function VideoCard({ card }: { card: VideoCardModel }) {
   const titleId = useId();
   return (
-    <Card as="article" aria-labelledby={titleId} className={cx("flex flex-col gap-2", card.dimmed && "opacity-70")}>
+    <Card as="article" aria-labelledby={titleId} className={cx("flex flex-col gap-2 lg:h-full", card.dimmed && "opacity-70")}>
       <div className="flex items-center justify-between gap-2">
         <h3 id={titleId} className="min-w-0 text-base font-semibold text-text-primary">
           {card.title}
@@ -125,7 +130,7 @@ function VideoCard({ card }: { card: VideoCardModel }) {
             href={card.action.href}
             {...EXTERNAL_LINK_PROPS}
             aria-describedby={titleId}
-            className="mt-0.5 flex min-h-11 items-center gap-2 rounded-button"
+            className="mt-0.5 flex min-h-11 items-center gap-2 rounded-button lg:mt-auto"
           >
             <span aria-hidden className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary">
               <span className="ml-0.5 size-0 border-y-[0.3125rem] border-l-[0.4375rem] border-y-transparent border-l-white" />
@@ -137,7 +142,7 @@ function VideoCard({ card }: { card: VideoCardModel }) {
       ) : (
         <p
           className={cx(
-            "pt-0.5 text-sm font-medium",
+            "pt-0.5 text-sm font-medium lg:mt-auto",
             card.action.tone === "alert" ? "text-state-alert" : "text-text-secondary",
           )}
         >
@@ -165,7 +170,7 @@ function IconLabel({ icon: Icon, className, children }: { icon: Icon; className:
 /** 분만 방식(또는 출산일)이 없으면 추천하지 않고 프로필 입력으로 안내한다(ExerciseView.swift:118-129) */
 export function NeedsProfileBlock({ title, body }: { title: string; body: string }) {
   return (
-    <Card className="flex flex-col gap-2">
+    <Card className={cx("flex flex-col gap-2", BLOCK_WIDTH)}>
       <IconLabel icon={UserRoundSearch} className="text-text-secondary">
         {title}
       </IconLabel>
@@ -177,7 +182,7 @@ export function NeedsProfileBlock({ title, body }: { title: string; body: string
 /** 운동 영상 추천 전면 중단 — stateAlert 배경, 흰 글씨(ExerciseView.swift:132-150). 영상은 조회하지 않는다. */
 export function RedFlagBlock() {
   return (
-    <section className="flex w-full flex-col gap-4 rounded-card bg-state-alert p-6 text-white">
+    <section className={cx("flex w-full flex-col gap-4 rounded-card bg-state-alert p-6 text-white", BLOCK_WIDTH)}>
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <FilledOctagonAlert className="size-6" shapeClassName="fill-white" markClassName="stroke-state-alert" />
         {EXERCISE_TEXT.redFlagTitle}

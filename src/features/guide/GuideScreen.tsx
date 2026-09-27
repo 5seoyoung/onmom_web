@@ -1,9 +1,11 @@
 // 회복 가이드 — iOS GuideView.swift. content.json만 쓰는 정적 화면이라 서버 컴포넌트다(사용자 데이터 없음).
 // 순서: 머리(제목·부제) → 즉시 병원에 가야 할 신호 카드 → 가이드 카드 8장(출처 칩) → 출처 각주.
+// PC(넓은 화면, 컨테이너 쿼리 42rem 이상): 가이드 카드를 2열로. 병원 신호 카드와 각주는 늘 전체 폭. 폰 기둥에서는 한 줄.
 import { TriangleAlert } from "lucide-react";
 import { Card, EvidenceChip, SubPageHeader } from "@/components/ui";
 import { SfIcon } from "./SfIcon";
-import { GUIDE_TEXT, guideCardViews, guideRedFlags, type GuideCardView } from "./guideContent";
+import { GUIDE_TEXT, guideCardViews, guideRedFlags, splitPhoneNumbers, type GuideCardView } from "./guideContent";
+import { ROUTES } from "@/routes";
 
 const RED_FLAG_HEADING_ID = "guide-red-flags";
 
@@ -13,14 +15,16 @@ export function GuideScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 끝 Spacer(minLength: lg) — GuideView.swift:83-92
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
-      <SubPageHeader title={GUIDE_TEXT.title} subtitle={GUIDE_TEXT.subtitle} backHref="/profile/" />
+    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+      <SubPageHeader title={GUIDE_TEXT.title} subtitle={GUIDE_TEXT.subtitle} backHref={ROUTES.profile} />
 
       {redFlags.length > 0 ? <RedFlagSignsCard flags={redFlags} /> : null}
 
-      {cards.map((card) => (
-        <GuideCard key={card.key} card={card} />
-      ))}
+      <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2">
+        {cards.map((card) => (
+          <GuideCard key={card.key} card={card} />
+        ))}
+      </div>
 
       {/* GuideView.swift:157-163 — 11 textSecondary, 위 여백 xs */}
       <p className="pt-1 text-[0.6875rem] text-text-secondary">{GUIDE_TEXT.footnote}</p>
@@ -48,7 +52,7 @@ function RedFlagSignsCard({ flags }: { flags: readonly string[] }) {
             <span aria-hidden className="text-white/90">
               •
             </span>
-            <span>{flag}</span>
+            <KeepPhones text={flag} />
           </li>
         ))}
       </ul>
@@ -71,7 +75,7 @@ function GuideCard({ card }: { card: GuideCardView }) {
             {card.points.map((point) => (
               <li key={point} className="flex items-start gap-1.5 text-[0.8125rem] text-text-secondary">
                 <span aria-hidden>•</span>
-                <span>{point}</span>
+                <KeepPhones text={point} />
               </li>
             ))}
           </ul>
@@ -83,5 +87,22 @@ function GuideCard({ card }: { card: GuideCardView }) {
         </div>
       </div>
     </Card>
+  );
+}
+
+/** 문장 속 전화번호를 한 줄에 묶어 보여 준다(글자는 그대로). */
+function KeepPhones({ text }: { text: string }) {
+  return (
+    <span>
+      {splitPhoneNumbers(text).map((seg, i) =>
+        seg.phone ? (
+          <span key={i} className="whitespace-nowrap">
+            {seg.text}
+          </span>
+        ) : (
+          seg.text
+        ),
+      )}
+    </span>
   );
 }

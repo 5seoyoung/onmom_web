@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canLeaveWithHistoryBack } from "./subPageExit";
+import { canLeaveWithHistoryBack, canLeaveWithHistoryBackToAny } from "./subPageExit";
 
 const ORIGIN = "https://5seoyoung.github.io";
 const BASE = "/onmom_web";
@@ -132,5 +132,26 @@ describe("canLeaveWithHistoryBack — Navigation API가 없을 때(대체 판단
 
   it("문서를 연 주소를 모르면 replace", () => {
     expect(canLeaveWithHistoryBack({ currentUrl: WRITE, documentEntryUrl: null, basePath: BASE, parentHref: "/journal/" })).toBe(false);
+  });
+});
+
+describe("canLeaveWithHistoryBackToAny — 앞 화면이 여럿인 화면", () => {
+  const PRIVACY = `${ORIGIN}${BASE}/privacy/`;
+  const PARENTS = ["/", "/settings/"];
+  const from = (previousEntryUrl: string | null) => ({ currentUrl: PRIVACY, previousEntryUrl, documentEntryUrl: PRIVACY, basePath: BASE });
+
+  it("앞 기록이 후보 중 하나면 back()", () => {
+    expect(canLeaveWithHistoryBackToAny(from(`${ORIGIN}${BASE}/`), PARENTS)).toBe(true);
+    expect(canLeaveWithHistoryBackToAny(from(`${ORIGIN}${BASE}/settings/`), PARENTS)).toBe(true);
+  });
+
+  it("앞 기록이 후보가 아니거나 없으면 replace", () => {
+    expect(canLeaveWithHistoryBackToAny(from(`${ORIGIN}${BASE}/home/`), PARENTS)).toBe(false);
+    expect(canLeaveWithHistoryBackToAny(from(null), PARENTS)).toBe(false);
+  });
+
+  it("Navigation API가 없으면 canLeaveWithHistoryBack과 같은 대체 판단", () => {
+    expect(canLeaveWithHistoryBackToAny({ currentUrl: PRIVACY, documentEntryUrl: `${ORIGIN}${BASE}/`, basePath: BASE }, PARENTS)).toBe(true);
+    expect(canLeaveWithHistoryBackToAny({ currentUrl: PRIVACY, documentEntryUrl: PRIVACY, basePath: BASE }, PARENTS)).toBe(false);
   });
 });

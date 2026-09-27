@@ -42,7 +42,8 @@ export function JournalWriteScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 md — CommunityView.swift:122-141
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+    // PC: 읽기 좋은 폭(최대 42rem) 기둥(왼쪽 정렬 — 사이드바로 화면을 옮겨도 머리(뒤로·제목) 위치가 다른 화면과 같게), 내용 칸은 더 길게. 폰 기둥(30rem)에서는 그대로.
+    <main className="@container flex w-full max-w-[42rem] flex-1 flex-col gap-4 px-6 pt-2 pb-10">
       <LeaveSubPageHeader
         title={JOURNAL_TEXT.composeTitle}
         backHref={JOURNAL_HREF}
@@ -88,7 +89,7 @@ export function JournalWriteScreen() {
             id={bodyId}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="min-h-40 w-full resize-y rounded-button bg-background p-1 text-base text-text-primary"
+            className="min-h-40 w-full resize-y rounded-button bg-background p-1 text-base text-text-primary @xl:min-h-72"
           />
         </Card>
       </div>

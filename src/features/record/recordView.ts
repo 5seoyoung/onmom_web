@@ -101,17 +101,54 @@ export function submitSymptomCheck(
  * 화면 배치(RecordFlowView.swift:35-49).
  * - 입력 단계: 폼 → [확인하기] → 오늘의 한 가지 질문 → 최근 기록(기록이 있을 때만) → 면책
  * - 결과 단계: 병원 신호면 레드플래그 카드 + 가까운 산부인과, 아니면 "위험 신호 없음" 카드 → [다시 입력] → 면책
- *   (결과 단계에서는 질문·최근 기록을 숨긴다)
+ *   (결과 단계에서 폰은 폼·질문·최근 기록을 숨긴다 — PC 두 열에서는 폼 옆에 결과가 오고 나머지도 남는다. recordColumns)
  */
 export type RecordLayout =
   | { phase: "form"; showsRecent: boolean }
-  | { phase: "result"; redFlag: RedFlag; showsClinics: true }
-  | { phase: "result"; redFlag: null; showsClinics: false };
+  | { phase: "result"; redFlag: RedFlag; showsClinics: true; showsRecent: boolean }
+  | { phase: "result"; redFlag: null; showsClinics: false; showsRecent: boolean };
 
 export function recordLayout(result: RedFlagResult | null, historyCount: number): RecordLayout {
-  if (result === null) return { phase: "form", showsRecent: historyCount > 0 };
+  const showsRecent = historyCount > 0;
+  if (result === null) return { phase: "form", showsRecent };
   const flag = result.hospitalSignal;
-  return flag ? { phase: "result", redFlag: flag, showsClinics: true } : { phase: "result", redFlag: null, showsClinics: false };
+  return flag
+    ? { phase: "result", redFlag: flag, showsClinics: true, showsRecent }
+    : { phase: "result", redFlag: null, showsClinics: false, showsRecent };
+}
+
+export interface RecordColumns {
+  body: string;
+  form: string;
+  side: string;
+  sideExtras: string;
+  /**
+   * 폼을 잠글지 — 결과 단계에서는 판정에 쓴 답을 보여 주기만 한다(iOS: 결과가 뜨면 [다시 입력]을 눌러야 고칠 수 있다).
+   * PC는 결과 옆에 폼이 남으므로, 잠그지 않으면 답을 바꿔도 이전 판정이 그대로 떠 있게 된다.
+   */
+  formLocked: boolean;
+  /** [확인하기]는 입력 단계에서만 — 결과가 떠 있는 동안 다시 눌러 같은 기록이 겹쳐 저장되지 않게(iOS와 같음). */
+  showsSubmit: boolean;
+}
+
+/**
+ * 본문 열 배치 — 폰은 세로 한 줄(간격 16), PC(lg 이상)는 두 열: 왼쪽 폼 + [확인하기], 오른쪽 결과 + 질문 + 최근 기록.
+ * 결과 단계에서 폰에 숨기는 묶음은 `hidden`(display:none — 보이지도 낭독되지도 초점이 가지도 않음)이고 PC에서만 `lg:flex`.
+ * 그래서 폰 화면·낭독 순서는 iOS와 같고, PC는 결과가 폼 옆 오른쪽 열 맨 위에 떠서 스크롤 없이 보인다.
+ * 결과 단계의 PC 폼은 잠기고 [확인하기]는 사라진다 — 고치려면 [다시 입력](폰과 같은 흐름).
+ */
+export function recordColumns(phase: RecordLayout["phase"]): RecordColumns {
+  const column = "flex min-w-0 flex-col gap-4";
+  const wideOnly = "hidden min-w-0 flex-col gap-4 lg:flex";
+  const result = phase === "result";
+  return {
+    body: "flex flex-col gap-4 focus:outline-none lg:grid lg:grid-cols-2 lg:items-start",
+    form: result ? wideOnly : column,
+    side: column,
+    sideExtras: result ? wideOnly : column,
+    formLocked: result,
+    showsSubmit: !result,
+  };
 }
 
 // MARK: 최근 기록 (RecordFlowView.swift:106-129)

@@ -3,8 +3,11 @@
 // 기록장 탭 — iOS CommunityView.swift. 개인 메모이며 공유 게시판이 아니다.
 // 순서: 제목 → "이 기기에만 저장" 안내 → 내 기록(글쓰기 버튼 · 목록 또는 빈 상태) → 면책 한 줄(목록 아래, Swift 순서).
 // 저장소를 읽기 전(hydrated=false)에는 목록 자리를 비워 둔다 — 빈 상태가 번쩍이지 않게.
+// PC(넓은 화면): 화면 폭(컨테이너 쿼리 @container)이 42rem 이상이면 글 목록을 2열 카드로, 제목은
+// 하위 화면 제목(ScreenHeader 24 bold)처럼 왼쪽에 둔다 — 폰 기둥(최대 30rem)에서는 늘 한 줄 목록·가운데 제목(iOS 그대로).
 
 import Link from "next/link";
+import { useId } from "react";
 import { Clock, CircleUserRound, Lock, MessageSquare, SquarePen } from "lucide-react";
 import { Card, EmptyState, SectionTitle } from "@/components/ui";
 import type { CommunityPost } from "@/domain/types";
@@ -18,9 +21,9 @@ export function JournalScreen() {
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 sm — CommunityView.swift:16-26
-    <main className="flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
-      {/* .navigationTitle("기록장") + .inline — 가운데 17 semibold */}
-      <h1 className="flex min-h-11 items-center justify-center text-[1.0625rem] font-semibold text-neutral">
+    <main className="@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10">
+      {/* .navigationTitle("기록장") + .inline — 가운데 17 semibold. 넓은 화면은 내비게이션 막대가 없으니 페이지 제목처럼 */}
+      <h1 className="flex min-h-11 items-center justify-center text-[1.0625rem] font-semibold text-neutral @2xl:justify-start @2xl:py-2 @2xl:text-2xl @2xl:font-bold">
         {JOURNAL_TEXT.title}
       </h1>
 
@@ -67,7 +70,8 @@ function PostList({ posts }: { posts: readonly CommunityPost[] }) {
     return <EmptyState message={JOURNAL_TEXT.empty} />;
   }
   return (
-    <ul className="flex flex-col gap-2">
+    // 폰: 한 줄(간격 sm) / 넓은 화면: 2열, 한 줄의 카드 높이를 맞춘다
+    <ul className="grid grid-cols-1 gap-2 @2xl:grid-cols-2 @2xl:gap-3">
       {posts.map((post) => (
         <li key={post.id}>
           <PostRow post={post} />
@@ -81,14 +85,18 @@ function PostList({ posts }: { posts: readonly CommunityPost[] }) {
 function PostRow({ post }: { post: CommunityPost }) {
   const when = formatPostDateTime(post.date);
   const count = post.comments.length;
+  // 링크 안에 <article>이 있으면 브라우저가 내용으로 링크 이름을 만들지 않는다(Chrome 접근성 트리에서 이름 "") —
+  // 제목을 링크 이름으로 잇는다. 본문·작성자·댓글 수는 읽기 모드에서 그대로 읽힌다.
+  const titleId = useId();
   return (
-    <Link href={postHref(post.id)} className="block rounded-card">
-      <Card as="article" className="flex flex-col gap-1">
-        <h3 className="truncate text-base font-semibold text-text-primary">{post.title}</h3>
+    <Link href={postHref(post.id)} aria-labelledby={titleId} className="block h-full rounded-card">
+      <Card as="article" className="flex h-full flex-col gap-1">
+        <h3 id={titleId} className="truncate text-base font-semibold text-text-primary">{post.title}</h3>
         {post.body ? (
           <p className="line-clamp-2 text-[0.8125rem] whitespace-pre-wrap wrap-break-word text-text-secondary">{post.body}</p>
         ) : null}
-        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6875rem] text-text-secondary">
+        {/* 2열에서 옆 카드보다 짧으면 작성자 줄을 카드 아래에 붙인다(한 줄 목록에서는 차이 없음) */}
+        <p className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6875rem] text-text-secondary">
           <span className="inline-flex items-center gap-1">
             <CircleUserRound aria-hidden className="size-3.5 shrink-0" />
             {post.authorName}

@@ -4,6 +4,8 @@
 // 서버(LLM)가 설정돼 있으면 patient_edu 프리셋으로 묻고, 미설정·실패면 앱 내 규칙 안내(폴백)로 답하며 그 사실을 배너로 알린다.
 // 음성 입력은 웹에서 만들지 않는다(결정 D3). 대화는 이 화면 메모리에만 둔다(저장하지 않음).
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
+// PC(넓은 화면): 머리·배너·대화·입력창을 같은 가운데 기둥(최대 44rem)에 맞춘다. 스크롤 영역은 전체 폭이라 스크롤 막대는 가장자리에 있다.
+// 폰 기둥(30rem)에서는 기둥이 곧 화면 폭이라 그대로다.
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
 import { ArrowUp, Info, LoaderCircle } from "lucide-react";
@@ -35,6 +37,9 @@ const SPEAKER_SR_LABEL = { user: "나: ", assistant: "온맘: " } as const;
 const THINKING_SR_LABEL = "답변을 준비하고 있어요";
 
 const noopSubscribe = () => () => {};
+
+/** 대화 기둥 — 머리·배너·말풍선·입력창이 같은 폭(최대 44rem)으로 가운데 정렬된다 */
+const CHAT_COLUMN = "mx-auto w-full max-w-[44rem]";
 
 export function ChatScreen() {
   const { hydrated, state } = useAppStore();
@@ -130,57 +135,59 @@ export function ChatScreen() {
   }
 
   return (
-    <main className="flex h-dvh flex-col">
-      <div className="px-6 pt-2">
+    <main className="@container flex h-dvh flex-col">
+      <div className={cx(CHAT_COLUMN, "px-6 pt-2")}>
         <SubPageHeader title={TITLE} backHref={backHref} />
       </div>
 
       {showBanner ? <FallbackNotice /> : null}
 
-      <div ref={logRef} className="flex-1 overflow-y-auto p-4">
-        {/* role="log": 새 말풍선을 화면 낭독기가 차례로 읽는다 */}
-        <div role="log">
-          <ol className="flex flex-col gap-2">
-            {messages.map((m) => (
-              <ChatBubble key={m.id} message={m} />
-            ))}
-          </ol>
-        </div>
-
-        {/* 자주 묻는 질문은 서버가 답할 수 있을 때만(ChatView.swift:31-36) — 규칙 폴백은 FAQ 대부분에 엉뚱한 답을 준다 */}
-        {showFaq ? (
-          <section aria-labelledby="chat-faq-title" className="flex flex-col gap-1 pt-2">
-            <h2 id="chat-faq-title" className="pl-1 text-xs font-medium text-text-subtle">
-              {CHAT_FAQ_TITLE}
-            </h2>
-            <ul className="flex flex-wrap gap-2">
-              {CHAT_FAQ.map((q) => (
-                <li key={q} className="flex">
-                  <button
-                    type="button"
-                    onClick={() => send(q)}
-                    disabled={!hydrated}
-                    className="min-h-11 rounded-full bg-coral-tint px-3 py-2 text-left text-[0.8125rem] font-medium text-primary"
-                  >
-                    {q}
-                  </button>
-                </li>
+      <div ref={logRef} className="flex-1 overflow-y-auto">
+        <div className={cx(CHAT_COLUMN, "p-4")}>
+          {/* role="log": 새 말풍선을 화면 낭독기가 차례로 읽는다 */}
+          <div role="log">
+            <ol className="flex flex-col gap-2">
+              {messages.map((m) => (
+                <ChatBubble key={m.id} message={m} />
               ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {thinking ? (
-          <div role="status" className="flex pl-4 pt-2">
-            <LoaderCircle aria-hidden className="size-5 text-primary motion-safe:animate-spin" />
-            <span className="sr-only">{THINKING_SR_LABEL}</span>
+            </ol>
           </div>
-        ) : null}
+
+          {/* 자주 묻는 질문은 서버가 답할 수 있을 때만(ChatView.swift:31-36) — 규칙 폴백은 FAQ 대부분에 엉뚱한 답을 준다 */}
+          {showFaq ? (
+            <section aria-labelledby="chat-faq-title" className="flex flex-col gap-1 pt-2">
+              <h2 id="chat-faq-title" className="pl-1 text-xs font-medium text-text-subtle">
+                {CHAT_FAQ_TITLE}
+              </h2>
+              <ul className="flex flex-wrap gap-2">
+                {CHAT_FAQ.map((q) => (
+                  <li key={q} className="flex">
+                    <button
+                      type="button"
+                      onClick={() => send(q)}
+                      disabled={!hydrated}
+                      className="min-h-11 rounded-full bg-coral-tint px-3 py-2 text-left text-[0.8125rem] font-medium text-primary"
+                    >
+                      {q}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {thinking ? (
+            <div role="status" className="flex pl-4 pt-2">
+              <LoaderCircle aria-hidden className="size-5 text-primary motion-safe:animate-spin" />
+              <span className="sr-only">{THINKING_SR_LABEL}</span>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <form
         onSubmit={onSubmit}
-        className="flex items-end gap-2 bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+        className={cx(CHAT_COLUMN, "flex items-end gap-2 bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]")}
       >
         <textarea
           ref={inputRef}
@@ -214,7 +221,8 @@ export function ChatScreen() {
 // 서버 대신 앱 내 안내로 답하고 있음 — "AI가 답한 것처럼" 보이지 않게(ChatView.swift:61-74). 문구: content.json disclaimers.chat_banner
 function FallbackNotice() {
   return (
-    <div role="status" className="flex items-start gap-1.5 bg-state-watch/10 px-4 py-2">
+    // 폰: 화면 폭 띠 / 넓은 화면: 대화 기둥 폭의 둥근 안내 상자
+    <div role="status" className={cx(CHAT_COLUMN, "flex items-start gap-1.5 bg-state-watch/10 px-4 py-2 @3xl:rounded-button")}>
       <Info aria-hidden className="mt-0.75 size-3.5 shrink-0 fill-state-watch text-white" />
       <p className="min-w-0 text-[0.8125rem] text-text-secondary">{CHAT_FALLBACK_BANNER}</p>
     </div>
