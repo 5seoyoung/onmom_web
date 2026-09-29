@@ -1,21 +1,29 @@
-// 관리자 화면의 서버 호출 — Supabase RPC 세 개(supabase/migrations/0002_admin.sql)만 부른다.
+// 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql).
 //
 //   is_admin()                          — 지금 로그인한 카카오 계정이 관리자 목록(public.admins)에 있는가
-//   admin_overview(p_consent_version)   — 집계(전체·게스트·카카오·서버 기록·현재 판 동의·최근 7일·30일 가입)
+//   admin_overview(p_consent_version)   — 집계(전체·게스트·카카오·서버 기록·현재 판 동의·최근 7일·30일 가입 — 0005 뒤에는 동의 판 분포·게스트/카카오 나누기)
 //   admin_list_users(p_limit, p_offset) — 계정 메타데이터 목록(건강 기록·이메일 없음)
+//   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005)
+//   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
+//   admin_list_admins()                 — 관리자 목록(0005)
 //
-// 권한은 서버가 지킨다: 세 함수 모두 is_admin()이 아니면 오류(42501)를 낸다. 여기서 세션을 보는 것은 화면 안내용일 뿐이다.
+// 권한은 서버가 지킨다: 모든 함수가 is_admin()이 아니면 오류(42501)를 낸다. 여기서 세션을 보는 것은 화면 안내용일 뿐이다.
 // 응답·오류를 콘솔에 남기지 않는다(계정 메타데이터도 개인정보).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  ADMIN_LIST_MAX,
   ADMIN_PAGE_SIZE,
+  CSV_MAX_ROWS,
+  parseAdminRows,
   parseOverview,
   parseUserRows,
   splitPage,
   usersPageArgs,
+  type AdminListRow,
   type AdminOverview,
   type AdminUserRow,
+  type DeleteFailure,
 } from "./adminModel";
 
 export interface AdminRpcError {
@@ -137,6 +145,80 @@ export async function fetchUsersPage(
     if (rows === null) return { ok: false, failure: "failed" };
     const split = splitPage(rows, args.p_limit - 1);
     return { ok: true, value: { page, rows: split.rows, hasNext: split.hasNext } };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/**
+ * CSV용 — 사용자 메타데이터 전체를 서버 최대(100명)씩 여러 번 불러 모은다. 최대 max명(기본 5,000).
+ * 한 번이라도 실패하면 부분 파일을 만들지 않고 실패로 돌려준다(빠진 사람이 있는 목록을 내보내지 않는다).
+ */
+export async function fetchAllUsers(client: AdminClient, max: number = CSV_MAX_ROWS): Promise<AdminResult<AdminUserRow[]>> {
+  const all: AdminUserRow[] = [];
+  const limit = Math.max(1, Math.min(max, Number.MAX_SAFE_INTEGER));
+  try {
+    for (let offset = 0; all.length < limit; offset += ADMIN_LIST_MAX) {
+      const { data, error } = await client.rpc("admin_list_users", { p_limit: ADMIN_LIST_MAX, p_offset: offset });
+      if (error !== null) return { ok: false, failure: failureOf(error) };
+      const rows = parseUserRows(data);
+      if (rows === null) return { ok: false, failure: "failed" };
+      all.push(...rows);
+      if (rows.length < ADMIN_LIST_MAX) break;
+    }
+    return { ok: true, value: all.slice(0, limit) };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+// ── 0005_admin_tools.sql ─────────────────────────────────────────────────────
+
+export async function fetchAdmins(client: AdminClient): Promise<AdminResult<AdminListRow[]>> {
+  try {
+    const { data, error } = await client.rpc("admin_list_admins");
+    if (error !== null) return { ok: false, failure: failureOf(error) };
+    const rows = parseAdminRows(data);
+    return rows === null ? { ok: false, failure: "failed" } : { ok: true, value: rows };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/** 계정 ID 하나 — 없으면 value null(오류가 아니다). id는 normalizeUuid를 거친 값이어야 한다. */
+export async function findUser(client: AdminClient, id: string): Promise<AdminResult<AdminUserRow | null>> {
+  try {
+    const { data, error } = await client.rpc("admin_find_user", { p_id: id });
+    if (error !== null) return { ok: false, failure: failureOf(error) };
+    const rows = parseUserRows(data);
+    if (rows === null) return { ok: false, failure: "failed" };
+    return { ok: true, value: rows.find((r) => r.id === id) ?? null };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/** admin_delete_user의 오류 → 화면 갈래. P0001은 메시지로 나눈다(SQL의 raise exception 문구 — 0005_admin_tools.sql 2)). */
+export function deleteFailureOf(error: AdminRpcError | null | undefined): DeleteFailure {
+  const code = error?.code ?? "";
+  const message = (error?.message ?? "").toLowerCase();
+  if (code === "P0002") return "notFound";
+  if (code === "P0001") {
+    if (message.includes("own account")) return "self";
+    if (message.includes("is admin")) return "isAdmin";
+    return "failed";
+  }
+  return failureOf(error);
+}
+
+export type DeleteResult = { ok: true } | { ok: false; failure: DeleteFailure };
+
+/** 이용자의 삭제 요청 처리 — 서버가 user_states + auth.users를 지우고 admin_audit에 남긴다. 사유는 선택(500자). */
+export async function deleteUser(client: AdminClient, targetId: string, reason: string | null): Promise<DeleteResult> {
+  try {
+    const { error } = await client.rpc("admin_delete_user", { p_target: targetId, p_reason: reason });
+    if (error !== null) return { ok: false, failure: deleteFailureOf(error) };
+    return { ok: true };
   } catch {
     return { ok: false, failure: "failed" };
   }

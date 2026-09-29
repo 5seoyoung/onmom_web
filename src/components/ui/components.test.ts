@@ -31,7 +31,7 @@ describe("EvidenceChip", () => {
   it("출처 칩: 접두를 떼고, 아이콘 + primary 스타일 + 스크린리더용 '출처'", () => {
     const html = render(h(EvidenceChip, { token: "src:임산부수첩 2023" }));
     expect(visibleText(html)).toBe("임산부수첩 2023");
-    expect(html).toContain("text-primary");
+    expect(html).toContain("text-primary-text"); // 글자는 AA 글자 전용 토큰(globals.css), 배경은 원색 10%
     expect(html).toContain("bg-primary/10");
     expect(html).toContain("<svg");
     expect(html).toContain('<span class="sr-only">출처: </span>');
@@ -81,6 +81,14 @@ describe("StatusBadge", () => {
     expect(render(h(StatusBadge, { status: "watch", label: "라벨", variant: "exercise" }))).toContain(
       "bg-state-watch/15",
     );
+  });
+
+  it("글자는 AA 글자 전용 토큰(state-*-text), 원색 글자 클래스는 없다(CPO 12 기본값)", () => {
+    for (const status of ["normal", "watch", "alert"] as const) {
+      const html = render(h(StatusBadge, { status }));
+      expect(html).toContain(`text-state-${status}-text`);
+      expect(html).not.toMatch(new RegExp(`text-state-${status}[\\s"]`));
+    }
   });
 });
 

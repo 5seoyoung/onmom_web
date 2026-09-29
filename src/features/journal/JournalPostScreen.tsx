@@ -10,6 +10,7 @@ import { CircleArrowUp, CircleUserRound, Clock } from "lucide-react";
 import type { CommunityPost } from "@/domain/types";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { cx } from "@/components/ui";
+import { StorageWarning } from "@/features/home/StorageWarning";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitComment } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
@@ -22,6 +23,8 @@ export function JournalPostScreen() {
     // PC 틀은 pageFrame(읽기 화면 — 최대 48rem, 왼쪽 정렬). 더 깊은 화면이라 PC에서도 [뒤로]가 맨 위 줄에 있다. 폰 기둥(30rem)에서는 그대로.
     <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.reading)}>
       <LeaveSubPageHeader title={JOURNAL_TEXT.detailTitle} backHref={JOURNAL_HREF} onLeave={exit.leave} />
+      {/* 저장 실패 안내 — 댓글도 입력이라 글쓰기와 같은 자리에 둔다(막지 않는다) */}
+      <StorageWarning />
       <Suspense fallback={null}>
         <PostFromQuery />
       </Suspense>
@@ -114,7 +117,7 @@ function CommentBar({ onSubmit }: { onSubmit: (text: string) => boolean }) {
         aria-label={JOURNAL_TEXT.commentPlaceholder}
         autoComplete="off"
         enterKeyHint="send"
-        className="min-h-11 min-w-0 flex-1 rounded-full bg-surface px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle"
+        className="min-h-11 min-w-0 flex-1 rounded-full bg-surface px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle-aa"
       />
       <button
         type="submit"

@@ -16,16 +16,17 @@ export interface StatusBadgeProps {
 }
 
 // Tailwind가 클래스를 찾을 수 있게 조합을 전부 적어 둔다.
+// 배경은 iOS 원색 12%/15% 그대로, 글자는 AA 글자 전용 토큰(globals.css state-*-text) — 원색 글자는 이 배경 위 1.67~2.45:1(DEV_NOTES §3 CPO 12).
 const TONE: Record<StatusBadgeVariant, Record<MetricStatus, string>> = {
   metric: {
-    normal: "bg-state-normal/12 text-state-normal",
-    watch: "bg-state-watch/12 text-state-watch",
-    alert: "bg-state-alert/12 text-state-alert",
+    normal: "bg-state-normal/12 text-state-normal-text",
+    watch: "bg-state-watch/12 text-state-watch-text",
+    alert: "bg-state-alert/12 text-state-alert-text",
   },
   exercise: {
-    normal: "bg-state-normal/15 text-state-normal",
-    watch: "bg-state-watch/15 text-state-watch",
-    alert: "bg-state-alert/15 text-state-alert",
+    normal: "bg-state-normal/15 text-state-normal-text",
+    watch: "bg-state-watch/15 text-state-watch-text",
+    alert: "bg-state-alert/15 text-state-alert-text",
   },
 };
 

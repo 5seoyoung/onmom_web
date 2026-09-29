@@ -165,6 +165,9 @@ Supabase 화면은 **바로 가기 링크**도 적었습니다. 로그인한 상
 | `SUPABASE_ACCESS_TOKEN` | <https://supabase.com/dashboard/account/tokens> (Supabase 오른쪽 위 계정 → **Account preferences → Access Tokens**) → **Generate new token** → 이름 `github-actions-onmom` → 만든 토큰 |
 | `SUPABASE_DB_PASSWORD` | B-5의 데이터베이스 비밀번호 |
 | `ANTHROPIC_API_KEY` | Claude Console <https://console.anthropic.com> (지금은 platform.claude.com으로 이동) → **Settings → API keys → Create Key** 로 만든 키. **AI 상담을 켤 때만** 필요하고, 지금은 비워 둬도 됩니다 |
+| `VAPID_PRIVATE_KEY` · `VAPID_SUBJECT` · `REMINDER_CRON_SECRET` | **매일 리마인더(웹 푸시)를 켤 때만.** `node scripts/generate-vapid.mjs`의 비밀 키(43자) · `mailto:<운영 이메일>` · 긴 무작위 문자열(`openssl rand -hex 32`). 넣고 D-1을 돌려도 Vault 값을 넣기 전에는 켜지지 않습니다 — `docs/PWA_AND_REMINDERS.md` §5 |
+
+- ⚠️ D-1은 `ANTHROPIC_API_KEY` Secret 값으로 서버의 키를 **덮어씁니다**. 대시보드·CLI에서 키를 바꿨다면 이 Secret도 같은 키로 바꾼 뒤 D-1을 돌립니다.
 
 - `SUPABASE_ACCESS_TOKEN`은 **내 Supabase 계정의 모든 프로젝트를 바꿀 수 있는** 토큰입니다. 이 Secret 말고 어디에도 두지 않습니다. 만료일을 정했다면 달력에 적어 두세요(만료되면 D-1이 "Unauthorized"로 실패).
 - Anthropic 키를 만들면 콘솔의 **Settings → Limits**에서 월 사용 한도도 정합니다.
@@ -178,6 +181,7 @@ Supabase 화면은 **바로 가기 링크**도 적었습니다. 로그인한 상
 | `ALLOWED_ORIGINS` | `https://5seoyoung.github.io,http://localhost:3000` (선택 — 넣은 적이 없으면 함수 기본값이 이 값. 도메인을 사면 쉼표로 더함) |
 | `CHAT_HOURLY_LIMIT` | AI 상담 한 사람의 1시간 요청 수, 1~1000 (선택 — 넣은 적이 없으면 함수 기본값 30). **AI 상담을 처음 켤 때는 `10` 권장** |
 | `CHAT_GLOBAL_DAILY_LIMIT` | AI 상담 전체의 하루 요청 수 (선택 — 넣은 적이 없으면 함수 기본값 500). 비용 상한 역할 |
+| `ANTHROPIC_WORKSPACE_ID` | (선택) Anthropic 키가 워크스페이스에 묶이지 않은 조직 전체용 키일 때 — 콘솔 **Settings → Workspaces**의 ID(`wrkspc_…`). 워크스페이스 안에서 만든 키면 비움 |
 
 - 한 번 넣은 값은 Variable을 지워도 **서버에 남습니다**(워크플로는 빈 값을 건너뛸 뿐 지우지 않음). 기본값으로 되돌리려면 Supabase **Edge Functions → Secrets** ([바로 가기](https://supabase.com/dashboard/project/movrwmoniopgetdmagon/functions/secrets))에서 그 이름을 지웁니다.
 - AI 상담 한도가 낮을수록 한 사람이 게스트 계정을 여러 개 만들어 하루 전체 한도(`CHAT_GLOBAL_DAILY_LIMIT`)를 다 써 버리기 어렵습니다. CAPTCHA(B-6)와 함께 씁니다(LAUNCH_CHECKLIST 5-0).
@@ -193,6 +197,8 @@ Supabase 화면은 **바로 가기 링크**도 적었습니다. 로그인한 상
 | `NEXT_PUBLIC_KAKAO_JS_KEY` | A-2의 JavaScript 키 |
 | `NEXT_PUBLIC_AI_CHAT_ENABLED` | `false` — LAUNCH_CHECKLIST 5단계를 마친 뒤에만 `true` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | (선택) B-6의 Site Key |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | (선택) 매일 리마인더 — `node scripts/generate-vapid.mjs`의 **공개 키**(87자, B로 시작). Supabase 값과 함께 있어야 설정 > 알림 토글이 켜짐(`docs/PWA_AND_REMINDERS.md` §5 F). 형식이 틀리면 사이트 빌드가 멈춤 |
+| `NEXT_PUBLIC_SITE_INDEXABLE` | (선택) `true`면 서비스 소개(/)만 검색 노출 허용, 나머지 화면은 계속 noindex. 비우면 전부 noindex(1.0 공개 전 기본) |
 
 - `NEXT_PUBLIC_SUPABASE_URL`과 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`는 **둘 다** 있어야 켜집니다. 하나만 있으면 지금처럼 동작합니다.
 - 지도(`NEXT_PUBLIC_KAKAO_JS_KEY`)는 Supabase와 따로 켜집니다. 지도만 먼저 켜도 됩니다.
@@ -207,11 +213,11 @@ Supabase 화면은 **바로 가기 링크**도 적었습니다. 로그인한 상
 1. 저장소 **Actions** 탭 → 왼쪽 **Supabase** → 오른쪽 **Run workflow** → Branch **main** → **Run workflow**
    - Branch는 꼭 **main**. 다른 브랜치를 고르면 운영 DB를 건드리지 않도록 작업이 **건너뜀(skipped)**으로 끝납니다.
 2. 3~7분 뒤 초록 체크(✓)가 뜨면 성공입니다. 하는 일:
-   1) 설정 확인(빠진 값이 있으면 무엇이 빠졌는지 알리고 멈춤) → 2) 테스트(`npm test` — 실패하면 아무것도 바꾸지 않고 멈춤) → 3) 프로젝트 연결 → 4) DB 표 만들기·고치기(`supabase/migrations`의 파일 중 아직 적용하지 않은 것을 번호 순서로) → 5) 함수 비밀값 넣기(`ANTHROPIC_API_KEY`·`VIDEO_API_URL`·`ALLOWED_ORIGINS`·`CHAT_*` 중 값이 있는 것만) → 6) 함수 `videos`·`chat` 배포 → 7) 배포 확인(AI 상담 함수가 로그인을 확인할 수 있는지 한 번 불러 봄 — AI는 부르지 않음)
+   1) 설정 확인(빠진 값이 있으면 무엇이 빠졌는지 알리고 멈춤) → 2) 테스트(`npm test` — 실패하면 아무것도 바꾸지 않고 멈춤) → 3) 프로젝트 연결 → 4) DB 표 만들기·고치기(`supabase/migrations`의 파일 중 아직 적용하지 않은 것을 번호 순서로) → 5) 함수 비밀값 넣기(`ANTHROPIC_API_KEY`·`ANTHROPIC_WORKSPACE_ID`·`VIDEO_API_URL`·`ALLOWED_ORIGINS`·`CHAT_*`·`VAPID_*`·`REMINDER_CRON_SECRET` 중 값이 있는 것만) → 6) 함수 `videos`·`chat`·`send-reminders` 배포 → 7) 배포 확인(AI 상담 함수가 로그인을 확인할 수 있는지 한 번 불러 봄 — AI는 부르지 않음)
    - 실행 화면 아래 **Summary**에 결과가 한국어로 나옵니다. 경고(노란 ⚠)는 초록 체크여도 읽습니다. 특히 **"AI 상담 — 로그인 확인 불가"**는 B-4를 보고 개발자에게 알립니다.
 3. 확인(Supabase 대시보드):
-   - **Table Editor**에 `user_states`, `admins`, `llm_usage`(AI 상담 횟수 — 사용자 id와 시각만) 표가 있고 모두 **RLS enabled**가 보임
-   - **Edge Functions**에 `videos`, `chat`이 보임
+   - **Table Editor**에 `user_states`, `admins`, `llm_usage`(AI 상담 횟수 — 사용자 id와 시각만), `push_subscriptions`(0004 — 리마인더 푸시 끝점), `admin_audit`(0005 — 관리자 삭제 기록) 표가 있고 모두 **RLS enabled**가 보임
+   - **Edge Functions**에 `videos`, `chat`, `send-reminders`가 보임(`send-reminders`는 Vault `reminder_cron_secret`을 넣기 전에는 불리지 않음 — `docs/PWA_AND_REMINDERS.md` §5 E)
    - **Database → Migrations**에 `0001`부터 저장소의 마지막 번호까지 보임
    - **Edge Functions → Secrets**에 넣은 이름이 보임(값은 보이지 않는 게 정상)
    - **Edge Functions → chat → Logs**에 `missing_env`가 있으면 `names`에 `SUPABASE_`로 시작하는 이름이 **없음**(`ANTHROPIC_API_KEY`는 LAUNCH_CHECKLIST 5단계 전까지 있어도 정상). 있으면 B-4를 보고 개발자에게

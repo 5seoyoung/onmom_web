@@ -37,10 +37,12 @@ export const SCREEN_PATH: Readonly<Record<Exclude<RootScreen, "loading">, string
 };
 
 /**
- * 늘 여는 주소(끝 슬래시 없이 비교) — 서비스 소개, 개인정보처리방침, 로그인 콜백, 관리자 화면.
+ * 늘 여는 주소(끝 슬래시 없이 비교) — 서비스 소개, 개인정보처리방침, 이용약관, 로그인 콜백, 관리자 화면.
  * 관리자 화면은 로그인·온보딩과 무관하게 그리고, 권한은 화면이 Supabase is_admin()으로 확인한다(데이터는 서버 함수가 막는다).
  */
-const PUBLIC_PATHS: ReadonlySet<string> = new Set([ROUTES.landing, ROUTES.privacy, ROUTES.authCallback, ROUTES.admin].map(normalizePathname));
+const PUBLIC_PATHS: ReadonlySet<string> = new Set(
+  [ROUTES.landing, ROUTES.privacy, ROUTES.terms, ROUTES.authCallback, ROUTES.admin].map(normalizePathname),
+);
 
 /** 화면 → 그 화면을 그리는 주소 묶음. 다시 동의는 온보딩 주소에서 그린다. */
 const ROUTE_OF_SCREEN: Readonly<Record<Exclude<RootScreen, "loading">, RouteKind>> = {

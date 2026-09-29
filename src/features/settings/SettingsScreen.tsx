@@ -2,7 +2,8 @@
 
 // 설정 — iOS SettingsView(MoreView.swift:4-142).
 // 순서: 계정(로그인 표시 · 로그아웃 · 계정 삭제) → 프로필(편집 · 산후 일수 · 분만 방식 · 목표 · 내 동네)
-//       → 알림(웹 미구현 — 준비 중, D4) → 개인정보·안전(면책 · 개인정보처리방침 — 서버 저장 빌드는 "내 기기에만 저장" 문장을 바꾼다).
+//       → 알림(웹 미구현 — 준비 중, D4) → 개인정보·안전(면책 · 개인정보처리방침 — 서버 저장 빌드는 "내 기기에만 저장" 문장을 바꾼다
+//       · 이용약관(초안) · 문의 mailto) → 내 데이터(웹 신규 — 동의 내역·철회 방법·내 데이터 내려받기, DataRightsCard).
 // 로그아웃·계정 삭제는 확인 창을 거친다. 계정이 없어지면 앱 관문(features/flow/AppGate)이 로그인 화면으로 보낸다.
 //
 // 계정 카드(settingsView.ts accountModeFor·accountCardActions)
@@ -16,16 +17,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronRight, Pencil } from "lucide-react";
+import { ChevronRight, Mail, Pencil } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, SubPageHeader, cx } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import { useAccountSession } from "@/auth";
 import { useAppStore } from "@/store/useAppStore";
 import { useNowMs } from "@/features/profile/useNow";
+import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contact";
+import { hasTermsText, TERMS_TEXT } from "@/features/terms/termsText";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { DataRightsCard } from "./DataRightsCard";
+import { ReminderSection } from "./ReminderSection";
 import {
   PRIVACY_HREF,
+  TERMS_HREF,
   PROFILE_EDIT_HREF,
   PROFILE_EDIT_TEXT,
   PROFILE_HREF,
@@ -125,8 +131,10 @@ export function SettingsScreen() {
             onDelete={() => setConfirming("delete")}
           />
           <ProfileCard rows={settingsProfileRows(state.profile, new Date(nowMs))} />
-          <NotificationCard />
+          <ReminderSection fallback={<NotificationCard />} />
           <PrivacyCard body={privacyBodyFor(supabase)} />
+          {/* 내 데이터(웹 신규) — 동의 내역·철회 방법·내려받기(열람권). 계정·처리방침 카드 뒤, 마지막. */}
+          <DataRightsCard snapshot={{ state, account }} />
         </>
       ) : null}
 
@@ -211,7 +219,7 @@ function AccountCard({
             aria-busy={busy === "link" || undefined}
             className="flex min-h-11 w-full flex-col items-start gap-0.5 py-1 text-left disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <span className="text-[0.9375rem] font-semibold text-primary">{GUEST_ACCOUNT_TEXT.linkKakao}</span>
+            <span className="text-[0.9375rem] font-semibold text-primary-text">{GUEST_ACCOUNT_TEXT.linkKakao}</span>
             <span className="text-[0.8125rem] text-text-secondary">{GUEST_ACCOUNT_TEXT.linkKakaoHint}</span>
           </button>
         </>
@@ -223,7 +231,7 @@ function AccountCard({
             type="button"
             onClick={onSignOut}
             disabled={disabled}
-            className="flex min-h-11 w-full items-center text-left text-[0.9375rem] font-semibold text-state-alert disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex min-h-11 w-full items-center text-left text-[0.9375rem] font-semibold text-state-alert-text disabled:cursor-not-allowed disabled:opacity-50"
           >
             {SETTINGS_TEXT.signOut}
           </button>
@@ -236,7 +244,7 @@ function AccountCard({
         disabled={disabled}
         className="flex min-h-11 w-full flex-col items-start gap-0.5 py-1 text-left disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <span className="text-[0.9375rem] font-semibold text-state-alert">{actions.deleteLabel}</span>
+        <span className="text-[0.9375rem] font-semibold text-state-alert-text">{actions.deleteLabel}</span>
         <span className="text-[0.8125rem] text-text-secondary">{SETTINGS_TEXT.deleteAccountHint}</span>
       </button>
       {actions.notice !== null ? <p className="text-[0.8125rem] text-text-secondary">{actions.notice}</p> : null}
@@ -245,7 +253,7 @@ function AccountCard({
         {busy === "signOut" ? SERVER_ACCOUNT_TEXT.signingOut : busy === "delete" ? SERVER_ACCOUNT_TEXT.deleting : null}
       </p>
       <div role="alert" className="empty:hidden">
-        {failure !== null ? <p className="text-[0.8125rem] font-semibold text-state-alert">{failure}</p> : null}
+        {failure !== null ? <p className="text-[0.8125rem] font-semibold text-state-alert-text">{failure}</p> : null}
       </div>
     </Card>
   );
@@ -263,7 +271,7 @@ function ProfileCard({ rows }: { rows: SettingsRow[] }) {
         <Link
           href={PROFILE_EDIT_HREF}
           aria-label={PROFILE_EDIT_TEXT.title}
-          className="-my-2.5 -mr-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-button px-2 text-[0.8125rem] font-semibold text-primary"
+          className="-my-2.5 -mr-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-button px-2 text-[0.8125rem] font-semibold text-primary-text"
         >
           <Pencil aria-hidden className="size-3" strokeWidth={2.5} />
           {SETTINGS_TEXT.edit}
@@ -293,20 +301,44 @@ function NotificationCard() {
   );
 }
 
-/** body — privacyBodyFor(서버 저장 빌드면 "내 기기에만 저장" 문장을 바꾼 것) */
+const PRIVACY_LINK_CLASS = "flex min-h-11 items-center justify-between gap-2 rounded-button text-[0.9375rem] font-semibold text-primary-text";
+
+/**
+ * body — privacyBodyFor(서버 저장 빌드면 "내 기기에만 저장" 문장을 바꾼 것).
+ * 링크: 개인정보처리방침(원문) · 이용약관(초안 — features/terms, 본문이 있을 때만) · 문의(방침의 이메일로 mailto — features/terms/contact.ts).
+ */
 function PrivacyCard({ body }: { body: string }) {
   return (
     // MoreView.swift:70-87
     <Card as="section" aria-labelledby="settings-privacy" className="flex flex-col gap-2">
       <SectionTitle id="settings-privacy">{SETTINGS_TEXT.privacy}</SectionTitle>
       <p className="text-[0.8125rem] text-text-secondary">{body}</p>
-      <Link
-        href={PRIVACY_HREF}
-        className="flex min-h-11 items-center justify-between gap-2 rounded-button text-[0.9375rem] font-semibold text-primary"
-      >
+      <Link href={PRIVACY_HREF} className={PRIVACY_LINK_CLASS}>
         {SETTINGS_TEXT.privacyPolicy}
         <ChevronRight aria-hidden className="size-4 shrink-0 text-text-secondary" strokeWidth={2.5} />
       </Link>
+      {hasTermsText() ? (
+        <>
+          <hr className="border-divider" />
+          <Link href={TERMS_HREF} className={PRIVACY_LINK_CLASS}>
+            {TERMS_TEXT.navTitle}
+            <ChevronRight aria-hidden className="size-4 shrink-0 text-text-secondary" strokeWidth={2.5} />
+          </Link>
+        </>
+      ) : null}
+      {CONTACT_EMAIL !== null ? (
+        <>
+          <hr className="border-divider" />
+          {/* 문의 — 이름은 왼쪽, 주소는 오른쪽(누르면 메일 앱, 제목만 미리 채움) */}
+          <a href={mailtoHref(CONTACT_EMAIL)} className={PRIVACY_LINK_CLASS}>
+            {CONTACT_TEXT.label}
+            <span className="inline-flex min-w-0 items-center gap-1 text-[0.8125rem] font-medium text-text-secondary">
+              <span className="break-all">{CONTACT_EMAIL}</span>
+              <Mail aria-hidden className="size-4 shrink-0" strokeWidth={2.5} />
+            </span>
+          </a>
+        </>
+      ) : null}
     </Card>
   );
 }

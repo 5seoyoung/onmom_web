@@ -21,6 +21,8 @@ import { cx, primaryButtonClass } from "@/components/ui";
 import { isLLMBackendConfigured, isSupabaseConfigured } from "@/config";
 import { CLINICS_TEXT } from "@/features/clinics/clinicsView";
 import brandLogo from "@/features/flow/brand-logo.png";
+import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contact";
+import { hasTermsText, TERMS_TEXT } from "@/features/terms/termsText";
 import { ROUTES } from "@/routes";
 import {
   FEATURES,
@@ -49,6 +51,9 @@ import { StartLink, StartNote } from "./StartLink";
 // 문구와 구성은 landingContent.ts. 가짜 수치·후기·예시 화면은 넣지 않는다(원칙 3).
 
 const CONTAINER = "mx-auto w-full max-w-[72rem] px-5 md:px-8";
+/** 바닥글 링크(개인정보처리방침·이용약관·문의) — 누르는 영역 44, 밑줄 */
+const FOOTER_LINK_CLASS =
+  "inline-flex min-h-11 items-center rounded-button font-semibold text-text-primary underline underline-offset-4 hover:text-text-secondary";
 /** brand-logo.png의 바탕색 — 로고가 판 위에 떠 보이지 않고 한 장처럼 보이게 */
 const LOGO_BACKGROUND = "bg-[#fdefeb]";
 
@@ -114,11 +119,11 @@ function Logo({ className, eager = false }: { className: string; eager?: boolean
 function SiteHeader() {
   return (
     <header className="sticky top-0 z-20 border-b border-divider bg-background/90 backdrop-blur-md">
-      <div className={cx(CONTAINER, "flex h-16 items-center justify-between gap-4")}>
+      <div className={cx(CONTAINER, "flex min-h-16 items-center justify-between gap-4")}>
         {/* 로고·온맘 — 여기(서비스 소개)서 누르면 맨 위로 부드럽게(움직임 줄이기면 바로), 섹션 조각(#…)은 지운다(landingTop.ts) */}
         <LandingHomeLink className="-ml-1 inline-flex min-h-11 items-center gap-2 rounded-button px-1">
           <Logo eager className="size-9 rounded-[0.625rem]" />
-          <span className="text-[1.1875rem] font-bold text-neutral">{LANDING_TEXT.brand}</span>
+          <span className="shrink-0 text-[1.1875rem] font-bold whitespace-nowrap text-neutral">{LANDING_TEXT.brand}</span>
         </LandingHomeLink>
         <nav className="hidden md:block">
           <ul className="flex items-center gap-1">
@@ -330,9 +335,22 @@ function SiteFooter() {
           <p className="text-[0.8125rem] leading-relaxed text-text-secondary">{content.disclaimers.home_footer}</p>
         </div>
         <div className="flex flex-col items-start gap-1 text-[0.875rem] md:items-end">
-          <Link href={ROUTES.privacy} className="inline-flex min-h-11 items-center rounded-button font-semibold text-text-primary underline underline-offset-4 hover:text-text-secondary">
-            {LANDING_TEXT.privacy}
-          </Link>
+          {/* 개인정보처리방침 · 이용약관(초안 — features/terms) · 문의(방침의 이메일로 mailto — features/terms/contact.ts). 링크는 본문이 있을 때만. */}
+          <div className="flex flex-wrap items-center gap-x-4 md:justify-end">
+            <Link href={ROUTES.privacy} className={FOOTER_LINK_CLASS}>
+              {LANDING_TEXT.privacy}
+            </Link>
+            {hasTermsText() ? (
+              <Link href={ROUTES.terms} className={FOOTER_LINK_CLASS}>
+                {TERMS_TEXT.navTitle}
+              </Link>
+            ) : null}
+            {CONTACT_EMAIL !== null ? (
+              <a href={mailtoHref(CONTACT_EMAIL)} className={FOOTER_LINK_CLASS}>
+                {CONTACT_TEXT.label}
+              </a>
+            ) : null}
+          </div>
           <p className="text-text-secondary">{LANDING_TEXT.copyright}</p>
         </div>
       </div>

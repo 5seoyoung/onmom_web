@@ -5,6 +5,7 @@ import type { FetchVideosResult } from "@/api/video";
 import { safeExternalUrl } from "@/api/safeUrl";
 import { parseLocalDate, toLocalDateString } from "@/domain/date";
 import type { DeliveryMethod, LocalDateString, MaternityRecord, UserProfile } from "@/domain/types";
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
 import { DELIVERY_TITLE, HOME_STAGE_TEXT } from "@/rules/exercise";
 import {
   ANALYSIS_GROUPS,
@@ -168,7 +169,7 @@ export interface AnalyzeResultModel {
  * 결과 화면 모델. 최근 기록에 레드플래그가 있으면 '가능'과 영상을 숨기고(D1 — analysisSections의
  * suppressExerciseOnRedFlag), '가능' 자리에 홈과 같은 "운동 안내를 멈췄어요" 안내를 둔다. 주의·금지는 그대로 보인다.
  */
-export function analyzeResultModel(output: EngineOutput, activeRedFlag: boolean): AnalyzeResultModel {
+export function analyzeResultModel(output: EngineOutput, activeRedFlag: boolean, ctx: { offline?: boolean } = {}): AnalyzeResultModel {
   const show = analysisSections(output, { activeRedFlag, suppressExerciseOnRedFlag: true });
   const rec = output.recommendation;
   const blocks: ResultBlock[] = [];
@@ -189,7 +190,8 @@ export function analyzeResultModel(output: EngineOutput, activeRedFlag: boolean)
     if (output.videoFetch === "notConfigured") {
       videos = { kind: "info", title: ANALYSIS_TEXT.notConfiguredTitle, body: ANALYSIS_TEXT.notConfiguredBody };
     } else if (output.videoFetch === "failed") {
-      videos = { kind: "info", title: ANALYSIS_TEXT.failedTitle, body: ANALYSIS_TEXT.failedBody };
+      // 오프라인이면 "네트워크 상태를 확인한 뒤…" 대신 오프라인 안내(제목은 그대로) — 가능/주의/금지 안내는 그대로 유효하다
+      videos = { kind: "info", title: ANALYSIS_TEXT.failedTitle, body: ctx.offline ? OFFLINE_TEXT : ANALYSIS_TEXT.failedBody };
     } else if (output.exerciseVideos.length > 0) {
       videos = {
         kind: "list",

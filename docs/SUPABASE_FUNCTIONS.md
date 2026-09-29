@@ -1,11 +1,12 @@
-# Supabase Edge Functions — `videos` · `chat`
+# Supabase Edge Functions — `videos` · `chat` · `send-reminders`
 
-온맘 웹은 GitHub Pages의 정적 사이트라 서버 코드가 없습니다. 브라우저가 직접 할 수 없는 두 가지를 Supabase Edge Function(Deno)이 맡습니다.
+온맘 웹은 GitHub Pages의 정적 사이트라 서버 코드가 없습니다. 브라우저가 직접 할 수 없는 일을 Supabase Edge Function(Deno)이 맡습니다.
 
 | 함수 | 하는 일 | 로그인 | 게이트웨이 JWT 확인 |
 |---|---|---|---|
 | `videos` | 운동 영상 목록 프록시. 영상 서버(Render)에 CORS가 없어 브라우저가 직접 부르지 못한다 | 필요 없음(공개 목록) | 끔 `verify_jwt = false` |
 | `chat` | AI 상담(`patient_edu`)과 약물 체크의 표에 없는 항목(`substance`)을 Anthropic(Claude)에 묻는다 | 필요(익명 게스트 포함). 함수 안에서 확인 | 끔 `verify_jwt = false` — 함수가 `auth.getUser`로 직접 확인 |
+| `send-reminders` | 매일 20:00 KST 리마인더 웹 푸시 발송(pg_cron → 함수, `0004_push_reminders.sql`). 알림 본문은 고정 문구뿐 | 사용자 없음 — `x-reminder-secret`(Vault `reminder_cron_secret` = 비밀값 `REMINDER_CRON_SECRET`) 또는 서버 키 | 끔 `verify_jwt = false` — 함수가 직접 확인. 비밀값 `VAPID_PRIVATE_KEY`·`VAPID_SUBJECT`·`REMINDER_CRON_SECRET`(+ 선택 `VAPID_PUBLIC_KEY`·`REMINDER_HOUR`). **Vault 값이 생겨야 켜짐** — 설명 전부: [`PWA_AND_REMINDERS.md`](PWA_AND_REMINDERS.md) |
 
 운영자용 켜는 순서는 [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md), 켜기 전 법·개인정보 항목은 [`LAUNCH_CHECKLIST.md`](LAUNCH_CHECKLIST.md) 5단계. 이 문서는 개발자용 설명입니다.
 
@@ -39,6 +40,7 @@
 | 이름 | 쓰는 함수 | 기본값 | 공개 여부 |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | chat | 없음 → chat은 `503 not_configured` | **비밀** — GitHub Secret → 함수 비밀에만 |
+| `ANTHROPIC_WORKSPACE_ID` | chat | 없음(워크스페이스에 묶인 키면 비움) | 공개값에 가까운 식별자(`wrkspc_…`) — 조직 전체용 키일 때만. GitHub Variable(또는 Secret) → 워크플로가 함수 비밀로 넣는다(아래 "ANTHROPIC_WORKSPACE_ID") |
 | `VIDEO_API_URL` | videos | `https://hackathon-video-api.onrender.com` | 공개값. https만(로컬 개발은 `http://localhost`) |
 | `ALLOWED_ORIGINS` | 둘 다 | `https://5seoyoung.github.io,http://localhost:3000` | 공개값. 쉼표 구분, 경로는 떼고 origin만 씀 |
 | `CHAT_HOURLY_LIMIT` | chat | 30 (1~1000) | 공개값 |
@@ -54,15 +56,16 @@
 
 ## 3. 배포
 
-**보통**: `supabase/` 아래가 바뀐 채로 main에 올라가면 워크플로가 `supabase db push` → `supabase secrets set` → `supabase functions deploy videos chat` 순서로 돌립니다(값을 넣기 전의 자동 실행은 건너뜀).
+**보통**: `supabase/` 아래가 바뀐 채로 main에 올라가면 워크플로가 `supabase db push` → `supabase secrets set` → `supabase functions deploy videos chat send-reminders` 순서로 돌립니다(값을 넣기 전의 자동 실행은 건너뜀).
+⚠️ `secrets set`은 GitHub Secret `ANTHROPIC_API_KEY` 값으로 서버 값을 **덮어씁니다** — 대시보드·CLI에서 키를 바꿨다면 GitHub Secret도 같은 키로 바꾼 뒤 워크플로를 돌립니다.
 
 **손으로**(Supabase CLI, 개발자 컴퓨터):
 
 ```bash
 supabase link --project-ref movrwmoniopgetdmagon
-supabase db push                                    # 0003_llm_usage.sql 포함
+supabase db push                                    # 0001~0005(0004 리마인더 표·예약, 0005 관리자 도구) — 이미 적용한 번호는 건너뜀
 supabase secrets set ANTHROPIC_API_KEY=…            # 값은 터미널 기록에 남지 않게 주의(파일로: --env-file)
-supabase functions deploy videos chat               # verify_jwt는 supabase/config.toml을 따른다
+supabase functions deploy videos chat send-reminders   # verify_jwt는 supabase/config.toml을 따른다
 ```
 
 **`verify_jwt` 설정** — `supabase/config.toml`(CI 담당 파일)에 있어야 합니다:
@@ -73,9 +76,12 @@ verify_jwt = false
 
 [functions.chat]
 verify_jwt = false
+
+[functions.send-reminders]
+verify_jwt = false
 ```
 
-config.toml 없이 배포한다면 `supabase functions deploy videos chat --no-verify-jwt`.
+config.toml 없이 배포한다면 `supabase functions deploy videos chat send-reminders --no-verify-jwt`.
 chat을 `false`로 두는 이유: 게이트웨이 확인은 공개 키(`sb_publishable_…`)만 보낸 요청도 통과시키므로 어차피 함수 안에서 사용자를 확인해야 하고,
 함수 안의 `auth.getUser`는 서명뿐 아니라 계정·세션이 살아 있는지까지 봅니다. **chat의 토큰 확인을 지우면 이 값을 `true`로 되돌립니다**(아니면 누구나 Anthropic 비용을 씀).
 
@@ -202,3 +208,6 @@ npx --yes deno@latest check --no-lock --node-modules-dir=none supabase/functions
 | AI 상담이 늘 앱 안내로 답함 | 함수 로그의 `code`: `not_configured`(Anthropic 키) · `auth_unavailable`(서버 키 없음·틀림 — 시작 줄 `missing_env`/`server_key` 확인, Auth 장애) · `unauthorized`(세션 없음 — 게스트 계정 생성 실패 등) · `rate_limited`·`busy`(한도) · `refused`. 동의 카드에서 [동의하지 않기]를 골랐는지(그때 배너는 "AI 답변에 동의하지 않아…") |
 | `llm_model_unavailable` | Anthropic 조직에서 `claude-opus-5`를 쓸 수 있는지 |
 | `unavailable` | `0003_llm_usage.sql`이 적용됐는지(D-1), 함수 권한 |
+
+### ANTHROPIC_WORKSPACE_ID (선택)
+Anthropic 콘솔에서 만든 키가 워크스페이스에 묶이지 않은 조직 전체용 키면, API가 `anthropic-workspace-id` 헤더를 요구한다(오류: "This API key is not scoped to a workspace"). 콘솔 Settings → Workspaces에서 기본 워크스페이스 ID(`wrkspc_…`)를 복사해 함수 비밀값 `ANTHROPIC_WORKSPACE_ID`로 등록한다. 워크스페이스 안에서 만든 키를 쓰면 비워 둬도 된다.

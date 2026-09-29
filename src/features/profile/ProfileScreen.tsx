@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, cx } from "@/components/ui";
+import { StorageWarning } from "@/features/home/StorageWarning";
 import { useAppStore } from "@/store/useAppStore";
 import {
   PROFILE_MENU,
@@ -55,6 +56,9 @@ export function ProfileScreen() {
     <main className={cx("@container flex flex-1 flex-col gap-4 px-6 pt-2 pb-10", PAGE_FRAME.wide)}>
       {/* .navigationTitle("프로필") — 큰 제목(34 bold). PC(lg)는 다른 화면의 제목(ScreenHeader 24 bold)과 같은 크기·같은 높이 */}
       <h1 className="pt-6 text-[2.125rem] leading-tight font-bold text-neutral lg:pt-2 lg:text-2xl lg:leading-8">{PROFILE_TEXT.title}</h1>
+
+      {/* 저장 실패 안내(다른 탭과 같은 자리) — 조건이 아니면 그리지 않는다 */}
+      <StorageWarning />
 
       {hydrated && nowMs !== null ? (
         <div className="flex flex-col gap-4 @4xl:grid @4xl:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] @4xl:items-start @4xl:gap-6">
@@ -114,7 +118,7 @@ function InfoCard({ rows, flags }: { rows: ReturnType<typeof profileInfoRows>; f
                 {flags.map((flag) => (
                   <li
                     key={flag}
-                    className="rounded-full bg-coral-tint px-2.5 py-1.25 text-xs font-medium text-primary"
+                    className="rounded-full bg-coral-tint px-2.5 py-1.25 text-xs font-medium text-primary-text"
                   >
                     {flag}
                   </li>

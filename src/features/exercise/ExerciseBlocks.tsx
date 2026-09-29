@@ -42,9 +42,11 @@ function StatusBlock({ body, onRetry }: { body: Exclude<ExerciseBody, { kind: "p
   switch (body.kind) {
     case "loading":
       return (
-        <div role="status" className="flex justify-center py-8">
+        // 8초 뒤 콜드스타트 안내가 스피너 아래에 붙는다(exerciseModel — 문구는 보이고 live region이 읽는다)
+        <div role="status" className="flex flex-col items-center gap-3 py-8">
           <LoaderCircle aria-hidden className="size-7 animate-spin text-primary motion-reduce:animate-none" />
           <span className="sr-only">{body.srLabel}</span>
+          {body.notice !== null ? <p className="text-center text-sm text-text-secondary">{body.notice}</p> : null}
         </div>
       );
     case "unavailable":
@@ -62,7 +64,7 @@ function StatusBlock({ body, onRetry }: { body: Exclude<ExerciseBody, { kind: "p
             </>
           ) : null}
           {body.excluded.map((line) => (
-            <p key={line} className="text-[0.8125rem] text-state-watch">
+            <p key={line} className="text-[0.8125rem] text-state-watch-text">
               {line}
             </p>
           ))}
@@ -71,14 +73,14 @@ function StatusBlock({ body, onRetry }: { body: Exclude<ExerciseBody, { kind: "p
     case "failed":
       return (
         <Card className="flex flex-col gap-2">
-          <IconLabel icon={WifiOff} className="text-state-watch">
+          <IconLabel icon={WifiOff} className="text-state-watch-text">
             {body.title}
           </IconLabel>
           <p className="text-base text-text-secondary">{body.message}</p>
           <button
             type="button"
             onClick={onRetry}
-            className="-mx-1 mt-0.5 inline-flex min-h-11 w-fit items-center rounded-button px-1 text-sm font-medium text-primary"
+            className="-mx-1 mt-0.5 inline-flex min-h-11 w-fit items-center rounded-button px-1 text-sm font-medium text-primary-text"
           >
             {body.retry}
           </button>
@@ -145,7 +147,7 @@ function VideoCard({ card }: { card: VideoCardModel }) {
         <p
           className={cx(
             "pt-0.5 text-sm font-medium lg:mt-auto",
-            card.action.tone === "alert" ? "text-state-alert" : "text-text-secondary",
+            card.action.tone === "alert" ? "text-state-alert-text" : "text-text-secondary",
           )}
         >
           {card.action.text}

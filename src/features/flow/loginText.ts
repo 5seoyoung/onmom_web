@@ -1,5 +1,7 @@
 // 로그인 화면 문구 — LoginView.swift 원문. 화면(LoginScreen.tsx)은 여기서 고른 문구만 쓴다.
 
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
+
 export const LOGIN_TEXT = {
   brand: "온맘", // 원문: LoginView.swift:26
   tagline: "산모의 회복을, 하나의 흐름으로", // 원문: LoginView.swift:28
@@ -23,4 +25,12 @@ export const LOGIN_TEXT = {
  */
 export function loginConsentText(supabaseConfigured: boolean): string {
   return supabaseConfigured ? LOGIN_TEXT.consentNotice : LOGIN_TEXT.consent;
+}
+
+/**
+ * 카카오 동의 화면으로 보내지 못했을 때의 안내 — 원문(KakaoLoginService.swift:29). 브라우저가 확실히 오프라인이면(로그인 번들을
+ * 받지 못해 실패하는 흔한 경우) 다른 서버 기능과 같은 오프라인 안내(features/home/useOnline OFFLINE_TEXT)로 말한다.
+ */
+export function kakaoFailedMessage(online: boolean): string {
+  return online ? LOGIN_TEXT.kakaoFailed : OFFLINE_TEXT;
 }

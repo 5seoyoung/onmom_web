@@ -139,6 +139,13 @@ describe("오늘의 한 가지 질문 카드", () => {
     if (model.kind === "ask") expect(html).toContain(model.question.text);
   });
 
+  it("서버 저장 빌드 모델이면 '이 기기' 문구가 그려지지 않고 서버 저장 각주가 그려진다", () => {
+    const model = moodCardModel([], NOW, { serverStorage: true });
+    const html = renderToStaticMarkup(h(MoodQuestionCard, { model, onAnswer: noop }));
+    expect(html).not.toContain("이 기기");
+    expect(html).toContain("동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장되고, 진단이 아니에요.");
+  });
+
   it("답함: 답 문구만, 버튼 없음", () => {
     const model = moodCardModel(
       [{ id: "m", date: kst("2026-09-23T08:00").toISOString(), questionID: 1, answer: "unsure" }],
@@ -166,6 +173,30 @@ describe("최근 기록 카드", () => {
     expect(count(html, "<li")).toBe(2);
     expect(html).toContain(`<time dateTime="${rec.date}"`);
     expect(html).toContain("9월 23일 오후 3:05");
+    expect(html).toContain("병원 신호");
+    expect(html).toContain("위험신호 없음");
+    // 위험 증상 필드가 없는 기록(옛 기록·iOS 기록)에는 신호 줄이 없다
+    expect(html).not.toContain(RECORD_TEXT.dizziness);
+  });
+
+  it("위험 증상 토글이 켜져 있던 기록은 줄 아래에 그 라벨(RECORD_TEXT 원문)을 칩으로 보인다", () => {
+    const rec: SymptomRecord = {
+      id: "r1",
+      date: kst("2026-09-23T15:05").toISOString(),
+      lochiaIncreased: false,
+      lochiaRed: false,
+      feverEvent: false,
+      painNrs: 0,
+      redFlagCode: "neuro_flag",
+      postpartumDays: 30,
+    };
+    const rows = recentRecordRows([
+      { ...rec, woundPainWorsening: false, dizzinessFainting: true, chestPainBreathing: false, calfPainSwelling: false },
+      { ...rec, id: "r2", redFlagCode: null, woundPainWorsening: false, dizzinessFainting: false, chestPainBreathing: false, calfPainSwelling: false },
+    ]);
+    const html = renderToStaticMarkup(h(RecentRecordsCard, { rows }));
+    expect(count(html, RECORD_TEXT.dizziness)).toBe(1);
+    expect(html).not.toContain(RECORD_TEXT.woundPain);
     expect(html).toContain("병원 신호");
     expect(html).toContain("위험신호 없음");
   });

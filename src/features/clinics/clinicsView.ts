@@ -2,7 +2,8 @@
 // 원본: onmom(iOS) 저장소 Onmom/Features/Region/NearbyClinicsView.swift — web/reference/swift에는 빠져 있다(검수 #34).
 // 검색 흐름·문구·거리 표기는 api/clinics.ts가 가진다. 여기엔 "어느 상태에서 무엇을 보여주나"만 둔다.
 
-import { distanceText, telHref, type Clinic, type ClinicSearchResult, type LatLng } from "@/api/clinics";
+import { distanceText, telHref, type Clinic, type ClinicFailureKind, type ClinicSearchResult, type LatLng } from "@/api/clinics";
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
 
 export const CLINICS_TEXT = {
   addressTitle: "내 동네", // 원문: NearbyClinicsView.swift:30
@@ -28,8 +29,8 @@ export type ClinicsViewState =
   /** 아직 검색하지 않음 */
   | { status: "idle" }
   | { status: "loading" }
-  /** 원문 오류 문구(api/clinics CLINIC_MESSAGES) */
-  | { status: "error"; message: string }
+  /** 원문 오류 문구(api/clinics CLINIC_MESSAGES). kind는 오프라인 안내로 바꿀지 가르는 데 쓴다(clinicsErrorMessage). */
+  | { status: "error"; kind: ClinicFailureKind; message: string }
   | { status: "results"; center: LatLng; clinics: Clinic[] };
 
 /**
@@ -50,7 +51,15 @@ export function initialClinicsState(configured: boolean, address: string): Clini
 export function stateFromSearchResult(r: ClinicSearchResult): ClinicsViewState {
   if (r.ok) return { status: "results", center: r.center, clinics: r.clinics };
   if (r.kind === "notConfigured") return { status: "notConfigured" };
-  return { status: "error", message: r.message };
+  return { status: "error", kind: r.kind, message: r.message };
+}
+
+/**
+ * 오류 카드 문구. 검색 실패("failed" — SDK 로드·주소 변환·검색 요청 오류)인데 브라우저가 오프라인이면
+ * 원문 "검색에 실패했어요…" 대신 오프라인 안내(05 §3 오프라인 동작). 주소 없음·못 찾음·결과 없음은 연결과 무관하니 원문 그대로.
+ */
+export function clinicsErrorMessage(view: Extract<ClinicsViewState, { status: "error" }>, online: boolean): string {
+  return view.kind === "failed" && !online ? OFFLINE_TEXT : view.message;
 }
 
 export interface ClinicRowView {

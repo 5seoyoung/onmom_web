@@ -109,7 +109,7 @@ export function SymptomFormCards({
           aria-labelledby={neighborhoodId}
           aria-describedby={neighborhoodHelpId}
           autoCapitalize="none"
-          className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle-aa disabled:cursor-not-allowed disabled:opacity-50"
         />
         <p id={neighborhoodHelpId} className="text-[0.8125rem] text-text-secondary">
           {RECORD_TEXT.neighborhoodHelp}

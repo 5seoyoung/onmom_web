@@ -172,7 +172,7 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
             onChange={(e) => set("neighborhood", e.target.value)}
             placeholder={PROFILE_EDIT_TEXT.neighborhoodPlaceholder}
             autoComplete="off"
-            className="min-h-11 w-full rounded-button bg-background px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle"
+            className="min-h-11 w-full rounded-button bg-background px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle-aa"
           />
         </div>
 
@@ -247,7 +247,7 @@ function SegmentedChoice<T extends string>({ legend, name, options, value, onCha
         {options.map((o) => (
           <label
             key={o.value}
-            className="flex min-h-11 cursor-pointer items-center justify-center rounded-[0.4375rem] px-2 text-center text-[0.8125rem] font-medium text-text-primary has-checked:bg-surface has-checked:font-semibold has-checked:shadow-[0_0.1875rem_0.5rem_rgb(0_0_0/0.12)] has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-primary forced-colors:has-checked:outline-2 forced-colors:has-checked:outline-[Highlight]"
+            className="flex min-h-11 cursor-pointer items-center justify-center rounded-[0.4375rem] px-2 text-center text-[0.8125rem] font-medium text-text-primary has-checked:bg-surface has-checked:font-semibold has-checked:shadow-[0_0.1875rem_0.5rem_rgb(0_0_0/0.12)] has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-focus-ring forced-colors:has-checked:outline-2 forced-colors:has-checked:outline-[Highlight]"
           >
             <input
               type="radio"

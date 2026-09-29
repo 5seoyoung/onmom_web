@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { fetchVideos } from "@/api/video";
 import { isVideoBackendConfigured } from "@/config";
 import type { MaternityRecord } from "@/domain/types";
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
 import { EXERCISE_TEXT, routeTag, type Video } from "@/rules/exercise";
+import { COLD_START_TEXT } from "./videoLoad";
 import {
   NEEDS_DELIVERY_DATE_TEXT,
   VIDEO_LOAD_THROWN,
@@ -123,8 +125,46 @@ describe("연결 실패 · 조회 중", () => {
     });
   });
 
-  it("결과가 없으면 조회 중", () => {
-    expect(exerciseBody(null, "vaginal", 3, maternity())).toEqual({ kind: "loading", srLabel: "운동 영상을 불러오고 있어요" });
+  it("결과가 없으면 조회 중 — 8초 전에는 안내 없음", () => {
+    expect(exerciseBody(null, "vaginal", 3, maternity())).toEqual({
+      kind: "loading",
+      srLabel: "운동 영상을 불러오고 있어요",
+      notice: null,
+    });
+  });
+
+  it("8초가 지났거나 자동 재시도 중(waking)이면 스피너 아래 콜드스타트 안내(05 §0)", () => {
+    expect(exerciseBody(null, "vaginal", 3, maternity(), { waking: true })).toMatchObject({
+      kind: "loading",
+      notice: "서버를 깨우는 중이에요 — 조금만 기다려 주세요",
+    });
+    const body = exerciseBody(null, "vaginal", 3, maternity(), { waking: true });
+    if (body.kind !== "loading") throw new Error("loading");
+    expect(body.notice).toBe(COLD_START_TEXT);
+  });
+
+  it("오프라인이면 실패 문구를 오프라인 안내로 — 제목·[다시 시도]는 그대로", () => {
+    const failed: VideoLoad = { kind: "failed", message: EXERCISE_TEXT.failedUnreachable };
+    expect(exerciseBody(failed, "vaginal", 3, maternity(), { offline: true })).toEqual({
+      kind: "failed",
+      title: "연결 실패",
+      message: OFFLINE_TEXT,
+      retry: "다시 시도",
+    });
+    // 온라인이면 원문 그대로
+    const online = exerciseBody(failed, "vaginal", 3, maternity(), { offline: false });
+    if (online.kind !== "failed") throw new Error("failed");
+    expect(online.message).toBe(EXERCISE_TEXT.failedUnreachable);
+  });
+
+  it("오프라인이어도 미설정(준비 중)·목록은 바뀌지 않는다 — 오프라인 안내는 실패에만", () => {
+    const unavailable: VideoLoad = { kind: "unavailable", message: EXERCISE_TEXT.unavailableBody };
+    expect(exerciseBody(unavailable, "cesarean", 9, maternity(), { offline: true })).toMatchObject({
+      kind: "unavailable",
+      message: EXERCISE_TEXT.unavailableBody,
+    });
+    const loaded: VideoLoad = { kind: "loaded", videos: [video("a", "recovery_priority")] };
+    expect(exerciseBody(loaded, "cesarean", 9, maternity(), { offline: true }).kind).toBe("plan");
   });
 });
 

@@ -2,8 +2,8 @@
 
 /* 디자인 토큰 — iOS Theme.swift / 06_DESIGN.md.
    라이트 모드 하나(iOS도 라이트 고정). 코랄은 CTA·핵심 강조에만.
-   ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다.
-      텍스트 전용 색 토큰 도입은 CPO 결정 대기(08) — 결정 전까지 iOS 값을 그대로 둔다. */
+   ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다(docs/DEV_NOTES.md §3 CPO 12).
+      iOS 원색은 아이콘·배경·테두리용으로 그대로 두고, 글자에는 아래 "글자 전용" 토큰을 쓴다(기본값 — CPO가 되돌릴 수 있음, docs/ACCESSIBILITY.md). */
 @theme {
   --color-primary: #fb6f6f;
   --color-coral-tint: #fff0f0;
@@ -19,12 +19,35 @@
   --color-text-secondary: #4e5968;
   --color-text-subtle: #8b95a1;
   --color-divider: #f2f4f6;
+  /* 키보드 포커스 링 — neutral. 코랄(primary)은 흰 배경에서 2.76:1이라 비텍스트 대비 3:1(WCAG 1.4.11)에 못 미쳐 링에는 쓰지 않는다.
+     neutral은 background·surface 위 16:1, 코랄 칩·버튼 위에서도 3:1 이상(components/ui/contrast.test.ts). 접근성 전용 토큰 — 장식에 쓰지 않는다. */
+  --color-focus-ring: #191f28;
+  /* 글자 전용 색(WCAG AA 4.5:1) — iOS 원색(위)을 글자로 쓰면 흰 배경에서 1.8~3.0:1이라 못 읽는 사람이 있다.
+     같은 색상(hue)을 짙게만 한 값. 원색이 깔린 배경(배지 12%·15%, 출처 칩 primary 10%, coral-tint, background, divider) 위에서도
+     모두 4.5:1 이상(components/ui/contrast.test.ts가 잰다). 아이콘·배경·테두리에는 쓰지 않는다 — 그건 원색 그대로.
+     기본값(CPO 12 결정 전) — iOS 색으로 되돌리려면 여기 값만 원색으로 바꾸면 모든 화면에 한 번에 적용된다. */
+  --color-state-normal-text: #0c7449;
+  --color-state-watch-text: #9a5b00;
+  --color-state-alert-text: #bf3636;
+  --color-primary-text: #bf3636; /* 코랄 글자(출처 칩·활성 메뉴·NRS 값) — primary와 state-alert가 같은 색이라 alert-text와 같다 */
+  --color-text-subtle-aa: #646e7b; /* text-subtle(#8b95a1, 3.0:1) 대신 쓰는 보조 글자 — placeholder·면책·안내 */
 
   --radius-card: 1.25rem; /* 20 */
   --radius-button: 0.875rem; /* 14 */
   --radius-chip: 0.75rem; /* 12 */
 
   --font-sans: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+
+  /* 앱 관문의 불러오는 중 표시(features/flow/AppGate.tsx) — 0.4초가 넘게 걸릴 때만 나타난다. 빠르면 아무것도 번쩍이지 않는다. */
+  --animate-gate-in: gate-in 0.2s ease-out 0.4s both;
+  @keyframes gate-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 /* 글씨 크기는 전부 rem — 사용자의 브라우저 글씨 크기·확대를 따른다(iOS Dynamic Type 대응과 같은 원칙). */
@@ -41,8 +64,39 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* 포커스 링은 항상 보이게 */
-:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+/* 포커스 링은 항상 보이게 — 키보드·스크린리더 초점(:focus-visible)에만 그린다(마우스·터치는 브라우저 판단 그대로).
+   요소 밖 2px 띄워 그리므로 어두운 버튼(neutral) 위에서도 주변 배경과 맞닿아 보인다. 고대비(강제 색) 모드에서는 브라우저가 시스템 색으로 바꾼다.
+   base 층에 둔다 — 층 밖에 두면 Tailwind 유틸리티(utilities 층)보다 우선해 초점만 옮기는 상자(tabIndex -1 + focus:outline-none)에도
+   링이 그려졌다. 이제 유틸리티가 이긴다: 컨트롤은 링을 받고, 초점 이동용 상자는 화면이 정한 대로 링 없이 초점만 받는다. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
+  /* 어두운 면(bg-neutral 카드 — 예: 랜딩 마지막 CTA) 안의 컨트롤은 neutral 링이 배경과 같아(1:1) 안 보인다 → 흰(surface) 링(16.6:1).
+     자손 선택자라 neutral 주 버튼 자신(밝은 페이지 위에 링이 그려진다)은 그대로 neutral 링. */
+  .bg-neutral :focus-visible {
+    outline-color: var(--color-surface);
+  }
+
+  /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 CPO 결정(docs/DEV_NOTES.md §3 CPO 12) 전까지 그대로. */
+  @media (prefers-contrast: more) {
+    :focus-visible {
+      outline-width: 3px;
+    }
+  }
+}
+
+/* 움직임 줄이기 — 전환·애니메이션·부드러운 스크롤을 전부 끈다(Tailwind motion-reduce 클래스가 없는 곳, 네이티브 <details>, 라우터 스크롤 포함).
+   0으로 두지 않고 아주 짧게 남겨 transitionend·animationend에 기대는 코드가 깨지지 않게 한다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

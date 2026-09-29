@@ -12,11 +12,15 @@
 // 결과 단계에서 폰에 숨기는 부분은 `hidden lg:flex`(display:none — 보이지도, 낭독되지도, 초점이 가지도 않음)라
 // 폰 화면·낭독 순서는 이전과 같다.
 // 결과가 뜨면 맨 위로 올리고 결과로 초점을 옮긴다 — PC에서도 결과가 오른쪽 열 맨 위라 스크롤 없이 보인다.
+// 저장 실패(storageAvailable=false) 안내는 머리 아래(features/home/StorageWarning) — [확인하기]는 막지 않는다(iOS처럼 메모리에서 동작).
+// 오늘의 질문 각주는 저장 위치에 맞게(서버 저장 빌드면 "동의를 받은 뒤 온맘 서버에" — recordView moodNoteFor).
 
 import { useRef, useState } from "react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton, cx } from "@/components/ui";
+import { isSupabaseConfigured } from "@/config";
 import type { MoodAnswer } from "@/domain/types";
+import { StorageWarning } from "@/features/home/StorageWarning";
 import type { SymptomForm } from "@/rules/record";
 import type { RedFlagResult } from "@/rules/redflag";
 import { useAppStore } from "@/store/useAppStore";
@@ -89,6 +93,7 @@ export function RecordScreen() {
   return (
     <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
       <ScreenHeader title={RECORD_TEXT.title} subtitle={recordSubtitle(state.profile, today) ?? undefined} />
+      <StorageWarning />
       <div ref={bodyRef} tabIndex={-1} className={columns.body}>
         {/* 왼쪽 열 — 입력 폼. 결과 단계의 폰에서는 숨긴다(iOS: 결과가 폼 자리를 차지).
             결과 단계의 PC에서는 잠긴 채 보인다 — fieldset disabled가 안의 모든 입력을 막는다. */}
@@ -119,7 +124,10 @@ export function RecordScreen() {
           ) : null}
           {/* 폰은 입력 단계에서만(iOS). PC는 결과 옆에서도 — 방금 남긴 기록이 최근 기록 맨 위에 보인다. */}
           <div className={columns.sideExtras}>
-            <MoodQuestionCard model={moodCardModel(state.moodChecks, today)} onAnswer={answerMood} />
+            <MoodQuestionCard
+              model={moodCardModel(state.moodChecks, today, { serverStorage: isSupabaseConfigured() })}
+              onAnswer={answerMood}
+            />
             {layout.showsRecent ? <RecentRecordsCard rows={recentRecordRows(state.symptomHistory)} /> : null}
           </div>
         </div>

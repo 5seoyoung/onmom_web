@@ -113,9 +113,9 @@ function ProfileCard({ profile }: { profile: AnalyzeResultModel["profile"] }) {
 
 // Tailwind가 클래스를 찾을 수 있게 조합을 전부 적어 둔다. 색만으로 구분하지 않도록 제목(가능/주의/금지)과 아이콘 모양도 다르다.
 const TONE: Record<AnalysisTone, { Icon: typeof CircleCheck; icon: string; count: string; dot: string }> = {
-  normal: { Icon: CircleCheck, icon: "fill-state-normal", count: "bg-state-normal/15 text-state-normal", dot: "bg-state-normal" },
+  normal: { Icon: CircleCheck, icon: "fill-state-normal", count: "bg-state-normal/15 text-state-normal-text", dot: "bg-state-normal" },
   accent: { Icon: CircleAlert, icon: "fill-accent", count: "bg-accent/15 text-accent", dot: "bg-accent" },
-  alert: { Icon: CircleX, icon: "fill-state-alert", count: "bg-state-alert/15 text-state-alert", dot: "bg-state-alert" },
+  alert: { Icon: CircleX, icon: "fill-state-alert", count: "bg-state-alert/15 text-state-alert-text", dot: "bg-state-alert" },
 };
 
 function RecGroup({ group }: { group: RecGroupModel }) {

@@ -216,6 +216,7 @@ function setup(
     storedSession?: boolean;
     clientUnavailable?: number;
     captcha?: CaptchaResult;
+    beforeSignOut?: () => Promise<unknown>;
   } = {},
 ): Ctx {
   const remotes = opts.remotes ?? new Map<string, FakeRemote>();
@@ -258,6 +259,7 @@ function setup(
     replaceUrl,
     firstFetchTimeoutMs: 5_000,
     flushTimeoutMs: 5_000,
+    beforeSignOut: opts.beforeSignOut,
   });
   const goOnline = () => {
     for (const l of [...online]) l();
@@ -1066,12 +1068,12 @@ describe("페이지를 열 때 세션을 확인하지 못해도 동기화가 꺼
 });
 
 describe("로그아웃", () => {
-  async function signedIn(opts: { failWrite?: number } = {}) {
+  async function signedIn(opts: { failWrite?: number; beforeSignOut?: () => Promise<unknown> } = {}) {
     const remotes = new Map([[KAKAO_USER_ID, new FakeRemote()]]);
     const remote = remotes.get(KAKAO_USER_ID)!;
     remote.setServer(onboardedState({ ownerAccountID: KAKAO_ACCOUNT }));
     remote.failWrite = opts.failWrite ?? 0;
-    const ctx = setup({ remotes, client: fakeClient({ codes: { abc: kakaoSession() } }) });
+    const ctx = setup({ remotes, client: fakeClient({ codes: { abc: kakaoSession() } }), beforeSignOut: opts.beforeSignOut });
     const store = setupStore();
     await ctx.manager.completeCallback(store, `${CALLBACK}?code=abc`);
     return { ...ctx, store, remote };
@@ -1103,6 +1105,61 @@ describe("로그아웃", () => {
     expect(store.getSnapshot().account).toBeNull();
     expect(store.getSnapshot().state.moodChecks).toHaveLength(1); // 다음 로그인 때 올린다
     expect(fc.calls).toContain("signOut:local");
+  });
+
+  describe("beforeSignOut — 세션을 끝내기 직전 이 브라우저의 서버 행 정리(리마인더 구독)", () => {
+    it("다 올린 뒤 세션이 살아 있을 때 한 번 부르고, 그다음 세션을 끝낸다", async () => {
+      const calls: string[] = [];
+      const ctx = await signedIn({
+        beforeSignOut: async () => {
+          calls.push(`hook:${ctx.fc.hasSession()}`);
+        },
+      });
+      expect(await ctx.manager.signOut(ctx.store)).toEqual({ ok: true, localDataErased: true });
+      expect(calls).toEqual(["hook:true"]);
+      expect(ctx.fc.calls).toContain("signOut:local");
+    });
+
+    it("unsynced로 멈추면 부르지 않고, [그래도 로그아웃](force)이면 부른다", async () => {
+      const hook = vi.fn(async () => undefined);
+      const { manager, store } = await signedIn({ failWrite: 99, beforeSignOut: hook });
+      store.actions.addMoodCheck({ questionID: 1, answer: "no" });
+      const first = manager.signOut(store);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await first).toEqual({ ok: false, reason: "unsynced" });
+      expect(hook).not.toHaveBeenCalled();
+
+      const forced = manager.signOut(store, { force: true });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await forced).toEqual({ ok: true, localDataErased: false });
+      expect(hook).toHaveBeenCalledTimes(1);
+    });
+
+    it("던지거나 끝나지 않아도 로그아웃은 끝난다(3초까지만 기다림)", async () => {
+      const thrower = await signedIn({ beforeSignOut: async () => Promise.reject(new Error("offline")) });
+      expect(await thrower.manager.signOut(thrower.store)).toEqual({ ok: true, localDataErased: true });
+
+      const hanging = await signedIn({ beforeSignOut: () => new Promise(() => undefined) });
+      const out = hanging.manager.signOut(hanging.store);
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(await out).toEqual({ ok: true, localDataErased: true });
+      expect(hanging.fc.calls).toContain("signOut:local");
+    });
+
+    it("게스트(로그아웃 없음)·설정 없는 빌드에서는 부르지 않는다", async () => {
+      const hook = vi.fn(async () => undefined);
+      const guest = setup({ beforeSignOut: hook });
+      const store = setupStore();
+      await guest.manager.signInGuest(store);
+      onboardWithConsent(store);
+      expect(await guest.manager.signOut(store)).toEqual({ ok: false, reason: "guest" });
+
+      const plain = setup({ configured: false, beforeSignOut: hook });
+      const store2 = setupStore();
+      await plain.manager.signInGuest(store2);
+      expect(await plain.manager.signOut(store2)).toEqual({ ok: true, localDataErased: false });
+      expect(hook).not.toHaveBeenCalled();
+    });
   });
 
   it("설정이 있는 빌드의 게스트는 로그아웃하지 않는다 — 익명 계정은 로그아웃하면 다시 찾을 수 없다", async () => {

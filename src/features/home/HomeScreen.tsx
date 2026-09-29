@@ -28,6 +28,8 @@ import {
   WeightPlanCard,
 } from "./HomeCards";
 import { buildHomeViewModel } from "./homeViewModel";
+import { StorageWarning } from "./StorageWarning";
+import { SyncStatusNotice } from "./SyncStatusNotice";
 import { useNow } from "./useNow";
 
 /** PC(lg)에서 두 열. 폰에서는 세로 한 줄(간격 16 = main과 같은 gap-4). */
@@ -50,6 +52,9 @@ export function HomeScreen() {
   return (
     <main className={cx("flex flex-1 flex-col gap-4 px-5 pb-6 pt-2", PAGE_FRAME.wide)}>
       <HomeTopBar />
+      {/* 저장 실패·서버 저장 오래 실패 안내 — 조건이 아니면 그리지 않는다(빈 카드 금지) */}
+      <StorageWarning />
+      <SyncStatusNotice />
       {vm ? (
         <>
           <div className={HOME_COLUMNS_CLASS}>

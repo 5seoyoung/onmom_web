@@ -7,7 +7,8 @@
 // - 공개 주소(서비스 소개 /, 개인정보처리방침, 로그인 콜백, 관리자 화면)는 저장소와 무관하게 늘 그린다.
 // - 저장소를 읽기 전(정적 HTML·첫 렌더)에는 보호된 화면을 그리지 않는다 — 로그인 전 사용자에게
 //   메인 화면이나 기본값이 번쩍이지 않게.
-// - 주소가 어긋나면 router.replace로 맞춘다(뒤로 가기에 잘못된 주소가 남지 않게). 그동안은 아무것도 그리지 않는다.
+// - 주소가 어긋나면 router.replace로 맞춘다(뒤로 가기에 잘못된 주소가 남지 않게). 그동안은 화면 대신 불러오는 중 표시(GateLoading) —
+//   0.4초가 넘을 때만 보이는 스피너와 낭독 문구 하나. 사용자 데이터는 없어서 정적 HTML에 들어가도 된다(빈 흰 화면 대신, 08 §2).
 // - usePathname·router는 basePath(/onmom_web)를 알아서 떼고 붙인다.
 // - 사용자 관리(Supabase)가 설정돼 있으면 여기서 한 번 세션을 이어받는다(useAuthSession — 다시 방문한 사용자의 로그인·서버 동기화,
 //   예전 브라우저 전용 게스트를 익명 계정으로 옮기기(앱 화면에서만 — 공개 주소에서는 하지 않는다), 로그아웃 감지).
@@ -15,11 +16,27 @@
 //   설정이 없으면 아무것도 안 한다.
 
 import { useEffect, type ReactNode } from "react";
+import { LoaderCircle } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthSession } from "@/auth/useAuth";
 import { rootScreenFor } from "@/store/appStore";
 import { useAppStore } from "@/store/useAppStore";
 import { gateDecision, routeKindFor } from "./gate";
+
+// 웹 신규 문구 — CPO 확인 필요 (저장소를 읽거나 주소를 맞추는 동안의 낭독 문구 — 화면에는 스피너만)
+export const GATE_LOADING_TEXT = "불러오는 중이에요";
+
+/** 관문이 화면을 그리기 전 — 스피너는 0.4초 뒤에 나타나고(animate-gate-in), 움직임 줄이기면 돌지 않는다. */
+function GateLoading() {
+  return (
+    <div role="status" className="flex min-h-dvh items-center justify-center">
+      <span aria-hidden className="animate-gate-in">
+        <LoaderCircle className="size-7 text-primary motion-safe:animate-spin" />
+      </span>
+      <span className="sr-only">{GATE_LOADING_TEXT}</span>
+    </div>
+  );
+}
 
 export function AppGate({ children }: { children?: ReactNode }) {
   const store = useAppStore();
@@ -34,6 +51,6 @@ export function AppGate({ children }: { children?: ReactNode }) {
     if (redirectTo !== null) router.replace(redirectTo);
   }, [redirectTo, router]);
 
-  if (decision.kind !== "render") return null;
+  if (decision.kind !== "render") return <GateLoading />;
   return <>{children}</>;
 }

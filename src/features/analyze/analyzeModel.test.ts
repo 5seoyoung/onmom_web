@@ -221,6 +221,23 @@ describe("결과 화면", () => {
     });
   });
 
+  it("오프라인이면 실패 문구만 오프라인 안내로(제목·가능/주의/금지는 그대로) — 미설정·목록은 바뀌지 않는다", () => {
+    const failed = analyzeResultModel(analyze(P, {}, { state: "failed" }), false, { offline: true });
+    expect(failed.videos).toEqual({
+      kind: "info",
+      title: "운동 영상을 불러오지 못했어요",
+      body: "오프라인이에요 — 인터넷에 연결되면 다시 시도해 주세요",
+    });
+    expect(failed.blocks.map((b) => (b.kind === "group" ? b.group.title : b.kind))).toEqual(["가능", "금지"]);
+    expect(analyzeResultModel(analyze(P, {}, { state: "notConfigured" }), false, { offline: true }).videos).toMatchObject({
+      title: "운동 영상은 준비 중이에요",
+    });
+    // 온라인이면 원문 그대로
+    expect(analyzeResultModel(analyze(P, {}, { state: "failed" }), false, { offline: false }).videos).toMatchObject({
+      body: "네트워크 상태를 확인한 뒤 다시 분석해 주세요. 위 안내는 그대로 유효해요.",
+    });
+  });
+
   it("조회는 됐지만 지금 볼 영상이 없으면 영상 영역을 그리지 않는다(빈 카드 금지)", () => {
     const ok = analyze(P, {}, { state: "ok", videos: [video("z", "full_core")] });
     expect(analyzeResultModel(ok, false).videos).toBeNull();

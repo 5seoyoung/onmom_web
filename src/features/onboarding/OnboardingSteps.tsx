@@ -12,10 +12,12 @@ import { cx } from "@/components/ui/cx";
 import type { DeliveryMethod, RecoveryGoal } from "@/domain/types";
 import { weightPlan } from "@/rules/weight";
 import { BrandLogo } from "@/features/flow/BrandLogo";
+import { TermsSheetLink } from "@/features/terms/TermsSheetLink";
 import {
   DELIVERY_OPTIONS,
   deliveryDateHint,
   GOAL_OPTIONS,
+  isDeliveryDateInvalid,
   isDeliveryDatePicked,
   ONBOARDING_TEXT as T,
   returnDateHint,
@@ -37,6 +39,18 @@ const GOAL_ICON: Record<RecoveryGoal, LucideIcon> = { homemaker: House, returnin
 
 // 웹 신규 문구 — CPO 확인 필요 (분만 방식 선택지 묶음의 스크린리더 이름. 화면에는 보이지 않는다)
 const DELIVERY_GROUP_LABEL = "분만 방식";
+
+/** 동의 단계의 글자 링크(개인정보처리방침 전문 보기 · 이용약관 보기) — 13 semibold 글자용 코랄(primary-text, AA), 누르는 영역 44 */
+export const CONSENT_LINK_CLASS = "inline-flex min-h-11 items-center rounded-button text-[0.8125rem] font-semibold text-primary-text";
+
+/**
+ * 날짜 줄(출산일·복직 예정일) — 라벨·안내 왼쪽, 날짜 입력 오른쪽. 라벨 묶음이 최소 폭(8.5rem)보다 좁아지면(글자 150% 등) 입력이
+ * 다음 줄로 넘어간다(docs/ACCESSIBILITY.md §3·§6). 입력은 줄어들지 않는다(DATE_INPUT_CLASS shrink-0).
+ * 8.5rem: 402px 폰·글자 100%에서는 두 줄 모두 iOS처럼 입력이 오른쪽에 그대로 있고(복직 예정일 줄의 라벨 묶음 약 139px),
+ * 125% 이상에서는 넘어간다. 9rem이면 100%에서 복직 예정일 줄이, 10rem이면 두 줄 모두 넘어갔다.
+ */
+const DATE_ROW_CLASS = "flex flex-wrap items-center justify-between gap-x-4 gap-y-2";
+const DATE_LABEL_COLUMN_CLASS = "flex min-w-[8.5rem] flex-1 flex-col gap-0.5";
 
 /** 날짜 입력 — 오른쪽 정렬 칩 모양(iOS 압축형 DatePicker 자리). 표시 형식은 브라우저가 정한다. */
 const DATE_INPUT_CLASS =
@@ -87,12 +101,13 @@ export function DeliveryStep({ draft, onChange, headingRef, today }: StepProps &
 
       {/* 출산일은 앱의 기준점 — 산후 일차·주차 게이팅이 모두 여기서 나온다. 직접 골라야 다음으로 넘어간다. */}
       <Card>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-0.5">
+        {/* 글자를 키우면(150%) 날짜 입력이 줄 폭을 차지해 라벨·안내가 1~2글자씩 세로로 늘어진다 — 좁으면 입력을 다음 줄로 넘긴다 */}
+        <div className={DATE_ROW_CLASS}>
+          <div className={DATE_LABEL_COLUMN_CLASS}>
             <label htmlFor={dateId} className="text-sm font-medium text-text-secondary">
               {T.deliveryDateLabel}
             </label>
-            <p id={hintId} className={cx("text-[0.8125rem]", hint.emphasized ? "text-primary" : "text-text-secondary")}>
+            <p id={hintId} className={cx("text-[0.8125rem]", hint.emphasized ? "text-primary-text" : "text-text-secondary")}>
               {hint.text}
             </p>
           </div>
@@ -104,6 +119,8 @@ export function DeliveryStep({ draft, onChange, headingRef, today }: StepProps &
             value={draft.deliveryDate}
             onChange={(e) => onChange({ deliveryDate: e.target.value })}
             aria-describedby={hintId}
+            // 직접 입력한 미래 날짜·형식 오류 — 안내 문구(원문)는 그대로 두고 잘못된 값임을 보조기기에 알린다. 비어 있으면 오류가 아니다.
+            aria-invalid={isDeliveryDateInvalid(draft.deliveryDate, today) || undefined}
             className={DATE_INPUT_CLASS}
           />
         </div>
@@ -166,8 +183,8 @@ export function GoalStep({ draft, onChange, headingRef }: StepProps) {
       {/* 복직 예정일은 사용자가 직접 고른다 — 고르지 않은 날짜를 채우지 않는다(OnboardingFlowView.swift:220-221). */}
       {showsReturnDateCard(draft) ? (
         <Card>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex min-w-0 flex-col gap-0.5">
+          <div className={DATE_ROW_CLASS}>
+            <div className={DATE_LABEL_COLUMN_CLASS}>
               <label htmlFor={returnDateId} className="text-sm font-medium text-text-secondary">
                 {T.returnDateLabel}
               </label>
@@ -209,7 +226,7 @@ export function GoalStep({ draft, onChange, headingRef }: StepProps) {
           {plan ? (
             <div className="flex flex-col gap-2 pt-2">
               <hr className="border-divider" />
-              <p className="text-[0.9375rem] font-semibold text-primary">{plan.title}</p>
+              <p className="text-[0.9375rem] font-semibold text-primary-text">{plan.title}</p>
               <p className="text-[0.8125rem] text-text-secondary">{plan.detail}</p>
             </div>
           ) : null}
@@ -251,15 +268,14 @@ export function ConsentStep({ draft, onChange, headingRef, onOpenPolicy }: StepP
         />
       </div>
 
-      {/* 누르는 영역은 44 이상, 겉보기 간격은 Swift(글자 높이)와 같게 음수 여백으로 맞춘다 */}
-      <button
-        type="button"
-        onClick={onOpenPolicy}
-        aria-haspopup="dialog"
-        className="-my-3.5 inline-flex min-h-11 items-center self-start rounded-button text-[0.8125rem] font-semibold text-primary"
-      >
-        {T.consentPolicyLink}
-      </button>
+      {/* 누르는 영역은 44 이상, 겉보기 간격은 Swift(글자 높이)와 같게 음수 여백으로 맞춘다.
+          처리방침 옆의 "이용약관 보기"(features/terms — 초안, 시트로 연다)는 web/08 §1 법률 자문 "이용약관 화면(온보딩 동의 옆)". */}
+      <div className="-my-3.5 flex flex-wrap items-center gap-x-4">
+        <button type="button" onClick={onOpenPolicy} aria-haspopup="dialog" className={CONSENT_LINK_CLASS}>
+          {T.consentPolicyLink}
+        </button>
+        <TermsSheetLink className={CONSENT_LINK_CLASS} />
+      </div>
 
       <p className="text-[0.8125rem] text-text-secondary">{content.disclaimers.onboarding_consent}</p>
     </div>

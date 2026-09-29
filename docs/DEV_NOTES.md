@@ -2,6 +2,7 @@
 
 2026-09-23 기준으로 규칙·저장·UI·외부 연동 모듈을 합치며 쓰고, 2026-09-27 화면 구현(§6)과 주소 재구성(§4 주소 지도 — "/"는 서비스 소개, 앱 홈은 "/home/"), 서비스 소개·폰/PC 반응형 껍데기·카카오 로그인(Supabase) 통합(§7)을 더했습니다.
 2026-09-28 실서비스 전환(게스트 = Supabase 익명 계정, 동의의 판, 영상·AI 서버 함수, 관리자 화면)을 §8에 더했습니다. §7의 서버 저장 동의 설명(7-0·7-3·7-4)은 §8이 대신합니다.
+2026-09-29 기능 완성(PWA·매일 리마인더, 권리·관리자 도구, 화면 보강, 접근성·운영, 여러 탭 보호)을 §10에 더했습니다.
 `[#n]`은 인수인계 검수 문서(비공개, `docs/private/handoff-audit-2026-09-23.md`)의 항목 번호입니다.
 결정이 나면 해당 줄을 지우고 코드·테스트를 고칩니다. 규칙 값이 바뀌면 `src/rules/version.ts`의 버전도 올립니다.
 
@@ -103,7 +104,7 @@
 7. **LLM 답의 출처**: LLM이 준 출처가 확인된 표 출처와 같은 `src:` 칩으로 보입니다 [원칙 4]. 다른 모양으로 할지, 빼거나 둘지. LLM이 "unknown"이면 표의 "정보 부족"을 대체하는 것도 확인 필요.
 8. **로그아웃·공용 PC** [#19]: 로그아웃해도 건강 데이터가 브라우저에 평문으로 남습니다. 게스트 데이터는 다음 카카오 로그인 계정으로 넘어갑니다. 실계정 로그아웃 시 지울지, 게스트에게 "이 브라우저에서 삭제"를 줄지. (2026-09-27: 카카오 계정은 서버에 다 올라간 뒤 로그아웃하면 브라우저 사본을 지웁니다 — §7-3. 게스트·서버 저장 전 카카오는 그대로 남습니다.)
 9. **"이 기기" 문구** [#48]: 로그아웃·계정 삭제·기록장 안내 문구가 iOS 그대로 "이 기기"입니다(D5로 우선 유지). 저장 실패(`storageAvailable=false`) 안내 문구도 없습니다.
-10. **여러 탭 경합**: 변경 이벤트가 조금 늦게 오거나(뒤로 가기 캐시 복원 등) 받지 못하면 다른 탭의 최근 기록을 덮을 수 있습니다. 저장 직전마다 다시 읽을지.
+10. ~~**여러 탭 경합**~~ — 2026-09-29 해결: 저장 직전에 저장소가 바뀌었으면 다시 읽고 합친 뒤 저장, 계정이 바뀌었으면 쓰기를 버림(§10-1 여러 탭 보호). 남은 결정: 다른 탭이 로그아웃·삭제한 뒤 낡은 탭에서 누른 기록은 저장하지 않고 버립니다(안내 문구 없음 — 화면은 로그인으로 감).
 11. **기록 날짜가 없는 손상 데이터**는 읽은 시각으로 채워집니다(iOS와 같음). 오래된 레드플래그 기록이 오늘 것처럼 보일 수 있습니다.
 12. **색 대비** [#52]: iOS 팔레트 그대로라 WCAG AA에 못 미칩니다 — 레드플래그 카드 흰 글씨 2.76:1, 카드 안 칩 2.22, 상태 배지 1.67~2.45, 출처 칩 2.50, placeholder 3.04, 토글 켬 2.76·끔 1.65, 구분선 테두리 1.06~1.10, 슬라이더 트랙 1.27, **포커스 링(코랄) 2.64~2.76**. 텍스트 전용 색 토큰과 3:1 이상 포커스 링 토큰(예: #191F28)을 `globals.css`에 정해야 합니다. 화면을 만들며 더 나온 곳: 홈·운동 탭의 "{단계} 제외 — {사유}" 줄(`text-state-watch` #FFB020, 흰 배경 약 1.8:1), 홈 면책·기분 카드 안내(`text-text-subtle` #8B95A1, 약 3.0:1). 아이콘·배지용 watch 색은 두고 글자용 짙은 watch 토큰을 더할지, iOS 색을 그대로 받아들일지 — 정하면 모든 화면에 한 번에 적용합니다.
 13. **숨은 "출처: " 낭독 문구** 유지 여부.
@@ -138,16 +139,17 @@
 |---|---|---|---|---|
 | `/` | `landing` | `page.tsx` → `features/landing/LandingPage.tsx` | 공개 — 늘 그림, 이동 없음 | 전체 폭 |
 | `/privacy/` | `privacy` | `privacy/page.tsx` | 공개 | 카드 기둥(`CardColumn`) |
+| `/terms/` | `terms` | `terms/page.tsx` → `features/terms/TermsScreen.tsx` | 공개(2026-09-29 — 이용약관 초안) | 카드 기둥 |
 | `/auth/callback/` | `authCallback` | `auth/callback/page.tsx` → `features/flow/AuthCallbackScreen.tsx` | 공개 — 카카오 로그인(Supabase)에서 돌아오는 주소. 설정이 없는 빌드에서도 파일은 있고, 열면 실패 안내 | 카드 기둥 |
 | `/admin/` | `admin` | `admin/page.tsx` → `features/admin/AdminScreen.tsx` | 공개 — 관문이 옮기지 않음(로그인·온보딩과 무관). 권한은 화면이 Supabase `is_admin()`으로 확인하고 데이터는 서버 함수가 막음(§8). 메뉴에 링크하지 않음. 공개 주소라 예전 게스트를 익명 계정으로 옮기지 않음 | 전체 폭(본문 최대 64rem 가운데 — §9) |
 | `/login/` | `login` | `login/page.tsx` | 로그인 전만. 로그인했으면 `rootScreenFor`대로 `/onboarding/` 또는 `/home/` | 카드 기둥 |
 | `/onboarding/` | `onboarding` | `onboarding/page.tsx` | 로그인했고 온보딩 전만. **다시 동의**(Supabase 빌드에서 온보딩을 마쳤지만 지금 판의 동의가 없음 — `rootScreenFor` "consent")도 이 주소: `SCREEN_PATH.consent` = `/onboarding/?consent=1`, 화면은 `hasOnboarded`로 동의 단계만 그림 | 카드 기둥 |
 | `/home/` `/exercise/` `/record/` `/journal/` `/journal/write/` `/journal/post/?id=` `/profile/` | `home` `exercise` `record` `journal` `journalWrite` `journalPost` `profile` | `(app)/(tabs)/…` (탭바 레이아웃) | main — 로그인·온보딩을 마친 뒤만 | 앱 껍데기(`AppShell`) |
 | `/analyze/` `/guide/` `/lifestyle/` `/support/` `/substance/` `/chat/` `/region/` `/settings/` `/settings/profile/` | `analyze` `guide` `lifestyle` `support` `substance` `chat` `region` `settings` `settingsProfile` | `(app)/…` | main | 앱 껍데기 |
-| 그 밖 | — | Next 404(`404.html`) | main으로 봄 — 로그인 전이면 `/login/`, 뒤면 404 | 전체 폭 |
+| 그 밖 | — | 한국어 404(`src/app/not-found.tsx` → `404.html`) | main으로 봄 — 로그인 전이면 `/login/`, 뒤면 404 | 카드 기둥 |
 
 - **레이아웃**: 루트 `layout.tsx`는 `StoreProvider` + `AppGate`만 두고 폭을 정하지 않습니다. 앱 화면은 `(app)/layout.tsx`의 `components/shell/AppShell.tsx`(폰 = 폰 폭 기둥 + 떠 있는 탭바, PC = 왼쪽 사이드바 + 넓은 본문), 로그인·온보딩·처리방침·콜백은 `components/shell/CardColumn.tsx`(폰 = 폰 폭 기둥, PC = 가운데 카드)를 씁니다. 자세한 폭 규칙은 §7-2. (옛 `components/MobileColumn.tsx`는 쓰는 곳이 없어 지웠습니다.)
-- **관문**: 공개 주소(`/`·`/privacy/`·`/auth/callback/`·`/admin/`)는 저장소를 읽기 전에도 정적 HTML 그대로 그립니다. 그 밖은 읽기 전에는 아무것도 그리지 않습니다. `SCREEN_PATH.main`은 `ROUTES.home`입니다.
+- **관문**: 공개 주소(`/`·`/privacy/`·`/terms/`·`/auth/callback/`·`/admin/`)는 저장소를 읽기 전에도 정적 HTML 그대로 그립니다. 그 밖은 읽기 전(과 주소를 맞추는 동안)에는 화면 대신 불러오는 중 표시(`AppGate` `GateLoading` — 0.4초 뒤에 나타나는 스피너 + 낭독 "불러오는 중이에요", 사용자 데이터 없음)를 그립니다. `SCREEN_PATH.main`은 `ROUTES.home`입니다.
 - **`(app)` 묶음 = main**: `src/routes.test.ts`가 `src/app`의 모든 `page.tsx`에 `ROUTES` 값이 있는지, 모든 `ROUTES` 값에 페이지가 있는지(콜백 제외), `(app)` 안 페이지는 관문이 main으로, 밖 페이지는 main이 아닌 것으로 보는지 확인합니다. 새 화면은 `ROUTES`에 먼저 더하고, 로그인 뒤 화면이면 `(app)` 안에 둡니다.
 - `/dev/components` 카탈로그는 지웠습니다(§3 CPO 14).
 
@@ -166,7 +168,8 @@
 - **심각도 라벨**이 `null`이면 배지를 뺍니다(원시 코드 금지).
 - 브라우저에 개인 데이터를 새로 저장하면 키 접두 `onmom.web.`를 씁니다(계정 삭제가 지움).
 - **AI 상담으로 가는 링크**: 홈에서는 `/chat/?from=home`(`HOME_CHAT_HREF`) — 챗의 [뒤로]가 홈 탭(`/home/`)으로 옵니다. 쿼리가 없으면 프로필로 갑니다(`chatBackHref`).
-- **하위 화면 떠나기**: 글쓰기·글 상세·프로필 편집은 `features/profile/LeaveSubPage.tsx`의 `useLeaveSubPage(부모)`로 떠납니다. 바로 앞 기록이 **부모 화면**일 때만 `router.back()`, 아니면 부모로 `replace`(주소로 바로 들어온 경우 등).
+- **하위 화면 떠나기**: 글쓰기·글 상세·프로필 편집·처리방침·약관은 `features/profile/LeaveSubPage.tsx`의 `useLeaveSubPage(부모)`로 떠납니다. 바로 앞 기록이 **부모 화면**일 때만 `router.back()`, 아니면 부모로 `replace`(주소로 바로 들어온 경우 등).
+  공용 `SubPageHeader`의 [뒤로](분석·설정·챗·서비스 7개)도 2026-09-29부터 같은 판단(`components/ui/subPageExit.ts`)으로 — 앞 기록이 `backHref`면 `history.back()`, 아니면 링크대로 부모로 이동(방문 기록에 같은 화면이 두 번 남지 않음).
 - **탭 밖 화면의 링크 끝은 늘 `/`**(trailingSlash). 쿼리는 `/journal/post/?id=…`처럼 슬래시 뒤에 붙입니다.
 
 ## 5. 아직 남은 중복
@@ -178,7 +181,7 @@
 | 목표 표시명(전업/복직 예정) | `rules/chat.ts`(비공개) · `features/home/homeViewModel.ts GOAL_TITLE` · `features/profile/profileView.ts` · `features/onboarding/onboardingModel.ts GOAL_OPTIONS` | `rules/exercise.ts DELIVERY_TITLE` 옆으로 옮겨 내보내고(또는 content.json) 화면 사본 셋을 지움 |
 | 분만 방식 선택지 | `onboarding/onboardingModel.ts` · `analyze/analyzeModel.ts` · `settings/settingsView.ts`의 `DELIVERY_OPTIONS` | 제목은 모두 `DELIVERY_TITLE`을 씀 — 배열 하나로 합칠 수 있음 |
 | 브라우저 시계 훅 | `home/useNow.ts` · `profile/useNow.ts` · `onboarding/useLocalToday.ts` · `record/localDay.ts` | 공용 훅 하나(`useNow`·`useLocalDay`)로 합침 |
-| 하위 화면 떠나기 | `features/profile/subPageExit.ts`·`LeaveSubPage.tsx` vs 공용 `SubPageHeader`(늘 고정 경로 push) | `SubPageHeader`에 `onBack`을 두거나 이 판단을 `components/ui`로 옮김 |
+| ~~하위 화면 떠나기~~ | 2026-09-29 판단을 `components/ui/subPageExit.ts`·`historySnapshot.ts`로 옮기고 `SubPageHeader`가 씀(`features/profile/subPageExit.ts`는 다시 내보내기만) | 끝 — `LeaveSubPage`(replace)와 `SubPageHeader`(push)의 차이만 남음 |
 | 외부 링크 허용 호스트 | `api/safeUrl.ts` · `features/support/supportViewModel.ts SUPPORT_LINK_HOSTS`(www.gov.kr) | gov.kr을 공용 목록으로 옮김 |
 | SF Symbol → lucide 아이콘 | `features/guide/sfIcons.ts` | 다른 화면이 쓰면 `components/ui`로 |
 | 산모수첩 차단 칩 | `rules/recovery.ts BLOCKED_CHIPS` = content.json 주의 오버레이 칩과 같은 글자 | Swift도 별도 리터럴(RecoveryAnalysis.swift:35) — content.json 키가 생기면 그쪽으로 |
@@ -213,7 +216,7 @@
 - **D1 레드플래그 활성**(최근 기록에 `redFlagCode`): 홈 "확인 필요"·단계 카드 → "운동 안내를 멈췄어요"·체중 카드 숨김, 운동 탭 레드플래그 블록(영상 조회 안 함), 분석 결과 '가능'·영상 숨김(`suppressExerciseOnRedFlag: true`) + 멈춤 안내. 마음 카드는 숨기지 않음.
 - **D2** 카카오 로그인 비활성 + "준비 중", 게스트만 동작. 웹에 Apple 로그인 없음. (2026-09-27: Supabase 설정이 있는 빌드에서만 켜짐 — §7)
 - **D3** 음성 입력 없음(마이크 버튼 없음). 홈 상단 버튼은 "AI 상담"으로 챗을 엶(iOS "말로 물어보기").
-- **D4** 매일 리마인더 알림 미구현 — 설정에 토글 없이 "준비 중".
+- **D4** 매일 리마인더 알림 미구현 — 설정에 토글 없이 "준비 중". (2026-09-29: Supabase + `NEXT_PUBLIC_VAPID_PUBLIC_KEY`가 있는 빌드는 웹 푸시 토글 — §10, `docs/PWA_AND_REMINDERS.md`)
 - **D5** "이 기기" 등 iOS 문구 그대로(§3 CPO 9).
 - **D6** 카카오 JS 키가 없으면 가까운 산부인과는 준비 중 카드 + 검색 버튼 비활성. 지역 연계 화면의 안내·입력은 그대로.
 - **D7** 영상 서버 미설정이면 운동 탭 "영상 준비 중" + 현재 단계(금기 단계 제외) + "{단계} 제외 — {사유}" 줄.
@@ -261,11 +264,11 @@
 
 ### 알려진 한계 · 남은 일
 - **카카오 지도는 실제 키로 한 번도 돌려보지 않았습니다.** 키를 켜기 전에 브라우저에서 지도·핀·목록을 확인해야 합니다(`features/clinics/ClinicMap.tsx`, 지도 타입은 화면 쪽에 따로 선언).
-- **공용 `SubPageHeader`의 [뒤로]는 늘 고정 경로로 push** — 분석·설정·챗 등에서 방문 기록에 같은 화면이 두 번 남습니다(§5).
+- ~~**공용 `SubPageHeader`의 [뒤로]는 늘 고정 경로로 push**~~ — 2026-09-29 고침(§4 하위 화면 떠나기).
 - **색 대비 토큰 결정**(§3 CPO 12)이 모든 화면에 걸려 있습니다.
 - 스크린리더 실기기 점검, 글씨 150%·키보드 점검은 아직입니다. E2E는 저장소·CI에 없습니다(위 점검은 수동).
 - 서버가 필요한 기능(카카오 로그인·영상·LLM·카카오 검색)은 지금 배포에서 모두 준비 중 상태로 동작합니다. 켜면 해당 화면을 다시 확인합니다(카카오 로그인은 §7-4 체크리스트를 먼저).
-- 저장 실패(`storageAvailable=false`) 안내, PWA 매니페스트는 남았습니다.
+- ~~저장 실패(`storageAvailable=false`) 안내, PWA 매니페스트는 남았습니다.~~ — 2026-09-29: 저장 실패 안내(`home/StorageWarning`), PWA 매니페스트·서비스 워커·매일 리마인더(웹 푸시)는 `docs/PWA_AND_REMINDERS.md`(§10).
 - ~~처리방침(`/privacy/`)의 [뒤로]는 늘 설정으로 갑니다~~ — 2026-09-27 고침(위 화면 표).
 
 ## 7. 서비스 소개 · 폰/PC 반응형 · 카카오 로그인(Supabase) (2026-09-27 통합)
@@ -419,9 +422,9 @@
 | 동의·개인정보 | `domain/consent.ts`, `features/onboarding/{consentText,ServerConsentStep,OnboardingFlow,onboardingModel}`, `features/privacy/{dataItems,webPolicyText,policy}` | Supabase 빌드의 온보딩 동의 = 필수 (a) 개인정보 수집·이용 (b) 민감정보(건강정보) 처리 (c) 만 14세 이상 — 따로따로, 전부 켜야 시작. (d) AI 국외 이전은 **안내만**(동의는 AI를 처음 쓸 때). 법이 명확히 표시하라는 줄은 크게·굵게·밑줄. [동의하지 않고 나가기] → 확인 창 → 계정 삭제. `/privacy/`는 웹 방침 초안("초안 — 법률 검토 전") |
 | 서버 함수 | `supabase/functions/**`, `src/api/{llm,video,http}.ts`, `features/chat/{aiConsent,AiConsentCard,chatModel,ChatScreen}`, `features/substance` | `llmComplete`·`fetchVideos`는 Supabase가 있으면 함수를, 없으면 예전처럼 `NEXT_PUBLIC_LLM_URL`·`NEXT_PUBLIC_VIDEO_URL`. 위기 표현(content.json + 서버 목록)은 어떤 모드에서도 규칙 답(1577-0199/109/119)으로, AI로 보내지 않고 나중 요청에서도 뺌. 약물 체크는 표 먼저, 표에 없는 항목만 AI("AI 답변" 표시) |
 | 관리자 | `src/app/admin/page.tsx`, `features/admin/**`, `supabase/migrations/0002_admin.sql` | `public.admins`에 있는 카카오 사용자만(익명 사용자는 명단에 있어도 거절). 숫자 카드 5·최근 30일 신규 막대(표로 보기)·사용자 목록 20개씩. 이메일·닉네임·건강 기록 없음 |
-| CI·문서 | `.github/workflows/{supabase,deploy}.yml`, `supabase/config.toml`, `.env.example`, `docs/{SUPABASE_SETUP,SUPABASE_FUNCTIONS,LAUNCH_CHECKLIST}.md` | "Supabase" 워크플로(main만): 값 확인 → `npm test` → link → `db push`(0001→0003) → 함수 비밀값(빈 값은 건너뜀, 지우지 않음) → videos·chat 배포 → chat 로그인 확인. 사이트 배포는 Variables만 읽음 |
+| CI·문서 | `.github/workflows/{supabase,deploy}.yml`, `supabase/config.toml`, `.env.example`, `docs/{SUPABASE_SETUP,SUPABASE_FUNCTIONS,LAUNCH_CHECKLIST}.md` | "Supabase" 워크플로(main만): 값 확인 → `npm test` → link → `db push`(0001→0005, 2026-09-29) → 함수 비밀값(빈 값은 건너뜀, 지우지 않음) → videos·chat·send-reminders 배포 → chat 로그인 확인. 사이트 배포는 Variables만 읽음 |
 
-**마이그레이션**: `0001_user_states`(표·RLS 본인 행·`delete_my_account()`·동의 칸 — 예전 판 표에는 칸을 더함) → `0002_admin`(0001의 동의 칸이 없으면 멈춤) → `0003_llm_usage`. 모두 여러 번 실행해도 같은 결과.
+**마이그레이션**: `0001_user_states`(표·RLS 본인 행·`delete_my_account()`·동의 칸 — 예전 판 표에는 칸을 더함) → `0002_admin`(0001의 동의 칸이 없으면 멈춤) → `0003_llm_usage` → `0004_push_reminders`(2026-09-29 — 푸시 구독 표·pg_cron 예약, Vault 값 전에는 요청 없음) → `0005_admin_tools`(2026-09-29 — 관리자 검색·삭제·감사 기록, 0002가 없으면 멈춤). 모두 여러 번 실행해도 같은 결과.
 
 ### 8-2. 동의 계약(모든 모듈 공통)
 - `UserProfile.consentVersion`·`consentAcceptedAt`(기본 `null`). `CURRENT_CONSENT_VERSION = "web-2026-09-28"`, `hasCurrentConsent(profile)` = `consentAccepted && consentVersion === CURRENT_CONSENT_VERSION`.
@@ -510,3 +513,85 @@
 - **서비스 소개 로고**(`features/landing/LandingHomeLink.tsx`·`landingTop.ts`): 서비스 소개에서 누르면 맨 위로 부드럽게(움직임 줄이기면 바로), 주소의 `#섹션`은 지움(방문 기록은 늘리지 않음), 초점은 로고에 그대로. 전에는 Next Link가 같은 주소에서 스크롤을 유지해 아무 일도 없었음. 다른 화면의 로고(사이드바·로그인·홈 머리)는 보통 링크 — 새 화면 맨 위에서 열림(Next 기본).
 - 새 문구 없음. 확인: 폰 402×874·PC 1440×900·1366×657·1024×768, 설정 없는 빌드와 Supabase 빌드(가짜 주소 — 다시 동의·설정 게스트 칸·관리자 권한 없음)에서 캡처(저장소 밖).
 
+
+## 10. 기능 완성(2026-09-28) — 2026-09-29 통합
+
+요청: 실서비스로 남은 빈틈(갭 분석 40항목)을 채운다 — 가짜 데이터 없이, 설정이 없는 빌드(지금 배포)는 브라우저만으로 그대로 동작.
+다섯 갈래(PWA·푸시, 권리·관리자, 화면 — 탭, 화면 — 서비스, 접근성·운영)를 따로 만들고 검수·수정한 뒤 여기서 합쳤습니다. 커밋은 하지 않았습니다.
+
+### 10-1. 더한 것
+| 갈래 | 파일 | 요점 |
+|---|---|---|
+| PWA·매일 리마인더 | `public/{manifest.webmanifest,sw.js,icons/*}`, `features/pwa/**`, `features/settings/ReminderSection.tsx`, `supabase/migrations/0004_push_reminders.sql`, `supabase/functions/send-reminders/**`·`_shared/reminders.ts`, `scripts/generate-vapid.mjs` | 홈 화면 추가(매니페스트·아이콘·서비스 워커 — 정적 파일만 캐시, 건강 데이터 응답은 캐시하지 않음). 매일 20:00 KST 웹 푸시(iOS 로컬 알림 자리) — 알림 본문은 content.json `notification` 고정 문구뿐. 켜짐 = 브라우저 구독 + 이 계정의 서버 행. 설명 전부: `docs/PWA_AND_REMINDERS.md` |
+| 권리·관리자 | `features/settings/{DataRightsCard,dataExport}.ts(x)`, `features/terms/**`·`src/app/terms`, `features/admin/{AdminTools,DeleteUserDialog}.tsx`, `supabase/migrations/0005_admin_tools.sql` | 설정 > 내 데이터(동의 내역·철회 방법·계정 ID·JSON 내려받기), 이용약관 초안(`/terms/`, 법률 검토 전), 문의 mailto(방침의 이메일), 관리자 검색·계정 삭제(8자 입력 확인·사유에 이메일 금지·감사 기록)·관리자 목록·동의 판 분포·CSV — 모두 메타데이터만 |
+| 화면 — 탭 | `features/home/{SyncStatusNotice,StorageWarning,syncStatusView,storageWarningView,useOnline}`, `features/exercise/videoLoad.ts`, journal·record 배너 | 서버 저장 상태(설정 카드 한 줄 + 60초 넘게 실패하면 홈 안내), 저장 실패 안내(`storageAvailable=false`), 영상 서버 깨우는 중 문구·5xx 한 번 재시도, 오프라인 문구, Supabase 빌드의 "이 기기에만" 배너·각주를 서버판으로 |
+| 화면 — 서비스 | `features/guide/PhoneLinks.tsx`, `features/chat/**`, `features/substance/**`, 온보딩·로그인 | 가이드·지원사업 전화번호 tel 링크, 말풍선마다 "AI 답변 · 진단·처방이 아닙니다"/"앱 안내" 표시(tel 링크는 앱 안내에만), AI가 제시한 출처에 낭독 접두, 한도·혼잡·거절별 AI 실패 문구, FAQ 칩은 AI가 실제로 답할 때(mode on)만, 날짜 줄 150% 줄바꿈 |
+| 접근성·운영 | `src/app/{not-found,error,global-error}.tsx`, `components/shell/{ErrorScreen,RouteFocus}.tsx`, `globals.css` 글자 전용 토큰·포커스 링, `components/ui/contrast.test.ts`, `docs/ACCESSIBILITY.md` | 한국어 404·오류 화면(오류 내용은 어디에도 내지 않음), 화면 이동 때 초점, 글자 전용 색 토큰(AA)·포커스 링 `#191F28`, 150%·키보드 점검 기록 |
+
+**통합에서 한 것**
+- 연결: `src/app/page.tsx` `robots: robotsFor("landing")`(`NEXT_PUBLIC_SITE_INDEXABLE=true`면 서비스 소개만 색인 — `pwa.test.ts`) · `supabase/config.toml` `[functions.send-reminders] verify_jwt = false` · "Supabase" 워크플로에 `send-reminders` 배포·`VAPID_PRIVATE_KEY`·`VAPID_SUBJECT`·`REMINDER_CRON_SECRET`(Secrets)·`VAPID_PUBLIC_KEY`(= Variables `NEXT_PUBLIC_VAPID_PUBLIC_KEY`)·`ANTHROPIC_WORKSPACE_ID`(Variables 또는 Secrets — chat 함수가 이미 읽던 값) + 형식 확인 · `gate.ts` 공개 주소에 `/terms/`.
+- **카카오 로그아웃 → 리마인더 행 정리**: `src/auth/session.ts` `beforeSignOut` 의존성(기본 = `disableReminderNow`, 동적 가져오기). 다 올렸거나 [그래도 로그아웃]일 때 세션을 끝내기 직전 한 번, 최대 3초, 실패해도 로그아웃은 계속(`session.test.ts` 4개).
+- **여러 탭 보호**(§3 CPO 10): `persistence.stateToken()`(저장된 상태·계정 글자 그대로 — 저장 형식은 그대로) → `appStore.commit`이 저장 직전에 이 탭이 마지막으로 본 값과 비교. 달라졌으면 다시 읽고 ① 같은 계정이면 `store/tabRebase.ts rebaseOnStored`(= `mergeStates`, 기준 = 이 탭이 마지막으로 본 저장 상태 — 기록·글·댓글 합집합, 프로필·산모수첩은 이 탭이 바꾼 칸만; 동의 묶음도 칸별 3방향이라 동기화 엔진이 지운 동의를 다른 탭 값이 되살리지 않음) ② 계정이 바뀌었거나 끝났으면(다른 탭의 로그아웃·삭제·다른 계정) 쓰기를 버림. 이 탭의 저장이 실패 중이면 비교하지 않음(메모리가 원본). 페이지가 다시 보일 때(`pageshow` persisted·`visibilitychange` visible — `watchPageResume`) 바뀐 경우에만 다시 읽음. `tabRebase.test.ts` 14개(두 스토어 + 한 메모리 저장소, 알림 없음 — 보호를 끄면 8개 실패).
+- **[뒤로] 방문 기록**: `SubPageHeader`가 앞 기록이 부모면 `history.back()`(§4·§5).
+- **관문 빈 화면 → 불러오는 중**: `AppGate` `GateLoading`(0.4초 뒤 스피너, `animate-gate-in` 토큰).
+- **색 대비 적용**(`docs/ACCESSIBILITY.md` §6 목록): 글자에 쓰인 `text-primary`·`text-state-{alert,watch,normal}`·`text-text-subtle`·`placeholder:text-text-subtle` → 글자 전용 토큰(탭바·설정·홈·기록·운동·분석·기록장·관리자·처리방침·약관 시트 등 50여 곳), 코랄 포커스 링 `outline-primary` 5곳 → `outline-focus-ring`. 아이콘·배경·브랜드 워드마크("온맘")는 그대로, 흰 글씨/코랄·출처 칩 inverse·토글 꺼짐 트랙은 CPO 12 결정 대기라 그대로. 150%: 분석 출산일 줄 줄바꿈, 서비스 소개 머리 `min-h-16`·워드마크 줄바꿈 금지, 설정 문의 이메일 `break-all`. 기록장 글 제목은 iOS `lineLimit(1)` 그대로.
+
+### 10-2. 설정 없음 vs 있음 (추가분)
+| 무엇 | 설정 없음(지금 배포) | 설정 있음 |
+|---|---|---|
+| PWA | 매니페스트·아이콘·서비스 워커(운영 빌드, `/onmom_web/` 범위) | 같음 |
+| 설정 > 알림 | "준비 중"(요청 없음) | Supabase + `NEXT_PUBLIC_VAPID_PUBLIC_KEY`면 iOS 토글. 발송은 Vault `reminder_cron_secret`을 넣어야 시작 |
+| 설정 > 내 데이터 | 동의 내역·철회 방법·내려받기(`serverUserId: null`), 계정 ID 행 없음 | 세션이 있으면 계정 ID 행(내려받기에도) |
+| 이용약관·문의 | `/terms/`(초안 표시)·mailto | 같음 |
+| `/admin/` | 권한 없음 + 설정 없는 빌드 안내 | 관리자 = 집계 + 도구(0005 적용 전에는 설정 안내) |
+| 서버 저장 상태 | 표시 없음(동기화 "off") | 설정 카드 한 줄, 60초 넘게 실패하면 홈 안내 |
+| 저장 실패 안내 | 브라우저가 저장하지 못하면 홈·기록·운동·기록장(목록·글쓰기·글)·프로필·분석 위에 안내(닫으면 이 페이지 동안 숨김) | 같음 |
+| 카카오 로그아웃 | — | 세션을 끝내기 전 이 브라우저의 리마인더 행 삭제 |
+| 여러 탭 | 저장 직전 비교·합치기 | 같음(동기화 엔진의 쓰기도) |
+| 검색 노출 | 전부 noindex | `NEXT_PUBLIC_SITE_INDEXABLE=true`면 서비스 소개만 index |
+
+### 10-3. 웹 신규 문구 (CPO 확인 필요 — 코드에 `// 웹 신규 문구 — CPO 확인 필요`)
+| 파일 | 문구 | 보이는 곳 |
+|---|---|---|
+| `features/flow/AppGate.tsx` | "불러오는 중이에요" | 관문 로딩(낭독만) — 통합에서 새로 |
+| `features/pwa/reminderModel.ts` `REMINDER_TEXT` | 권한 거부 안내 / iPhone 설치 안내 / "이 브라우저는 알림을 지원하지 않아요." / 실패 / "알림 설정을 바꾸고 있어요" | 설정 > 알림(설정 있음) — `PWA_AND_REMINDERS.md` §6 |
+| `features/settings/settingsView.ts` `DATA_RIGHTS_TEXT` | "내 데이터" / "내 동의 내역" / "계정 ID" / "문의나 삭제 요청을 보낼 때 이 계정 ID를 함께 알려 주세요." / "동의를 철회하려면 위 계정 카드에서 계정을 삭제해 주세요." / "내 데이터 내려받기" + 안내·실패 | 설정 > 내 데이터 |
+| `features/terms/termsText.ts`(+ `docs/privacy/TERMS_DRAFT.md`) · `contact.ts` | 이용약관 초안 전체("초안 — 법률 검토 전") · "문의" / 메일 제목 "온맘 문의" | `/terms/`·설정·서비스 소개 바닥글 |
+| `features/admin/adminModel.ts` `ADMIN_TEXT` 도구 묶음 | 검색·삭제(사유 라벨 "…이메일·건강 정보는 적지 마세요." / "사유에 이메일 주소가 있어요. …")·관리자 목록·CSV·차트 나눔 | `/admin/`(운영자용) |
+| `features/home/syncStatusView.ts` | "서버에 저장됨" / "저장 중" / "서버에 저장하지 못했어요" / "동의 후 저장돼요" / "새 버전의 온맘이 필요해요 — 새로 고침" / 홈 안내 한 줄 | 설정·홈(설정 있음) |
+| `features/home/storageWarningView.ts` · `useOnline.ts` | "이 브라우저에 기록을 저장할 수 없어요. …" · "오프라인이에요 — 인터넷에 연결되면 다시 시도해 주세요" | 저장 실패·오프라인 |
+| `features/exercise/videoLoad.ts` | "서버를 깨우는 중이에요 — 조금만 기다려 주세요" | 운동 탭·분석(영상 느릴 때) — iOS 최신 문구·재시도 규칙과 다름(아래 10-6) |
+| `features/chat/chatModel.ts` | "앱 안내" / "AI 답변 · 진단·처방이 아닙니다" / "AI 상담 이용 횟수가 잠시 한도에 닿아" / "지금은 AI 서버를 잠시 이용할 수 없어" / "AI가 이 질문에는 답하지 않아" | AI 상담(AI 켜짐) |
+| `features/substance/SubstanceCheckScreen.tsx` | "AI가 제시한 출처: "(낭독만) | 약물 체크 AI 답 |
+| `features/journal/journalView.ts` · `features/record/recordView.ts` | 서버판 기록장 배너 / 기분 각주("…동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장…") | Supabase 빌드만 |
+| `features/flow/callbackText.ts` | 콜백 문구 4개(설정 없는 빌드에서 콜백 주소를 연 경우 포함) | `/auth/callback/` |
+| `src/app/not-found.tsx` · `components/shell/ErrorScreen.tsx` | 404 4개 · 오류 3개 | `docs/ACCESSIBILITY.md` §8 |
+
+### 10-4. 주인이 할 일 (순서)
+0. **어떤 Variable을 넣었는지**: 이 작업에서는 GitHub 값을 읽을 수 없습니다(`gh` 없음). 이름에 따라: `NEXT_PUBLIC_SUPABASE_URL`+`…_PUBLISHABLE_KEY` 둘 다 → 다음 사이트 배포부터 카카오 로그인·서버 저장이 켜짐(**LAUNCH_CHECKLIST 1~3단계 먼저**) · `NEXT_PUBLIC_KAKAO_JS_KEY` → 산부인과 찾기만 · `NEXT_PUBLIC_VAPID_PUBLIC_KEY` → Supabase 값과 함께일 때만 알림 토글(형식이 틀리면 사이트 빌드가 멈춤) · `NEXT_PUBLIC_SITE_INDEXABLE=true` → 서비스 소개만 색인 · `ANTHROPIC_WORKSPACE_ID` → "Supabase" 워크플로가 chat 함수 비밀값으로 넣음 · `NEXT_PUBLIC_AI_CHAT_ENABLED=true` → Supabase 값과 함께일 때만, LAUNCH_CHECKLIST 5단계 뒤. 어느 것이든 **다음 배포(Deploy to GitHub Pages) 전에는 공개 사이트에 반영되지 않습니다.**
+1. **GitHub Secret `ANTHROPIC_API_KEY`를 지금 서버에 넣은 키와 같게**(워크플로의 `secrets set`이 덮어씀) — 이 변경을 main에 올리면 `supabase/**`가 바뀌어 "Supabase" 워크플로가 자동으로 돕니다.
+2. 커밋·push → "Supabase" 워크플로: `db push`(0004·0005 — 0001~0003은 이미 적용), `send-reminders` 배포. 손으로 할 때는 `docs/SUPABASE_FUNCTIONS.md` §3. 확인: Table Editor에 `push_subscriptions`·`admin_audit`, Edge Functions에 `send-reminders`.
+3. **관리자 등록**(SETUP E): 카카오로 로그인 → `/admin/`의 "내 계정 ID" 복사 → SQL Editor `insert into public.admins (user_id) values ('<계정 ID>');`(해제는 `delete from public.admins where user_id = '…'`).
+4. **삭제 요청 처리**: 사용자가 설정 > 내 데이터의 계정 ID를 보냄 → `/admin/` 검색 → [계정 삭제] → 앞 8자 입력(사유에는 이메일·건강 정보를 적지 않음). 카카오 연결 끊기는 자동이 아님(처리방침 5절 — 사용자가 직접).
+5. **매일 리마인더**(`docs/PWA_AND_REMINDERS.md` §5 — **처리방침 초안에 `push_subscriptions`·푸시 서비스가 들어간 뒤에만**): `node scripts/generate-vapid.mjs` → Secrets `VAPID_PRIVATE_KEY`·`VAPID_SUBJECT`(`mailto:…`)·`REMINDER_CRON_SECRET`(16자 이상) + Variable `NEXT_PUBLIC_VAPID_PUBLIC_KEY` → "Supabase" 워크플로 → SQL Editor `select vault.create_secret('<REMINDER_CRON_SECRET과 같은 값>', 'reminder_cron_secret');` = **켜기** → 사이트 배포 → G단계 끝에서 끝 시험.
+6. 사이트 값(SETUP C-3)과 `LAUNCH_CHECKLIST`는 §8-5 순서 그대로.
+
+### 10-5. 확인한 것 (2026-09-29)
+- `npm run typecheck` 통과 · `npm run lint` 통과 · `npm test` 95파일 1706개 통과 + 기대 실패 5개(CPO 12 대비 항목 `it.fails`) · `npm run build`·`BASE_PATH=/onmom_web npm run build` 통과(정적 페이지 26개). `out/`에 `manifest.webmanifest`(`start_url` `/onmom_web/home/`, `scope`·`id` `/onmom_web/`)·`sw.js`·`icons/` 5개, 모든 HTML의 `<link rel="manifest">`·apple-touch-icon이 `/onmom_web/…`, 서비스 워커 등록 주소 `${basePath}/sw.js`·범위 `${basePath}/`. 설정 없는 번들에 Supabase 주소·키 없음.
+- 헤드리스 Chrome(스크립트는 저장소 밖), 설정 없는 `/onmom_web` 빌드 18/18: 서비스 소개 noindex·매니페스트 → [시작하기] → 로그인(카카오 준비 중) → 게스트 → 온보딩 4단계 → `/home/` 63일차·빈 상태 · 탭바 활성 라벨 `rgb(191,54,54)`/아이콘 코랄 · 기록 어지러움 → 홈 "확인 필요"·운동 멈춤 · 서비스 워커 범위 `/onmom_web/` · 설정 알림 "준비 중"(토글 없음)·내 데이터(계정 ID 행 없음)·이용약관·문의 · 내려받기 → `온맘-내기록-YYYY-MM-DD.json`(`serverUserId: null`) · 설정 → 이용약관 → [뒤로] = 설정(방문 기록 수 그대로) · 프로필 → 가이드 → [뒤로] = 프로필(방문 기록 수 그대로), 주소로 바로 연 생활 권고 → [뒤로] = 프로필 · 모르는 주소 → 한국어 404(로그인 뒤)·`/login/`(로그인 전) · 챗 미설정 규칙 답·FAQ 없음 · 계정 삭제 → `onmom.web.*` 0개 · 로그아웃 상태 `/terms/` 공개 · PC 1440 "주요 메뉴" 1개·가로 넘침 없음 · 콘솔 오류 0(의도한 404 주소의 리소스 404 제외)·4xx 0·**localhost 밖 요청 0**.
+- 공개 Supabase 값 + 시험용 VAPID 공개 키로 만든 사본 빌드 8/8(supabase.co 요청은 모두 가로챔 — 익명 가입 422 흉내, authorize는 빈 페이지, 그 밖 503 — **운영 프로젝트에 사용자·행을 만들지 않음**): 서비스 소개 서버판 문구·요청 0 · 카카오 켜짐 → `authorize?provider=kakao`(PKCE S256, `redirect_to=…/onmom_web/auth/callback/`, `scopes` 없음) · `/admin/` 권한 없음·익명 가입 시도 없음 · `/terms/` · 게스트(브라우저 전용으로 이어짐) → 필수 동의 3개 → `/home/` · 설정 알림 = 토글(준비 중 아님)·계정 ID 행 없음(세션 없음) · REST 쓰기 시도 0.
+
+### 10-6. 남은 것
+**CPO·법률 [필수 — 켜기 전]**
+- 웹 처리방침·동의 문구 확정(초안 표시·시행일, Anthropic 연락처·구체 보유 기간, 국외 이전 세부) — `LAUNCH_CHECKLIST` 1-1~1-4, §8-7. 문구를 바꾸면 `CURRENT_CONSENT_VERSION`·`AI_CONSENT_VERSION`을 올리고 `docs/privacy/CONSENT_AND_POLICY_DRAFT.md`를 함께(`draftDoc.test`). 이용약관 초안도 같은 검토.
+- **처리방침에 `push_subscriptions`(끝점·키·시간대)와 푸시 서비스(Google FCM·Mozilla·Microsoft·Apple — 끝점과 암호화된 고정 문구만) 추가** — 매일 리마인더(Vault 값)를 켜기 전 필수. 보유: 끄기·계정 삭제 즉시, 로그아웃·만료는 다음 발송 때.
+- `grep -rn '웹 신규 문구 — CPO 확인 필요' src`의 모든 줄(10-3 + §6·§7-5·§8-6), CPO 12 색(흰 글씨/코랄 2.76, 출처 칩 inverse 2.22, 토글 꺼짐 1.65, 레드플래그 카드), 영상 깨우기 문구·5xx 재시도(iOS 89505cf는 "최대 30초" 문구·재시도 없음 — 웹은 프록시가 시간 초과를 502로 알려 한 번 재시도), 게스트 로그아웃의 "브라우저 데이터를 지우면 기록이 사라짐" 안내(문구 없음), FAQ 칩을 AI 동의 전에도 보일지, `admin_audit` 보유 기간, 위험 증상 토글 저장(§3 CPO 3).
+**서버·운영**
+- 매일 리마인더는 실제 푸시 서비스로 한 번도 보내 보지 않음(RFC 시험 벡터만) — `PWA_AND_REMINDERS.md` §5 G. 네이버 웨일·삼성 인터넷의 끝점 호스트 확인. Supabase 빌드의 **브라우저 전용 게스트**(익명 가입 실패)에게도 알림 토글이 보이지만 서버 행을 저장할 수 없어 "알림 설정을 바꾸지 못했어요…"로 끝남(해가 없지만 이유 문구가 정확하지 않음).
+- 계정 삭제 때 카카오 연결 끊기(`KAKAO_ADMIN_KEY` 함수), 오래된 익명 계정 정리 작업, AI 동의의 서버 쪽 기록(지금은 브라우저 localStorage만), 카카오 동의항목 최소화(authorize에 `scopes` 없음 — 카카오 콘솔 A-7 "선택 동의"로 관리).
+- 실제 카카오 로그인·연결·동기화·삭제·관리자 도구를 끝에서 끝까지(SETUP F), 0004·0005를 운영 DB에(워크플로).
+**웹 [nice]**
+- 레거시 계정 API 설정(`NEXT_PUBLIC_ACCOUNT_URL`·`NEXT_PUBLIC_ONMOM_APP_KEY`·`isAccountBackendConfigured`·`APP_KEY_HEADER`) — CTO가 Render 계정 API를 버린다고 확정하면 `config.ts`·`.env.example`·`deploy.yml`·`api/http.ts`에서 지움(VIDEO/LLM 예전 경로는 유지).
+- CSP 메타 태그 — GitHub Pages는 헤더를 못 붙여 `<meta http-equiv>`만 가능. 허용 목록(script `self` dapi.kakao.com t1.daumcdn.net challenges.cloudflare.com · connect `self` *.supabase.co dapi.kakao.com · img `self` data: *.daumcdn.net · frame challenges.cloudflare.com)을 카카오 키 로컬 빌드에서 지도·Turnstile로 확인한 뒤에만(깨질 위험 큼 — 이번에 넣지 않음).
+- 기록·기분 전체 이력 화면과 기록별 고치기·지우기(지금은 최근 5개·내려받기만 — 지우기를 더하면 §10-1 여러 탭 합치기와 서버 합치기가 "합집합"이라 삭제 표시가 필요).
+- 제목 템플릿·OG 이미지, robots.txt·sitemap(프로젝트 페이지 `/onmom_web/`에서는 크롤러가 루트의 robots.txt만 읽으므로 커스텀 도메인 뒤에), CI의 브라우저 스모크(패키지 설치 필요), VoiceOver·TalkBack 실기기, 카카오 지도 `role="region"` 이름(새 문구).

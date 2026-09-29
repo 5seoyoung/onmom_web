@@ -67,6 +67,15 @@ describe("ROUTES", () => {
     expect(routeKindFor(ROUTES.admin)).toBe("public");
   });
 
+  it("이용약관은 /terms/ — 개인정보처리방침처럼 (app) 묶음 밖의 공개 주소(로그인 전 서비스 소개·온보딩에서도 연다)", () => {
+    expect(ROUTES.terms).toBe("/terms/");
+    const terms = pageRoutes().find((r) => r.path === ROUTES.terms);
+    expect(terms).toBeDefined();
+    expect(terms?.inAppGroup).toBe(false);
+    expect(routeKindFor(ROUTES.terms)).toBe("public");
+    expect(routeKindFor(ROUTES.privacy)).toBe("public");
+  });
+
   it("개발용 카탈로그(/dev/)는 없다", () => {
     expect(pageRoutes().some((r) => r.path.startsWith("/dev/"))).toBe(false);
   });

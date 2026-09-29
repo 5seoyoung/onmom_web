@@ -5,8 +5,12 @@ import { CHAT_FALLBACK_BANNER } from "@/rules/chat";
 import {
   CHAT_DECLINED_BANNER,
   CHAT_DECLINED_DEFAULT_REPLY,
+  CHAT_ORIGIN_CAPTION,
   canSendChat,
   chatBackHref,
+  chatBannerText,
+  chatDefaultReplyText,
+  chatFallbackReasonFor,
   chatLlmContext,
   chatScreenState,
   chatSendAction,
@@ -23,7 +27,7 @@ const GREETING =
 
 describe("첫 화면", () => {
   it("인사말 하나 — ChatView.swift:13 원문", () => {
-    expect(initialChatMessages()).toEqual([{ id: 0, role: "assistant", text: GREETING }]);
+    expect(initialChatMessages()).toEqual([{ id: 0, role: "assistant", text: GREETING, origin: "greeting" }]);
   });
   it("배너 문구는 content.json disclaimers.chat_banner", () => {
     expect(CHAT_FALLBACK_BANNER).toBe(content.disclaimers.chat_banner);
@@ -33,29 +37,52 @@ describe("첫 화면", () => {
 describe("chatScreenState — 배너·FAQ(ChatView.swift:20, :31-36, :161)", () => {
   it("서버 미설정: 처음부터 배너, FAQ 숨김(결정 D8)", () => {
     expect(
-      chatScreenState({ llmConfigured: false, messageCount: 1, thinking: false, lastReplyFromFallback: null }),
+      chatScreenState({ mode: "off", messageCount: 1, thinking: false, lastReplyFromFallback: null }),
     ).toEqual({ showBanner: true, showFaq: false });
   });
   it("서버 설정: 첫 화면은 배너 없음 + FAQ", () => {
     expect(
-      chatScreenState({ llmConfigured: true, messageCount: 1, thinking: false, lastReplyFromFallback: null }),
+      chatScreenState({ mode: "on", messageCount: 1, thinking: false, lastReplyFromFallback: null }),
     ).toEqual({ showBanner: false, showFaq: true });
   });
   it("서버 설정 + 마지막 답이 폴백이면 배너, 정상 답이면 배너 내림", () => {
     expect(
-      chatScreenState({ llmConfigured: true, messageCount: 3, thinking: false, lastReplyFromFallback: true }).showBanner,
+      chatScreenState({ mode: "on", messageCount: 3, thinking: false, lastReplyFromFallback: true }).showBanner,
     ).toBe(true);
     expect(
-      chatScreenState({ llmConfigured: true, messageCount: 5, thinking: false, lastReplyFromFallback: false }).showBanner,
+      chatScreenState({ mode: "on", messageCount: 5, thinking: false, lastReplyFromFallback: false }).showBanner,
     ).toBe(false);
   });
   it("FAQ는 인사말만 있고 대기 중이 아닐 때만", () => {
-    expect(chatScreenState({ llmConfigured: true, messageCount: 2, thinking: true, lastReplyFromFallback: null }).showFaq).toBe(
+    expect(chatScreenState({ mode: "on", messageCount: 2, thinking: true, lastReplyFromFallback: null }).showFaq).toBe(
       false,
     );
-    expect(chatScreenState({ llmConfigured: true, messageCount: 1, thinking: true, lastReplyFromFallback: null }).showFaq).toBe(
+    expect(chatScreenState({ mode: "on", messageCount: 1, thinking: true, lastReplyFromFallback: null }).showFaq).toBe(
       false,
     );
+  });
+  it("동의를 묻는 중(ask): 배너 없음, FAQ도 숨김 — AI가 실제로 답할 때(on)만 FAQ", () => {
+    expect(chatScreenState({ mode: "ask", messageCount: 1, thinking: false, lastReplyFromFallback: null })).toEqual({
+      showBanner: false,
+      showFaq: false,
+    });
+  });
+  it("FAQ 칩 → [동의하지 않기]가 생길 수 없는 이유: 규칙은 '수유 중에 커피…'에 출혈 안내로 답한다('피')", async () => {
+    const coffee = "수유 중에 커피 마셔도 되나요?";
+    expect(content.chat_faq).toContain(coffee);
+    const complete = vi.fn();
+    const declined = await requestChatReply([...initialChatMessages(), { id: 1, role: "user", text: coffee }], {
+      llmConfigured: false,
+      complete,
+      context: null,
+      declined: true,
+    });
+    // 규칙 폴백(iOS 그대로)은 FAQ 질문에 엉뚱하게 답한다 — 그래서 ask에서는 칩을 보이지 않는다(위 테스트)
+    expect(declined.text).toBe(content.chat_fallback.replies.bleeding);
+    expect(complete).not.toHaveBeenCalled();
+    // 거절하면 off — 칩은 계속 없다. 동의하면 on — 인사말만 있는 다음 방문 첫 화면에만 칩
+    expect(chatScreenState({ mode: "off", messageCount: 1, thinking: false, lastReplyFromFallback: null }).showFaq).toBe(false);
+    expect(chatScreenState({ mode: "on", messageCount: 1, thinking: false, lastReplyFromFallback: null }).showFaq).toBe(true);
   });
 });
 
@@ -93,7 +120,7 @@ describe("requestChatReply — 서버 우선, 실패면 규칙 폴백(ChatView.s
   it("서버 미설정: 서버를 부르지 않고 폴백 답", async () => {
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
     const r = await requestChatReply(history, { llmConfigured: false, complete, context: { week: 1 } });
-    expect(r).toEqual({ text: content.chat_fallback.replies.bleeding, fromFallback: true, crisis: false });
+    expect(r).toEqual({ text: content.chat_fallback.replies.bleeding, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "notConnected" });
     expect(complete).not.toHaveBeenCalled();
   });
 
@@ -102,7 +129,7 @@ describe("requestChatReply — 서버 우선, 실패면 규칙 폴백(ChatView.s
     const signal = new AbortController().signal;
     const context = { week: 0, delivery: "vaginal" as const, breastfeeding: true };
     const r = await requestChatReply(history, { llmConfigured: true, complete, context, signal });
-    expect(r).toEqual({ text: "병원에 가 보세요.", fromFallback: false, crisis: false });
+    expect(r).toEqual({ text: "병원에 가 보세요.", fromFallback: false, crisis: false, origin: "ai", fallbackReason: null });
     const [req, opts] = complete.mock.calls[0] as unknown as [LLMRequest, { signal?: AbortSignal }];
     // rules가 만드는 iOS 컨텍스트 문자열(BMI·목표·위험 신호 포함 가능)은 보내지 않고 세 항목만
     expect(req).toEqual({
@@ -118,7 +145,7 @@ describe("requestChatReply — 서버 우선, 실패면 규칙 폴백(ChatView.s
     for (const kind of ["network", "server", "empty", "notConfigured"] as const) {
       const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind, message: "" }));
       const r = await requestChatReply(history, { llmConfigured: true, complete, context: null });
-      expect(r).toEqual({ text: content.chat_fallback.replies.bleeding, fromFallback: true, crisis: false });
+      expect(r).toEqual({ text: content.chat_fallback.replies.bleeding, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "notConnected" });
     }
   });
 
@@ -216,7 +243,7 @@ describe("위기 표현 — AI 방식(ask·off·on)과 상관없이 AI에 보내
       const h = [...initialChatMessages(), { id: 1, role: "user" as const, text }];
       const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
       const r = await requestChatReply(h, { llmConfigured, complete, context: { week: 2 }, declined });
-      expect(r).toEqual({ text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true });
+      expect(r).toEqual({ text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null });
       expect(r.text).toContain("1577-0199");
       expect(complete).not.toHaveBeenCalled();
     }
@@ -243,6 +270,15 @@ describe("앞선 위기 턴은 AI 요청에 싣지 않는다", () => {
     ]);
   });
 
+  it("서버 함수가 자기 선필터로 고정 위기 안내를 돌려주면 AI 답이 아니라 위기 안내(앱 안내)로 다룬다 — 'AI 답변' 표시 없음", async () => {
+    // 웹 선필터가 먼저 거르므로 보통 오지 않는다(handler.ts `{ ok, text: CRISIS_REPLY, flagged }`) — 와도 정직하게 표시한다
+    const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "오로가 언제까지 나오나요?" }];
+    const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: content.chat_fallback.replies.self_harm }));
+    const r = await requestChatReply(history, { llmConfigured: true, complete, context: null });
+    expect(r).toEqual({ text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null });
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
+
   it("동의 전에 앱이 답한 위기 질문은 동의 뒤 첫 AI 요청 본문에 없다", async () => {
     // ask: 위기 질문 → 앱이 위기 안내로 답함 → 다음 질문에서 동의 → 그 대화 전체로 AI에 묻는다
     const history = [
@@ -253,7 +289,7 @@ describe("앞선 위기 턴은 AI 요청에 싣지 않는다", () => {
     ];
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "가족에게 알려 주세요." }));
     const r = await requestChatReply(history, { llmConfigured: true, complete, context: null });
-    expect(r).toEqual({ text: "가족에게 알려 주세요.", fromFallback: false, crisis: false });
+    expect(r).toEqual({ text: "가족에게 알려 주세요.", fromFallback: false, crisis: false, origin: "ai", fallbackReason: null });
     const [req] = complete.mock.calls[0] as unknown as [LLMRequest];
     expect(req.messages).toEqual([{ role: "user", content: "산후 우울감이 있어요" }]);
     const body = JSON.stringify(req);
@@ -278,11 +314,87 @@ describe("AI 동의를 거절했을 때 — \"연결되지 않아\"가 아니라
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
     const ask = (text: string) => [...initialChatMessages(), { id: 1, role: "user" as const, text }];
     const declined = await requestChatReply(ask("오로가 언제까지?"), { llmConfigured: false, complete, context: null, declined: true });
-    expect(declined).toEqual({ text: CHAT_DECLINED_DEFAULT_REPLY, fromFallback: true, crisis: false });
+    expect(declined).toEqual({ text: CHAT_DECLINED_DEFAULT_REPLY, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "declined" });
     const bleeding = await requestChatReply(ask("출혈이 많아요"), { llmConfigured: false, complete, context: null, declined: true });
     expect(bleeding.text).toBe(content.chat_fallback.replies.bleeding);
     const off = await requestChatReply(ask("오로가 언제까지?"), { llmConfigured: false, complete, context: null });
     expect(off.text).toBe(content.chat_fallback.replies.default);
     expect(complete).not.toHaveBeenCalled();
+  });
+});
+
+describe("앱 안내로 답한 이유 — 서버 함수의 한도·혼잡·거절을 \"연결되지 않아\"로 뭉개지 않는다(handler.ts · SUPABASE_FUNCTIONS §5)", () => {
+  const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "오로가 언제까지 나오나요?" }];
+  const serverFail = (status: number) => vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status }));
+
+  it("chatFallbackReasonFor — 429 한도 · 503 혼잡/이용 불가 · 422 거절, 그 밖은 연결되지 않아", () => {
+    expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 429 })).toBe("rateLimited");
+    expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 503 })).toBe("busy");
+    expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 422 })).toBe("refused");
+    for (const status of [400, 401, 413, 500, 502, 504, undefined]) {
+      expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status })).toBe("notConnected");
+    }
+    for (const kind of ["network", "empty", "notConfigured"] as const) {
+      expect(chatFallbackReasonFor({ ok: false, kind, message: "", status: 429 })).toBe("notConnected");
+    }
+  });
+
+  it("배너·기본 답은 content.json 원문에서 첫머리만 바꾼다 — 나머지 문장은 그대로", () => {
+    const bannerTail = content.disclaimers.chat_banner.slice("지금은 AI 서버에 연결되지 않아".length);
+    const replyTail = content.chat_fallback.replies.default.slice("지금은 AI 서버에 연결되지 않아".length);
+    expect(chatBannerText("notConnected")).toBe(content.disclaimers.chat_banner);
+    expect(chatDefaultReplyText("notConnected")).toBe(content.chat_fallback.replies.default);
+    expect(chatBannerText("declined")).toBe(CHAT_DECLINED_BANNER);
+    expect(chatBannerText("rateLimited")).toBe(`AI 상담 이용 횟수가 잠시 한도에 닿아${bannerTail}`);
+    expect(chatBannerText("busy")).toBe(`지금은 AI 서버를 잠시 이용할 수 없어${bannerTail}`);
+    expect(chatBannerText("refused")).toBe(`AI가 이 질문에는 답하지 않아${bannerTail}`);
+    expect(chatDefaultReplyText("rateLimited")).toBe(`AI 상담 이용 횟수가 잠시 한도에 닿아${replyTail}`);
+    expect(chatDefaultReplyText("busy")).toBe(`지금은 AI 서버를 잠시 이용할 수 없어${replyTail}`);
+    expect(chatDefaultReplyText("refused")).toBe(`AI가 이 질문에는 답하지 않아${replyTail}`);
+    for (const reason of ["declined", "rateLimited", "busy", "refused"] as const) {
+      expect(chatBannerText(reason)).not.toContain("연결되지 않아");
+      expect(chatDefaultReplyText(reason)).not.toContain("연결되지 않아");
+    }
+  });
+
+  it("requestChatReply — 429·503·422면 기본 답의 첫머리와 이유가 바뀌고, 답은 앱 안내(rules)", async () => {
+    for (const [status, reason] of [
+      [429, "rateLimited"],
+      [503, "busy"],
+      [422, "refused"],
+    ] as const) {
+      const complete = serverFail(status);
+      const r = await requestChatReply(history, { llmConfigured: true, complete, context: null });
+      expect(r).toEqual({ text: chatDefaultReplyText(reason), fromFallback: true, crisis: false, origin: "rules", fallbackReason: reason });
+      expect(complete).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("키워드 답(출혈·운동·기분)은 이유와 무관하게 원문 그대로 — 이유만 남긴다", async () => {
+    const h = [...initialChatMessages(), { id: 1, role: "user" as const, text: "출혈이 많아요" }];
+    const r = await requestChatReply(h, { llmConfigured: true, complete: serverFail(429), context: null });
+    expect(r).toEqual({ text: content.chat_fallback.replies.bleeding, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "rateLimited" });
+  });
+
+  it("502·504·연결 실패는 원문(연결되지 않아) — 잘린 답·시간 초과를 다른 이유로 꾸미지 않는다", async () => {
+    for (const complete of [serverFail(502), serverFail(504), vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "network", message: "" }))]) {
+      const r = await requestChatReply(history, { llmConfigured: true, complete, context: null });
+      expect(r).toEqual({ text: content.chat_fallback.replies.default, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "notConnected" });
+    }
+  });
+
+  it("거절(declined)이 서버 실패 이유보다 먼저 — 거절했으면 서버를 부르지 않았으니 이유는 declined", async () => {
+    const complete = serverFail(429);
+    const r = await requestChatReply(history, { llmConfigured: false, complete, context: null, declined: true });
+    expect(r.fallbackReason).toBe("declined");
+    expect(complete).not.toHaveBeenCalled();
+  });
+});
+
+describe("말풍선 표시(origin) — LAUNCH_CHECKLIST 5-3 \"AI 답변\" 표시", () => {
+  it("인사말에는 표시가 없고, 앱 안내·AI 답에는 있다", () => {
+    expect(CHAT_ORIGIN_CAPTION.greeting).toBeNull();
+    expect(CHAT_ORIGIN_CAPTION.rules).toBe("앱 안내");
+    expect(CHAT_ORIGIN_CAPTION.ai).toBe("AI 답변 · 진단·처방이 아닙니다");
   });
 });

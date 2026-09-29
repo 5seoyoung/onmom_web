@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import { GuideScreen } from "./GuideScreen";
-import { GUIDE_TEXT, guideCardViews, guideRedFlags, sourceToken, splitPhoneNumbers } from "./guideContent";
+import { GUIDE_TEXT, guideCardViews, guideRedFlags, phoneCallLabel, SAFETY_SHORT_NUMBERS, sourceToken, splitPhoneNumbers } from "./guideContent";
+import { PhoneLinks } from "./PhoneLinks";
 import { SF_ICON_FALLBACK, hasSfIcon, sfIcon } from "./sfIcons";
 
 // next.config의 trailingSlash: true를 흉내 낸다(빌드 때 주입되는 값 — 없으면 Link가 끝 슬래시를 뗀다).
@@ -21,11 +22,14 @@ const indexOf = (text: string) => {
   expect(i, text).toBeGreaterThanOrEqual(0);
   return i;
 };
-/** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로). 전화번호는 한 줄로 묶는 span 안에 들어간다. */
+/** 전화번호 하나가 그려지는 모양 — tel: 링크(숫자만) · "{번호}에 전화 걸기" · 한 줄로 묶임 · 글자는 그대로 */
+const phoneAnchor = (number: string, color = "text-primary-text") =>
+  `<a href="tel:${number.replace(/\D/g, "")}" aria-label="${escapeHtml(phoneCallLabel(number))}" class="whitespace-nowrap rounded-xs underline underline-offset-2 ${color}">${escapeHtml(number)}</a>`;
+/** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로). 전화번호는 tel: 링크 안에 들어간다. */
 const textAt = (text: string) =>
   indexOf(
     splitPhoneNumbers(text)
-      .map((seg) => (seg.phone ? `<span class="whitespace-nowrap">${escapeHtml(seg.text)}</span>` : escapeHtml(seg.text)))
+      .map((seg) => (seg.phone ? phoneAnchor(seg.text) : escapeHtml(seg.text)))
       .join(""),
   );
 
@@ -132,14 +136,53 @@ describe("GuideScreen 마크업", () => {
   });
 });
 
-describe("전화번호 줄바꿈 방지", () => {
-  it("번호만 떼어 내고 글자는 그대로 둔다", () => {
+describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web/07 §5)", () => {
+  it("하이픈 번호만 떼어 내고 글자는 그대로 둔다", () => {
     const text = "정신건강복지센터(1577-0199) 또는 02-2276-2276으로 연락하세요.";
     const segs = splitPhoneNumbers(text);
     expect(segs.map((s) => s.text).join("")).toBe(text);
     expect(segs.filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "02-2276-2276"]);
   });
+
+  it("안전 연계 짧은 번호(109 · 119 · 1350)도 번호로 본다 — 앞뒤에 숫자·하이픈이 없을 때만", () => {
+    expect(SAFETY_SHORT_NUMBERS).toEqual(["109", "119", "1350"]);
+    const crisis = content.chat_fallback.replies.self_harm;
+    expect(splitPhoneNumbers(crisis).filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "109", "119"]);
+    expect(splitPhoneNumbers("고용노동부 — 고객상담 1350").filter((s) => s.phone).map((s) => s.text)).toEqual(["1350"]);
+    // 수치·다른 번호의 일부는 전화번호로 지어내지 않는다
+    for (const text of ["산모의 10~20%가 겪는", "1190원", "400~500kcal", "하루 200–300mg", "01090001350", "119-0000-0000"]) {
+      const phones = splitPhoneNumbers(text).filter((s) => s.phone);
+      if (text === "119-0000-0000") expect(phones.map((s) => s.text)).toEqual(["119-0000-0000"]);
+      else expect(phones, text).toEqual([]);
+    }
+    // content.json의 가이드·생활 권고·지원사업 문장에서 번호로 잡히는 것은 이 셋뿐
+    const all = [
+      ...content.guide_red_flags,
+      ...content.guide_cards.flatMap((c) => c.points),
+      ...content.lifestyle_tips.map((t) => t.detail),
+      ...content.support_domains.flatMap((d) => d.solutions.flatMap((s) => [s.name, s.note])),
+    ];
+    expect(new Set(all.flatMap((t) => splitPhoneNumbers(t).filter((s) => s.phone).map((s) => s.text)))).toEqual(
+      new Set(["1577-0199", "02-2276-2276", "1350"]),
+    );
+  });
+
   it("번호가 없으면 한 덩어리", () => {
     expect(splitPhoneNumbers("오로 변화")).toEqual([{ text: "오로 변화", phone: false }]);
+  });
+
+  it("PhoneLinks — tel: 링크(숫자만) + '{번호}에 전화 걸기', 글자는 그대로", () => {
+    const markup = renderToStaticMarkup(h(PhoneLinks, { text: "위급하면 119입니다. 상담 1577-0199" }));
+    expect(markup).toBe(`<span>위급하면 ${phoneAnchor("119")}입니다. 상담 ${phoneAnchor("1577-0199")}</span>`);
+    expect(phoneCallLabel("109")).toBe("109에 전화 걸기");
+    // 어두운 배경용 색
+    expect(renderToStaticMarkup(h(PhoneLinks, { text: "119", linkClassName: "text-white" }))).toBe(`<span>${phoneAnchor("119", "text-white")}</span>`);
+    // link=false — 링크 없이 한 줄로 묶기만(이미 링크인 행 안)
+    expect(renderToStaticMarkup(h(PhoneLinks, { text: "상담 109", link: false }))).toBe('<span>상담 <span class="whitespace-nowrap">109</span></span>');
+  });
+
+  it("회복 가이드 화면의 전화번호는 정신건강복지센터 1577-0199 하나 — tel: 링크", () => {
+    expect(html.match(/href="tel:/g)).toHaveLength(1);
+    expect(html).toContain(phoneAnchor("1577-0199"));
   });
 });

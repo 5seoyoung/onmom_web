@@ -44,6 +44,8 @@ const supabaseUrl = env("SUPABASE_URL");
 /** 새 secret 키("default") 먼저, 없으면 예전 service_role 키 — 값은 기록하지 않는다 */
 const serverKey = pickServerKey(env("SUPABASE_SECRET_KEYS"), env("SUPABASE_SERVICE_ROLE_KEY"));
 const anthropicKey = env("ANTHROPIC_API_KEY");
+/** 조직 전체용 키는 요청마다 워크스페이스를 지정해야 한다(anthropic-workspace-id). 워크스페이스에 묶인 키면 비워 둔다. */
+const anthropicWorkspaceId = env("ANTHROPIC_WORKSPACE_ID");
 
 const hourlyLimit = parsePositiveInt(env("CHAT_HOURLY_LIMIT"), CHAT_HOURLY_LIMIT_DEFAULT, 1000);
 const globalDailyLimit = parsePositiveInt(env("CHAT_GLOBAL_DAILY_LIMIT"), CHAT_GLOBAL_DAILY_LIMIT_DEFAULT);
@@ -69,7 +71,13 @@ const admin =
     : null;
 
 /** 재시도 1번(429·5xx·연결 오류) — 전체 대기는 LLM_DEADLINE_MS가 끊는다 */
-const anthropic = anthropicKey ? new Anthropic({ apiKey: anthropicKey, maxRetries: 1 }) : null;
+const anthropic = anthropicKey
+  ? new Anthropic({
+      apiKey: anthropicKey,
+      maxRetries: 1,
+      defaultHeaders: anthropicWorkspaceId ? { "anthropic-workspace-id": anthropicWorkspaceId } : undefined,
+    })
+  : null;
 
 /** 비스트리밍 요청 — 본문(LlmMessageParams)이 SDK 타입과 맞는지는 deno check가 본다(형 변환 없음) */
 function send(client: Anthropic, params: LlmMessageParams, signal: AbortSignal) {

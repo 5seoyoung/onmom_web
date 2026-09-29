@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { ADMIN_PAGE_SIZE } from "./adminModel";
-import { checkAdminAccess, failureOf, fetchOverview, fetchUsersPage, type AdminClient, type AdminRpcError, type AdminSessionUser } from "./adminApi";
+import { ADMIN_LIST_MAX, ADMIN_PAGE_SIZE } from "./adminModel";
+import {
+  checkAdminAccess,
+  deleteFailureOf,
+  deleteUser,
+  failureOf,
+  fetchAdmins,
+  fetchAllUsers,
+  fetchOverview,
+  fetchUsersPage,
+  findUser,
+  type AdminClient,
+  type AdminRpcError,
+  type AdminSessionUser,
+} from "./adminApi";
 
 const USER_ID = "3f0f9b2e-0000-4000-8000-000000000001";
 
@@ -134,5 +147,155 @@ describe("fetchUsersPage", () => {
     expect(await fetchUsersPage(forbidden.client, 0)).toEqual({ ok: false, failure: "forbidden" });
     const thrown = fakeClient({ replies: { admin_list_users: new Error("offline") } });
     expect(await fetchUsersPage(thrown.client, 0)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+// ── 0005_admin_tools.sql ─────────────────────────────────────────────────────
+
+const userRow = (i: number) => ({
+  id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+  created_at: "2026-09-28T00:00:00Z",
+  last_sign_in_at: null,
+  is_anonymous: true,
+  provider: "anonymous",
+  has_state: false,
+  consent_version: null,
+  state_updated_at: null,
+});
+
+/** admin_list_users를 offset·limit대로 돌려주는 가짜 — total명. failAt 번째 호출(0부터)은 오류. */
+function pagedClient(total: number, failAt: number | null = null) {
+  const calls: Record<string, unknown>[] = [];
+  const client: AdminClient = {
+    async getSessionUser() {
+      return { user: { id: USER_ID }, failed: false };
+    },
+    async rpc(fn, args) {
+      if (fn !== "admin_list_users") return { data: null, error: { code: "PGRST202" } };
+      const a = args ?? {};
+      calls.push(a);
+      if (failAt !== null && calls.length - 1 === failAt) return { data: null, error: { code: "08006", message: "boom" } };
+      const offset = Number(a.p_offset ?? 0);
+      const limit = Number(a.p_limit ?? 0);
+      return { data: Array.from({ length: Math.max(0, Math.min(total, offset + limit) - offset) }, (_, k) => userRow(offset + k)), error: null };
+    },
+    onSignedOut() {
+      return () => {};
+    },
+  };
+  return { client, calls };
+}
+
+describe("fetchAllUsers — CSV용 전체 목록", () => {
+  it("서버 최대(100)씩 이어서 부르고, 한 쪽이 100보다 적으면 멈춘다", async () => {
+    const { client, calls } = pagedClient(250);
+    const r = await fetchAllUsers(client);
+    expect(r.ok && r.value.length).toBe(250);
+    expect(r.ok && r.value[249].id).toBe(userRow(249).id);
+    expect(calls).toEqual([
+      { p_limit: ADMIN_LIST_MAX, p_offset: 0 },
+      { p_limit: ADMIN_LIST_MAX, p_offset: 100 },
+      { p_limit: ADMIN_LIST_MAX, p_offset: 200 },
+    ]);
+  });
+
+  it("딱 100의 배수면 빈 쪽을 한 번 더 받고 멈춘다 — 0명이면 빈 목록", async () => {
+    const full = pagedClient(100);
+    expect((await fetchAllUsers(full.client)).ok && full.calls.length).toBe(2);
+    const none = pagedClient(0);
+    const r = await fetchAllUsers(none.client);
+    expect(r).toEqual({ ok: true, value: [] });
+  });
+
+  it("최대 행 수를 넘기지 않는다(넘치는 쪽은 부르지 않고 잘라 낸다)", async () => {
+    const { client, calls } = pagedClient(1000);
+    const r = await fetchAllUsers(client, 150);
+    expect(r.ok && r.value.length).toBe(150);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("중간에 한 번이라도 실패하면 부분 목록을 주지 않는다(빠진 사람이 있는 파일을 만들지 않게)", async () => {
+    const { client } = pagedClient(250, 1);
+    expect(await fetchAllUsers(client)).toEqual({ ok: false, failure: "failed" });
+    const forbidden = fakeClient({ replies: { admin_list_users: { data: null, error: { code: "42501" } } } });
+    expect(await fetchAllUsers(forbidden.client)).toEqual({ ok: false, failure: "forbidden" });
+    const odd = fakeClient({ replies: { admin_list_users: { data: [{ id: "" }], error: null } } });
+    expect(await fetchAllUsers(odd.client)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+describe("fetchAdmins", () => {
+  const row = { user_id: USER_ID, added_at: "2026-09-28T00:00:00Z", last_sign_in_at: null, is_me: true };
+
+  it("인자 없이 부르고 행을 읽는다", async () => {
+    const { client, calls } = fakeClient({ replies: { admin_list_admins: { data: [row], error: null } } });
+    expect(await fetchAdmins(client)).toEqual({ ok: true, value: [{ userId: USER_ID, addedAt: row.added_at, lastSignInAt: null, isMe: true }] });
+    expect(calls).toEqual([{ fn: "admin_list_admins", args: undefined }]);
+  });
+
+  it("0005가 없으면 설치 안내, 권한 없음, 모양 오류, 예외", async () => {
+    const missing = fakeClient({ replies: { admin_list_admins: { data: null, error: { code: "PGRST202" } } } });
+    expect(await fetchAdmins(missing.client)).toEqual({ ok: false, failure: "setupMissing" });
+    const forbidden = fakeClient({ replies: { admin_list_admins: { data: null, error: { code: "42501" } } } });
+    expect(await fetchAdmins(forbidden.client)).toEqual({ ok: false, failure: "forbidden" });
+    const odd = fakeClient({ replies: { admin_list_admins: { data: [{ user_id: null }], error: null } } });
+    expect(await fetchAdmins(odd.client)).toEqual({ ok: false, failure: "failed" });
+    const thrown = fakeClient({ replies: { admin_list_admins: new Error("offline") } });
+    expect(await fetchAdmins(thrown.client)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+describe("findUser", () => {
+  it("계정 ID를 보내고, 그 ID의 행만 돌려준다 — 없으면 null(오류가 아니다)", async () => {
+    const target = userRow(7);
+    const found = fakeClient({ replies: { admin_find_user: { data: [target], error: null } } });
+    const r = await findUser(found.client, target.id);
+    expect(r.ok && r.value?.id).toBe(target.id);
+    expect(found.calls).toEqual([{ fn: "admin_find_user", args: { p_id: target.id } }]);
+
+    const none = fakeClient({ replies: { admin_find_user: { data: [], error: null } } });
+    expect(await findUser(none.client, target.id)).toEqual({ ok: true, value: null });
+    // 다른 ID의 행이 오면(서버 오류) 찾은 것으로 보지 않는다
+    const other = fakeClient({ replies: { admin_find_user: { data: [userRow(8)], error: null } } });
+    expect(await findUser(other.client, target.id)).toEqual({ ok: true, value: null });
+  });
+
+  it("오류·예외", async () => {
+    const forbidden = fakeClient({ replies: { admin_find_user: { data: null, error: { code: "42501" } } } });
+    expect(await findUser(forbidden.client, USER_ID)).toEqual({ ok: false, failure: "forbidden" });
+    const missing = fakeClient({ replies: { admin_find_user: { data: null, error: { code: "42883" } } } });
+    expect(await findUser(missing.client, USER_ID)).toEqual({ ok: false, failure: "setupMissing" });
+    const odd = fakeClient({ replies: { admin_find_user: { data: { id: USER_ID }, error: null } } });
+    expect(await findUser(odd.client, USER_ID)).toEqual({ ok: false, failure: "failed" });
+    const thrown = fakeClient({ replies: { admin_find_user: new Error("offline") } });
+    expect(await findUser(thrown.client, USER_ID)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+describe("deleteUser — 이용자의 삭제 요청 처리", () => {
+  it("대상 ID와 사유(없으면 null)를 보낸다", async () => {
+    const ok = fakeClient({ replies: { admin_delete_user: { data: null, error: null } } });
+    expect(await deleteUser(ok.client, USER_ID, "이용자 요청")).toEqual({ ok: true });
+    expect(ok.calls).toEqual([{ fn: "admin_delete_user", args: { p_target: USER_ID, p_reason: "이용자 요청" } }]);
+    await deleteUser(ok.client, USER_ID, null);
+    expect(ok.calls[1].args).toEqual({ p_target: USER_ID, p_reason: null });
+  });
+
+  it("서버의 거절 이유를 갈래로 — 없는 계정(P0002)·내 계정·다른 관리자(P0001 메시지)·권한·설치·그 밖", () => {
+    expect(deleteFailureOf({ code: "P0002", message: "onmom: user not found" })).toBe("notFound");
+    expect(deleteFailureOf({ code: "P0001", message: "onmom: cannot delete own account" })).toBe("self");
+    expect(deleteFailureOf({ code: "P0001", message: "onmom: target is admin" })).toBe("isAdmin");
+    expect(deleteFailureOf({ code: "P0001", message: "something else" })).toBe("failed");
+    expect(deleteFailureOf({ code: "42501" })).toBe("forbidden");
+    expect(deleteFailureOf({ code: "PGRST202" })).toBe("setupMissing");
+    expect(deleteFailureOf({ code: "22023" })).toBe("failed");
+    expect(deleteFailureOf(null)).toBe("failed");
+  });
+
+  it("실패·예외는 ok false", async () => {
+    const self = fakeClient({ replies: { admin_delete_user: { data: null, error: { code: "P0001", message: "onmom: cannot delete own account" } } } });
+    expect(await deleteUser(self.client, USER_ID, null)).toEqual({ ok: false, failure: "self" });
+    const thrown = fakeClient({ replies: { admin_delete_user: new Error("offline") } });
+    expect(await deleteUser(thrown.client, USER_ID, null)).toEqual({ ok: false, failure: "failed" });
   });
 });

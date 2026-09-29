@@ -13,9 +13,10 @@ import content from "@/content";
 import { Toggle } from "@/components/ui";
 import { cx } from "@/components/ui/cx";
 import { SERVER_ACCOUNT_TEXT } from "@/features/settings/settingsView";
+import { TermsSheetLink } from "@/features/terms/TermsSheetLink";
 import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT as S, type ConsentItemText } from "./consentText";
 import { ONBOARDING_TEXT as T, type OnboardingDraft, type OnboardingMode } from "./onboardingModel";
-import { StepHeader } from "./OnboardingSteps";
+import { CONSENT_LINK_CLASS, StepHeader } from "./OnboardingSteps";
 
 // iOS 동의 안내와 같은 아이콘 자리(OnboardingFlowView.swift:308-312)
 const LINE_ICONS: readonly LucideIcon[] = [ShieldLock, CircleArrowOutUpRight, BriefcaseMedical];
@@ -99,15 +100,14 @@ export function ServerConsentStep({
         <ConsentDetails item={AI_TRANSFER_NOTICE} />
       </section>
 
-      {/* 누르는 영역은 44 이상, 겉보기 간격은 iOS 동의 화면과 같게 음수 여백으로 맞춘다 */}
-      <button
-        type="button"
-        onClick={onOpenPolicy}
-        aria-haspopup="dialog"
-        className="-my-3.5 inline-flex min-h-11 items-center self-start rounded-button text-[0.8125rem] font-semibold text-primary"
-      >
-        {T.consentPolicyLink}
-      </button>
+      {/* 누르는 영역은 44 이상, 겉보기 간격은 iOS 동의 화면과 같게 음수 여백으로 맞춘다.
+          처리방침 옆의 "이용약관 보기"(features/terms — 초안, 시트로 연다)는 web/08 §1 법률 자문 "이용약관 화면(온보딩 동의 옆)". */}
+      <div className="-my-3.5 flex flex-wrap items-center gap-x-4">
+        <button type="button" onClick={onOpenPolicy} aria-haspopup="dialog" className={CONSENT_LINK_CLASS}>
+          {T.consentPolicyLink}
+        </button>
+        <TermsSheetLink className={CONSENT_LINK_CLASS} />
+      </div>
 
       {/* 동의하지 않기 — 주 버튼과 헷갈리지 않게 보조 글자 버튼. 처리방침 링크 바로 아래(누르는 영역 44는 겹치지 않게, 겉보기 간격만 음수 여백으로) */}
       <div className="-mt-2.5 -mb-3 flex flex-col items-start gap-1">
@@ -121,7 +121,7 @@ export function ServerConsentStep({
           {declineBusy ? SERVER_ACCOUNT_TEXT.deleting : S.decline}
         </button>
         {declineError !== null ? (
-          <p role="alert" className="text-[0.8125rem] font-medium text-state-alert">
+          <p role="alert" className="text-[0.8125rem] font-medium text-state-alert-text">
             {declineError}
           </p>
         ) : null}

@@ -148,6 +148,13 @@ export interface AuthSessionDeps {
   firstFetchTimeoutMs?: number;
   /** 로그아웃 전 올리기를 기다리는 최대 시간 */
   flushTimeoutMs?: number;
+  /**
+   * 카카오 로그아웃이 세션을 끝내기 직전(다 올렸거나 [그래도 로그아웃])에 한 번 — 세션이 있어야 지울 수 있는 이 브라우저의 서버 행 정리.
+   * 기본 인스턴스: 매일 리마인더 구독 행 삭제 + 브라우저 구독 해지(features/pwa/reminderActions disableReminderNow).
+   * 실패·예외는 무시하고, beforeSignOutTimeoutMs가 지나면 기다리지 않고 로그아웃한다(행은 다음 발송 때 410으로 지워진다).
+   */
+  beforeSignOut?: () => Promise<unknown>;
+  beforeSignOutTimeoutMs?: number;
 }
 
 export interface AuthSessionManager {
@@ -304,6 +311,7 @@ interface RestoreRun {
 export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionManager {
   const firstFetchTimeoutMs = deps.firstFetchTimeoutMs ?? 10_000;
   const flushTimeoutMs = deps.flushTimeoutMs ?? 8_000;
+  const beforeSignOutTimeoutMs = deps.beforeSignOutTimeoutMs ?? 3_000;
   const onOnline = deps.onOnline ?? browserOnOnline;
   const restoreRetryDelays = deps.restoreRetryDelaysMs ?? RESTORE_RETRY_DELAYS_MS;
   const now = deps.now ?? (() => new Date());
@@ -321,6 +329,25 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
 
   function emitStatus() {
     for (const l of [...statusListeners]) l();
+  }
+
+  /** beforeSignOut을 부르고 끝나거나 beforeSignOutTimeoutMs가 지날 때까지만 기다린다. 던지지 않는다. */
+  async function runBeforeSignOut(): Promise<void> {
+    const hook = deps.beforeSignOut;
+    if (!hook) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([
+        Promise.resolve()
+          .then(hook)
+          .catch(() => undefined),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, beforeSignOutTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   function stopSync() {
@@ -803,7 +830,10 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
         if (!flushed && !opts.force) return { ok: false, reason: "unsynced" };
         stopSync();
         const client = await deps.getClient();
-        if (client) await signOutLocal(client);
+        if (client) {
+          await runBeforeSignOut(); // 세션이 살아 있을 때 — 이 브라우저의 리마인더 구독 행(DEV_NOTES §10)
+          await signOutLocal(client);
+        }
         if (flushed) {
           // 서버에 다 있다 — 공용 PC에 건강 기록 사본을 남기지 않는다(감사 #19). 스토어의 "이 브라우저 데이터 전부 지우기"를 쓴다.
           store.actions.deleteAccount();
@@ -924,4 +954,7 @@ export const authSession: AuthSessionManager = createAuthSessionManager({
   captcha: browserCaptcha,
   origin: () => window.location.origin,
   replaceUrl: (href) => window.history.replaceState(window.history.state, "", href),
+  // 카카오 로그아웃 직전 — 이 브라우저의 매일 리마인더 구독 행을 세션이 있을 때 지운다(없으면 다음 발송의 410에서 지워짐).
+  // 구독이 없으면 서버 요청 없이 끝난다. 동적 import — 리마인더 코드를 로그아웃 때만 받는다.
+  beforeSignOut: async () => (await import("@/features/pwa/reminderActions")).disableReminderNow(),
 });

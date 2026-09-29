@@ -45,7 +45,47 @@ export const config = {
    * 처리방침·동의 문구가 준비된 뒤에 켠다(docs/LAUNCH_CHECKLIST.md 5단계). 기본은 꺼짐.
    */
   aiChatEnabled: (process.env.NEXT_PUBLIC_AI_CHAT_ENABLED ?? "").trim() === "true",
+  /**
+   * 웹 푸시(매일 리마인더)의 VAPID 공개 키 — 공개값(브라우저가 구독할 때 applicationServerKey로 쓴다).
+   * scripts/generate-vapid.mjs가 만든 한 쌍 중 공개 키만 여기에, 비밀 키는 Supabase 함수 비밀값(VAPID_PRIVATE_KEY)에만(docs/PWA_AND_REMINDERS.md).
+   * Supabase 설정과 이 값이 둘 다 있어야 설정 화면의 알림 토글이 켜진다(isReminderConfigured). 비면 "준비 중".
+   * 형식이 틀리면(65바이트 비압축 P-256 공개 키의 base64url이 아님) 빌드가 멈춘다 — 동작하지 않는 토글을 내보내지 않게.
+   */
+  vapidPublicKey: vapidPublicKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+  /**
+   * 검색 노출 — "true"면 서비스 소개(/)만 색인을 허용하고, 나머지 화면은 계속 noindex(robotsFor). 기본은 전부 noindex(1.0 공개 전).
+   */
+  siteIndexable: (process.env.NEXT_PUBLIC_SITE_INDEXABLE ?? "").trim() === "true",
 } as const;
+
+/** 매일 리마인더(웹 푸시)를 켤 수 있는가 — 구독을 저장할 Supabase와 VAPID 공개 키가 둘 다 있을 때만. */
+export const isReminderConfigured = () => isSupabaseConfigured() && config.vapidPublicKey !== null;
+
+/**
+ * 화면별 robots 메타 — 서비스 소개("landing")만 NEXT_PUBLIC_SITE_INDEXABLE=true일 때 색인을 허용한다.
+ * 앱 화면("app")은 정적 HTML에 내용이 없고(관문이 저장소를 읽기 전에는 그리지 않음) 건강 기록 화면이라 늘 noindex.
+ * 루트 레이아웃은 "app"을 쓰고, 서비스 소개 페이지(src/app/page.tsx)가 "landing"으로 덮어쓴다.
+ */
+export function robotsFor(page: "landing" | "app"): { index: boolean; follow: boolean } {
+  const index = page === "landing" && config.siteIndexable;
+  return { index, follow: index };
+}
+
+/** VAPID 공개 키 모양 — 비압축 P-256 공개 키(0x04 + 64바이트)의 base64url = 87자, 첫 글자 "B". */
+export function isVapidPublicKeyShape(key: string): boolean {
+  return /^B[A-Za-z0-9_-]{86}$/.test(key);
+}
+
+function vapidPublicKey(v: string | undefined): string | null {
+  const key = (v ?? "").trim();
+  if (key.length === 0) return null;
+  if (!isVapidPublicKeyShape(key)) {
+    throw new Error(
+      "NEXT_PUBLIC_VAPID_PUBLIC_KEY 형식이 틀립니다. scripts/generate-vapid.mjs가 출력한 공개 키(87자, B로 시작)를 그대로 넣으세요. 비밀 키를 넣지 않았는지도 확인하세요.",
+    );
+  }
+  return key;
+}
 
 /**
  * Supabase Edge Functions 주소(https://<ref>.supabase.co/functions/v1) — 영상 프록시(videos)·AI 상담(chat).

@@ -93,7 +93,7 @@ export function HomeTopBar() {
       <h1 className="hidden lg:block lg:sr-only">{HOME_TEXT.brand}</h1>
       <Link
         href={HOME_CHAT_HREF}
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-coral-tint px-3 text-[0.8125rem] font-semibold text-primary"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-coral-tint px-3 text-[0.8125rem] font-semibold text-primary-text"
       >
         <MessageCircle aria-hidden className="size-3.5 shrink-0" strokeWidth={2.5} />
         {HOME_TEXT.askButton}
@@ -107,7 +107,7 @@ export function HeroCard({ dayCount, chips }: { dayCount: number | null; chips: 
   return (
     <Card as="section" aria-labelledby="home-hero-title" className="flex items-center gap-4">
       <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-        <h2 id="home-hero-title" className="text-sm font-medium text-text-subtle">
+        <h2 id="home-hero-title" className="text-sm font-medium text-text-subtle-aa">
           {HOME_TEXT.heroTitle}
         </h2>
         {dayCount !== null ? (
@@ -146,7 +146,7 @@ export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) 
             <SquarePen className="size-5.5 text-primary" strokeWidth={2.5} />
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-0.75">
-            <p className="text-[0.8125rem] font-medium text-text-subtle">{HOME_TEXT.emptyStateTitle}</p>
+            <p className="text-[0.8125rem] font-medium text-text-subtle-aa">{HOME_TEXT.emptyStateTitle}</p>
             <p className="text-xl font-bold leading-snug text-text-primary">{HOME_TEXT.emptyStateHeadline}</p>
             <p className="text-[0.8125rem] text-text-secondary">{HOME_TEXT.emptyStateBody}</p>
           </div>
@@ -164,7 +164,7 @@ export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) 
           <Icon className={cx("size-6", TONE_ICON[model.tone])} />
         </div>
         <div className="flex min-w-0 flex-col gap-0.75">
-          <h2 id="home-state-title" className="text-[0.8125rem] font-medium text-text-subtle">
+          <h2 id="home-state-title" className="text-[0.8125rem] font-medium text-text-subtle-aa">
             {model.title}
           </h2>
           <p className="text-[1.75rem] font-bold leading-tight text-text-primary">{model.label}</p>
@@ -178,7 +178,7 @@ export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) 
           return (
             <div key={step.label} className="flex flex-col items-center gap-1.5">
               <span className={cx("h-1.25 w-full rounded-full", current ? TONE_BAR[model.tone] : "bg-divider")} />
-              <span className={cx("text-[0.6875rem]", current ? "font-bold text-text-primary" : "font-medium text-text-subtle")}>
+              <span className={cx("text-[0.6875rem]", current ? "font-bold text-text-primary" : "font-medium text-text-subtle-aa")}>
                 {step.label}
               </span>
             </div>
@@ -207,7 +207,7 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
             <a href={telHref(call.number)} className="flex min-h-11 items-center gap-2 rounded-chip bg-coral-tint px-4 py-2">
               <Phone aria-hidden className="size-3.5 shrink-0 fill-primary text-primary" />
               <span className="min-w-0 flex-1 text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
-              <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary">{call.number}</span>
+              <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
             </a>
           </li>
         ))}
@@ -222,12 +222,12 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
         <button
           type="button"
           onClick={onSnooze}
-          className="flex min-h-11 flex-1 items-center justify-center rounded-chip px-2 py-2.5 text-center text-[0.9375rem] font-semibold text-text-subtle"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-chip px-2 py-2.5 text-center text-[0.9375rem] font-semibold text-text-subtle-aa"
         >
           {HOME_TEXT.moodLater}
         </button>
       </div>
-      <p className="text-xs text-text-subtle">{HOME_TEXT.moodDisclaimer}</p>
+      <p className="text-xs text-text-subtle-aa">{HOME_TEXT.moodDisclaimer}</p>
     </Card>
   );
 }
@@ -242,7 +242,7 @@ export function AnalyzeEntryCard({ ref }: { ref?: Ref<HTMLAnchorElement> }) {
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.75">
           <p className="text-base font-semibold text-text-primary">{HOME_TEXT.analyzeTitle}</p>
-          <p className="text-[0.8125rem] text-text-subtle">{HOME_TEXT.analyzeSubtitle}</p>
+          <p className="text-[0.8125rem] text-text-subtle-aa">{HOME_TEXT.analyzeSubtitle}</p>
         </div>
         <Chevron />
       </Card>
@@ -263,11 +263,11 @@ export function MetricsCard({
   return (
     <Card as="section" aria-labelledby="home-metrics-title" className="flex flex-col gap-3.5">
       <div className="flex items-center justify-between gap-2">
-        <h2 id="home-metrics-title" className="text-[0.9375rem] font-semibold text-text-subtle">
+        <h2 id="home-metrics-title" className="text-[0.9375rem] font-semibold text-text-subtle-aa">
           {HOME_TEXT.metricsTitle}
         </h2>
         {relativeTime ? (
-          <time dateTime={recordDate} className="shrink-0 text-[0.8125rem] text-text-subtle">
+          <time dateTime={recordDate} className="shrink-0 text-[0.8125rem] text-text-subtle-aa">
             {relativeTime}
           </time>
         ) : null}
@@ -301,13 +301,13 @@ export function StageCard({ card }: { card: HomeStageCard }) {
   }
   return (
     <Card as="section" aria-labelledby="home-stage-title" className="flex flex-col gap-1">
-      <h2 id="home-stage-title" className="text-[0.8125rem] font-medium text-text-subtle">
+      <h2 id="home-stage-title" className="text-[0.8125rem] font-medium text-text-subtle-aa">
         {card.heading}
       </h2>
       <p className="text-base text-text-primary">{card.current}</p>
       {card.next ? <p className="text-[0.8125rem] text-text-secondary">{card.next}</p> : null}
       {card.excluded.map((line) => (
-        <p key={line} className="text-[0.8125rem] text-state-watch">
+        <p key={line} className="text-[0.8125rem] text-state-watch-text">
           {line}
         </p>
       ))}
@@ -321,7 +321,7 @@ export function WeightPlanCard({ plan }: { plan: WeightPlan }) {
     <Card as="section" aria-labelledby="home-weight-title" className="flex flex-col gap-2">
       <div className="flex items-center gap-1.5">
         <Footprints aria-hidden className="size-3.5 shrink-0 text-primary" strokeWidth={2.5} />
-        <h2 id="home-weight-title" className="text-[0.8125rem] font-medium text-text-subtle">
+        <h2 id="home-weight-title" className="text-[0.8125rem] font-medium text-text-subtle-aa">
           {plan.title}
         </h2>
       </div>
@@ -336,7 +336,7 @@ export function QuickRecordButton() {
   return (
     <Link
       href={ROUTES.record}
-      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-button bg-coral-tint px-4 py-4 text-base font-semibold text-primary"
+      className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-button bg-coral-tint px-4 py-4 text-base font-semibold text-primary-text"
     >
       <CirclePlus aria-hidden className="size-5 shrink-0 fill-primary text-coral-tint" />
       {HOME_TEXT.quickRecord}
@@ -346,5 +346,5 @@ export function QuickRecordButton() {
 
 // MARK: 푸터 면책 (HomeView.swift:27-31)
 export function HomeFooter() {
-  return <p className="pt-1 text-[0.8125rem] text-text-subtle">{HOME_TEXT.footer}</p>;
+  return <p className="pt-1 text-[0.8125rem] text-text-subtle-aa">{HOME_TEXT.footer}</p>;
 }

@@ -43,6 +43,11 @@ export interface PersistenceAdapter {
   saveGuestID(id: string): boolean;
   /** STORAGE_PREFIX 키 전부 삭제 — 상태·계정·게스트 id·다른 모듈의 설정값까지(AppStore.swift:128-131) */
   eraseAll(): void;
+  /**
+   * 저장된 상태·계정의 지금 내용을 가리키는 값(불투명) — 이 탭이 마지막으로 읽거나 쓴 뒤 다른 탭이 바꿨는지 비교하는 데만 쓴다
+   * (appStore의 여러 탭 보호). 저장소를 읽을 수 없으면 null(비교하지 않는다). 없으면(테스트용 어댑터) 보호 없이 지금까지처럼 쓴다.
+   */
+  stateToken?(): string | null;
 }
 
 /** 브라우저 localStorage — 서버 렌더링 중이거나 접근이 막혀 있으면 null */
@@ -106,6 +111,16 @@ export function createStoragePersistence(getStorage: () => StorageLike | null): 
         // 저장소를 못 쓰면 지울 것도 없다
       }
     },
+    stateToken() {
+      // 저장된 글자 그대로 — 판 번호를 따로 두지 않아 저장 형식(04 PersistedState JSON)이 바뀌지 않는다. 같은 글자면 바뀐 것이 없다.
+      try {
+        const s = getStorage();
+        if (!s) return null;
+        return `${s.getItem(STATE_KEY) ?? ""}\u0000${s.getItem(ACCOUNT_KEY) ?? ""}`;
+      } catch {
+        return null;
+      }
+    },
   };
 }
 
@@ -132,4 +147,31 @@ export function watchBrowserStorage(onChange: () => void): () => void {
   };
   window.addEventListener("storage", handler);
   return () => window.removeEventListener("storage", handler);
+}
+
+/** watchPageResume이 쓰는 최소 모양(테스트에서는 가짜를 넣는다) */
+export interface PageResumeTargets {
+  win: Pick<EventTarget, "addEventListener" | "removeEventListener">;
+  doc: Pick<EventTarget, "addEventListener" | "removeEventListener"> & { readonly visibilityState: string };
+}
+
+/**
+ * 페이지가 다시 보이면 알린다 — 뒤로 가기 캐시에서 복원(pageshow persisted), 다른 탭에서 돌아옴(visibilitychange visible).
+ * 멈춰 있던 동안 다른 탭의 storage 이벤트를 놓쳤을 수 있어서다. 반환값은 해제 함수.
+ */
+export function watchPageResume(onResume: () => void, targets?: PageResumeTargets): () => void {
+  const t = targets ?? (typeof window === "undefined" || typeof document === "undefined" ? null : { win: window, doc: document });
+  if (t === null) return () => {};
+  const onShow = (e: Event) => {
+    if ((e as Event & { persisted?: boolean }).persisted === true) onResume();
+  };
+  const onVisibility = () => {
+    if (t.doc.visibilityState === "visible") onResume();
+  };
+  t.win.addEventListener("pageshow", onShow);
+  t.doc.addEventListener("visibilitychange", onVisibility);
+  return () => {
+    t.win.removeEventListener("pageshow", onShow);
+    t.doc.removeEventListener("visibilitychange", onVisibility);
+  };
 }

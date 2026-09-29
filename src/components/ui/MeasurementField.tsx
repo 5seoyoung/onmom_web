@@ -64,7 +64,7 @@ export function MeasurementField({
         value={draft}
         onChange={(e) => handleChange(e.target.value)}
         onBlur={() => setDraft(formatMeasurement(parseMeasurement(draft)))}
-        className="min-h-11 w-22.5 shrink-0 bg-transparent text-right text-[0.9375rem] font-semibold text-text-primary placeholder:text-text-subtle"
+        className="min-h-11 w-22.5 shrink-0 bg-transparent text-right text-[0.9375rem] font-semibold text-text-primary placeholder:text-text-subtle-aa"
       />
     </div>
   );

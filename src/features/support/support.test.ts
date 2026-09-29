@@ -3,7 +3,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { SUPPORT_DOMAINS, SUPPORT_TEXT, SUPPORT_UNIVERSAL } from "@/rules/support";
-import { SupportProgramScreen } from "./SupportProgramScreen";
+import { SolutionCard, SupportProgramScreen } from "./SupportProgramScreen";
 import { SUPPORT_LINK_HOSTS, supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
 
 // next.config의 trailingSlash: true를 흉내 낸다(빌드 때 주입되는 값 — 없으면 Link가 끝 슬래시를 뗀다).
@@ -125,5 +125,32 @@ describe("SupportProgramScreen 첫 화면 마크업", () => {
 
   it("뒤로 가기는 프로필로(끝 슬래시)", () => {
     expect(html).toContain('href="/profile/"');
+  });
+});
+
+describe("해결책 행의 전화번호(web/07 §5 — 전화 링크로)", () => {
+  const domainOf = (id: number) => SUPPORT_DOMAINS.find((d) => d.id === id)!;
+
+  it("링크가 없는 행의 설명 속 번호(고용노동부 고객상담 1350)는 번호만 tel: 링크 — 글자는 그대로", () => {
+    const html = renderToStaticMarkup(h(SolutionCard, { title: "t", solutions: domainOf(2).solutions }));
+    expect(html).toContain(
+      '고용노동부 — 고객상담 <a href="tel:1350" aria-label="1350에 전화 걸기" class="whitespace-nowrap rounded-xs underline underline-offset-2 text-primary-text">1350</a>',
+    );
+    expect(html.match(/<a /g)).toHaveLength(1);
+  });
+
+  it("행 전체가 링크인 항목(중앙난임·우울증상담센터)은 안에 링크를 겹치지 않는다", () => {
+    const html = renderToStaticMarkup(h(SolutionCard, { title: "t", solutions: domainOf(5).solutions }));
+    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).toContain('<a href="tel:0222762276"');
+    expect(html).not.toContain("tel:02-2276-2276");
+    // 번호는 한 줄로 묶기만(링크 없이 — 행이 이미 전화 링크)
+    expect(html).toContain('중앙난임·우울증상담센터 <span class="whitespace-nowrap">02-2276-2276</span>');
+  });
+
+  it("번호가 없는 행은 링크가 없다(공통 안내 카드는 정부24 링크 하나)", () => {
+    const html = renderToStaticMarkup(h(SolutionCard, { title: "t", solutions: [SUPPORT_UNIVERSAL] }));
+    expect(html.match(/<a /g)).toHaveLength(1);
+    expect(html).not.toContain("tel:");
   });
 });

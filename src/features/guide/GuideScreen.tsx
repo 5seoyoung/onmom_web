@@ -1,11 +1,13 @@
 // 회복 가이드 — iOS GuideView.swift. content.json만 쓰는 정적 화면이라 서버 컴포넌트다(사용자 데이터 없음).
 // 순서: 머리(제목·부제) → 즉시 병원에 가야 할 신호 카드 → 가이드 카드 8장(출처 칩) → 출처 각주.
+// 문장 속 전화번호(정신건강복지센터 1577-0199)는 tel: 링크(PhoneLinks — web/07 §5). 글자는 그대로.
 // PC(넓은 화면, 컨테이너 쿼리 42rem 이상): 가이드 카드를 2열로. 병원 신호 카드와 각주는 늘 전체 폭. 폰 기둥에서는 한 줄.
 import { TriangleAlert } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, EvidenceChip, SubPageHeader, cx } from "@/components/ui";
 import { SfIcon } from "./SfIcon";
-import { GUIDE_TEXT, guideCardViews, guideRedFlags, splitPhoneNumbers, type GuideCardView } from "./guideContent";
+import { GUIDE_TEXT, guideCardViews, guideRedFlags, type GuideCardView } from "./guideContent";
+import { PhoneLinks } from "./PhoneLinks";
 import { ROUTES } from "@/routes";
 
 const RED_FLAG_HEADING_ID = "guide-red-flags";
@@ -53,7 +55,8 @@ function RedFlagSignsCard({ flags }: { flags: readonly string[] }) {
             <span aria-hidden className="text-white/90">
               •
             </span>
-            <KeepPhones text={flag} />
+            {/* 붉은 카드 위라 링크도 흰색(지금 문구에는 번호가 없다 — 생기면 같은 규칙) */}
+            <PhoneLinks text={flag} linkClassName="text-white" />
           </li>
         ))}
       </ul>
@@ -76,7 +79,7 @@ function GuideCard({ card }: { card: GuideCardView }) {
             {card.points.map((point) => (
               <li key={point} className="flex items-start gap-1.5 text-[0.8125rem] text-text-secondary">
                 <span aria-hidden>•</span>
-                <KeepPhones text={point} />
+                <PhoneLinks text={point} />
               </li>
             ))}
           </ul>
@@ -88,22 +91,5 @@ function GuideCard({ card }: { card: GuideCardView }) {
         </div>
       </div>
     </Card>
-  );
-}
-
-/** 문장 속 전화번호를 한 줄에 묶어 보여 준다(글자는 그대로). */
-function KeepPhones({ text }: { text: string }) {
-  return (
-    <span>
-      {splitPhoneNumbers(text).map((seg, i) =>
-        seg.phone ? (
-          <span key={i} className="whitespace-nowrap">
-            {seg.text}
-          </span>
-        ) : (
-          seg.text
-        ),
-      )}
-    </span>
   );
 }

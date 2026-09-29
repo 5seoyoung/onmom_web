@@ -9,6 +9,7 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, cx } from "@/components/ui";
+import { StorageWarning } from "@/features/home/StorageWarning";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitPost } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
@@ -57,12 +58,15 @@ export function JournalWriteScreen() {
             onClick={handleSubmit}
             disabled={!canSubmit}
             // PC: 제목 줄(32px) 가운데에 맞추고 머리 높이를 다른 화면과 같게(-my-1.5 — 누르는 영역 44px는 그대로)
-            className="flex min-h-11 items-center rounded-button px-2 text-base font-semibold text-primary disabled:cursor-not-allowed disabled:text-text-subtle lg:-my-1.5"
+            className="flex min-h-11 items-center rounded-button px-2 text-base font-semibold text-primary-text disabled:cursor-not-allowed disabled:text-text-subtle lg:-my-1.5"
           >
             {JOURNAL_TEXT.submit}
           </button>
         }
       />
+
+      {/* 저장 실패 안내(브라우저에 저장 못 함) — 글쓰기는 막지 않고 떠나면 사라질 수 있음을 알린다 */}
+      <StorageWarning />
 
       <div className="flex flex-col gap-4">
         <Card className="flex flex-col gap-2">
@@ -79,7 +83,7 @@ export function JournalWriteScreen() {
             autoComplete="off"
             enterKeyHint="next"
             required
-            className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle"
+            className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle-aa"
           />
         </Card>
         <Card className="flex flex-col gap-2">

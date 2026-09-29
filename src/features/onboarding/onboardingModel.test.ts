@@ -20,6 +20,7 @@ import {
   firstStepFor,
   GOAL_OPTIONS,
   initialDraft,
+  isDeliveryDateInvalid,
   isDeliveryDatePicked,
   isReturnDatePicked,
   nextStep,
@@ -87,6 +88,14 @@ describe("출산일", () => {
 
   it("오늘을 아직 모르면(서버 렌더) 고르지 않은 것", () => {
     expect(isDeliveryDatePicked("2026-09-01", "")).toBe(false);
+  });
+
+  it("잘못된 값 표시(aria-invalid) — 적혀 있는데 고른 것으로 볼 수 없을 때만", () => {
+    expect(isDeliveryDateInvalid("2026-09-28", TODAY)).toBe(true); // 내일(직접 입력)
+    expect(isDeliveryDateInvalid("2026-02-31", TODAY)).toBe(true);
+    expect(isDeliveryDateInvalid("2026-09-27", TODAY)).toBe(false);
+    expect(isDeliveryDateInvalid("", TODAY)).toBe(false); // 아직 안 고름 — 오류가 아니다
+    expect(isDeliveryDateInvalid("2026-09-28", "")).toBe(false); // 오늘을 모르면 판단하지 않는다
   });
 
   it("안내 문구 — 고르기 전에는 강조", () => {

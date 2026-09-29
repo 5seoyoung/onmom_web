@@ -1,7 +1,9 @@
 "use client";
 
 // 기록장 탭 — iOS CommunityView.swift. 개인 메모이며 공유 게시판이 아니다.
-// 순서: 제목 → "이 기기에만 저장" 안내 → 내 기록(글쓰기 버튼 · 목록 또는 빈 상태) → 면책 한 줄(목록 아래, Swift 순서).
+// 순서: 제목 → 저장 위치 안내(설정 없는 빌드 "이 기기에만", 서버 저장 빌드 "동의를 받은 뒤 온맘 서버에" — journalView localOnlyNoticeFor)
+// → 내 기록(글쓰기 버튼 · 목록 또는 빈 상태) → 면책 한 줄(목록 아래, Swift 순서).
+// 저장 실패(storageAvailable=false) 안내는 제목 아래(features/home/StorageWarning) — 글쓰기는 막지 않는다.
 // 저장소를 읽기 전(hydrated=false)에는 목록 자리를 비워 둔다 — 빈 상태가 번쩍이지 않게.
 // PC(넓은 화면): 화면 폭(컨테이너 쿼리 @container)이 42rem 이상이면 글 목록을 2열 카드로, 제목은
 // 하위 화면 제목(ScreenHeader 24 bold)처럼 왼쪽에 둔다 — 폰 기둥(최대 30rem)에서는 늘 한 줄 목록·가운데 제목(iOS 그대로).
@@ -11,9 +13,11 @@ import { useId } from "react";
 import { Clock, CircleUserRound, Lock, MessageSquare, SquarePen } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, EmptyState, SectionTitle, cx } from "@/components/ui";
+import { isSupabaseConfigured } from "@/config";
 import type { CommunityPost } from "@/domain/types";
+import { StorageWarning } from "@/features/home/StorageWarning";
 import { useAppStore } from "@/store/useAppStore";
-import { JOURNAL_TEXT, JOURNAL_WRITE_HREF, commentCountLabel, formatPostDateTime, postHref } from "./journalView";
+import { JOURNAL_TEXT, JOURNAL_WRITE_HREF, commentCountLabel, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
 
 const LIST_HEADING_ID = "journal-list-heading";
 
@@ -29,7 +33,8 @@ export function JournalScreen() {
         {JOURNAL_TEXT.title}
       </h1>
 
-      <LocalOnlyNotice />
+      <StorageWarning />
+      <LocalOnlyNotice text={localOnlyNoticeFor(isSupabaseConfigured())} />
 
       <section aria-labelledby={LIST_HEADING_ID} className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
@@ -56,12 +61,12 @@ export function JournalScreen() {
   );
 }
 
-// 공유되지 않는다는 사실을 화면 맨 위에서 알린다 — coralTint 배경 · 라운드 14 · 패딩 md (CommunityView.swift:35-50)
-function LocalOnlyNotice() {
+// 어디에 저장되고 공유되지 않는다는 사실을 화면 맨 위에서 알린다 — coralTint 배경 · 라운드 14 · 패딩 md (CommunityView.swift:35-50)
+function LocalOnlyNotice({ text }: { text: string }) {
   return (
     <div role="note" className="flex w-full items-start gap-2 rounded-button bg-coral-tint p-4">
       <Lock aria-hidden className="mt-1 size-3.5 shrink-0 text-primary" strokeWidth={2.5} />
-      <p className="min-w-0 flex-1 text-[0.8125rem] text-text-secondary">{JOURNAL_TEXT.localOnlyNotice}</p>
+      <p className="min-w-0 flex-1 text-[0.8125rem] text-text-secondary">{text}</p>
     </div>
   );
 }

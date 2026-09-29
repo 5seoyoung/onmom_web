@@ -23,10 +23,11 @@ export function TabBar() {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-full ${
-                  active ? "bg-divider text-primary" : "text-neutral"
+                  active ? "bg-divider text-primary-text" : "text-neutral"
                 }`}
               >
-                <Icon aria-hidden className="size-6" strokeWidth={2.1} />
+                {/* 라벨은 글자 전용 짙은 코랄(5.02:1), 아이콘은 iOS 코랄 그대로 — SideNav와 같은 방식(docs/ACCESSIBILITY.md §4) */}
+                <Icon aria-hidden className={`size-6 ${active ? "text-primary" : ""}`} strokeWidth={2.1} />
                 <span className={`text-[0.6875rem] ${active ? "font-semibold" : "font-medium"}`}>{label}</span>
               </Link>
             </li>

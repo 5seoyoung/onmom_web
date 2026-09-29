@@ -3,31 +3,48 @@ import {
   ADMIN_LIST_MAX,
   ADMIN_TEXT,
   ADMIN_PAGE_SIZE,
+  CSV_MAX_ROWS,
+  DELETE_REASON_MAX,
   accountKind,
+  adminRowView,
   barReadout,
   chartBars,
+  chartSegmentKinds,
   chartSummary,
+  consentVersionRows,
+  csvCell,
+  csvFileName,
   dayLong,
   dayTick,
+  deleteConfirmMatches,
+  deleteFailureMessage,
+  deleteReasonProblem,
   formatCount,
   formatPeople,
   formatSeoulDate,
   formatSeoulDateTime,
   generatedAtLabel,
+  hasChartSplit,
   kpiCards,
   niceScale,
+  normalizeDeleteReason,
+  normalizeUuid,
   pageLabel,
+  parseAdminRows,
   parseCount,
   parseOverview,
   parseUserRows,
+  segmentUsers,
   sharePercent,
   shortId,
   splitPage,
   userRowView,
+  usersCsv,
   usersPageArgs,
   type AdminOverview,
   type AdminUserRow,
   type DayCount,
+  type DeleteFailure,
 } from "./adminModel";
 
 const VERSION = "web-2026-09-28";
@@ -38,7 +55,7 @@ function thirtyDays(values: (i: number) => number = () => 0): DayCount[] {
   const start = Date.UTC(2026, 7, 30);
   for (let i = 0; i < 30; i++) {
     const d = new Date(start + i * 86_400_000);
-    out.push({ day: d.toISOString().slice(0, 10), users: values(i) });
+    out.push({ day: d.toISOString().slice(0, 10), users: values(i), anonymousUsers: null, kakaoUsers: null });
   }
   return out;
 }
@@ -374,5 +391,259 @@ describe("쪽 나누기", () => {
     expect(pageLabel(2, 20, 5, 45)).toBe("41–45 / 전체 45명");
     expect(pageLabel(0, 20, 3, null)).toBe("1–3");
     expect(pageLabel(0, 20, 0, 0)).toBeNull();
+  });
+});
+
+// ── 0005_admin_tools.sql 확장 ────────────────────────────────────────────────
+
+/** 게스트·카카오를 나눠 준 30칸(0005 뒤의 응답) — users = 게스트 + 카카오 + 기타 */
+function thirtyDaysSplit(values: (i: number) => { guest: number; kakao: number; other?: number }): DayCount[] {
+  return thirtyDays().map((d, i) => {
+    const v = values(i);
+    return { ...d, users: v.guest + v.kakao + (v.other ?? 0), anonymousUsers: v.guest, kakaoUsers: v.kakao };
+  });
+}
+
+describe("parseOverview — 0005 확장(동의 판 분포 · 날마다 게스트/카카오)", () => {
+  const split = thirtyDays((i) => i % 3).map((d) => ({ day: d.day, users: d.users, anonymous_users: d.users > 0 ? 1 : 0, kakao_users: d.users > 1 ? 1 : 0 }));
+  const WITH_0005 = {
+    ...OVERVIEW_JSON,
+    new_users_by_day: split,
+    consent_versions: [
+      { version: null, users: 2 },
+      { version: VERSION, users: "17" },
+      { version: "web-2026-09-01", users: 1 },
+    ],
+  };
+
+  it("칸이 있으면 읽고, 판이 비었거나 null이면 '판 없음'(null)으로", () => {
+    const o = parseOverview(WITH_0005)!;
+    expect(o.newUsersByDay[2]).toEqual({ day: "2026-09-01", users: 2, anonymousUsers: 1, kakaoUsers: 1 });
+    expect(o.newUsersByDay[0]).toMatchObject({ users: 0, anonymousUsers: 0, kakaoUsers: 0 });
+    expect(o.consentVersions).toEqual([
+      { version: null, users: 2 },
+      { version: VERSION, users: 17 },
+      { version: "web-2026-09-01", users: 1 },
+    ]);
+    expect(parseOverview({ ...WITH_0005, consent_versions: [{ version: "", users: 3 }] })?.consentVersions).toEqual([{ version: null, users: 3 }]);
+  });
+
+  it("0002만 실행된 서버(칸 없음)는 null — 0으로 꾸미지 않는다", () => {
+    const o = parseOverview(OVERVIEW_JSON)!;
+    expect(o.consentVersions).toBeNull();
+    expect(o.newUsersByDay.every((d) => d.anonymousUsers === null && d.kakaoUsers === null)).toBe(true);
+    expect(parseOverview({ ...OVERVIEW_JSON, consent_versions: null })?.consentVersions).toBeNull();
+    expect(parseOverview({ ...OVERVIEW_JSON, consent_versions: [] })?.consentVersions).toEqual([]);
+  });
+
+  it("칸이 있는데 모양이 다르면 전체가 모양 오류(null)", () => {
+    expect(parseOverview({ ...WITH_0005, consent_versions: "x" })).toBeNull();
+    expect(parseOverview({ ...WITH_0005, consent_versions: [{ version: VERSION, users: "많음" }] })).toBeNull();
+    expect(parseOverview({ ...WITH_0005, consent_versions: [{ version: 5, users: 1 }] })).toBeNull();
+    expect(parseOverview({ ...WITH_0005, consent_versions: [null] })).toBeNull();
+    expect(parseOverview({ ...WITH_0005, new_users_by_day: [{ day: "2026-09-01", users: 2, anonymous_users: "x", kakao_users: 1 }] })).toBeNull();
+    expect(parseOverview({ ...WITH_0005, new_users_by_day: [{ day: "2026-09-01", users: 2, anonymous_users: 1, kakao_users: -1 }] })).toBeNull();
+  });
+
+  it("한쪽 칸만 있으면 없는 쪽은 null — 화면은 나누지 않는다", () => {
+    const o = parseOverview({ ...WITH_0005, new_users_by_day: [{ day: "2026-09-01", users: 2, kakao_users: 1 }] })!;
+    expect(o.newUsersByDay[0]).toEqual({ day: "2026-09-01", users: 2, anonymousUsers: null, kakaoUsers: 1 });
+    expect(hasChartSplit(o.newUsersByDay)).toBe(false);
+  });
+});
+
+describe("parseAdminRows", () => {
+  const ROW = { user_id: "3f0f9b2e-0000-4000-8000-000000000001", added_at: "2026-09-28T00:00:00+00:00", last_sign_in_at: "2026-09-28T01:00:00+00:00", is_me: true };
+
+  it("계정 ID·등록일·최근 접속·나인지만", () => {
+    expect(parseAdminRows([ROW, { ...ROW, user_id: "3f0f9b2e-0000-4000-8000-000000000002", last_sign_in_at: null, is_me: "true" }])).toEqual([
+      { userId: ROW.user_id, addedAt: ROW.added_at, lastSignInAt: ROW.last_sign_in_at, isMe: true },
+      { userId: "3f0f9b2e-0000-4000-8000-000000000002", addedAt: ROW.added_at, lastSignInAt: null, isMe: false },
+    ]);
+  });
+
+  it("한 행이라도 ID·등록일이 없으면 null, 배열이 아니면 null", () => {
+    expect(parseAdminRows([ROW, { ...ROW, user_id: null }])).toBeNull();
+    expect(parseAdminRows([{ ...ROW, added_at: "언제" }])).toBeNull();
+    expect(parseAdminRows({})).toBeNull();
+    expect(parseAdminRows([])).toEqual([]);
+  });
+
+  it("행 → 화면(한국 날짜·짧은 ID·나)", () => {
+    expect(adminRowView({ userId: ROW.user_id, addedAt: ROW.added_at, lastSignInAt: null, isMe: true })).toEqual({
+      id: ROW.user_id,
+      shortId: "3f0f9b2e",
+      added: "2026.09.28",
+      lastSignIn: "—",
+      isMe: true,
+    });
+  });
+});
+
+describe("30일 막대 — 게스트·카카오 나누기(자료가 허락할 때만)", () => {
+  it("모든 날에 두 수가 있고 합이 전체를 넘지 않을 때만 나눈다", () => {
+    expect(hasChartSplit(thirtyDaysSplit(() => ({ guest: 1, kakao: 0 })))).toBe(true);
+    expect(hasChartSplit(thirtyDays())).toBe(false); // 0002 — 칸 없음
+    const oneMissing = thirtyDaysSplit(() => ({ guest: 1, kakao: 1 }));
+    oneMissing[3] = { ...oneMissing[3], kakaoUsers: null };
+    expect(hasChartSplit(oneMissing)).toBe(false);
+    const overflow = thirtyDaysSplit(() => ({ guest: 1, kakao: 1 }));
+    overflow[0] = { ...overflow[0], users: 1 }; // 게스트 + 카카오 > 전체
+    expect(hasChartSplit(overflow)).toBe(false);
+    expect(hasChartSplit([])).toBe(false);
+  });
+
+  it("조각은 게스트(아래)·카카오·기타(나머지) 순, 0인 조각은 뺀다, 높이는 꼭대기 대비 %", () => {
+    const days = thirtyDaysSplit((i) => (i === 29 ? { guest: 2, kakao: 1, other: 1 } : i === 10 ? { guest: 0, kakao: 3 } : { guest: 0, kakao: 0 }));
+    const bars = chartBars(days, niceScale(4));
+    expect(bars[29].segments).toEqual([
+      { kind: "guest", users: 2, heightPct: 50 },
+      { kind: "kakao", users: 1, heightPct: 25 },
+      { kind: "other", users: 1, heightPct: 25 },
+    ]);
+    expect(bars[10].segments).toEqual([{ kind: "kakao", users: 3, heightPct: 75 }]);
+    expect(bars[0].segments).toEqual([]);
+    expect(bars[29].heightPct).toBe(100);
+    expect(chartSegmentKinds(bars)).toEqual(["guest", "kakao", "other"]);
+    expect(segmentUsers(bars[29], "guest")).toBe(2);
+    expect(segmentUsers(bars[10], "guest")).toBe(0);
+    expect(barReadout(bars[29])).toBe("9월 28일 · 4명 (게스트 2명 · 카카오 1명 · 기타 1명)");
+    expect(barReadout(bars[0])).toBe("8월 30일 · 0명");
+  });
+
+  it("기타가 어느 날에도 없으면 범례·표는 게스트·카카오만", () => {
+    const bars = chartBars(
+      thirtyDaysSplit((i) => ({ guest: i % 2, kakao: 1 })),
+      niceScale(2),
+    );
+    expect(chartSegmentKinds(bars)).toEqual(["guest", "kakao"]);
+  });
+
+  it("나눌 수 없으면(0002) 조각 없음 — 한 색 막대, 범례 없음, 알림은 전과 같다", () => {
+    const bars = chartBars(thirtyDays((i) => (i === 29 ? 3 : 0)), niceScale(3));
+    expect(bars.every((b) => b.segments === null)).toBe(true);
+    expect(chartSegmentKinds(bars)).toEqual([]);
+    expect(chartSegmentKinds([])).toEqual([]);
+    expect(barReadout(bars[29])).toBe("9월 28일 · 3명");
+    expect(segmentUsers(bars[29], "kakao")).toBe(0);
+  });
+});
+
+describe("consentVersionRows — 동의 버전 분포", () => {
+  it("현재 판 먼저, 그다음 판 이름 내림차순, 판 없음은 마지막. 비율은 서버 기록이 있는 사람 기준", () => {
+    const rows = consentVersionRows(
+      [
+        { version: null, users: 2 },
+        { version: "web-2026-09-01", users: 1 },
+        { version: "web-2026-10-01", users: 1 },
+        { version: VERSION, users: 16 },
+      ],
+      VERSION,
+    );
+    expect(rows.map((r) => [r.label, r.usersLabel, r.share, r.isCurrent])).toEqual([
+      [VERSION, "16명", "80%", true],
+      ["web-2026-10-01", "1명", "5%", false],
+      ["web-2026-09-01", "1명", "5%", false],
+      [ADMIN_TEXT.consentNone, "2명", "10%", false],
+    ]);
+    expect(rows.map((r) => r.key)).toEqual([VERSION, "web-2026-10-01", "web-2026-09-01", "__none__"]);
+    expect(ADMIN_TEXT.consentNone).toBe("없음");
+  });
+
+  it("비어 있으면 빈 목록, 합계 0이면 비율 없음", () => {
+    expect(consentVersionRows([], VERSION)).toEqual([]);
+    expect(consentVersionRows([{ version: VERSION, users: 0 }], VERSION)[0].share).toBeNull();
+  });
+});
+
+describe("계정 찾기·계정 삭제 입력", () => {
+  const ID = "3F0F9B2E-0000-4000-8000-000000000001";
+
+  it("계정 ID — 앞뒤 공백·대문자를 정리한 UUID 36자만, 아니면 null(서버에 묻지 않는다)", () => {
+    expect(normalizeUuid(`  ${ID} `)).toBe(ID.toLowerCase());
+    expect(normalizeUuid("3f0f9b2e")).toBeNull();
+    expect(normalizeUuid(`{${ID}}`)).toBeNull();
+    expect(normalizeUuid("")).toBeNull();
+    expect(normalizeUuid("3f0f9b2e-0000-4000-8000-00000000000g")).toBeNull();
+  });
+
+  it("삭제 확정 — 계정 ID 앞 8자리(공백·대소문자 무시)", () => {
+    expect(deleteConfirmMatches(" 3F0F9B2E ", ID.toLowerCase())).toBe(true);
+    expect(deleteConfirmMatches("3f0f9b2", ID.toLowerCase())).toBe(false);
+    expect(deleteConfirmMatches("", ID.toLowerCase())).toBe(false);
+  });
+
+  it("사유 — 다듬고 500자까지, 비면 null(SQL 제약과 같다)", () => {
+    expect(DELETE_REASON_MAX).toBe(500);
+    expect(normalizeDeleteReason("   ")).toBeNull();
+    expect(normalizeDeleteReason("  이용자 요청(문의 메일 2026-09-28)  ")).toBe("이용자 요청(문의 메일 2026-09-28)");
+    expect(normalizeDeleteReason("가".repeat(600))).toHaveLength(500);
+  });
+
+  it("사유에 이메일 주소가 있으면 막는다(SQL 제약 admin_audit_reason_no_email과 같은 패턴) — 안내 문구도 이메일·건강 정보를 말한다", () => {
+    expect(deleteReasonProblem(null)).toBeNull();
+    expect(deleteReasonProblem("이용자 요청(문의 메일 2026-09-28)")).toBeNull();
+    expect(deleteReasonProblem("요청자 someone@example.com 이 메일로 요청")).toBe(ADMIN_TEXT.deleteReasonHasEmail);
+    expect(deleteReasonProblem("First.Last+tag@sub.example.co.kr")).toBe(ADMIN_TEXT.deleteReasonHasEmail);
+    expect(deleteReasonProblem("골뱅이@만")).toBeNull(); // 도메인 모양이 아니면 이메일이 아니다
+    expect(ADMIN_TEXT.deleteReasonLabel).toContain("이메일");
+    expect(ADMIN_TEXT.deleteReasonLabel).toContain("건강 정보");
+  });
+
+  it("실패 갈래 → 문장(없는 계정·내 계정·다른 관리자·0005 미실행·그 밖)", () => {
+    const expected: Record<DeleteFailure, string> = {
+      notFound: ADMIN_TEXT.deleteNotFound,
+      self: ADMIN_TEXT.deleteSelf,
+      isAdmin: ADMIN_TEXT.deleteIsAdmin,
+      setupMissing: ADMIN_TEXT.toolsSetupHint,
+      forbidden: ADMIN_TEXT.deleteFailed,
+      failed: ADMIN_TEXT.deleteFailed,
+    };
+    for (const [failure, text] of Object.entries(expected)) expect(deleteFailureMessage(failure as DeleteFailure)).toBe(text);
+    expect(ADMIN_TEXT.toolsSetupHint).toContain("0005_admin_tools.sql");
+    expect(ADMIN_TEXT.deleteIsAdmin).toContain("public.admins");
+  });
+});
+
+describe("CSV 내려받기 — 메타데이터만", () => {
+  const kakao: AdminUserRow = {
+    id: "3f0f9b2e-0000-4000-8000-000000000001",
+    createdAt: "2026-09-27T15:30:00+00:00",
+    lastSignInAt: "2026-09-28T01:02:00+00:00",
+    isAnonymous: false,
+    provider: "kakao",
+    hasState: true,
+    consentVersion: VERSION,
+    stateUpdatedAt: "2026-09-28T01:05:00+00:00",
+  };
+  const guest: AdminUserRow = { ...kakao, id: "00000000-0000-4000-8000-000000000002", lastSignInAt: null, isAnonymous: true, provider: "anonymous", hasState: false, consentVersion: null, stateUpdatedAt: null };
+
+  it("칸 — 쉼표·따옴표·줄바꿈은 따옴표로 감싸고, 수식 첫 글자는 막는다", () => {
+    expect(csvCell("abc")).toBe("abc");
+    expect(csvCell("a,b")).toBe('"a,b"');
+    expect(csvCell('say "hi"')).toBe('"say ""hi"""');
+    expect(csvCell("두\n줄")).toBe('"두\n줄"');
+    expect(csvCell("=1+1")).toBe("'=1+1");
+    expect(csvCell("@cmd")).toBe("'@cmd");
+    expect(csvCell("-1")).toBe("'-1");
+  });
+
+  it("첫 줄은 칸 이름, UTF-8 BOM + CRLF, 표에 보이는 칸만(이메일·닉네임·건강 기록 없음)", () => {
+    const text = usersCsv([kakao, guest], VERSION);
+    expect(text.startsWith("\uFEFF")).toBe(true);
+    const lines = text.slice(1).split("\r\n");
+    expect(lines).toHaveLength(4); // 머리 + 2행 + 끝 줄바꿈 뒤 빈 줄
+    expect(lines[3]).toBe("");
+    expect(lines[0]).toBe("계정 ID,가입일,최근 접속,유형,동의 버전,현재 판 동의,기록 저장,마지막 저장일");
+    expect(lines[1]).toBe(`${kakao.id},2026.09.28 00:30,2026.09.28 10:02,카카오,${VERSION},예,있음,2026.09.28`);
+    expect(lines[2]).toBe(`${guest.id},2026.09.28 00:30,—,게스트,,아니요,없음,`);
+    expect(text).not.toMatch(/email|이메일|닉네임|state\b/);
+    expect(usersCsv([], VERSION).slice(1).split("\r\n")).toEqual([lines[0], ""]);
+  });
+
+  it("최대 5,000명 — 안내 문구와 같은 수. 파일 이름은 이 기기의 날짜", () => {
+    expect(CSV_MAX_ROWS).toBe(5000);
+    expect(ADMIN_TEXT.csvNote).toContain("5,000");
+    expect(csvFileName(new Date(2026, 8, 28, 23, 40))).toBe("온맘-관리자-사용자-2026-09-28.csv");
   });
 });

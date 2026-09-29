@@ -10,6 +10,7 @@ import {
   shouldOfferAiConsent,
   substanceDeps,
   substanceLlmContext,
+  substanceResultChips,
   VERDICT_BADGE_CLASS,
   verdictBadge,
 } from "./substanceModel";
@@ -50,9 +51,9 @@ describe("판정 배지", () => {
     expect(verdictBadge("unknown").label).toBe("정보 부족");
   });
   it("색은 Swift 매핑 — safe 정상, caution 관찰, avoid 이상, unknown textSecondary", () => {
-    expect(VERDICT_BADGE_CLASS.safe).toContain("state-normal");
-    expect(VERDICT_BADGE_CLASS.caution).toContain("state-watch");
-    expect(VERDICT_BADGE_CLASS.avoid).toContain("state-alert");
+    expect(VERDICT_BADGE_CLASS.safe).toBe("bg-state-normal/15 text-state-normal-text");
+    expect(VERDICT_BADGE_CLASS.caution).toBe("bg-state-watch/15 text-state-watch-text");
+    expect(VERDICT_BADGE_CLASS.avoid).toBe("bg-state-alert/15 text-state-alert-text");
     expect(VERDICT_BADGE_CLASS.unknown).toContain("text-text-secondary");
   });
 });
@@ -175,5 +176,33 @@ describe("createLatestOnly — 늦게 온 이전 조회는 버린다(SubstanceCh
     releaseSlow();
     await p1;
     expect(shown).toBe("두 번째 조회");
+  });
+});
+
+describe("substanceResultChips — AI가 제시한 출처는 확인된 출처 칩과 다른 모양(원칙 4, DEV_NOTES §3 CPO 7)", () => {
+  it("표 결과의 칩은 토큰 그대로 공용 칩(src: = 확인된 출처 칩)", () => {
+    expect(substanceResultChips({ source: "table", evidenceChips: ["회피", "src:FDA"] })).toEqual([
+      { kind: "evidence", token: "회피" },
+      { kind: "evidence", token: "src:FDA" },
+    ]);
+  });
+
+  it("AI 답의 src: 토큰은 aiSource(접두 제거) — 'AI 답변' 칩은 공용 칩 그대로", () => {
+    expect(substanceResultChips({ source: "llm", evidenceChips: ["src:LactMed", "src: NHS ", "AI 답변"] })).toEqual([
+      { kind: "aiSource", text: "LactMed" },
+      { kind: "aiSource", text: "NHS" },
+      { kind: "evidence", token: "AI 답변" },
+    ]);
+  });
+
+  it("빈 칩은 그리지 않는다(AI가 빈 출처를 주어도 칩을 지어내지 않는다)", () => {
+    expect(substanceResultChips({ source: "llm", evidenceChips: ["src:", "  ", "AI 답변"] })).toEqual([{ kind: "evidence", token: "AI 답변" }]);
+  });
+
+  it("AI 답 전체 흐름: 표에 없는 항목 → LLM 출처는 aiSource 셋", async () => {
+    const complete = okText('{"verdict":"caution","detail":"d","sources":["LactMed","FDA"]}');
+    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 3, context: null });
+    const r = await checkSubstance("모르는약", deps);
+    expect(substanceResultChips(r).map((c) => c.kind)).toEqual(["aiSource", "aiSource", "evidence"]);
   });
 });

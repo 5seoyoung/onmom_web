@@ -165,6 +165,14 @@ export function isDeliveryDatePicked(value: string, today: LocalDateString): boo
   return d !== null && t !== null && d.getTime() <= t.getTime();
 }
 
+/**
+ * 출산일 칸이 잘못된 값인가 — 무언가 적혀 있는데 고른 것으로 볼 수 없을 때(직접 입력한 미래 날짜·형식 오류).
+ * 비어 있으면(아직 안 고름) 잘못된 값이 아니고, 오늘을 아직 모르면(서버 렌더) 판단하지 않는다. 화면은 aria-invalid로 알린다(안내 문구는 원문 그대로).
+ */
+export function isDeliveryDateInvalid(value: string, today: LocalDateString): boolean {
+  return value !== "" && today !== "" && !isDeliveryDatePicked(value, today);
+}
+
 /** 출산일 아래 안내 — 고르기 전에는 강조색(OnboardingFlowView.swift:149-152). */
 export function deliveryDateHint(picked: boolean): { text: string; emphasized: boolean } {
   return picked

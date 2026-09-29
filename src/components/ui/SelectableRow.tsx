@@ -35,7 +35,7 @@ export function SelectableRow({
   disabled,
 }: SelectableRowProps) {
   return (
-    <label className="group/selectable-row relative flex min-h-11 w-full cursor-pointer items-center gap-4 rounded-card bg-surface p-4 text-left ring-1 ring-divider has-checked:ring-[1.5px] has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary has-disabled:cursor-not-allowed has-disabled:opacity-50 forced-colors:border forced-colors:border-[CanvasText]">
+    <label className="group/selectable-row relative flex min-h-11 w-full cursor-pointer items-center gap-4 rounded-card bg-surface p-4 text-left ring-1 ring-divider has-checked:ring-[1.5px] has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring has-disabled:cursor-not-allowed has-disabled:opacity-50 forced-colors:border forced-colors:border-[CanvasText]">
       <input
         type="radio"
         name={name}

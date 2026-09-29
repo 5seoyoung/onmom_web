@@ -1,9 +1,10 @@
 "use client";
 
-// 관리자 화면(/admin/) — 운영자가 가입·이용 규모를 보는 곳. 메뉴에 링크하지 않는다.
+// 관리자 화면(/admin/) — 운영자가 가입·이용 규모를 보고, 이용자의 삭제 요청을 처리하는 곳. 메뉴에 링크하지 않는다.
 //
-// 보이는 것: 집계(전체·게스트·카카오·현재 판 동의·최근 7일 활성), 30일 신규 가입 막대, 계정 메타데이터 목록.
-// 보이지 않는 것: 건강 기록(state)·이메일·닉네임 — 서버 함수가 애초에 돌려주지 않는다(supabase/migrations/0002_admin.sql).
+// 보이는 것: 집계(전체·게스트·카카오·현재 판 동의·최근 7일 활성), 30일 신규 가입 막대(0005 뒤에는 게스트·카카오 나눔),
+//   동의 버전 분포·관리자 목록·계정 찾기(0005_admin_tools.sql), 계정 메타데이터 목록(+ 행마다 [계정 삭제] · CSV 내려받기).
+// 보이지 않는 것: 건강 기록(state)·이메일·닉네임 — 서버 함수가 애초에 돌려주지 않는다(supabase/migrations/0002_admin.sql·0005_admin_tools.sql).
 //
 // 누가 보나: Supabase 설정이 있는 빌드 + 카카오로 로그인한(게스트 아님) + public.admins에 있는 계정.
 //   - 설정 없음 → "권한이 없어요"(설정 없는 빌드 안내). Supabase로 요청하지 않는다.
@@ -12,22 +13,30 @@
 //   - 관리자 → 대시보드. 다른 탭에서 로그아웃하면 바로 내려 준다(공용 PC에 남지 않게).
 // 권한은 서버가 지킨다(모든 함수가 is_admin()을 확인). 이 화면의 판단은 안내용이다.
 // 앱 관문(features/flow/gate.ts)은 이 주소를 로그인·온보딩으로 옮기지 않아야 한다(공개 주소) — 권한은 여기서 본다.
+//
+// 0005가 아직 실행되지 않은 서버(0002만): 집계·목록은 그대로 보이고, 동의 버전 분포 카드는 그리지 않으며(응답에 칸이 없음),
+//   관리자 목록·계정 찾기·계정 삭제는 "0005_admin_tools.sql을 실행했는지 확인" 안내를 보인다.
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
+import { Download, LoaderCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { getSupabaseClient } from "@/auth/client";
 import { Card, PrimaryButton, primaryButtonClass, secondaryButtonClass } from "@/components/ui";
 import { cx } from "@/components/ui/cx";
 import { isSupabaseConfigured } from "@/config";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import { BrandLogo } from "@/features/flow/BrandLogo";
+import { downloadTextFile } from "@/features/settings/dataExport";
 import { ROUTES } from "@/routes";
 import {
   adminClientFrom,
   checkAdminAccess,
+  deleteUser,
+  fetchAdmins,
+  fetchAllUsers,
   fetchOverview,
   fetchUsersPage,
+  findUser,
   type AdminClient,
   type AdminFailure,
   type UsersPage,
@@ -35,15 +44,25 @@ import {
 import {
   ADMIN_PAGE_SIZE,
   ADMIN_TEXT,
+  adminRowView,
   chartBars,
   chartSummary,
+  consentVersionRows,
+  csvFileName,
+  deleteFailureMessage,
   generatedAtLabel,
   kpiCards,
   niceScale,
+  normalizeUuid,
   pageLabel,
   userRowView,
+  usersCsv,
+  type AdminListRow,
   type AdminOverview,
+  type UserRowView,
 } from "./adminModel";
+import { AdminsTable, ConsentVersionsTable, TOOL_BUTTON_CLASS, ToolCard, UserSearch, type SearchState } from "./AdminTools";
+import { DeleteUserDialog } from "./DeleteUserDialog";
 import { NewUsersChart } from "./NewUsersChart";
 import { UserList, UserListCard } from "./UserList";
 
@@ -160,12 +179,55 @@ function lastOf<T>(l: Loadable<T>): T | null {
   return l.status === "ok" ? l.value : l.status === "loading" ? l.last : null;
 }
 
+/** 계정 찾기·삭제·CSV가 실패했을 때의 문장 — 0005 미실행은 설치 안내, 그 밖은 잠시 후 다시 */
+function toolFailureMessage(failure: Exclude<AdminFailure, "forbidden">, fallback: string): string {
+  return failure === "setupMissing" ? ADMIN_TEXT.toolsSetupHint : fallback;
+}
+
+/** 관리자일 때만 그린다. 데이터 상태는 여기 있고, 카드들(AdminTools·UserList·NewUsersChart)은 그리기만 한다. */
 function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbidden(): void }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [page, setPage] = useState(0);
   const [overview, setOverview] = useState<Loadable<AdminOverview>>({ status: "loading", last: null });
   const [users, setUsers] = useState<Loadable<UsersPage>>({ status: "loading", last: null });
+  const [admins, setAdmins] = useState<Loadable<AdminListRow[]>>({ status: "loading", last: null });
+  // 계정 찾기(이용자가 보낸 UUID)
+  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState<SearchState>({ kind: "idle" });
+  // 계정 삭제(요청 처리) — 대상이 있을 때만 확인 창을 그린다
+  const [deleteTarget, setDeleteTarget] = useState<UserRowView | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // 확인 창이 닫힌 뒤 포커스가 갈 곳(WCAG 2.4.3) — 창이 사라지면 브라우저는 포커스를 body로 떨어뜨린다(연 단추가 창이 떠 있는 동안
+  // 잠겨 있어 네이티브 <dialog>의 되돌리기도 실패한다). 취소 = 연 단추로, 삭제 완료 = 알림 줄로. 창이 사라진 다음 렌더에서 옮긴다.
+  // 갈 곳은 ref로 둔다(상태로 두면 효과 안에서 다시 setState — 렌더가 한 번 더 돈다). 창이 사라진 렌더의 효과가 읽고 비운다.
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const pendingFocusRef = useRef<"trigger" | "notice" | null>(null);
+  // CSV 내려받기(메타데이터만)
+  const [csv, setCsv] = useState<"idle" | "busy" | "failed">("idle");
   const usersTitleId = useId();
+  const consentTitleId = useId();
+  const adminsTitleId = useId();
+  const searchTitleId = useId();
+  const searchInputId = useId();
+
+  useEffect(() => {
+    const pendingFocus = pendingFocusRef.current;
+    if (pendingFocus === null || deleteTarget !== null) return;
+    pendingFocusRef.current = null;
+    const trigger = deleteTriggerRef.current;
+    deleteTriggerRef.current = null;
+    if (pendingFocus === "notice") {
+      noticeRef.current?.focus();
+    } else if (trigger !== null && trigger.isConnected) {
+      trigger.focus();
+    } else {
+      // 연 단추가 사라졌으면(목록이 바뀜) 계정 찾기 입력으로 — 화면 밖으로 떨어지지 않게
+      document.getElementById(searchInputId)?.focus();
+    }
+  }, [deleteTarget, searchInputId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,10 +255,24 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     };
   }, [client, page, reloadKey, onForbidden]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetchAdmins(client).then((r) => {
+      if (cancelled) return;
+      if (r.ok) setAdmins({ status: "ok", value: r.value });
+      else if (r.failure === "forbidden") onForbidden();
+      else setAdmins({ status: "failed", failure: r.failure });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, reloadKey, onForbidden]);
+
   // 다시 불러오는 동안 이전 값을 흐리게 남긴다(자리가 튀지 않게)
   const reload = () => {
     setOverview((o) => ({ status: "loading", last: lastOf(o) }));
     setUsers((u) => ({ status: "loading", last: lastOf(u) }));
+    setAdmins((a) => ({ status: "loading", last: lastOf(a) }));
     setReloadKey((k) => k + 1);
   };
   const goToPage = (next: number) => {
@@ -204,8 +280,80 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     setPage(Math.max(0, next));
   };
 
+  /** 계정 찾기 — 형식이 아니면 서버에 묻지 않는다 */
+  async function runSearch() {
+    const id = normalizeUuid(query);
+    if (id === null) {
+      setSearch({ kind: "invalid" });
+      return;
+    }
+    setSearch({ kind: "loading" });
+    const r = await findUser(client, id);
+    if (!r.ok) {
+      if (r.failure === "forbidden") onForbidden();
+      else setSearch({ kind: "failed", message: toolFailureMessage(r.failure, ADMIN_TEXT.searchFailed) });
+      return;
+    }
+    setSearch(r.value === null ? { kind: "notFound" } : { kind: "found", row: userRowView(r.value, CURRENT_CONSENT_VERSION) });
+  }
+
+  function openDelete(row: UserRowView) {
+    // 누른 [계정 삭제] 단추(지금 포커스) — 취소하면 여기로 돌아온다
+    deleteTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    pendingFocusRef.current = null;
+    setNotice(null);
+    setDeleteError(null);
+    setDeleteTarget(row);
+  }
+
+  /** 취소·Esc·바깥 누름 — 창을 닫고 포커스를 연 단추로 되돌린다 */
+  function closeDelete() {
+    if (deleteBusy) return;
+    pendingFocusRef.current = "trigger";
+    setDeleteTarget(null);
+    setDeleteError(null);
+  }
+
+  /** 확인 창의 확정 — 서버가 지우고 admin_audit에 남긴다. 성공하면 창을 닫고 목록·집계를 다시 불러온다. */
+  async function confirmDelete(reason: string | null) {
+    if (deleteTarget === null || deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    const r = await deleteUser(client, deleteTarget.id, reason);
+    setDeleteBusy(false);
+    if (!r.ok) {
+      if (r.failure === "forbidden") onForbidden();
+      else setDeleteError(deleteFailureMessage(r.failure));
+      return;
+    }
+    const deletedId = deleteTarget.id;
+    pendingFocusRef.current = "notice"; // 연 단추는 방금 지운 행과 함께 사라진다 — 알림 줄로
+    setDeleteTarget(null);
+    setNotice(ADMIN_TEXT.deleteDone);
+    // 찾기 결과가 그 계정이면 "삭제됐어요"로 바꾼다(다시 [계정 삭제]를 누를 수 없게)
+    setSearch((s) => (s.kind === "found" && s.row.id === deletedId ? { kind: "deleted", row: s.row } : s));
+    // 이 쪽의 마지막 한 명을 지웠으면 앞 쪽으로(빈 쪽을 보이지 않게), 아니면 같은 쪽을 다시
+    const shown = lastOf(users);
+    if (shown !== null && shown.rows.length === 1 && page > 0) setPage(page - 1);
+    reload();
+  }
+
+  /** CSV — 전체 목록을 서버 최대(100명)씩 모아 파일로. 부분 파일은 만들지 않는다(adminApi fetchAllUsers). */
+  async function exportCsv() {
+    setCsv("busy");
+    const r = await fetchAllUsers(client);
+    if (!r.ok) {
+      if (r.failure === "forbidden") onForbidden();
+      else setCsv("failed");
+      return;
+    }
+    const ok = downloadTextFile(csvFileName(new Date()), usersCsv(r.value, CURRENT_CONSENT_VERSION), "text/csv;charset=utf-8");
+    setCsv(ok ? "idle" : "failed");
+  }
+
   const shownOverview = lastOf(overview);
   const shownUsers = lastOf(users);
+  const shownAdmins = lastOf(admins);
   const generated = shownOverview === null ? null : generatedAtLabel(shownOverview.generatedAt);
 
   const cards = useMemo(() => (shownOverview === null ? [] : kpiCards(shownOverview, CURRENT_CONSENT_VERSION)), [shownOverview]);
@@ -215,12 +363,18 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     const scale = niceScale(Math.max(0, ...days.map((d) => d.users)));
     return { bars: chartBars(days, scale), scale, summary: chartSummary(days) };
   }, [shownOverview]);
+  const consentRows = useMemo(
+    () => (shownOverview === null || shownOverview.consentVersions === null ? null : consentVersionRows(shownOverview.consentVersions, CURRENT_CONSENT_VERSION)),
+    [shownOverview],
+  );
   const rowViews = useMemo(
     () => (shownUsers === null ? [] : shownUsers.rows.map((r) => userRowView(r, CURRENT_CONSENT_VERSION))),
     [shownUsers],
   );
+  const adminRows = useMemo(() => (shownAdmins === null ? [] : shownAdmins.map(adminRowView)), [shownAdmins]);
 
-  const busy = overview.status === "loading" || users.status === "loading";
+  const busy = overview.status === "loading" || users.status === "loading" || admins.status === "loading";
+  const deleting = deleteTarget !== null;
 
   return (
     // PC(lg)는 앱 화면의 틀(components/shell/pageFrame.ts)과 같은 리듬 — 제목 24 bold가 위 32px에서 시작, 카드 사이 16,
@@ -256,6 +410,17 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           <span>{ADMIN_TEXT.privacyNote}</span>
         </p>
 
+        {/* 방금 한 일(계정 삭제 완료) — 화면 낭독기에도 읽히고, 삭제 뒤 포커스가 여기로 온다(tabIndex -1: 탭 순서에는 없다). 비어 있으면 자리도 없다. */}
+        <div
+          ref={noticeRef}
+          tabIndex={-1}
+          role="status"
+          aria-live="polite"
+          className="empty:hidden rounded-chip bg-surface px-4 py-3 text-[0.8125rem] font-semibold text-text-primary ring-1 ring-divider focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+        >
+          {notice}
+        </div>
+
         {overview.status === "failed" ? (
           <LoadFailed failure={overview.failure} onRetry={reload} />
         ) : shownOverview === null || chart === null ? (
@@ -277,7 +442,61 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           </div>
         )}
 
-        <UserListCard titleId={usersTitleId}>
+        {/* 동의 버전 분포(0005 뒤에만 — 응답에 칸이 있을 때) · 관리자 목록. 둘 다 있으면 PC는 두 열, 하나면 전체 폭. */}
+        <div className={cx("grid gap-4 md:gap-5 lg:gap-4", consentRows !== null && "lg:grid-cols-2")}>
+          {consentRows !== null ? (
+            <ToolCard titleId={consentTitleId} title={ADMIN_TEXT.consentVersionsTitle} subtitle={ADMIN_TEXT.consentVersionsSubtitle}>
+              <div aria-busy={overview.status === "loading"} className={cx("transition-opacity", overview.status === "loading" && "opacity-50")}>
+                <ConsentVersionsTable rows={consentRows} />
+              </div>
+            </ToolCard>
+          ) : null}
+          <ToolCard titleId={adminsTitleId} title={ADMIN_TEXT.adminsTitle}>
+            {admins.status === "failed" ? (
+              <LoadFailed failure={admins.failure} onRetry={reload} bare setupHint={ADMIN_TEXT.toolsSetupHint} />
+            ) : shownAdmins === null ? (
+              <LoadingBlock bare />
+            ) : (
+              <div aria-busy={admins.status === "loading"} className={cx("transition-opacity", admins.status === "loading" && "opacity-50")}>
+                <AdminsTable rows={adminRows} />
+              </div>
+            )}
+          </ToolCard>
+        </div>
+
+        {/* 계정 찾기 — 이용자가 문의로 보낸 계정 ID로 찾아 삭제 요청을 처리한다(0005) */}
+        <ToolCard titleId={searchTitleId} title={ADMIN_TEXT.searchTitle}>
+          <UserSearch
+            inputId={searchInputId}
+            query={query}
+            onQueryChange={(v) => {
+              setQuery(v);
+              if (search.kind === "invalid") setSearch({ kind: "idle" });
+            }}
+            onSubmit={() => void runSearch()}
+            state={search}
+            onDelete={openDelete}
+            deleting={deleting}
+          />
+        </ToolCard>
+
+        <UserListCard
+          titleId={usersTitleId}
+          note={ADMIN_TEXT.csvNote}
+          actions={
+            <button type="button" onClick={() => void exportCsv()} disabled={csv === "busy" || shownUsers === null} className={TOOL_BUTTON_CLASS}>
+              {csv === "busy" ? (
+                <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
+              ) : (
+                <Download aria-hidden className="size-4" strokeWidth={2.5} />
+              )}
+              {csv === "busy" ? ADMIN_TEXT.csvExporting : ADMIN_TEXT.csvExport}
+            </button>
+          }
+        >
+          <div role="alert" className="empty:hidden text-[0.8125rem] font-semibold text-state-alert-text">
+            {csv === "failed" ? ADMIN_TEXT.csvFailed : null}
+          </div>
           {users.status === "failed" ? (
             <LoadFailed failure={users.failure} onRetry={reload} bare />
           ) : shownUsers === null ? (
@@ -292,10 +511,16 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
               hasNext={shownUsers.hasNext}
               onPrev={() => goToPage(shownUsers.page - 1)}
               onNext={() => goToPage(shownUsers.page + 1)}
+              onDelete={openDelete}
+              deleting={deleting}
             />
           )}
         </UserListCard>
       </div>
+
+      {deleteTarget !== null ? (
+        <DeleteUserDialog target={deleteTarget} busy={deleteBusy} error={deleteError} onConfirm={(reason) => void confirmDelete(reason)} onClose={closeDelete} />
+      ) : null}
     </main>
   );
 }
@@ -310,11 +535,22 @@ function LoadingBlock({ bare = false }: { bare?: boolean }) {
   return bare ? body : <Card>{body}</Card>;
 }
 
-function LoadFailed({ failure, onRetry, bare = false }: { failure: Exclude<AdminFailure, "forbidden">; onRetry(): void; bare?: boolean }) {
+/** setupHint — 설치 안내 문장(기본은 0002, 관리자 도구 카드는 0005) */
+function LoadFailed({
+  failure,
+  onRetry,
+  bare = false,
+  setupHint = ADMIN_TEXT.setupHint,
+}: {
+  failure: Exclude<AdminFailure, "forbidden">;
+  onRetry(): void;
+  bare?: boolean;
+  setupHint?: string;
+}) {
   const body = (
     <div role="alert" className="flex flex-col items-center gap-3 py-6 text-center">
       <p className="text-[0.9375rem] font-semibold text-text-primary">{ADMIN_TEXT.loadFailedTitle}</p>
-      <p className="text-[0.8125rem] text-text-secondary">{failure === "setupMissing" ? ADMIN_TEXT.setupHint : ADMIN_TEXT.loadFailedBody}</p>
+      <p className="text-[0.8125rem] text-text-secondary">{failure === "setupMissing" ? setupHint : ADMIN_TEXT.loadFailedBody}</p>
       <button
         type="button"
         onClick={onRetry}

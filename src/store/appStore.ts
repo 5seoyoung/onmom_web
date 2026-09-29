@@ -20,6 +20,7 @@ import { decodePersisted } from "./decode";
 import { initialState } from "./defaults";
 import type { PersistenceAdapter } from "./persistence";
 import * as S from "./state";
+import { rebaseOnStored } from "./tabRebase";
 
 export interface AppSnapshot {
   /** 브라우저 저장소를 읽었는가. false인 동안(서버 렌더링·첫 페인트) state는 초기값이다. */
@@ -94,6 +95,11 @@ export interface AppStoreDeps {
   newId: () => string;
   /** 다른 탭의 저장 변경 구독(브라우저: watchBrowserStorage). 반환값은 해제 함수. */
   watchExternalChanges?: (onChange: () => void) => () => void;
+  /**
+   * 페이지가 다시 보일 때(뒤로 가기 캐시 복원·탭으로 돌아옴) 알림(브라우저: watchPageResume). 저장소가 바뀌었을 때만 다시 읽는다 —
+   * 멈춰 있던 동안 놓친 다른 탭의 변경을 보이게. 반환값은 해제 함수.
+   */
+  watchResume?: (onResume: () => void) => () => void;
 }
 
 /** 저장소를 읽기 전 스냅샷 — 서버와 하이드레이션 첫 렌더가 같은 값을 보도록 모듈 상수로 둔다. */
@@ -113,6 +119,14 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
   let storageOk = true;
   let guestIDCache: string | null = null;
   let stopWatching: (() => void) | null = null;
+  let stopResume: (() => void) | null = null;
+  /**
+   * 여러 탭 보호(DEV_NOTES §10) — 이 탭이 마지막으로 읽거나 쓴 저장 상태와 그때의 저장소 값(persistence.stateToken).
+   * 저장 직전에 저장소 값이 달라졌으면 다른 탭이 쓴 것이다 → 다시 읽고 합친 뒤 저장한다(commit). 이 탭의 저장이 실패 중이면
+   * 메모리가 원본이라 비교하지 않는다(storageOk).
+   */
+  let seenState: PersistedState = UNLOADED.state;
+  let seenToken: string | null = null;
 
   function emit() {
     for (const l of [...listeners]) l();
@@ -125,6 +139,24 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
 
   function saveState(next: PersistedState) {
     storageOk = persistence.saveState(next);
+  }
+
+  /** 이 탭의 메모리 상태 = 저장소 상태가 된 직후에 부른다(읽은 뒤·저장한 뒤). */
+  function markSeen(state: PersistedState) {
+    seenState = state;
+    seenToken = persistence.stateToken?.() ?? null;
+  }
+
+  /** 이 탭이 마지막으로 보거나 쓴 뒤 다른 탭이 상태·계정을 저장했는가 */
+  function storedChangedElsewhere(): boolean {
+    if (!storageOk || seenToken === null || !persistence.stateToken) return false;
+    const token = persistence.stateToken();
+    return token !== null && token !== seenToken;
+  }
+
+  /** 다른 탭이 바꿨으면 다시 읽는다(페이지가 다시 보일 때·계정을 바꾸기 전). */
+  function refreshIfChanged() {
+    if (storedChangedElsewhere()) load();
   }
 
   /** 이전 사람의 흔적을 저장소에서 지운다 — 게스트 id도 지워 다음 게스트는 새 id를 받는다(AppStore.swift:128-131). */
@@ -154,6 +186,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     const account = decodeAccount(persistence.loadAccount());
     // 앱을 열 때마다 로그인 계정에 데이터를 묶는다 — 주인 없는 구버전 데이터는 귀속, 어긋난 주인은 삭제.
     if (account) state = bindAndSave(state, account, false);
+    markSeen(state);
     publish({ state, account });
   }
 
@@ -161,9 +194,25 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     if (!loaded) load();
   }
 
+  /**
+   * 상태 저장. 이 탭이 마지막으로 본 뒤 다른 탭이 저장했으면(변경 알림이 늦거나 오지 않음 — 뒤로 가기 캐시·백그라운드 탭)
+   * 낡은 전체 상태로 덮지 않고: 다시 읽어 → 같은 계정이면 이 탭의 쓰기를 저장된 최신 상태 위로 합쳐(tabRebase) 저장,
+   * 계정이 바뀌었거나 끝났으면(다른 탭의 로그아웃·계정 삭제·다른 계정 로그인) 이 쓰기를 버린다 — 지운 계정의 기록을 되살리거나
+   * 다른 사람의 기록에 섞지 않게.
+   */
   function commit(next: PersistedState) {
     if (next === snapshot.state) return;
+    if (storedChangedElsewhere()) {
+      const mine = next;
+      const seen = seenState;
+      const accountBefore = snapshot.account?.id ?? null;
+      load();
+      const accountNow = snapshot.account?.id ?? null;
+      if (accountBefore === null || accountNow !== accountBefore) return;
+      next = rebaseOnStored(mine, snapshot.state, seen, accountNow);
+    }
     saveState(next);
+    if (storageOk) markSeen(next);
     publish({ state: next });
   }
 
@@ -194,13 +243,18 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       ensureLoaded();
       const account = decodeAccount(input);
       if (!account) return;
+      refreshIfChanged(); // 다른 탭이 쓴 최신 상태에 묶는다(낡은 상태를 저장하지 않게)
       const state = bindAndSave(snapshot.state, account, true);
+      if (storageOk) markSeen(state);
       publish({ state, account });
     },
     signOut() {
       ensureLoaded();
       if (snapshot.account === null) return;
+      refreshIfChanged();
+      if (snapshot.account === null) return; // 다른 탭이 이미 로그아웃했다
       persistence.saveAccount(null);
+      if (storageOk) markSeen(snapshot.state);
       publish({ account: null });
     },
     deleteAccount() {
@@ -208,7 +262,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       eraseStorage();
       // 키를 전부 지웠으니 저장소 = 초기 상태 — 쓸 수 있으면 저장된 것으로 본다.
       storageOk = persistence.isAvailable();
-      publish({ state: S.eraseAll(), account: null });
+      const erased = S.eraseAll();
+      markSeen(erased);
+      publish({ state: erased, account: null });
     },
     completeOnboarding() {
       ensureLoaded();
@@ -281,12 +337,17 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         // 다른 탭에서 로그인·로그아웃·기록을 하면 이 탭도 같은 데이터를 보게 다시 읽는다.
         stopWatching = deps.watchExternalChanges(load);
       }
+      if (stopResume === null && deps.watchResume) stopResume = deps.watchResume(refreshIfChanged);
       return () => {
         listeners.delete(listener);
         if (listeners.size > 0) return;
         if (stopWatching !== null) {
           stopWatching();
           stopWatching = null;
+        }
+        if (stopResume !== null) {
+          stopResume();
+          stopResume = null;
         }
         // 구독이 없는 동안(스토어를 안 쓰는 화면)은 다른 탭의 변경 알림을 못 받는다. 다음 구독·action 때
         // 다시 읽어서, 낡은 상태 전체를 저장해 다른 탭이 남긴 기록(레드플래그 등)을 지우지 않게 한다.

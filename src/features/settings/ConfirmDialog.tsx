@@ -60,7 +60,7 @@ export function ConfirmDialog({ open, title, message, confirmLabel, cancelLabel,
           <button
             type="button"
             onClick={onConfirm}
-            className="flex min-h-11 w-full items-center justify-center rounded-button bg-coral-tint px-4 py-3 text-base font-semibold text-state-alert"
+            className="flex min-h-11 w-full items-center justify-center rounded-button bg-coral-tint px-4 py-3 text-base font-semibold text-state-alert-text"
           >
             {confirmLabel}
           </button>

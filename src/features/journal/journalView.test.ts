@@ -2,7 +2,23 @@ import { describe, expect, it } from "vitest";
 import type { CommunityPost } from "@/domain/types";
 import { initialState } from "@/store/defaults";
 import { addComment, addPost, canSubmitComment, canSubmitPost } from "@/store/state";
-import { commentCountLabel, commentMetaLine, findPost, formatPostDateTime, postHref } from "./journalView";
+import { JOURNAL_SERVER_TEXT, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
+
+describe("맨 위 배너 — 저장 위치에 맞게(01 §3-6 웹 수정)", () => {
+  it("설정 없는 빌드(브라우저 전용)는 iOS 원문 그대로", () => {
+    expect(localOnlyNoticeFor(false)).toBe(JOURNAL_TEXT.localOnlyNotice);
+    expect(localOnlyNoticeFor(false)).toBe("여기에 쓴 글은 이 기기에만 저장돼요. 아직 다른 분들과 공유되지 않아요.");
+  });
+
+  it("서버 저장 빌드는 '이 기기'라고 하지 않고, 동의 뒤 서버(서울) 저장과 비공유를 말한다", () => {
+    const text = localOnlyNoticeFor(true);
+    expect(text).toBe(JOURNAL_SERVER_TEXT.localOnlyNotice);
+    expect(text).not.toContain("이 기기");
+    expect(text).toContain("동의를 받은 뒤");
+    expect(text).toContain("온맘 서버(대한민국 서울)");
+    expect(text).toContain("공유되지 않아요");
+  });
+});
 
 const post = (id: string, patch: Partial<CommunityPost> = {}): CommunityPost => ({
   id,

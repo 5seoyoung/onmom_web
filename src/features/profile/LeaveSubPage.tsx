@@ -1,42 +1,13 @@
 "use client";
 
-// 하위 화면 떠나기 — 판단은 subPageExit.ts. 여기는 브라우저 값을 읽어 back() 또는 replace(부모)로 이동한다.
+// 하위 화면 떠나기 — 판단은 components/ui/subPageExit.ts. 여기는 브라우저 값을 읽어 back() 또는 replace(부모)로 이동한다.
+// (공용 SubPageHeader의 [뒤로]도 같은 판단을 쓰지만, 부모가 아니면 replace 대신 링크대로 push한다 — 등록·저장 뒤 떠나기가 없는 화면)
 
 import { useMemo, useRef, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { SubPageHeader, type SubPageHeaderProps } from "@/components/ui";
-import { canLeaveWithHistoryBack, canLeaveWithHistoryBackToAny, type HistorySnapshot } from "./subPageExit";
-
-interface NavigationLike {
-  currentEntry: { index: number } | null;
-  entries(): Array<{ url: string | null }>;
-}
-
-function readHistorySnapshot(parentHref: string): HistorySnapshot {
-  const snapshot: HistorySnapshot = {
-    currentUrl: window.location.href,
-    documentEntryUrl: null,
-    basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
-    parentHref,
-  };
-  try {
-    const entry = performance.getEntriesByType("navigation")[0];
-    snapshot.documentEntryUrl = entry?.name ?? null;
-  } catch {
-    // 성능 API가 없으면 모름(null) — 부모 주소로 replace한다
-  }
-  const nav = (window as Window & { navigation?: NavigationLike }).navigation;
-  const current = nav?.currentEntry;
-  if (nav && current && typeof nav.entries === "function") {
-    try {
-      const prev = current.index > 0 ? nav.entries()[current.index - 1] : undefined;
-      snapshot.previousEntryUrl = prev?.url ?? null;
-    } catch {
-      // entries()를 못 읽으면 대체 판단(documentEntryUrl)으로
-    }
-  }
-  return snapshot;
-}
+import { readHistorySnapshot } from "@/components/ui/historySnapshot";
+import { canLeaveWithHistoryBack, canLeaveWithHistoryBackToAny } from "@/components/ui/subPageExit";
 
 export interface SubPageExit {
   /** 이 화면을 떠나 부모로 — 앱 안에서 들어왔으면 back(), 아니면 replace(parentHref). 한 번만 움직인다. */

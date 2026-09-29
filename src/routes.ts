@@ -10,6 +10,8 @@ export const ROUTES = {
   landing: "/",
   /** 개인정보처리방침 — 누구나 */
   privacy: "/privacy/",
+  /** 이용약관(초안 — 법률 검토 전) — 누구나. 서비스 소개 바닥글·설정·온보딩 동의 옆에서 연다(features/terms). */
+  terms: "/terms/",
   /** 로그인 공급자에서 돌아오는 주소 — 누구나(아직 페이지 없음, 카카오 로그인 준비 중) */
   authCallback: "/auth/callback/",
   /**

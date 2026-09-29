@@ -6,6 +6,9 @@
 // [동의하고 계속하기]면 그 질문을 AI에, [동의하지 않기]면 앱 내 안내로 답한다. 동의 전에는 서버에 아무것도 보내지 않는다.
 // 음성 입력은 웹에서 만들지 않는다(결정 D3). 대화는 이 화면 메모리에만 둔다(저장하지 않음).
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
+// 온맘 말풍선 아래에 어디서 온 답인지 작은 글씨로 남긴다(앱 안내 / AI 답변 · 진단·처방이 아닙니다 — chatModel CHAT_ORIGIN_CAPTION).
+// 앱 안내로 답한 이유(미연결·동의 안 함·한도·혼잡·거절 — chatModel ChatFallbackReason)에 맞게 배너 첫머리를 바꾼다.
+// 앱 안내 말풍선의 전화번호(1577-0199 · 109 · 119)는 tel: 링크(PhoneLinks). AI 답은 plain text만(지어낸 번호가 링크가 되지 않게).
 // PC(lg 이상): 머리·배너·대화·입력창을 같은 기둥에 맞춘다 — 다른 읽기 화면과 같은 폭(최대 48rem)·같은 왼쪽 선·같은 위 여백
 // (components/shell/pageFrame.ts). 가운데 정렬하지 않는다. 사이드바에 있는 화면이라 PC에서는 [뒤로]를 숨긴다.
 // 스크롤 영역은 전체 폭이라 스크롤 막대는 가장자리에 있다. 폰 기둥(30rem)에서는 기둥이 곧 화면 폭이라 그대로다.
@@ -16,14 +19,16 @@ import { LLM_FUNCTION_MAX_MESSAGE_CHARS, llmComplete } from "@/api/llm";
 import { PAGE_EDGE_TOP, PAGE_EDGE_X, READING_WIDTH } from "@/components/shell/pageFrame";
 import { SubPageHeader, cx } from "@/components/ui";
 import { isLLMBackendConfigured } from "@/config";
-import { CHAT_FALLBACK_BANNER, CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
+import { PhoneLinks } from "@/features/guide/PhoneLinks";
+import { CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
 import { useAppStore } from "@/store/useAppStore";
 import { AiConsentCard } from "./AiConsentCard";
 import { aiMode, useAiConsent } from "./aiConsent";
 import {
-  CHAT_DECLINED_BANNER,
+  CHAT_ORIGIN_CAPTION,
   canSendChat,
   chatBackHref,
+  chatBannerText,
   chatLlmContext,
   chatSendAction,
   chatScreenState,
@@ -32,6 +37,7 @@ import {
   requestChatReply,
   shouldSendOnEnter,
   type ChatBubbleMessage,
+  type ChatFallbackReason,
 } from "./chatModel";
 
 // 원문: ChatView.swift:51
@@ -56,7 +62,7 @@ export function ChatScreen() {
   /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
   const [declined, setDeclined] = useState(false);
   const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
-  /** 서버에 물을 수 있는가(동의를 묻는 중 포함) — 배너·FAQ는 이 값을 본다 */
+  /** 서버에 물을 수 있는가(동의를 묻는 중 포함) — 입력 상한이 이 값을 본다. 배너·FAQ는 mode로 정한다(chatScreenState) */
   const llmConfigured = mode !== "off";
 
   const [messages, setMessages] = useState<ChatBubbleMessage[]>(initialChatMessages);
@@ -64,6 +70,8 @@ export function ChatScreen() {
   const [thinking, setThinking] = useState(false);
   /** 마지막 답이 규칙 폴백이었는가 — 아직 답이 없으면 null(서버 미설정이면 처음부터 배너) */
   const [lastReplyFromFallback, setLastReplyFromFallback] = useState<boolean | null>(null);
+  /** 마지막 폴백의 이유(배너 첫머리) — 아직 폴백 답이 없으면 null */
+  const [fallbackReason, setFallbackReason] = useState<ChatFallbackReason | null>(null);
   /** 동의를 기다리는 대화 — 첫 질문을 보냈는데 아직 AI 국외 이전 동의를 고르지 않았다 */
   const [awaitingConsent, setAwaitingConsent] = useState<ChatBubbleMessage[] | null>(null);
 
@@ -80,7 +88,7 @@ export function ChatScreen() {
   );
 
   const { showBanner, showFaq } = chatScreenState({
-    llmConfigured,
+    mode,
     messageCount: messages.length,
     thinking,
     lastReplyFromFallback,
@@ -138,8 +146,11 @@ export function ChatScreen() {
       inflight.current = null;
       setThinking(false);
       // 위기 안내는 AI 연결 여부와 무관한 고정 답이다 — 배너("AI 서버에 연결되지 않아")를 새로 띄우거나 내리지 않는다
-      if (!reply.crisis) setLastReplyFromFallback(reply.fromFallback);
-      setMessages((prev) => [...prev, { id: nextId.current++, role: "assistant", text: reply.text }]);
+      if (!reply.crisis) {
+        setLastReplyFromFallback(reply.fromFallback);
+        setFallbackReason(reply.fallbackReason);
+      }
+      setMessages((prev) => [...prev, { id: nextId.current++, role: "assistant", text: reply.text, origin: reply.origin }]);
     });
   }
 
@@ -187,8 +198,8 @@ export function ChatScreen() {
         <SubPageHeader title={TITLE} backHref={backHref} hideBackWithSidebar />
       </div>
 
-      {/* 이번에 AI 동의를 거절했으면 "연결되지 않아"가 아니라 "동의하지 않아" */}
-      {showBanner ? <FallbackNotice text={declined ? CHAT_DECLINED_BANNER : CHAT_FALLBACK_BANNER} /> : null}
+      {/* 첫머리는 이유에 맞게 — 미설정이면 원문("연결되지 않아"), 이번에 AI 동의를 거절했으면 "동의하지 않아", 한도·혼잡·거절은 서버 답에 따라 */}
+      {showBanner ? <FallbackNotice text={chatBannerText(fallbackReason ?? (declined ? "declined" : "notConnected"))} /> : null}
 
       <div ref={logRef} className="flex-1 overflow-y-auto">
         <div className={cx(CHAT_COLUMN, "p-4", PAGE_EDGE_X)}>
@@ -201,10 +212,10 @@ export function ChatScreen() {
             </ol>
           </div>
 
-          {/* 자주 묻는 질문은 서버가 답할 수 있을 때만(ChatView.swift:31-36) — 규칙 폴백은 FAQ 대부분에 엉뚱한 답을 준다 */}
+          {/* 자주 묻는 질문은 AI가 답할 때(동의한 뒤)만(ChatView.swift:31-36) — 규칙 폴백은 FAQ 대부분에 엉뚱한 답을 준다 */}
           {showFaq ? (
             <section aria-labelledby="chat-faq-title" className="flex flex-col gap-1 pt-2">
-              <h2 id="chat-faq-title" className="pl-1 text-xs font-medium text-text-subtle">
+              <h2 id="chat-faq-title" className="pl-1 text-xs font-medium text-text-subtle-aa">
                 {CHAT_FAQ_TITLE}
               </h2>
               <ul className="flex flex-wrap gap-2">
@@ -214,7 +225,7 @@ export function ChatScreen() {
                       type="button"
                       onClick={() => send(q)}
                       disabled={!hydrated}
-                      className="min-h-11 rounded-full bg-coral-tint px-3 py-2 text-left text-[0.8125rem] font-medium text-primary"
+                      className="min-h-11 rounded-full bg-coral-tint px-3 py-2 text-left text-[0.8125rem] font-medium text-primary-text"
                     >
                       {q}
                     </button>
@@ -256,7 +267,7 @@ export function ChatScreen() {
           aria-label={INPUT_PLACEHOLDER}
           enterKeyHint="send"
           autoComplete="off"
-          className="max-h-32 min-h-11 flex-1 resize-none rounded-[1.375rem] bg-surface px-4 py-2.5 text-base leading-6 text-text-primary placeholder:text-text-subtle [field-sizing:content]"
+          className="max-h-32 min-h-11 flex-1 resize-none rounded-[1.375rem] bg-surface px-4 py-2.5 text-base leading-6 text-text-primary placeholder:text-text-subtle-aa [field-sizing:content]"
         />
         <button
           type="submit"
@@ -276,7 +287,7 @@ export function ChatScreen() {
 }
 
 // 서버 대신 앱 내 안내로 답하고 있음 — "AI가 답한 것처럼" 보이지 않게(ChatView.swift:61-74).
-// 문구: content.json disclaimers.chat_banner, AI 동의를 거절했으면 chatModel CHAT_DECLINED_BANNER
+// 문구: content.json disclaimers.chat_banner — 첫머리만 이유에 따라(chatModel chatBannerText)
 function FallbackNotice({ text }: { text: string }) {
   return (
     // 폰: 화면 폭 띠 / 넓은 화면: 대화 기둥 폭의 둥근 안내 상자.
@@ -290,12 +301,15 @@ function FallbackNotice({ text }: { text: string }) {
   );
 }
 
-// 말풍선 — 16 · 라운드 18 · 좌우 16 위아래 8, 사용자는 오른쪽 primary/흰 글씨, 온맘은 왼쪽 surface(ChatView.swift:199-219)
-function ChatBubble({ message }: { message: ChatBubbleMessage }) {
+// 말풍선 — 16 · 라운드 18 · 좌우 16 위아래 8, 사용자는 오른쪽 primary/흰 글씨, 온맘은 왼쪽 surface(ChatView.swift:199-219).
+// 온맘 말풍선 아래 12px 표시(앱 안내 / AI 답변 …) — 인사말에는 없다. 웹 신규(iOS는 배너만 — ChatView.swift:61-74).
+// 테스트(chatMarkup.test.ts)가 따로 그려 본다 — AI 답에 전화 링크가 생기지 않는지, 앱 안내의 안전 연계 번호가 링크인지.
+export function ChatBubble({ message }: { message: ChatBubbleMessage }) {
   const isUser = message.role === "user";
+  const caption = !isUser && message.origin ? CHAT_ORIGIN_CAPTION[message.origin] : null;
   return (
-    <li className={cx("flex", isUser ? "justify-end pl-10" : "justify-start pr-10")}>
-      {/* LLM 답은 신뢰할 수 없는 값 — plain text로만 렌더(마크다운·HTML 금지, 검수 #51) */}
+    <li className={cx("flex flex-col gap-1", isUser ? "items-end pl-10" : "items-start pr-10")}>
+      {/* LLM 답은 신뢰할 수 없는 값 — plain text로만 렌더(마크다운·HTML 금지, 검수 #51). 전화 링크는 앱 안내(rules)에만 */}
       <p
         className={cx(
           "whitespace-pre-wrap rounded-[1.125rem] px-4 py-2 text-base",
@@ -303,8 +317,9 @@ function ChatBubble({ message }: { message: ChatBubbleMessage }) {
         )}
       >
         <span className="sr-only">{SPEAKER_SR_LABEL[message.role]}</span>
-        {message.text}
+        {message.origin === "rules" ? <PhoneLinks text={message.text} /> : message.text}
       </p>
+      {caption !== null ? <p className="px-2 text-xs text-text-subtle-aa">{caption}</p> : null}
     </li>
   );
 }

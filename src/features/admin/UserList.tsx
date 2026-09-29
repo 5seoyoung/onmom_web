@@ -5,11 +5,13 @@
 // - 폰(md 미만): 한 사람 = 한 줄 묶음(정의 목록, 구분선으로 나눔 — 카드 안에 상자를 겹치지 않는다). 표를 가로로 밀지 않게.
 // - PC(md 이상): 표. 숫자·날짜 칸은 자리 맞춤(tabular-nums).
 // - 다시 불러오는 동안 이전 목록을 흐리게 남긴다(자리가 튀지 않게).
+// - onDelete가 있으면 행마다 [계정 삭제](0005_admin_tools.sql — 이용자의 삭제 요청 처리, 확인 창은 부모가 띄운다).
 
 import type { ReactNode } from "react";
 import { Card } from "@/components/ui";
 import { cx } from "@/components/ui/cx";
 import { ADMIN_TEXT, type UserRowView } from "./adminModel";
+import { ROW_ACTION_CLASS } from "./AdminTools";
 
 /** 쪽 넘김 단추 — 공용 보조 단추와 같은 모양, 폭만 글자에 맞춤(cx는 같은 속성을 덮어쓰지 못해 따로 둔다) */
 const PAGE_BUTTON_CLASS =
@@ -41,6 +43,21 @@ function StateCell({ row }: { row: UserRowView }) {
   );
 }
 
+/** 행의 [계정 삭제] — 어느 계정인지 보조기기에 함께 읽힌다(표에는 같은 글자의 단추가 여러 개) */
+function DeleteButton({ row, onDelete, disabled }: { row: UserRowView; onDelete(row: UserRowView): void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onDelete(row)}
+      disabled={disabled}
+      aria-label={`${ADMIN_TEXT.deleteUser} ${row.shortId}`}
+      className={ROW_ACTION_CLASS}
+    >
+      {ADMIN_TEXT.deleteUser}
+    </button>
+  );
+}
+
 export interface UserListProps {
   titleId: string;
   rows: UserRowView[];
@@ -51,9 +68,14 @@ export interface UserListProps {
   hasNext: boolean;
   onPrev(): void;
   onNext(): void;
+  /** 행마다 [계정 삭제] — 없으면 단추를 그리지 않는다 */
+  onDelete?(row: UserRowView): void;
+  /** 삭제 창이 떠 있거나 삭제 중 — 단추를 잠근다 */
+  deleting?: boolean;
 }
 
-export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPrev, onNext }: UserListProps) {
+export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPrev, onNext, onDelete, deleting = false }: UserListProps) {
+  const canDelete = onDelete !== undefined;
   return (
     <div className="flex flex-col gap-4">
       <div aria-busy={loading} className={cx("transition-opacity", loading && "opacity-50")}>
@@ -85,6 +107,11 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
                       <StateCell row={r} />
                     </dd>
                   </dl>
+                  {canDelete ? (
+                    <div className="mt-2 flex justify-end">
+                      <DeleteButton row={r} onDelete={onDelete} disabled={deleting || loading} />
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -109,9 +136,14 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
                     <th scope="col" className="py-2 pr-4 font-medium">
                       {ADMIN_TEXT.colConsent}
                     </th>
-                    <th scope="col" className="py-2 font-medium">
+                    <th scope="col" className={cx("py-2 font-medium", canDelete && "pr-4")}>
                       {ADMIN_TEXT.colState}
                     </th>
+                    {canDelete ? (
+                      <th scope="col" className="py-2 text-right font-medium">
+                        <span className="sr-only">{ADMIN_TEXT.colActions}</span>
+                      </th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -128,9 +160,14 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
                       <td className="py-3 pr-4">
                         <Consent row={r} />
                       </td>
-                      <td className="py-3">
+                      <td className={cx("py-3", canDelete && "pr-4")}>
                         <StateCell row={r} />
                       </td>
+                      {canDelete ? (
+                        <td className="py-1.5 text-right">
+                          <DeleteButton row={r} onDelete={onDelete} disabled={deleting || loading} />
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
@@ -159,13 +196,29 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
   );
 }
 
-/** 목록 칸 — 제목과 목록을 한 카드에 */
-export function UserListCard({ titleId, children }: { titleId: string; children: ReactNode }) {
+/** 목록 칸 — 제목과 목록을 한 카드에. actions(CSV 내려받기 등)는 제목 오른쪽, note는 제목 아래. */
+export function UserListCard({
+  titleId,
+  actions,
+  note,
+  children,
+}: {
+  titleId: string;
+  actions?: ReactNode;
+  note?: string;
+  children: ReactNode;
+}) {
   return (
     <Card as="section" aria-labelledby={titleId} className="flex flex-col gap-4">
-      <h2 id={titleId} className="text-[1.0625rem] font-semibold text-neutral">
-        {ADMIN_TEXT.usersTitle}
-      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 id={titleId} className="text-[1.0625rem] font-semibold text-neutral">
+            {ADMIN_TEXT.usersTitle}
+          </h2>
+          {note !== undefined ? <p className="text-[0.8125rem] text-text-secondary">{note}</p> : null}
+        </div>
+        {actions}
+      </div>
       {children}
     </Card>
   );

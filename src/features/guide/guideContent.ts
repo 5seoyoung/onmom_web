@@ -53,8 +53,12 @@ export function guideCardViews(cards: readonly GuideCardSource[] = content.guide
   }));
 }
 
-// 전화번호가 "1577-" / "0199"처럼 하이픈에서 줄바뀌지 않게 번호만 따로 떼어 준다(화면에서 한 덩어리로 묶는다).
-const PHONE_RE = /\d{2,4}-\d{3,4}(?:-\d{4})?/g;
+// 문장 속 전화번호 — 화면이 한 덩어리로 묶어 tel: 링크를 건다(PhoneLinks.tsx). 글자는 그대로.
+// - 하이픈이 든 번호(1577-0199 · 02-2276-2276): 자릿수 형태로 찾는다.
+// - 하이픈 없는 짧은 번호는 안전 연계 번호 목록(web/07 §5 — 자살예방상담 109 · 응급 119 · 고용노동부 1350)만 — 앞뒤에 숫자·하이픈이
+//   없을 때만 맞아, "10~20%"·"1190"·"400~500kcal" 같은 수치는 번호로 보지 않는다. 그 밖의 숫자 나열은 전화번호로 지어내지 않는다.
+export const SAFETY_SHORT_NUMBERS: readonly string[] = ["109", "119", "1350"];
+const PHONE_RE = new RegExp(`\\d{2,4}-\\d{3,4}(?:-\\d{4})?|(?<![\\d-])(?:${SAFETY_SHORT_NUMBERS.join("|")})(?![\\d-])`, "g");
 
 export interface TextSegment {
   text: string;
@@ -73,3 +77,6 @@ export function splitPhoneNumbers(text: string): TextSegment[] {
   if (last < text.length) out.push({ text: text.slice(last), phone: false });
   return out;
 }
+
+/** 전화 링크의 접근성 이름 — 원문 패턴: NearbyClinicsView.swift:128 `"\(clinic.name)에 전화 걸기"` (이름 자리에 번호) */
+export const phoneCallLabel = (number: string) => `${number}에 전화 걸기`;

@@ -7,7 +7,8 @@ import type { MoodAnswer } from "@/domain/types";
 import { RECORD_TEXT, type MoodCardModel } from "./recordView";
 
 // 오늘의 한 가지 질문 — RecordFlowView.swift:57-104.
-// 답하지 않았으면 문항 17 semibold + 답 버튼 3개(네/글쎄요/아니요, background 칩) + 안내 12 textSubtle.
+// 답하지 않았으면 문항 17 semibold + 답 버튼 3개(네/글쎄요/아니요, background 칩) + 안내 12 textSubtle(각주는 model.note —
+// 저장 위치에 맞는 문구, recordView moodNoteFor).
 // 답했으면 체크 아이콘(stateNormal) + "오늘은 「{답}」라고 답했어요. 내일 또 물어볼게요." 15 textSecondary.
 // 점수·등급은 보이지 않는다(원칙 1).
 
@@ -54,7 +55,7 @@ export function MoodQuestionCard({ model, onAnswer }: MoodQuestionCardProps) {
               </button>
             ))}
           </div>
-          <p className="text-xs text-text-subtle">{RECORD_TEXT.moodNote}</p>
+          <p className="text-xs text-text-subtle-aa">{model.note}</p>
         </>
       )}
     </Card>

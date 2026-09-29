@@ -1,9 +1,14 @@
-# Supabase 배포 — DB 표(마이그레이션) → Edge Function 비밀값 → Edge Function(videos·chat) 배포.
+# Supabase 배포 — DB 표(마이그레이션) → Edge Function 비밀값 → Edge Function(videos·chat·send-reminders) 배포.
 # 설명서: docs/SUPABASE_SETUP.md (D단계). 웹 사이트 배포는 deploy.yml이 따로 한다.
 #
 # 필요한 값 — 저장소 Settings → Secrets and variables → Actions
 #   Secrets:   SUPABASE_ACCESS_TOKEN(필수) · SUPABASE_DB_PASSWORD(필수) · ANTHROPIC_API_KEY(AI 상담을 켤 때)
+#              VAPID_PRIVATE_KEY · VAPID_SUBJECT · REMINDER_CRON_SECRET(매일 리마인더를 켤 때 — docs/PWA_AND_REMINDERS.md §5)
 #   Variables: SUPABASE_PROJECT_REF(필수) · VIDEO_API_URL · ALLOWED_ORIGINS · CHAT_HOURLY_LIMIT · CHAT_GLOBAL_DAILY_LIMIT
+#              ANTHROPIC_WORKSPACE_ID(조직 전체용 Anthropic 키일 때 — wrkspc_…, Secrets에 넣어도 읽는다)
+#              NEXT_PUBLIC_VAPID_PUBLIC_KEY(사이트 빌드와 같은 값 — 함수 비밀값 VAPID_PUBLIC_KEY로 넣어 비밀 키와 짝이 맞는지 함수가 확인)
+# 매일 리마인더는 이 워크플로만으로 켜지지 않는다 — 마지막에 Supabase SQL Editor에서 Vault reminder_cron_secret을 넣어야 예약이 함수를 부른다
+# (docs/PWA_AND_REMINDERS.md §5 E). 그 전에는 0004의 예약이 돌아도 요청을 만들지 않는다.
 # 비어 있는 선택 값은 건너뛴다(서버에 이미 있던 값은 그대로 남고, 없으면 함수 기본값 — supabase/functions/_shared).
 #
 # 하지 않는 것: 인증(Auth) 설정 올리기(`supabase config push`) — 인증 설정은 대시보드가 기준이다(supabase/config.toml 참고).
@@ -47,6 +52,11 @@ jobs:
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
           CHAT_GLOBAL_DAILY_LIMIT: ${{ vars.CHAT_GLOBAL_DAILY_LIMIT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          REMINDER_CRON_SECRET: ${{ secrets.REMINDER_CRON_SECRET }}
+          VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID || secrets.ANTHROPIC_WORKSPACE_ID }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
@@ -99,7 +109,37 @@ jobs:
             fi
           done
 
-          for fn in videos chat; do
+          # Anthropic 워크스페이스(선택) — 조직 전체용 키는 요청마다 워크스페이스를 지정해야 한다(chat/index.ts anthropic-workspace-id).
+          wsid="${ANTHROPIC_WORKSPACE_ID//[[:space:]]/}"
+          if [ -n "${wsid}" ] && ! [[ "${wsid}" =~ ^wrkspc_[A-Za-z0-9]+$ ]]; then
+            echo "::error title=ANTHROPIC_WORKSPACE_ID 형식::Anthropic 콘솔 Settings → Workspaces의 ID(wrkspc_로 시작)를 그대로 넣습니다."
+            exit 1
+          fi
+
+          # 매일 리마인더(선택) — 형식만 본다(값은 찍지 않는다). 비어 있으면 건너뛴다(리마인더는 꺼진 채).
+          # 비밀 키: scripts/generate-vapid.mjs의 비밀 키(base64url 43자). 공개 키(87자)를 잘못 넣는 실수를 막는다.
+          vpriv="${VAPID_PRIVATE_KEY//[[:space:]]/}"
+          if [ -n "${vpriv}" ] && ! [[ "${vpriv}" =~ ^[A-Za-z0-9_-]{43}$ ]]; then
+            echo "::error title=VAPID_PRIVATE_KEY 형식::scripts/generate-vapid.mjs가 출력한 비밀 키(43자)를 그대로 넣습니다. 공개 키(87자)를 넣지 않았는지 확인하세요."
+            exit 1
+          fi
+          vpub="${VAPID_PUBLIC_KEY//[[:space:]]/}"
+          if [ -n "${vpub}" ] && ! [[ "${vpub}" =~ ^B[A-Za-z0-9_-]{86}$ ]]; then
+            echo "::error title=NEXT_PUBLIC_VAPID_PUBLIC_KEY 형식::공개 키는 87자, B로 시작합니다(scripts/generate-vapid.mjs)."
+            exit 1
+          fi
+          vsub="${VAPID_SUBJECT//[[:space:]]/}"
+          if [ -n "${vsub}" ] && ! [[ "${vsub}" =~ ^(mailto:[^@]+@[^@]+|https://[^/]+.*)$ ]]; then
+            echo "::error title=VAPID_SUBJECT 형식::mailto:<운영 이메일> 또는 https://… 주소여야 합니다."
+            exit 1
+          fi
+          rsec="${REMINDER_CRON_SECRET//[[:space:]]/}"
+          if [ -n "${rsec}" ] && [ "${#rsec}" -lt 16 ]; then
+            echo "::error title=REMINDER_CRON_SECRET 길이::16자 이상이어야 합니다(예: openssl rand -hex 32)."
+            exit 1
+          fi
+
+          for fn in videos chat send-reminders; do
             if [ ! -f "supabase/functions/${fn}/index.ts" ]; then
               echo "::error title=함수 파일 없음::supabase/functions/${fn}/index.ts 가 저장소에 없습니다."
               exit 1
@@ -160,6 +200,11 @@ jobs:
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
           CHAT_GLOBAL_DAILY_LIMIT: ${{ vars.CHAT_GLOBAL_DAILY_LIMIT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          REMINDER_CRON_SECRET: ${{ secrets.REMINDER_CRON_SECRET }}
+          VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID || secrets.ANTHROPIC_WORKSPACE_ID }}
         run: |
           set -euo pipefail
           # 값은 명령 인자(다른 프로세스가 볼 수 있음)가 아니라 이 단계에서만 읽을 수 있는 임시 파일로 넘기고 바로 지운다.
@@ -167,7 +212,7 @@ jobs:
           envfile="$(mktemp)"
           trap 'rm -f "${envfile}"' EXIT
           names=()
-          for name in ANTHROPIC_API_KEY VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT; do
+          for name in ANTHROPIC_API_KEY ANTHROPIC_WORKSPACE_ID VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET VAPID_PUBLIC_KEY; do
             value="${!name:-}"
             value="${value//[[:space:]]/}"   # 붙여 넣을 때 딸려 온 공백·줄바꿈 제거(모든 값이 공백을 담지 않는다)
             if [ -z "${value}" ]; then
@@ -201,15 +246,24 @@ jobs:
               esac
             fi
           done
+          # 매일 리마인더(선택) — 셋 중 하나라도 없으면 send-reminders는 발송하지 않는다(503 missing_env). 켜지 않을 거면 그대로 둔다.
+          missing_reminder=()
+          for name in VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET; do
+            grep -qw -- "${name}" <<< "${present}" || missing_reminder+=("${name}")
+          done
+          if [ "${#missing_reminder[@]}" -gt 0 ]; then
+            echo "::notice title=매일 리마인더 꺼짐::서버에 없는 비밀값: ${missing_reminder[*]} — 켜려면 docs/PWA_AND_REMINDERS.md §5(키 만들기 → Secrets → Vault)."
+          fi
 
-      - name: Edge Function 배포 (videos · chat)
+      - name: Edge Function 배포 (videos · chat · send-reminders)
         if: steps.check.outputs.run == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           PROJECT_REF: ${{ steps.check.outputs.project_ref }}
         # 함수별 JWT 검사 여부는 supabase/config.toml의 [functions.*] verify_jwt를 따른다.
         # --use-api: Docker 없이 Supabase 서버에서 묶는다(러너에서 이미지를 받지 않는다).
-        run: supabase functions deploy videos chat --project-ref "$PROJECT_REF" --use-api
+        # send-reminders는 비밀값·Vault reminder_cron_secret이 생기기 전에는 부르는 곳이 없다(0004의 예약이 요청을 만들지 않음).
+        run: supabase functions deploy videos chat send-reminders --project-ref "$PROJECT_REF" --use-api
 
       # AI 상담 함수가 로그인 확인에 쓰는 서버 키(service_role 권한)를 갖고 있는지 본다.
       # 틀린 토큰으로 한 번 부른다 → 401이면 정상(토큰 확인에서 끝나므로 Anthropic을 부르지 않고 한도도 쓰지 않는다).
@@ -261,7 +315,8 @@ jobs:
             echo "## Supabase 배포"
             echo ""
             if [ "${JOB_STATUS}" = "success" ]; then
-              echo "- 테스트 · DB 표(supabase/migrations) · Edge Function 비밀값 · 함수(videos, chat) 배포를 마쳤습니다."
+              echo "- 테스트 · DB 표(supabase/migrations) · Edge Function 비밀값 · 함수(videos, chat, send-reminders) 배포를 마쳤습니다."
+              echo "- 매일 리마인더는 Supabase SQL Editor에서 Vault \`reminder_cron_secret\`을 넣어야 켜집니다(docs/PWA_AND_REMINDERS.md §5 E). 넣기 전에는 예약이 함수를 부르지 않습니다."
               case "${CHAT_CHECK}" in
                 ok) echo "- AI 상담 함수의 로그인 확인: 정상" ;;
                 no_key) echo "- ⚠️ AI 상담 함수가 로그인을 확인할 서버 키를 찾지 못했습니다 — AI 상담을 켜기 전에 개발자에게(설정 안내 B-4)." ;;

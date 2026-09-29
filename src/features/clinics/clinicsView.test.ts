@@ -6,9 +6,11 @@ import {
   type ClinicSearchServices,
   type KakaoPlace,
 } from "@/api/clinics";
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
 import {
   CLINICS_TEXT,
   clinicRowView,
+  clinicsErrorMessage,
   initialClinicsState,
   mapPoints,
   shouldAutoSearch,
@@ -64,12 +66,25 @@ describe("검색 결과 → 화면 상태", () => {
     });
   });
 
-  it("실패는 원문 문구 카드, 키 없음은 준비 중", () => {
+  it("실패는 원문 문구 카드(종류 포함), 키 없음은 준비 중", () => {
     expect(stateFromSearchResult({ ok: false, kind: "noResults", message: CLINIC_MESSAGES.noResults })).toEqual({
       status: "error",
+      kind: "noResults",
       message: "주변에서 산부인과를 찾지 못했어요.",
     });
     expect(stateFromSearchResult({ ok: false, kind: "notConfigured", message: null })).toEqual({ status: "notConfigured" });
+  });
+
+  it("오프라인이면 검색 실패(failed)만 오프라인 안내로 — 주소 없음·못 찾음·결과 없음은 원문 그대로(05 §3)", () => {
+    const failed = stateFromSearchResult({ ok: false, kind: "failed", message: CLINIC_MESSAGES.failed });
+    if (failed.status !== "error") throw new Error("error");
+    expect(clinicsErrorMessage(failed, false)).toBe(OFFLINE_TEXT);
+    expect(clinicsErrorMessage(failed, true)).toBe("검색에 실패했어요. 잠시 후 다시 시도해 주세요.");
+    for (const kind of ["emptyAddress", "notFound", "noResults"] as const) {
+      const view = stateFromSearchResult({ ok: false, kind, message: CLINIC_MESSAGES[kind] });
+      if (view.status !== "error") throw new Error("error");
+      expect(clinicsErrorMessage(view, false)).toBe(CLINIC_MESSAGES[kind]);
+    }
   });
 
   it("검색 흐름과 이어서: 빈 동네 · 못 찾음 · 결과", async () => {
@@ -81,9 +96,10 @@ describe("검색 결과 → 화면 상태", () => {
     const run = async (address: string, s: ClinicSearchServices) =>
       stateFromSearchResult(await searchNearbyClinics(address, { kakaoJsKey: "k", services: s }));
 
-    expect(await run("   ", services([]))).toEqual({ status: "error", message: "동네(주소)를 입력해 주세요." });
+    expect(await run("   ", services([]))).toEqual({ status: "error", kind: "emptyAddress", message: "동네(주소)를 입력해 주세요." });
     expect(await run("강남역", services([], false))).toEqual({
       status: "error",
+      kind: "notFound",
       message: "입력한 주소를 찾지 못했어요. 동/구 이름으로 다시 시도해 보세요.",
     });
     const state = await run("회기동", services([place("far", "127.06", "37.60"), place("near", "127.0501", "37.5901")]));

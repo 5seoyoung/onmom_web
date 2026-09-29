@@ -100,6 +100,40 @@ describe("[분석 시작] — 저장 먼저, 저장된 값으로 분석(D10, 감
     expect(outcome.output.videoFetch).toBe("notConfigured");
   });
 
+  it("영상 조회가 잠든 서버로 실패하면 한 번 자동으로 다시 시도하고(35초), 재시도 시작을 화면에 알린다(콜드스타트, 05 §0)", async () => {
+    const store = setup();
+    const results: FetchVideosResult[] = [
+      { ok: false, kind: "network", message: "" },
+      { ok: true, videos: [FULL_CORE] },
+    ];
+    const fetchVideos = vi.fn(async (): Promise<FetchVideosResult> => results.shift()!);
+    const onVideoRetry = vi.fn();
+    const controller = new AbortController();
+    const outcome = await saveAndAnalyze(form(), {
+      actions: store.actions,
+      readSaved: () => store.getSnapshot().state,
+      fetchVideos,
+      now: () => NOW,
+      signal: controller.signal,
+      onVideoRetry,
+    });
+    if (!outcome.ok) throw new Error(outcome.message);
+    expect(outcome.output.videoFetch).toBe("ok");
+    expect(fetchVideos).toHaveBeenCalledTimes(2);
+    expect(fetchVideos.mock.calls[0]).toEqual([routeTag("vaginal"), { signal: controller.signal }]);
+    expect(fetchVideos.mock.calls[1]).toEqual([routeTag("vaginal"), { signal: controller.signal, timeoutMs: 35_000 }]);
+    expect(onVideoRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("두 번째도 실패면 영상 상태는 failed — 더는 시도하지 않고 분석은 끝난다", async () => {
+    const store = setup();
+    const fetchVideos = vi.fn(async (): Promise<FetchVideosResult> => ({ ok: false, kind: "server", message: "", status: 502 }));
+    const outcome = await saveAndAnalyze(form(), { actions: store.actions, readSaved: () => store.getSnapshot().state, fetchVideos, now: () => NOW });
+    if (!outcome.ok) throw new Error(outcome.message);
+    expect(outcome.output.videoFetch).toBe("failed");
+    expect(fetchVideos).toHaveBeenCalledTimes(2);
+  });
+
   it("영상 조회가 예외로 끝나도 분석은 끝나고 영상 상태는 failed", async () => {
     const store = setup();
     const outcome = await saveAndAnalyze(form(), {

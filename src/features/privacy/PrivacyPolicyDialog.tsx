@@ -59,7 +59,7 @@ function PolicySheet({ onClose }: { onClose: () => void }) {
         <button
           type="button"
           onClick={() => ref.current?.close()}
-          className="-mr-2 min-h-11 justify-self-end rounded-button px-2 text-[1.0625rem] font-semibold text-primary"
+          className="-mr-2 min-h-11 justify-self-end rounded-button px-2 text-[1.0625rem] font-semibold text-primary-text"
         >
           {PRIVACY_POLICY_CLOSE}
         </button>

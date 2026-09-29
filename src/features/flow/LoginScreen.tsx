@@ -20,8 +20,9 @@ import { SecondaryButton } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import { ROUTES } from "@/routes";
 import { PrivacyPolicyDialog } from "@/features/privacy/PrivacyPolicyDialog";
+import { useOnline } from "@/features/home/useOnline";
 import { BrandLogo } from "./BrandLogo";
-import { LOGIN_TEXT, loginConsentText } from "./loginText";
+import { kakaoFailedMessage, LOGIN_TEXT, loginConsentText } from "./loginText";
 
 export function LoginScreen() {
   const session = useAccountSession();
@@ -31,7 +32,9 @@ export function LoginScreen() {
   const [signingIn, setSigningIn] = useState(false);
   /** 게스트 시작 중(익명 계정 만들기) — 끝나면 계정이 생겨 관문이 이 화면을 떠난다 */
   const [startingGuest, setStartingGuest] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
+  /** 카카오 동의 화면으로 보내지 못했다 — 문구는 그릴 때 정한다(오프라인이면 오프라인 안내, 연결되면 원문으로 바뀐다) */
+  const [kakaoFailed, setKakaoFailed] = useState(false);
+  const online = useOnline();
 
   // 카카오 화면에서 [뒤로]로 돌아오면(bfcache 복원) 버튼을 다시 켠다.
   useEffect(() => {
@@ -44,17 +47,17 @@ export function LoginScreen() {
 
   async function startKakao() {
     setSigningIn(true);
-    setLoginError(null);
+    setKakaoFailed(false);
     const result = await session.signInWithKakao();
     if (result.ok) return; // 브라우저가 카카오 동의 화면으로 이동한다 — 버튼은 꺼 둔다(두 번 누르기 방지)
     setSigningIn(false);
-    setLoginError(LOGIN_TEXT.kakaoFailed);
+    setKakaoFailed(true);
   }
 
   /** 늘 게스트 계정이 생긴다(익명 계정이 안 되면 이 브라우저 전용) — 실패 안내는 없다. */
   async function startGuest() {
     setStartingGuest(true);
-    setLoginError(null);
+    setKakaoFailed(false);
     try {
       await session.signInGuest();
     } finally {
@@ -93,10 +96,11 @@ export function LoginScreen() {
           {!kakaoEnabled ? <span className="rounded-full bg-[#261C0D]/10 px-2 py-0.5 text-xs font-semibold">{LOGIN_TEXT.kakaoPending}</span> : null}
         </button>
 
-        {/* LoginView.swift:59-62 — 오류는 카카오 버튼 바로 아래, 13 stateAlert. 색만으로 알리지 않게 role="alert"로 읽힌다. */}
-        {loginError !== null ? (
-          <p role="alert" className="text-center text-[0.8125rem] text-state-alert">
-            {loginError}
+        {/* LoginView.swift:59-62 — 오류는 카카오 버튼 바로 아래, 13 stateAlert. 색만으로 알리지 않게 role="alert"로 읽힌다.
+            오프라인이면 원문 대신 오프라인 안내(loginText kakaoFailedMessage). */}
+        {kakaoFailed ? (
+          <p role="alert" className="text-center text-[0.8125rem] text-state-alert-text">
+            {kakaoFailedMessage(online)}
           </p>
         ) : null}
 
@@ -110,7 +114,7 @@ export function LoginScreen() {
             type="button"
             onClick={() => setPolicyOpen(true)}
             aria-haspopup="dialog"
-            className="-mt-2 inline-flex min-h-11 items-center rounded-button px-2 text-xs font-semibold text-primary"
+            className="-mt-2 inline-flex min-h-11 items-center rounded-button px-2 text-xs font-semibold text-primary-text"
           >
             {LOGIN_TEXT.policy}
           </button>

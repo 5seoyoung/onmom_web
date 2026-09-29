@@ -8,6 +8,7 @@
 // 병원 목록은 두 열.
 // 지도 높이는 그대로 둔다(크기가 바뀌면 SDK relayout이 필요하다).
 // 기록 결과처럼 좁은 열 안에서는 기본값(layout="stack") — 폰과 같은 한 줄이다.
+// 오프라인(navigator.onLine=false)이면 검색 실패 카드 문구를 오프라인 안내로 바꾼다(clinicsErrorMessage) — 검색 자체는 막지 않는다.
 
 import { useEffect, useId, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Hourglass, LoaderCircle, MapPinOff, Search } from "lucide-react";
@@ -15,11 +16,13 @@ import { isClinicSearchConfigured, searchNearbyClinics } from "@/api/clinics";
 import { READING_BLOCK } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, cx } from "@/components/ui";
 import { config } from "@/config";
+import { useOnline } from "@/features/home/useOnline";
 import { ClinicMap } from "./ClinicMap";
 import { ClinicRow } from "./ClinicRow";
 import {
   CLINICS_TEXT,
   clinicRowView,
+  clinicsErrorMessage,
   initialClinicsState,
   shouldAutoSearch,
   stateFromSearchResult,
@@ -44,6 +47,7 @@ export function NearbyClinics({ address, onAddressChange, layout = "stack" }: Ne
   const wide = layout === "wide";
   const titleId = useId();
   const configured = isClinicSearchConfigured();
+  const online = useOnline();
   // 처음 나타날 때의 동네·상태 — 저장된 동네가 있으면 바로 찾는다(NearbyClinicsView.swift:70-72)
   const [mount] = useState(() => ({ address, auto: configured && shouldAutoSearch(address) }));
   const [view, setView] = useState<ClinicsViewState>(() => initialClinicsState(configured, address));
@@ -80,7 +84,7 @@ export function NearbyClinics({ address, onAddressChange, layout = "stack" }: Ne
               aria-labelledby={titleId}
               autoCapitalize="none"
               enterKeyHint="search"
-              className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-text-primary placeholder:text-text-subtle"
+              className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-text-primary placeholder:text-text-subtle-aa"
             />
             <button
               type="submit"
@@ -107,7 +111,7 @@ export function NearbyClinics({ address, onAddressChange, layout = "stack" }: Ne
               </div>
             </div>
           ) : view.status === "error" ? (
-            <StatusCard icon="error" text={view.message} />
+            <StatusCard icon="error" text={clinicsErrorMessage(view, online)} />
           ) : view.status === "notConfigured" ? (
             <StatusCard icon="notConfigured" text={CLINICS_TEXT.notConfigured} />
           ) : null}

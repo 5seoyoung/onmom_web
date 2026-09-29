@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { APP_NAV_TEXT } from "./appNav";
+import { RouteFocus } from "./RouteFocus";
 import { SideNav } from "./SideNav";
 
 // 로그인·온보딩을 마친 뒤 앱 화면(src/app/(app))의 껍데기 — 기기 폭에 맞춘다.
@@ -14,6 +15,8 @@ import { SideNav } from "./SideNav";
 //
 // 화면마다 자기 <main>을 그리므로 여기서는 <main>을 두지 않는다(랜드마크 중복 방지).
 // 사이드바가 본문보다 앞에 있어 PC 키보드 사용자를 위해 "본문 바로가기"를 둔다(초점을 받을 때만 보임, lg 이상만).
+//   폰·태블릿은 탭바가 본문 뒤(DOM 순서)라 건너뛸 것이 없어 두지 않는다 — 첫 Tab이 곧 본문의 첫 컨트롤이다.
+// 화면이 바뀌면 초점을 본문 묶음으로 옮긴다(RouteFocus) — 라우터는 스크롤만 올리고 초점은 메뉴 링크에 남기므로.
 export const APP_CONTENT_ID = "app-content";
 
 export function AppShell({ children }: { children?: ReactNode }) {
@@ -25,6 +28,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       >
         {APP_NAV_TEXT.skipToContent}
       </a>
+      <RouteFocus targetId={APP_CONTENT_ID} />
       <SideNav />
       <div
         id={APP_CONTENT_ID}

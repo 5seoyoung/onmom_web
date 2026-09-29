@@ -3,8 +3,13 @@ import type { UserProfile } from "@/domain/types";
 import { defaultMaternity, defaultProfile, initialState } from "@/store/defaults";
 import { updateMaternity, updateProfile } from "@/store/state";
 import {
+  DATA_RIGHTS_TEXT,
   GUEST_ACCOUNT_TEXT,
   MATERNITY_TOGGLES,
+  TERMS_HREF,
+  accountIdRow,
+  consentRows,
+  formatLocalDateTime,
   SERVER_ACCOUNT_TEXT,
   accountCardActions,
   accountModeFor,
@@ -286,5 +291,43 @@ describe("MATERNITY_TOGGLES", () => {
       "골반통·치골결합 이개",
       "복직근 이개(DRA)",
     ]);
+  });
+});
+
+describe("내 데이터 — 동의 내역 행(형식만 바꾼다, 값을 만들지 않는다)", () => {
+  it("서버 저장 빌드의 동의: 판 + 로컬 시각", () => {
+    const rows = consentRows(profile({ consentAccepted: true, consentVersion: "web-2026-09-28", consentAcceptedAt: "2026-09-28T05:05:00.000Z" }));
+    expect(rows).toEqual([
+      { key: "consentVersion", label: DATA_RIGHTS_TEXT.consentVersion, value: "web-2026-09-28" },
+      { key: "consentAt", label: DATA_RIGHTS_TEXT.consentAt, value: "2026.09.28 14:05" }, // Asia/Seoul
+    ]);
+  });
+
+  it("설정 없는 빌드의 동의(판 없음): 시각 한 줄만 — 판을 지어내지 않는다", () => {
+    const rows = consentRows(profile({ consentAccepted: true, consentVersion: null, consentAcceptedAt: "2026-09-28T05:05:00.000Z" }));
+    expect(rows.map((r) => r.key)).toEqual(["consentAt"]);
+  });
+
+  it("동의 전·시각을 읽을 수 없으면 빈 줄", () => {
+    expect(consentRows(profile())).toEqual([]);
+    expect(consentRows(profile({ consentAccepted: true, consentVersion: null, consentAcceptedAt: "언제" }))).toEqual([]);
+    expect(formatLocalDateTime(null)).toBeNull();
+    expect(formatLocalDateTime("not-a-date")).toBeNull();
+    expect(formatLocalDateTime("2026-01-05T15:07:00.000Z")).toBe("2026.01.06 00:07");
+  });
+
+  it("계정 ID 행 — Supabase 세션 사용자 id(UUID)가 있을 때만, 없으면 null(지어내지 않는다)", () => {
+    const id = "3f0f9b2e-0000-4000-8000-000000000001";
+    expect(accountIdRow(id)).toEqual({ key: "accountId", label: DATA_RIGHTS_TEXT.accountId, value: id });
+    expect(accountIdRow(null)).toBeNull();
+    expect(accountIdRow("   ")).toBeNull();
+    expect(DATA_RIGHTS_TEXT.accountIdHint).toContain("계정 ID");
+  });
+
+  it("문구 — 철회 = 계정 삭제, 내려받기 설명에 건강 정보 보관 주의", () => {
+    expect(DATA_RIGHTS_TEXT.consentWithdraw).toContain("계정을 삭제");
+    expect(DATA_RIGHTS_TEXT.exportHint).toContain("JSON");
+    expect(DATA_RIGHTS_TEXT.exportHint).toContain("건강 정보");
+    expect(TERMS_HREF).toBe("/terms/");
   });
 });

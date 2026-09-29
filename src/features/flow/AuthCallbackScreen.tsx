@@ -5,7 +5,9 @@
 //   지금 판의 동의가 없으면 → /onboarding/?consent=1.
 // - 게스트의 카카오 계정 연결(설정)이 끝났으면 → /settings/(홈으로 보낼 사람일 때만 — 동의·온보딩이 먼저면 그쪽으로).
 // - 연결하려던 카카오 계정이 이미 다른 온맘 계정이면 세션이 그 계정으로 로그인하러 카카오로 다시 보낸다 — 이 화면은 그대로 기다린다.
-// - 취소·실패 → 정직한 안내 + [다시 시도](로그인 화면, 게스트로 쓰는 중이면 설정). 문구는 iOS KakaoLoginService.swift 그대로.
+// - 취소·실패 → 정직한 안내 + [다시 시도](로그인 화면, 게스트로 쓰는 중이면 설정). 문구는 iOS KakaoLoginService.swift 그대로,
+//   설정 없는 빌드에서 이 주소를 열었으면 "준비 중", 브라우저가 확실히 오프라인이면 실패·기록 못 읽음은 오프라인 안내
+//   (callbackText.ts callbackErrorMessage·callbackSyncFailedBody — 연결되면 문구가 원문으로 돌아온다).
 // - 로그인은 됐지만 서버 기록을 못 읽었고 이 브라우저에도 온보딩 기록이 없으면 → 온보딩을 다시 묻지 않고 [다시 시도].
 //   (못 읽은 채로 온보딩을 보여 주면 이미 가입한 사람에게 처음부터 다시 묻게 된다. 동기화는 뒤에서 계속 시도한다.)
 // 공개 주소라 앱 관문이 막거나 옮기지 않는다(features/flow/gate.ts).
@@ -20,25 +22,17 @@ import { primaryButtonClass, PrimaryButton } from "@/components/ui";
 import { rootScreenFor, type AppStore } from "@/store/appStore";
 import { getBrowserStore } from "@/store/browserStore";
 import { StoreContext } from "@/store/StoreProvider";
+import { useOnline } from "@/features/home/useOnline";
 import { BrandLogo } from "./BrandLogo";
 import { callbackDestination, callbackRetryHref } from "./callbackRoute";
+import { AUTH_CALLBACK_TEXT, callbackErrorMessage, callbackSyncFailedBody, type CallbackErrorReason } from "./callbackText";
 
-export const AUTH_CALLBACK_TEXT = {
-  // 웹 신규 문구 — CPO 확인 필요 (카카오에서 돌아와 세션을 만드는 동안)
-  working: "로그인하고 있어요",
-  cancelled: "로그인이 취소되었어요.", // 원문: KakaoLoginService.swift:27
-  failed: "카카오 응답을 처리하지 못했어요. 잠시 후 다시 시도해주세요.", // 원문: KakaoLoginService.swift:28
-  // 웹 신규 문구 — CPO 확인 필요 (로그인은 됐지만 서버의 기록을 읽지 못함)
-  syncFailed: "기록을 불러오지 못했어요",
-  // 웹 신규 문구 — CPO 확인 필요 (위 문구의 안내 줄 — KakaoLoginService.swift의 "잠시 후 다시 시도해주세요."와 같은 말)
-  syncFailedBody: "잠시 후 다시 시도해주세요.",
-  retry: "다시 시도", // 원문: ExerciseView.swift:184
-} as const;
+export { AUTH_CALLBACK_TEXT } from "./callbackText";
 
 type View =
   | { kind: "working" }
-  /** retryHref = [다시 시도]가 가는 곳(callbackRetryHref) */
-  | { kind: "error"; message: string; retryHref: string }
+  /** reason → 문구는 그릴 때 정한다(오프라인 여부). retryHref = [다시 시도]가 가는 곳(callbackRetryHref) */
+  | { kind: "error"; reason: CallbackErrorReason; retryHref: string }
   /** 로그인은 됐고, 서버 기록 첫 읽기가 실패했다 */
   | { kind: "syncFailed" };
 
@@ -51,6 +45,7 @@ export function AuthCallbackScreen() {
   const router = useRouter();
   const [view, setView] = useState<View>({ kind: "working" });
   const [attempt, setAttempt] = useState(0);
+  const online = useOnline();
   /** 게스트의 카카오 연결이었는가 — [다시 시도] 뒤에도 같은 곳으로 */
   const linkedRef = useRef(false);
 
@@ -63,11 +58,7 @@ export function AuthCallbackScreen() {
         if (cancelled) return;
         if (outcome.kind === "redirecting") return; // 카카오로 다시 이동하는 중 — "로그인하고 있어요" 그대로
         if (outcome.kind === "error") {
-          setView({
-            kind: "error",
-            message: outcome.reason === "cancelled" ? AUTH_CALLBACK_TEXT.cancelled : AUTH_CALLBACK_TEXT.failed,
-            retryHref: callbackRetryHref(store.getSnapshot().account),
-          });
+          setView({ kind: "error", reason: outcome.reason, retryHref: callbackRetryHref(store.getSnapshot().account) });
           return;
         }
         sync = outcome.sync;
@@ -99,7 +90,7 @@ export function AuthCallbackScreen() {
         </div>
       ) : view.kind === "error" ? (
         <div role="alert" className="flex w-full max-w-[20rem] flex-col items-center gap-6">
-          <h1 className="text-lg font-semibold text-text-primary">{view.message}</h1>
+          <h1 className="text-lg font-semibold text-text-primary">{callbackErrorMessage(view.reason, online)}</h1>
           <Link href={view.retryHref} replace className={primaryButtonClass}>
             {AUTH_CALLBACK_TEXT.retry}
           </Link>
@@ -108,7 +99,7 @@ export function AuthCallbackScreen() {
         <div role="alert" className="flex w-full max-w-[20rem] flex-col items-center gap-6">
           <div className="flex flex-col gap-2">
             <h1 className="text-lg font-semibold text-text-primary">{AUTH_CALLBACK_TEXT.syncFailed}</h1>
-            <p className="text-[0.9375rem] text-text-secondary">{AUTH_CALLBACK_TEXT.syncFailedBody}</p>
+            <p className="text-[0.9375rem] text-text-secondary">{callbackSyncFailedBody(online)}</p>
           </div>
           <PrimaryButton
             onClick={() => {

@@ -3,6 +3,7 @@
 
 import { postpartumDayCount } from "@/domain/date";
 import type { MoodAnswer, MoodCheckRecord, SymptomRecord, UserProfile } from "@/domain/types";
+import { STORAGE_REGION } from "@/features/privacy/dataItems";
 import { DELIVERY_TITLE } from "@/rules/exercise";
 import { MOOD_ANSWERS, moodAnswerLabel, questionForDay, todayMoodCheck, type MoodQuestion } from "@/rules/mood";
 import { buildSymptomRecord, showsLochiaInputs, type SymptomForm } from "@/rules/record";
@@ -32,11 +33,27 @@ export const RECORD_TEXT = {
   submit: "확인하기", // 원문: RecordFlowView.swift:44
   retry: "다시 입력", // 원문: RecordFlowView.swift:41
   moodTitle: "오늘의 한 가지 질문", // 원문: RecordFlowView.swift:65
-  moodNote: "매일 한 가지씩 물어요. 답은 이 기기에만 남고, 진단이 아니에요.", // 원문: RecordFlowView.swift:98 (D5 — "이 기기" 그대로)
+  // 설정 없는 빌드(브라우저 전용)만 iOS 원문 그대로 — 서버 저장 빌드는 moodNoteFor가 바꾼다
+  moodNote: "매일 한 가지씩 물어요. 답은 이 기기에만 남고, 진단이 아니에요.", // 원문: RecordFlowView.swift:98
   recentTitle: "최근 기록", // 원문: RecordFlowView.swift:110
   recentNormal: "위험신호 없음", // 원문: RecordFlowView.swift:119
   recentFlagged: "병원 신호", // 원문: RecordFlowView.swift:119
 } as const;
+
+/**
+ * 서버 저장 빌드(Supabase 설정 있음)의 기분 각주. iOS "이 기기에만 남고"는 답이 동의 뒤 서버(서울)에 올라가는 빌드에서 사실이 아니다
+ * (03 §8 각주 "웹은 저장 위치에 맞게 수정"). 기록장 배너(journalView localOnlyNoticeFor)·설정 개인정보 문구와 같은 사실을 말한다.
+ * "서버에만"이라고 하지 않는다 — 답은 이 브라우저에도 남는다(동기화 캐시).
+ */
+export const RECORD_SERVER_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요
+  moodNote: `매일 한 가지씩 물어요. 답은 동의를 받은 뒤 온맘 서버(${STORAGE_REGION})에 저장되고, 진단이 아니에요.`,
+} as const;
+
+/** 오늘의 한 가지 질문 각주 — 서버 저장 빌드면 서버 안내, 아니면 iOS 원문("이 기기"). */
+export function moodNoteFor(serverStorage: boolean): string {
+  return serverStorage ? RECORD_SERVER_TEXT.moodNote : RECORD_TEXT.moodNote;
+}
 
 /** 위험 증상 토글 4개 — 화면 순서(RecordFlowView.swift:219-225) */
 export const RISK_TOGGLES = [
@@ -45,6 +62,41 @@ export const RISK_TOGGLES = [
   { key: "chestPainBreathing", label: RECORD_TEXT.chestBreath },
   { key: "calfPainSwelling", label: RECORD_TEXT.calfSwelling },
 ] as const satisfies readonly { key: keyof SymptomForm; label: string }[];
+
+export type RiskSymptomKey = (typeof RISK_TOGGLES)[number]["key"];
+
+/**
+ * 기록에 남기는 위험 증상 토글 4개(04 §1 "웹에서는 저장을 권장", 검수 #46, DEV_NOTES §3 CPO 3).
+ * 필드명은 SymptomInput(RedFlagEngine.swift:18-21)과 같다. `null` = 이 필드가 생기기 전 기록(false와 구분).
+ * 규칙은 바뀌지 않는다(판정은 여전히 rules/redflag) — 어떤 신호가 걸렸는지 기록에서 되짚을 수 있게 할 뿐이다.
+ *
+ * 지금 domain/types SymptomRecord에는 이 필드가 없다(CPO 확정 전). 그래서 화면 쪽은 "있으면 보여 준다"로 두었다:
+ * - submitSymptomCheck는 폼 값을 늘 싣는다 — 스토어(appStore.addSymptomRecord)가 아는 필드만 옮기므로 필드가 생길 때까지는 버려진다.
+ * - firedRiskLabels는 필드가 없거나 null인 기록(옛 기록·iOS 기록)에는 빈 배열을 돌려준다.
+ * domain/types·store/decode(기본 null)·appStore.addSymptomRecord에 네 필드를 더하면 그대로 저장·표시된다.
+ */
+export type RiskSymptomFlags = Record<RiskSymptomKey, boolean | null>;
+
+/** 기록 + (있을 수도 있는) 위험 증상 토글 */
+export type SymptomRecordWithRisk = SymptomRecord & Partial<RiskSymptomFlags>;
+
+/** 폼의 위험 증상 토글 4개만 */
+export function riskFlagsFromForm(form: SymptomForm): Record<RiskSymptomKey, boolean> {
+  return {
+    woundPainWorsening: form.woundPainWorsening,
+    dizzinessFainting: form.dizzinessFainting,
+    chestPainBreathing: form.chestPainBreathing,
+    calfPainSwelling: form.calfPainSwelling,
+  };
+}
+
+/**
+ * 기록에서 켜져 있던 위험 증상의 라벨(화면 순서, RECORD_TEXT 원문). 필드가 없거나 null이면(옛 기록) 빈 배열 —
+ * "없었다"고 지어내지 않고 줄을 그리지 않는다.
+ */
+export function firedRiskLabels(record: SymptomRecordWithRisk): string[] {
+  return RISK_TOGGLES.filter(({ key }) => record[key] === true).map(({ label }) => label);
+}
 
 /** 폼 초기값 — 전부 꺼짐, 통증 0(RecordFlowView.swift:14-25: 손대지 않으면 "통증 없음"으로 기록). */
 export const INITIAL_SYMPTOM_FORM: Readonly<SymptomForm> = Object.freeze({
@@ -82,10 +134,11 @@ export function submitSymptomCheck(
   form: SymptomForm,
   deliveryDate: string | null,
   now: Date,
-): { newRecord: NewSymptomRecord; result: RedFlagResult } {
+): { newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean>; result: RedFlagResult } {
   // id 인자는 저장에 쓰이지 않는다 — 스토어가 새 id를 붙인다(DEV_NOTES §4).
   const { record, result } = buildSymptomRecord(form, deliveryDate, now, "");
-  const newRecord: NewSymptomRecord = {
+  // 위험 증상 토글 4개도 함께 싣는다(RiskSymptomFlags 주석) — 스토어에 필드가 생기면 그대로 저장된다.
+  const newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean> = {
     date: record.date,
     lochiaIncreased: record.lochiaIncreased,
     lochiaRed: record.lochiaRed,
@@ -93,6 +146,7 @@ export function submitSymptomCheck(
     painNrs: record.painNrs,
     redFlagCode: record.redFlagCode,
     postpartumDays: record.postpartumDays,
+    ...riskFlagsFromForm(form),
   };
   return { newRecord, result };
 }
@@ -163,6 +217,11 @@ export interface RecentRecordRow {
   dateText: string;
   flagged: boolean;
   label: string;
+  /**
+   * 그 기록에서 켜져 있던 위험 증상 토글의 라벨(firedRiskLabels) — 어떤 신호였는지 되짚을 수 있게 줄 아래에 보인다.
+   * 필드가 없거나 null인 기록(옛 기록·iOS 기록·필드 도입 전)은 빈 배열이라 줄을 그리지 않는다.
+   */
+  signals: string[];
 }
 
 const RECORD_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
@@ -179,7 +238,7 @@ export function formatRecordDateTime(iso: string): string {
 }
 
 /** 최신순 기록에서 앞 5건 — 점 색과 함께 글자로도 "위험신호 없음"/"병원 신호"를 보여준다(색만으로 구분하지 않음). */
-export function recentRecordRows(history: readonly SymptomRecord[]): RecentRecordRow[] {
+export function recentRecordRows(history: readonly SymptomRecordWithRisk[]): RecentRecordRow[] {
   return history.slice(0, RECENT_RECORDS_LIMIT).map((r) => {
     const flagged = r.redFlagCode != null;
     return {
@@ -188,6 +247,7 @@ export function recentRecordRows(history: readonly SymptomRecord[]): RecentRecor
       dateText: formatRecordDateTime(r.date),
       flagged,
       label: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
+      signals: firedRiskLabels(r),
     };
   });
 }
@@ -196,20 +256,27 @@ export function recentRecordRows(history: readonly SymptomRecord[]): RecentRecor
 
 export type MoodCardModel =
   | { kind: "answered"; text: string }
-  | { kind: "ask"; question: MoodQuestion; answers: { answer: MoodAnswer; label: string }[] };
+  /** note: 답 버튼 아래 각주 — 저장 위치에 맞는 문구(moodNoteFor) */
+  | { kind: "ask"; question: MoodQuestion; answers: { answer: MoodAnswer; label: string }[]; note: string };
 
 /** 답한 뒤 문구 — 원문: RecordFlowView.swift:70 */
 export function answeredMoodText(label: string): string {
   return `오늘은 「${label}」라고 답했어요. 내일 또 물어볼게요.`;
 }
 
-/** 오늘 이미 답했으면 답 문구, 아니면 오늘의 문항과 답 버튼 3개(네/글쎄요/아니요). */
-export function moodCardModel(checks: readonly MoodCheckRecord[], now: Date): MoodCardModel {
+export interface MoodCardOptions {
+  /** 서버 저장 빌드(isSupabaseConfigured) — 각주가 "이 기기" 대신 서버 저장을 말한다. 기본 false(브라우저 전용). */
+  serverStorage?: boolean;
+}
+
+/** 오늘 이미 답했으면 답 문구, 아니면 오늘의 문항과 답 버튼 3개(네/글쎄요/아니요) + 각주. */
+export function moodCardModel(checks: readonly MoodCheckRecord[], now: Date, opts: MoodCardOptions = {}): MoodCardModel {
   const answered = todayMoodCheck(checks, now);
   if (answered) return { kind: "answered", text: answeredMoodText(moodAnswerLabel(answered.answer)) };
   return {
     kind: "ask",
     question: questionForDay(now),
     answers: MOOD_ANSWERS.map((answer) => ({ answer, label: moodAnswerLabel(answer) })),
+    note: moodNoteFor(opts.serverStorage ?? false),
   };
 }

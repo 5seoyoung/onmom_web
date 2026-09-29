@@ -6,6 +6,8 @@ import { safeExternalUrl } from "@/api/safeUrl";
 import type { FetchVideosResult } from "@/api/video";
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { DeliveryMethod, LocalDateString, MaternityRecord } from "@/domain/types";
+import { OFFLINE_TEXT } from "@/features/home/useOnline";
+import { COLD_START_TEXT } from "./videoLoad";
 import {
   EXERCISE_TEXT,
   blockedNow,
@@ -121,8 +123,15 @@ export function excludedStageLines(delivery: DeliveryMethod, week: number, mater
  */
 export const VIDEO_LOADING_SR_LABEL = "운동 영상을 불러오고 있어요"; // 웹 신규 문구 — CPO 확인 필요
 
+/** 조회 상황 — 화면이 넘긴다. waking: 8초가 지나도 응답이 없거나 자동 재시도 중(videoLoad.ts). offline: navigator.onLine=false. */
+export interface ExerciseBodyContext {
+  waking?: boolean;
+  offline?: boolean;
+}
+
 export type ExerciseBody =
-  | { kind: "loading"; srLabel: string }
+  /** notice: 스피너 아래 보이는 안내("서버를 깨우는 중이에요 — 조금만 기다려 주세요", videoLoad.ts) — 없으면 null */
+  | { kind: "loading"; srLabel: string; notice: string | null }
   | {
       kind: "unavailable";
       title: string;
@@ -135,14 +144,18 @@ export type ExerciseBody =
   | { kind: "empty"; message: string }
   | { kind: "plan"; sections: { title: string; count: number; cards: VideoCardModel[] }[] };
 
-/** 조회 상태 + 저장된 프로필 → 본문. load가 null이면 조회 중. */
+/**
+ * 조회 상태 + 저장된 프로필 → 본문. load가 null이면 조회 중.
+ * 오프라인이면 실패 문구를 일반 "네트워크에 연결할 수 없어요" 대신 오프라인 안내로 바꾼다(제목 "연결 실패"·[다시 시도]는 그대로).
+ */
 export function exerciseBody(
   load: VideoLoad | null,
   delivery: DeliveryMethod,
   week: number,
   maternity: MaternityRecord,
+  ctx: ExerciseBodyContext = {},
 ): ExerciseBody {
-  if (load === null) return { kind: "loading", srLabel: VIDEO_LOADING_SR_LABEL };
+  if (load === null) return { kind: "loading", srLabel: VIDEO_LOADING_SR_LABEL, notice: ctx.waking ? COLD_START_TEXT : null };
   switch (load.kind) {
     case "unavailable":
       return {
@@ -153,7 +166,12 @@ export function exerciseBody(
         excluded: excludedStageLines(delivery, week, maternity),
       };
     case "failed":
-      return { kind: "failed", title: EXERCISE_TEXT.failedTitle, message: load.message, retry: EXERCISE_TEXT.retry };
+      return {
+        kind: "failed",
+        title: EXERCISE_TEXT.failedTitle,
+        message: ctx.offline ? OFFLINE_TEXT : load.message,
+        retry: EXERCISE_TEXT.retry,
+      };
     case "loaded": {
       // 플랜은 저장된 산모수첩·주차로 매번 다시 계산한다 — 다른 화면에서 값이 바뀌어도 바로 맞춰진다.
       const plan = exercisePlan(load.videos, delivery, week, maternity);

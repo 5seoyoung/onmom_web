@@ -59,7 +59,7 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
               <label
                 key={opt.value}
                 className={cx(
-                  "flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-button border px-4 py-2.5 text-center text-[0.9375rem] font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary",
+                  "flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-button border px-4 py-2.5 text-center text-[0.9375rem] font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
                   selected
                     ? "border-primary bg-primary text-white forced-colors:border-[3px] forced-colors:border-[Highlight]"
                     : "border-divider bg-surface text-text-primary forced-colors:border-[CanvasText]",
@@ -80,8 +80,9 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
         </div>
       </Card>
 
-      <Card className="flex items-center justify-between gap-4">
-        <label htmlFor={dateId} className="text-base text-text-secondary">
+      {/* 글자 150%에서 라벨이 8.5rem보다 좁아지면 입력이 다음 줄로(온보딩 날짜 줄과 같은 규칙 — docs/ACCESSIBILITY.md §6) */}
+      <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <label htmlFor={dateId} className="min-w-[8.5rem] flex-1 text-base text-text-secondary">
           {ANALYZE_TEXT.deliveryDate}
         </label>
         <input
@@ -91,7 +92,7 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
           max={today}
           value={values.deliveryDate}
           onChange={(e) => setValues((v) => ({ ...v, deliveryDate: e.target.value }))}
-          className="min-h-11 min-w-0 rounded-full bg-divider px-3 text-base text-text-primary"
+          className="min-h-11 shrink-0 rounded-full bg-divider px-3 text-base text-text-primary"
         />
       </Card>
 
@@ -127,7 +128,7 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
         />
       </Card>
 
-      <p className="text-[0.6875rem] text-text-subtle">{ANALYZE_TEXT.lochiaNote}</p>
+      <p className="text-[0.6875rem] text-text-subtle-aa">{ANALYZE_TEXT.lochiaNote}</p>
 
       <PrimaryButton className="mt-2" disabled={!canStart} onClick={() => void onSubmit(values)}>
         {ANALYZE_TEXT.start}
@@ -136,13 +137,15 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
   );
 }
 
-export function AnalyzeLoading() {
+/** notice — 영상 서버 콜드스타트 안내(features/exercise/videoLoad.ts COLD_START_TEXT, 8초 뒤·자동 재시도 때). 없으면 null. */
+export function AnalyzeLoading({ notice = null }: { notice?: string | null }) {
   return (
     <div role="status" className="flex flex-1 flex-col items-center justify-center gap-6 px-8 py-16 text-center">
       <LoaderCircle aria-hidden className="size-9 animate-spin text-primary motion-reduce:animate-none" />
       <div className="flex flex-col gap-1">
         <p className="text-lg font-bold text-neutral">{ANALYZE_TEXT.loadingTitle}</p>
         <p className="text-base text-text-secondary">{ANALYZE_TEXT.loadingBody}</p>
+        {notice !== null ? <p className="pt-2 text-sm text-text-secondary">{notice}</p> : null}
       </div>
     </div>
   );

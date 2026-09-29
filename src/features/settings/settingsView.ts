@@ -51,6 +51,8 @@ export const SETTINGS_TEXT = {
 export const SETTINGS_HREF = ROUTES.settings;
 export const PROFILE_EDIT_HREF = ROUTES.settingsProfile;
 export const PRIVACY_HREF = ROUTES.privacy;
+/** 이용약관(초안) — 개인정보·안전 카드의 두 번째 링크(features/terms) */
+export const TERMS_HREF = ROUTES.terms;
 export const PROFILE_HREF = ROUTES.profile;
 
 /** 로그아웃 확인 문구 — 게스트면 다시 게스트로 이어 보기, 그 외는 같은 계정일 때만 이어 보기(MoreView.swift:99-101). */
@@ -215,6 +217,70 @@ export async function performDeleteAccount(deps: {
   }
   const result = await deps.deleteAccountEverywhere();
   return result.ok ? { kind: "done" } : { kind: "failed", message: deleteFailureMessage(result.reason) };
+}
+
+// MARK: 내 데이터 — 열람권(내려받기)·동의 내역. iOS에 없던 카드라 문구는 모두 웹 신규.
+// 근거: 웹 처리방침 초안 13절(열람·정정·삭제·처리정지·동의 철회), web/07 §3(consent_version 저장), DEV_NOTES §8-7(동의 증빙).
+
+export const DATA_RIGHTS_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요 (설정의 새 카드 제목)
+  title: "내 데이터",
+  // 웹 신규 문구 — CPO 확인 필요 (동의 내역 소제목·행 이름)
+  consentTitle: "내 동의 내역",
+  consentVersion: "동의 버전",
+  consentAt: "동의 일시",
+  // 웹 신규 문구 — CPO 확인 필요 (Supabase 계정 ID 행 — 문의·삭제 요청 때 관리자가 계정을 찾는 값. /admin/ "내 계정 ID"와 같은 값)
+  accountId: "계정 ID",
+  accountIdHint: "문의나 삭제 요청을 보낼 때 이 계정 ID를 함께 알려 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (철회 방법 = 계정 삭제 — 처리방침 초안 13절과 같은 사실)
+  consentWithdraw: "동의를 철회하려면 위 계정 카드에서 계정을 삭제해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (열람권 — 이 브라우저의 기록 전체를 JSON 파일로)
+  exportButton: "내 데이터 내려받기",
+  exportHint:
+    "이 브라우저에 있는 내 기록 전체(프로필·산모수첩·증상 기록·기분 답·기록장)를 JSON 파일로 저장해요. 건강 정보가 들어 있으니 안전한 곳에 보관해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (Blob 다운로드를 못 하는 브라우저)
+  exportFailed: "파일을 만들지 못했어요. 브라우저를 최신 버전으로 바꾸거나 다른 브라우저에서 다시 시도해 주세요.",
+} as const;
+
+/** 카드 안 이름·값 한 줄(InfoRows) */
+export interface InfoRow {
+  key: string;
+  label: string;
+  value: string;
+}
+
+/** ISO 시각 → 이 기기의 로컬 시각 "2026.09.28 14:05". 읽을 수 없으면 null(지어내지 않는다). */
+export function formatLocalDateTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const d = new Date(t);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${two(d.getMonth() + 1)}.${two(d.getDate())} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/**
+ * "내 동의 내역" 행 — 있는 값만 보인다(형식만 바꾼다, 값을 만들지 않는다).
+ * 설정 없는 빌드의 동의는 판이 없고(consentVersion null) 시각만 있다 → 동의 일시 한 줄. 서버 저장 빌드는 판 + 일시.
+ * 동의 전(consentAccepted false)이면 빈 배열 — 설정 화면은 온보딩 뒤에만 열리므로 보통 비지 않는다.
+ */
+export function consentRows(profile: Pick<UserProfile, "consentAccepted" | "consentVersion" | "consentAcceptedAt">): InfoRow[] {
+  if (!profile.consentAccepted) return [];
+  const rows: InfoRow[] = [];
+  if (profile.consentVersion !== null) rows.push({ key: "consentVersion", label: DATA_RIGHTS_TEXT.consentVersion, value: profile.consentVersion });
+  const at = formatLocalDateTime(profile.consentAcceptedAt);
+  if (at !== null) rows.push({ key: "consentAt", label: DATA_RIGHTS_TEXT.consentAt, value: at });
+  return rows;
+}
+
+/**
+ * 계정 ID 행 — Supabase 세션의 사용자 id(auth.users.id, UUID). 이용자가 문의로 삭제를 요청할 때 관리자가 계정을 찾는 값이라
+ * 설정에 보인다(supabase/migrations/0005_admin_tools.sql 머리 주석). 앱 계정 id("kakao-<회원번호>"·"guest-…")는 그 값이 아니다.
+ * 없으면(설정 없는 빌드·세션 없음) null — 지어내지 않는다.
+ */
+export function accountIdRow(serverUserId: string | null): InfoRow | null {
+  if (serverUserId === null || serverUserId.trim().length === 0) return null;
+  return { key: "accountId", label: DATA_RIGHTS_TEXT.accountId, value: serverUserId };
 }
 
 export interface SettingsRow {

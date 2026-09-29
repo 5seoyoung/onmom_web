@@ -38,8 +38,9 @@ export function NrsSlider({ label, value, defaultValue = 0, onValueChange, disab
           {label}
         </label>
         {/* 보이는 값은 눈으로만 — 스크린리더는 슬라이더의 aria-valuetext로 같은 값을 한 번만 듣는다.
-            (<output>은 live region이라 값이 바뀔 때마다 두 번 읽힌다.) Swift도 슬라이더 옆 평범한 Text. */}
-        <span aria-hidden="true" className="text-[0.9375rem] font-bold text-primary">
+            (<output>은 live region이라 값이 바뀔 때마다 두 번 읽힌다.) Swift도 슬라이더 옆 평범한 Text.
+            글자색은 AA 글자 전용 토큰(primary-text) — 원색 코랄은 흰 배경 위 2.76:1(DEV_NOTES §3 CPO 12). */}
+        <span aria-hidden="true" className="text-[0.9375rem] font-bold text-primary-text">
           {text}
         </span>
       </div>
