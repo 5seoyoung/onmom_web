@@ -76,6 +76,20 @@ describe("send-reminders handler", () => {
     expect(listed).toBe(0);
   });
 
+  it("예상 못 한 예외(발송 준비가 throw)는 500 internal — 로그에는 코드만", async () => {
+    const { call, logs } = setup({
+      preflight: async () => {
+        throw new Error("vapid import exploded: secret-looking detail");
+      },
+    });
+    const res = await call();
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ ok: false, code: "internal" });
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ fn: "send-reminders", status: 500, code: "internal" });
+    expect(JSON.stringify(logs)).not.toContain("secret-looking");
+  });
+
   it("구독을 못 읽으면 503 db_unavailable", async () => {
     const { call } = setup({
       listSubscriptions: async () => {

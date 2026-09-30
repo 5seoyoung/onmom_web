@@ -65,52 +65,57 @@ export function createSendRemindersHandler(deps: SendRemindersDeps): (req: Reque
       return failure(status, code);
     };
 
-    if (req.method !== "POST") return fail(405, "method_not_allowed");
-    if (!deps.authorize(req.headers)) return fail(401, "unauthorized");
-
-    const notReady = await deps.preflight();
-    if (notReady !== null) return fail(503, notReady);
-
-    let subscriptions: SubscriptionRecord[];
+    // 예상 못 한 예외(발송 준비·시각 계산 등)도 정해진 모양으로 끝낸다 — 로그에는 코드만(스택·값 없음). chat·videos와 같게.
     try {
-      subscriptions = await deps.listSubscriptions();
+      if (req.method !== "POST") return fail(405, "method_not_allowed");
+      if (!deps.authorize(req.headers)) return fail(401, "unauthorized");
+
+      const notReady = await deps.preflight();
+      if (notReady !== null) return fail(503, notReady);
+
+      let subscriptions: SubscriptionRecord[];
+      try {
+        subscriptions = await deps.listSubscriptions();
+      } catch {
+        return fail(503, "db_unavailable");
+      }
+
+      const now = deps.now();
+      const summary = emptySummary();
+      summary.total = subscriptions.length;
+      // 본문 {"hour": 0–23}은 확인된 호출자(사람이 손으로 시험할 때)만 그 한 번의 발송 시를 바꾼다. pg_cron 본문({"scheduled_at"})에는 없다.
+      const runHour = await requestedHour(req, hour);
+      const due = subscriptions.filter((s) => isDueNow(now, s.tz, runHour));
+      summary.due = due.length;
+
+      const gone: string[] = [];
+      await forEachConcurrent(due, concurrency, async (subscription) => {
+        // 0004의 check 제약이 막지만 한 번 더 — 브라우저 회사의 푸시 서비스가 아닌 주소로는 요청하지 않는다
+        if (!isKnownPushService(subscription.endpoint)) {
+          summary.rejected += 1;
+          return;
+        }
+        try {
+          const outcome = classifyPushStatus(await deps.send(subscription));
+          summary[outcome] += 1;
+          if (outcome === "gone") gone.push(subscription.id);
+        } catch {
+          summary.errors += 1;
+        }
+      });
+
+      if (gone.length > 0) {
+        try {
+          await deps.deleteSubscriptions(gone);
+          summary.pruned = gone.length;
+        } catch {
+          return done(200, { ok: true, ...summary, warning: "prune_failed" }, "prune_failed", summary);
+        }
+      }
+
+      return done(200, { ok: true, ...summary }, undefined, summary);
     } catch {
-      return fail(503, "db_unavailable");
+      return fail(500, "internal");
     }
-
-    const now = deps.now();
-    const summary = emptySummary();
-    summary.total = subscriptions.length;
-    // 본문 {"hour": 0–23}은 확인된 호출자(사람이 손으로 시험할 때)만 그 한 번의 발송 시를 바꾼다. pg_cron 본문({"scheduled_at"})에는 없다.
-    const runHour = await requestedHour(req, hour);
-    const due = subscriptions.filter((s) => isDueNow(now, s.tz, runHour));
-    summary.due = due.length;
-
-    const gone: string[] = [];
-    await forEachConcurrent(due, concurrency, async (subscription) => {
-      // 0004의 check 제약이 막지만 한 번 더 — 브라우저 회사의 푸시 서비스가 아닌 주소로는 요청하지 않는다
-      if (!isKnownPushService(subscription.endpoint)) {
-        summary.rejected += 1;
-        return;
-      }
-      try {
-        const outcome = classifyPushStatus(await deps.send(subscription));
-        summary[outcome] += 1;
-        if (outcome === "gone") gone.push(subscription.id);
-      } catch {
-        summary.errors += 1;
-      }
-    });
-
-    if (gone.length > 0) {
-      try {
-        await deps.deleteSubscriptions(gone);
-        summary.pruned = gone.length;
-      } catch {
-        return done(200, { ok: true, ...summary, warning: "prune_failed" }, "prune_failed", summary);
-      }
-    }
-
-    return done(200, { ok: true, ...summary }, undefined, summary);
   };
 }
