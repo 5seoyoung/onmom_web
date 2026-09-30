@@ -20,6 +20,12 @@ export interface AppStoreView extends AppSnapshot {
   actions: AppActions;
 }
 
+/** 여러 탭 보호로 버린 이 탭의 쓰기 수(appStore.discardedWrites) — 서버 렌더링·하이드레이션 첫 렌더는 0. */
+export function useDiscardedWrites(): number {
+  const store = useContext(StoreContext) ?? getBrowserStore();
+  return useSyncExternalStore(store.subscribe, store.discardedWrites, () => 0);
+}
+
 export function useAppStore(): AppStoreView {
   const store = useContext(StoreContext) ?? getBrowserStore();
   const snap = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);

@@ -43,6 +43,16 @@
 
 ### 2-3. 커스텀 도메인으로 옮길 때
 매니페스트는 정적 파일이라 basePath를 알지 못합니다. `BASE_PATH`가 ""가 되면 `public/manifest.webmanifest`의 세 값을 고칩니다: `"id": "/"`, `"start_url": "/home/"`, `"scope": "/"`. 그리고 `src/features/pwa/pwaAssets.ts`의 `PRODUCTION_BASE_PATH`를 ""로 — `pwa.test.ts`가 둘이 어긋나면 실패합니다. 서비스 워커·레이아웃 메타·아이콘 주소는 자동으로 따라갑니다.
+공유 미리보기(§2-4)의 절대 주소는 `NEXT_PUBLIC_SITE_URL=https://<도메인>/`을 함께 넣어야 새 도메인을 가리킵니다(비우면 `https://5seoyoung.github.io/onmom_web/`). 값을 넣었는데 경로가 `BASE_PATH`와 다르면 빌드가 멈춥니다(`src/config.ts siteUrlFrom`). 배포 워크플로(`.github/workflows/deploy.yml`)는 아직 이 Variable을 넘기지 않으니, 도메인을 옮길 때 `NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}` 한 줄을 build 단계 env에 더합니다(`.env.example`에도).
+
+### 2-4. 공유 미리보기(Open Graph·트위터) — 2026-09-29
+- 모든 화면: `og:image`·`twitter:image` = `public/og-image.png`(1200×630), 카드 `summary_large_image`, `og:site_name` "온맘", `og:locale` ko_KR. 제목·설명은 화면의 것(제목 틀 "%s · 온맘" — 이름이 든 제목(서비스 소개·이용약관·관리자)은 틀을 건너뜀). 서비스 소개는 `og:url`·제목·설명을 서비스 소개 문구 그대로(`LANDING_META` — 새 문장 없음). 코드: `src/features/landing/shareMeta.ts`, 루트 레이아웃 `metadataBase: new URL(config.siteUrl)`.
+- 절대 주소: Next가 상대 주소를 `metadataBase`의 경로 아래로 붙입니다 → `https://5seoyoung.github.io/onmom_web/og-image.png`(`shareMeta.test.ts`가 Next의 해석 함수로 확인). 아이콘·매니페스트는 `metadataBase`를 쓰지 않아 지금처럼 `/onmom_web/…`.
+- 이미지는 브랜드 로고(`src/features/flow/brand-logo.png`, 240×240, 배경 `#FDEFEB`)를 2배로 키워 같은 배경색 위 가운데에 둔 것입니다(로고 배경과 이어져 테두리가 보이지 않음 — 토큰 `coral-tint` `#FFF0F0`을 쓰면 로고 둘레에 옅은 네모가 보여 로고 배경색을 썼습니다). 다시 만들 때:
+  ```sh
+  sips -Z 480 src/features/flow/brand-logo.png --out /tmp/onmom-og-logo.png
+  sips -p 630 1200 --padColor FDEFEB /tmp/onmom-og-logo.png --out public/og-image.png
+  ```
 
 ## 3. 서비스 워커(`public/sw.js`)
 
@@ -78,6 +88,7 @@
   | 설정 없는 빌드 | "준비 중" 카드(지금과 같음, D4) |
   | iPhone·iPad Safari 탭(PushManager 없음) | 토글 없이 설치 안내 한 줄(§6 새 문구) |
   | 푸시를 지원하지 않는 브라우저 | "이 브라우저는 알림을 지원하지 않아요." |
+  | 서버 세션이 없는 게스트(익명 가입이 안 돼 이 브라우저 전용 — 꺼짐·요청 제한·CAPTCHA·오프라인, `src/auth/session.ts`) | 토글 없이 "지금은 온맘 서버에 연결되지 않은 게스트라 알림을 켤 수 없어요. 카카오 계정을 연결하면 켤 수 있어요."(§6). 설정의 [카카오 계정 연결]이나 다음 방문의 익명 계정 옮기기로 세션이 생기면 토글로 바뀝니다. 세션을 확인하는 동안(저장된 세션을 읽는 중)은 토글이 잠겨 있습니다(`src/auth/serverSession.ts`·`useServerSession.ts`) — 2026-09-29, 전에는 토글이 보였고 켜면 "인터넷 연결을 확인" 실패 문구로 끝났음 |
   | 알림 권한 거부됨 | 허용 방법 안내 한 줄 |
   | 이 브라우저의 푸시 서비스가 받는 목록 밖(켜기를 눌렀을 때 알게 됨) | "이 브라우저는 알림을 지원하지 않아요." — 구독은 풀고 저장하지 않음 |
   | 그 밖 | iOS 원문 토글 "매일 회복 체크 리마인더 / 저녁 8시, 이상 증상 빠른 기록 알림". **켜짐 = 이 브라우저에 지금 빌드의 키로 만든 구독이 있고, 그 끝점의 서버 행도 이 계정에 있음**(저장된 플래그가 아님 — 서버가 보낼 곳이 없는 "켜짐"은 없다. 행을 확인하지 못하면(오프라인) 브라우저 상태를 믿는다) |
@@ -154,6 +165,7 @@ Supabase 문서 "Scheduling Edge Functions"의 방식 그대로입니다 — 예
 | `denied` | "브라우저에서 이 사이트의 알림이 차단되어 있어요. 브라우저 설정에서 알림을 허용한 뒤 다시 켜 주세요." | 권한 거부 상태 |
 | `installHint` | "iPhone·iPad에서는 Safari의 공유 버튼 → '홈 화면에 추가'로 설치한 뒤, 홈 화면의 온맘에서 알림을 켤 수 있어요." | iOS Safari 탭 |
 | `unsupported` | "이 브라우저는 알림을 지원하지 않아요." | 푸시 API 없는 브라우저 |
+| `needsAccount` | "지금은 온맘 서버에 연결되지 않은 게스트라 알림을 켤 수 없어요. 카카오 계정을 연결하면 켤 수 있어요." | 서버 세션이 없는 게스트(2026-09-29) |
 | `failed` | "알림 설정을 바꾸지 못했어요. 인터넷 연결을 확인하고 잠시 후 다시 시도해 주세요." | 구독·해지 실패(role=alert) |
 | `busy` | "알림 설정을 바꾸고 있어요" | 진행 중(낭독용, aria-live) |
 
@@ -161,6 +173,7 @@ Supabase 문서 "Scheduling Edge Functions"의 방식 그대로입니다 — 예
 
 | 증상 | 원인·조치 |
 |---|---|
+| 토글 대신 "지금은 온맘 서버에 연결되지 않은 게스트라…" | 이 브라우저의 게스트에게 Supabase 세션이 없음 — 익명 로그인이 꺼져 있거나(대시보드 Authentication → Sign In / Providers → Anonymous), 요청 제한·CAPTCHA 실패(`NEXT_PUBLIC_TURNSTILE_SITE_KEY`와 대시보드 CAPTCHA가 짝이 맞는지)·오프라인. 카카오 계정을 연결하면 켤 수 있다 |
 | 설정 > 알림이 여전히 "준비 중" | 사이트 빌드에 `NEXT_PUBLIC_SUPABASE_URL`·`…_PUBLISHABLE_KEY`·`NEXT_PUBLIC_VAPID_PUBLIC_KEY` 중 하나가 없음(F, `docs/SUPABASE_SETUP.md` C-3). VAPID 공개 키만 넣은 빌드도 Supabase 값이 없으면 "준비 중"이 맞다 |
 | 사이트 빌드가 "NEXT_PUBLIC_VAPID_PUBLIC_KEY 형식이 틀립니다"로 멈춤 | 비밀 키(43자)를 넣었거나 공백이 섞임. 공개 키는 87자, B로 시작 |
 | 토글을 켜면 "알림 설정을 바꾸지 못했어요" | 0004가 아직 적용되지 않음(표 없음) → C. 또는 오프라인, 또는 이 계정의 기기가 10개(오래된 기기에서 끄거나 Table Editor에서 행 삭제). 브라우저 콘솔의 `push_subscriptions` 요청 상태로 구분 |
@@ -186,7 +199,7 @@ Supabase 문서 "Scheduling Edge Functions"의 방식 그대로입니다 — 예
 ## 9. 남은 결정·위험
 
 - **CPO**: 08 §2의 매일 리마인더를 웹 푸시로 가는 것으로 확정할지(대안: 카카오 알림톡·이메일 — 유료 채널·수신 동의가 필요해 만들지 않음). iOS는 설치한 사용자만 받습니다.
-- **개인정보**: `push_subscriptions`(끝점·키·시간대)은 개인정보처리방침 초안의 수집 항목에 아직 없습니다 — 법률 검토 때 추가(보유 기간 = 구독 해지·계정 삭제 시 즉시 삭제, 로그아웃·발송 실패(404/410) 시 다음 발송 때 삭제). 알림을 전달하는 곳은 브라우저 회사의 푸시 서비스(Google FCM·Mozilla·Microsoft WNS·Apple)뿐이고, 그곳에 가는 것은 끝점과 암호화된 고정 문구뿐입니다 — 처리방침의 "처리 위탁/국외 이전" 검토 대상.
+- **개인정보**: (2026-09-29) 처리방침 초안에 넣었습니다 — 매일 리마인더를 켤 수 있는 빌드(`isReminderConfigured`)의 방침에만 2절 "알림 정보(매일 리마인더를 켠 경우에만): 브라우저 푸시 구독 주소·암호화 키·시간대", 3절 목적, 5절 보유(끄기·계정 삭제 즉시, 로그아웃·구독 끝남은 다음 발송 때), 6절 ⑤ 브라우저 푸시 서비스(Google FCM·Apple·Mozilla·Microsoft WNS — 국외, 브라우저 제조사가 정함, 가는 것은 끝점과 암호화된 고정 문구뿐). 코드 `src/features/privacy/webPolicyText.ts`, 검토 문서 `docs/privacy/CONSENT_AND_POLICY_DRAFT.md` 3절·5절 체크리스트(국외 이전/위탁 판단, 동의 (a)에 넣을지). **법률 검토·CPO 승인 전에는 Vault 값(켜기)을 넣지 않습니다.**
 - **받는 푸시 서비스 목록**: 목록 밖의 푸시 서비스를 쓰는 브라우저(예: 자체 푸시 서버를 쓰는 일부 Chromium 계열)는 "지원하지 않아요"로 보입니다. 실제 기기에서 네이버 웨일·삼성 인터넷의 끝점 호스트를 G단계 때 확인하세요(대시보드 Table Editor `push_subscriptions.endpoint`의 호스트 — FCM이면 그대로 됩니다).
 - **발송 시각**: 하루 한 번 11:00 UTC 고정. pg_cron이 몇 분 늦을 수 있고, 푸시 서비스는 기기가 꺼져 있으면 4시간(TTL)까지 보관합니다.
 - **실제 푸시 서비스로는 아직 보내 보지 않았습니다**(암호화·서명은 RFC 시험 벡터·자체 검증으로 확인). G단계를 빠짐없이.

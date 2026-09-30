@@ -5,7 +5,19 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MaternityRecord, PersistedState, UserProfile } from "@/domain/types";
 import { SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
-import { ACCOUNT_ITEMS, AI_USAGE_ITEMS, AI_USAGE_RETENTION_DAYS, HEALTH_ITEMS, SETTING_ITEMS } from "./dataItems";
+import { LLM_FUNCTION_MAX_MESSAGES } from "@/api/llm";
+import { PUSH_SERVICE_HOSTS } from "@/features/pwa/reminderModel";
+import { CHAT_MAX_MESSAGES } from "../../../supabase/functions/_shared/chat";
+import {
+  ACCOUNT_ITEMS,
+  AI_CONTEXT_MAX_MESSAGES,
+  AI_USAGE_ITEMS,
+  AI_USAGE_RETENTION_DAYS,
+  ANON_CLEANUP_DAYS,
+  HEALTH_ITEMS,
+  PUSH_ITEMS,
+  SETTING_ITEMS,
+} from "./dataItems";
 import { policyFor } from "./policy";
 import { PolicySections, PolicyWebNote } from "./PrivacyPolicy";
 import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_WEB_NOTE } from "./policyText";
@@ -123,11 +135,71 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
 
   it("Cloudflare Turnstile은 쓸 때만 적는다", () => {
     expect(WEB_TEXT).not.toContain("Cloudflare");
-    const withTurnstile = webPolicySections({ turnstile: true })
+    const withTurnstile = webPolicySections({ turnstile: true, reminders: false })
       .map((s) => s.body)
       .join("\n");
     expect(withTurnstile).toContain("Cloudflare, Inc.");
     expect(withTurnstile).toContain("Turnstile");
+    expect(withTurnstile).toContain("⑤ Cloudflare, Inc. (미국)");
+  });
+
+  it("오래된 게스트 계정 자동 삭제(서버 저장 전이면 30일) — 5절, 늘(Supabase 빌드)", () => {
+    expect(section("보유 기간")).toContain(
+      `서버에 기록을 한 번도 저장하지 않은 게스트 계정(동의 전에 멈춘 경우 등)은 만든 지 ${ANON_CLEANUP_DAYS}일이 지나면 자동으로 삭제합니다.`,
+    );
+  });
+
+  it(`AI 국외 이전 — 질문 내용에 같은 대화의 최근 메시지(최대 ${AI_CONTEXT_MAX_MESSAGES}개)가 함께 담긴다고 적는다(웹·서버 한도와 같은 수)`, () => {
+    expect(AI_CONTEXT_MAX_MESSAGES).toBe(LLM_FUNCTION_MAX_MESSAGES);
+    expect(AI_CONTEXT_MAX_MESSAGES).toBe(CHAT_MAX_MESSAGES);
+    const anthropic = section("국외 이전").split("\n\n").find((b) => b.includes("Anthropic, PBC (미국)"))!;
+    expect(anthropic).toContain(`최근 메시지(이전 질문과 AI 답변을 합해 최대 ${AI_CONTEXT_MAX_MESSAGES}개)`);
+  });
+});
+
+describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌드", () => {
+  const withReminders = webPolicySections({ turnstile: false, reminders: true });
+  const part = (prefix: string) => withReminders.find((s) => s.title.includes(prefix))!.body;
+  const both = webPolicySections({ turnstile: true, reminders: true });
+
+  it("켤 수 없는 빌드(기본)에는 알림 정보·푸시 서비스를 적지 않는다(쓰지 않는 업체를 적지 않는다)", () => {
+    expect(WEB_TEXT).not.toContain(PUSH_ITEMS);
+    expect(WEB_TEXT).not.toContain("푸시 서비스");
+  });
+
+  it("2절 항목(켠 경우에만) · 3절 목적 · 5절 보유(끄기·계정 삭제 즉시)", () => {
+    expect(part("항목")).toContain(`• 알림 정보(매일 리마인더를 켠 경우에만): ${PUSH_ITEMS}`);
+    expect(part("처리 목적")).toContain("매일 저녁 8시 회복 체크 알림");
+    expect(part("보유 기간")).toContain("알림 정보는 알림을 끄거나 계정을 삭제하면 즉시 삭제합니다.");
+  });
+
+  it("6절 — 알림을 전달하는 브라우저 푸시 서비스(국외, 브라우저 제조사가 정함), 받는 푸시 서비스 목록과 같은 네 곳", () => {
+    const push = part("국외 이전").split("\n\n").find((b) => b.includes("브라우저 푸시 서비스"))!;
+    expect(push.startsWith("⑤ 브라우저 푸시 서비스")).toBe(true);
+    // 받는 푸시 서비스(reminderModel PUSH_SERVICE_HOSTS — 0004 check 제약과 같은 목록)마다 회사가 적혀 있다
+    const company: Record<(typeof PUSH_SERVICE_HOSTS)[number], string> = {
+      "fcm.googleapis.com": "Google LLC",
+      "push.services.mozilla.com": "Mozilla Corporation",
+      "notify.windows.com": "Microsoft Corporation",
+      "push.apple.com": "Apple Inc.",
+    };
+    for (const host of PUSH_SERVICE_HOSTS) expect(push, host).toContain(company[host]);
+    expect(push).toContain("브라우저의 제조사가 정합니다");
+    expect(push).toContain("건강 정보는 담지 않습니다");
+    for (const word of ["이전 항목", "이전 시기·방법", "목적", "보유 기간", "거부 방법과 효과"]) expect(push, word).toContain(word);
+  });
+
+  it("번호는 빠진 블록 없이 이어진다 — 둘 다 쓰면 푸시 ⑤, Cloudflare ⑥", () => {
+    const transfer = both.find((s) => s.title.includes("국외 이전"))!.body;
+    const heads = transfer
+      .split("\n")
+      .filter((l) => /^[①-⑧] /.test(l))
+      .map((l) => l.slice(0, 1));
+    expect(heads).toEqual(["①", "②", "③", "④", "⑤", "⑥"]);
+    expect(transfer).toContain("⑥ Cloudflare, Inc. (미국)");
+    // AI 상담 국외 이전은 늘 ①(4절이 "6절 ①"로 가리킨다)
+    expect(transfer).toContain("① Anthropic, PBC (미국)");
+    expect(both.find((s) => s.title.includes("동의와 처리 근거"))!.body).toContain("(6절 ①)");
   });
 
   it("권리(열람·정정·삭제·처리 정지·동의 철회), 14세 미만, 쿠키·브라우저 저장소, 문의처, 구제 기관", () => {

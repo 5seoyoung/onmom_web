@@ -14,6 +14,8 @@
 //   예전 브라우저 전용 게스트를 익명 계정으로 옮기기(앱 화면에서만 — 공개 주소에서는 하지 않는다), 로그아웃 감지).
 //   로그인 콜백(/auth/callback/)은 그 화면이 스스로 처리한다.
 //   설정이 없으면 아무것도 안 한다.
+// - 다른 탭의 로그아웃·계정 삭제·계정 전환 뒤 이 탭에서 누른 쓰기는 스토어가 버리고 다시 읽는다(여러 탭 보호) — 계정이 바뀌어
+//   여기서 로그인 화면으로 옮기고, StaleTabNotice가 저장하지 않았다고 한 번 알린다.
 
 import { useEffect, type ReactNode } from "react";
 import { LoaderCircle } from "lucide-react";
@@ -22,6 +24,7 @@ import { useAuthSession } from "@/auth/useAuth";
 import { rootScreenFor } from "@/store/appStore";
 import { useAppStore } from "@/store/useAppStore";
 import { gateDecision, routeKindFor } from "./gate";
+import { StaleTabNotice } from "./StaleTabNotice";
 
 // 웹 신규 문구 — CPO 확인 필요 (저장소를 읽거나 주소를 맞추는 동안의 낭독 문구 — 화면에는 스피너만)
 export const GATE_LOADING_TEXT = "불러오는 중이에요";
@@ -51,6 +54,12 @@ export function AppGate({ children }: { children?: ReactNode }) {
     if (redirectTo !== null) router.replace(redirectTo);
   }, [redirectTo, router]);
 
-  if (decision.kind !== "render") return <GateLoading />;
-  return <>{children}</>;
+  return (
+    <>
+      {decision.kind === "render" ? children : <GateLoading />}
+      {/* 여러 탭 보호로 이 탭의 쓰기를 버렸으면(다른 탭의 로그아웃·계정 삭제·계정 전환) 한 번 알린다. 스토어가 다시 읽은 계정으로
+          이 관문이 로그인(또는 바뀐 계정의 화면)으로 옮기는 동안에도 남도록 화면 밖(여기)에 둔다 — StaleTabNotice */}
+      <StaleTabNotice />
+    </>
+  );
 }

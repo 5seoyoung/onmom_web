@@ -2,7 +2,10 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
-import { createAppStore, type AppStore } from "./appStore";
+import { SCREEN_PATH, gateDecision } from "@/features/flow/gate";
+import { STALE_TAB_TEXT, staleTabNoticeVisible } from "@/features/flow/staleTabNoticeView";
+import { ROUTES } from "@/routes";
+import { createAppStore, rootScreenFor, type AppStore } from "./appStore";
 import { initialState } from "./defaults";
 import { STATE_KEY, createMemoryStorage, createStoragePersistence, watchPageResume, type StorageLike } from "./persistence";
 import { rebaseOnStored } from "./tabRebase";
@@ -214,5 +217,66 @@ describe("watchPageResume", () => {
 
   it("브라우저 밖(window·document 없음)에서는 아무것도 하지 않는다", () => {
     expect(() => watchPageResume(() => {})()).not.toThrow();
+  });
+});
+
+describe("버린 쓰기 알림 — 다른 탭이 로그아웃·삭제·계정 전환한 뒤 낡은 탭에서 누른 기록", () => {
+  /** 스토어가 알린 횟수(구독) */
+  function counting(store: AppStore) {
+    let notified = 0;
+    store.subscribe(() => notified++);
+    return () => notified;
+  }
+
+  it("다른 탭이 로그아웃했으면 버린 수가 1 늘고 구독자에게 알린다 — 관문은 로그인 화면으로", () => {
+    const { a, b } = twoTabs();
+    expect(a.discardedWrites()).toBe(0);
+    b.actions.signOut();
+    const notified = counting(a);
+
+    a.actions.addSymptomRecord(SYMPTOM);
+    expect(a.discardedWrites()).toBe(1);
+    expect(notified()).toBeGreaterThan(0);
+    // 관문: 기록 화면에 있던 이 탭은 로그인 화면으로 옮겨진다(쓰기를 버린 뒤의 스냅샷 = 로그아웃)
+    expect(rootScreenFor(a.getSnapshot(), false)).toBe("login");
+    expect(gateDecision(rootScreenFor(a.getSnapshot(), false), ROUTES.record)).toEqual({ kind: "redirect", to: SCREEN_PATH.login });
+    // 안내가 보인다(닫기 전), 닫은 뒤에는 다음에 또 버릴 때까지 숨는다
+    expect(staleTabNoticeVisible(a.discardedWrites(), 0)).toBe(true);
+    expect(staleTabNoticeVisible(a.discardedWrites(), a.discardedWrites())).toBe(false);
+  });
+
+  it("다른 탭이 계정을 삭제했을 때도, 다른 계정으로 바꿨을 때도 센다", () => {
+    const deleted = twoTabs();
+    deleted.b.load();
+    deleted.b.actions.deleteAccount();
+    deleted.a.actions.addPost({ title: "글", body: "" });
+    expect(deleted.a.discardedWrites()).toBe(1);
+
+    const switched = twoTabs();
+    switched.b.actions.signIn({ id: "kakao-42", name: null, provider: "kakao" });
+    switched.a.actions.updateProfile({ neighborhood: "역삼동" });
+    expect(switched.a.discardedWrites()).toBe(1);
+    switched.a.actions.addMoodCheck({ questionID: 1, answer: "no" }); // 이제 이 탭도 kakao-42 — 그대로 저장된다
+    expect(switched.a.discardedWrites()).toBe(1);
+  });
+
+  it("같은 계정의 다른 탭 기록은 합쳐 저장하므로 세지 않는다", () => {
+    const { a, b } = twoTabs();
+    b.actions.addSymptomRecord(SYMPTOM);
+    a.actions.addMoodCheck({ questionID: 1, answer: "no" });
+    expect(a.discardedWrites()).toBe(0);
+  });
+
+  it("동기화(replaceState)의 쓰기를 버린 것은 이용자가 누른 것이 아니라 세지 않는다(관문은 똑같이 로그인으로)", () => {
+    const { a, b } = twoTabs();
+    b.actions.signOut();
+    a.replaceState({ ...a.getSnapshot().state, moodChecks: [{ id: "srv-1", date: NOW.toISOString(), questionID: 2, answer: "no" as const }] });
+    expect(a.discardedWrites()).toBe(0);
+    expect(a.getSnapshot().account).toBeNull();
+  });
+
+  it("안내 문구는 짧고 저장하지 않았다는 사실만 — 닫기 버튼 이름은 iOS 원문", () => {
+    expect(STALE_TAB_TEXT.message).toContain("저장하지 않았어요");
+    expect(STALE_TAB_TEXT.dismiss).toBe("닫기");
   });
 });

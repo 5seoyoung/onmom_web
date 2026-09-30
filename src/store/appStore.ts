@@ -86,6 +86,12 @@ export interface AppStore {
    * 화면은 쓰지 않는다(actions가 아님). 계정은 바꾸지 않는다 — 호출 전에 계정이 맞는지 동기화 쪽이 확인한다.
    */
   replaceState(next: PersistedState): void;
+  /**
+   * 여러 탭 보호로 버린 이 탭의 쓰기 수(페이지를 연 뒤부터, 처음 0) — 다른 탭이 로그아웃·계정 삭제·다른 계정 로그인을 한 뒤
+   * 이 탭에서 누른 기록·입력(actions)은 저장하지 않는다(commit). 화면(features/flow/StaleTabNotice)이 늘어난 것을 보고 안내한다.
+   * 동기화(replaceState)의 쓰기는 이용자가 누른 것이 아니라 세지 않는다. subscribe로 바뀜을 알린다(useSyncExternalStore 스냅샷).
+   */
+  discardedWrites(): number;
   readonly actions: AppActions;
 }
 
@@ -127,6 +133,8 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
    */
   let seenState: PersistedState = UNLOADED.state;
   let seenToken: string | null = null;
+  /** 여러 탭 보호로 버린 이용자 쓰기 수(discardedWrites) */
+  let discarded = 0;
 
   function emit() {
     for (const l of [...listeners]) l();
@@ -198,9 +206,10 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
    * 상태 저장. 이 탭이 마지막으로 본 뒤 다른 탭이 저장했으면(변경 알림이 늦거나 오지 않음 — 뒤로 가기 캐시·백그라운드 탭)
    * 낡은 전체 상태로 덮지 않고: 다시 읽어 → 같은 계정이면 이 탭의 쓰기를 저장된 최신 상태 위로 합쳐(tabRebase) 저장,
    * 계정이 바뀌었거나 끝났으면(다른 탭의 로그아웃·계정 삭제·다른 계정 로그인) 이 쓰기를 버린다 — 지운 계정의 기록을 되살리거나
-   * 다른 사람의 기록에 섞지 않게.
+   * 다른 사람의 기록에 섞지 않게. 다시 읽은 계정으로 스냅샷이 바뀌므로 앱 관문이 로그인(또는 새 계정의 화면)으로 보내고,
+   * 이용자가 누른 쓰기(source "user")였으면 버린 수를 올려 화면이 조용히 알린다(discardedWrites — 저장된 척하지 않는다).
    */
-  function commit(next: PersistedState) {
+  function commit(next: PersistedState, source: "user" | "sync" = "user") {
     if (next === snapshot.state) return;
     if (storedChangedElsewhere()) {
       const mine = next;
@@ -208,7 +217,13 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       const accountBefore = snapshot.account?.id ?? null;
       load();
       const accountNow = snapshot.account?.id ?? null;
-      if (accountBefore === null || accountNow !== accountBefore) return;
+      if (accountBefore === null || accountNow !== accountBefore) {
+        if (accountBefore !== null && source === "user") {
+          discarded += 1;
+          emit();
+        }
+        return;
+      }
       next = rebaseOnStored(mine, snapshot.state, seen, accountNow);
     }
     saveState(next);
@@ -360,8 +375,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     load,
     replaceState(next) {
       ensureLoaded();
-      commit(next);
+      commit(next, "sync");
     },
+    discardedWrites: () => discarded,
     actions,
   };
 }

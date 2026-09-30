@@ -5,7 +5,7 @@
 // - Supabase 설정이 있는 빌드: 웹 방침 초안(webPolicyText.ts) — 서버 저장·카카오 로그인·AI 국외 이전을 적은 것. "초안 — 법률 검토 전" 표시.
 //   iOS 방침은 서버 저장을 부정하므로("별도의 회원 데이터베이스를 운영하지 않습니다") 이 빌드에서는 보이지 않는다.
 
-import { config, isSupabaseConfigured } from "@/config";
+import { config, isReminderConfigured, isSupabaseConfigured } from "@/config";
 import {
   PRIVACY_POLICY_EFFECTIVE,
   PRIVACY_POLICY_SECTIONS,
@@ -62,9 +62,12 @@ export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIO
   };
 }
 
-/** 이 빌드의 방침 옵션 — Turnstile 사이트 키(NEXT_PUBLIC_TURNSTILE_SITE_KEY)가 있으면 Cloudflare를 적는다(src/auth/turnstile.ts) */
+/**
+ * 이 빌드의 방침 옵션 — Turnstile 사이트 키(NEXT_PUBLIC_TURNSTILE_SITE_KEY)가 있으면 Cloudflare를 적고(src/auth/turnstile.ts),
+ * 매일 리마인더를 켤 수 있으면(Supabase + NEXT_PUBLIC_VAPID_PUBLIC_KEY — config.isReminderConfigured) 알림 정보·푸시 서비스를 적는다.
+ */
 export function activeWebPolicyOptions(): WebPolicyOptions {
-  return { turnstile: config.turnstileSiteKey !== null };
+  return { turnstile: config.turnstileSiteKey !== null, reminders: isReminderConfigured() };
 }
 
 /** 이 빌드의 방침 — 빌드 때 정해지는 값(NEXT_PUBLIC_*)이라 서버 HTML과 브라우저가 같다 */

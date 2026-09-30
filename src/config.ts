@@ -10,6 +10,39 @@ function url(v: string | undefined): string | null {
   return s.length > 0 ? s : null;
 }
 
+/** 공개 사이트 주소의 기본값 — GitHub Pages 프로젝트 페이지(basePath /onmom_web까지, 끝 슬래시) */
+export const DEFAULT_SITE_URL = "https://5seoyoung.github.io/onmom_web/";
+
+/**
+ * NEXT_PUBLIC_SITE_URL → 사이트 주소(origin + basePath + "/"). 비면 DEFAULT_SITE_URL.
+ * 공유 미리보기(Open Graph·트위터)의 절대 주소 기준이다(루트 레이아웃 metadataBase — Next가 상대 주소를 이 경로 아래로 붙인다).
+ * https만(내 컴퓨터 시험용 http://localhost·127.0.0.1은 허용), 쿼리·조각·사용자 정보 없이. 값을 넣었다면 경로가 이 빌드의 basePath와
+ * 같아야 한다 — 다르면 공유 이미지 주소가 없는 파일을 가리키므로 빌드를 멈춘다(커스텀 도메인: NEXT_PUBLIC_SITE_URL=https://<도메인>/ + BASE_PATH="").
+ * 기본값은 basePath와 비교하지 않는다(basePath 없이 만드는 로컬 빌드도 운영 주소를 가리키게).
+ */
+export function siteUrlFrom(raw: string | undefined, basePath: string): string {
+  const s = (raw ?? "").trim();
+  if (s.length === 0) return DEFAULT_SITE_URL;
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    throw new Error("NEXT_PUBLIC_SITE_URL이 주소 형식이 아닙니다. 예: https://5seoyoung.github.io/onmom_web/");
+  }
+  const local = u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
+  if ((u.protocol !== "https:" && !local) || u.search !== "" || u.hash !== "" || u.username !== "" || u.password !== "") {
+    throw new Error("NEXT_PUBLIC_SITE_URL은 https 주소여야 하고 ?·#·사용자 정보가 없어야 합니다. 예: https://5seoyoung.github.io/onmom_web/");
+  }
+  const path = u.pathname.replace(/\/+$/, "");
+  const base = basePath.replace(/\/+$/, "");
+  if (path !== base) {
+    throw new Error(
+      `NEXT_PUBLIC_SITE_URL의 경로(${path || "/"})가 이 빌드의 BASE_PATH(${base || "/"})와 다릅니다. 커스텀 도메인이면 BASE_PATH=""와 https://<도메인>/ 을 함께 쓰세요.`,
+    );
+  }
+  return `${u.origin}${path}/`;
+}
+
 export const config = {
   /** Video DB — GET /videos?include=&exclude=&limit= */
   videoURL: url(process.env.NEXT_PUBLIC_VIDEO_URL),
@@ -22,6 +55,11 @@ export const config = {
   /** 카카오 JavaScript 키 — 공개값(카카오 개발자 콘솔에서 사이트 도메인 제한). REST 키는 여기 두지 않는다. */
   kakaoJsKey: (process.env.NEXT_PUBLIC_KAKAO_JS_KEY ?? "").trim() || null,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
+  /**
+   * 공개 사이트 주소(basePath까지, 끝 슬래시) — 공유 미리보기의 절대 주소 기준(siteUrlFrom). 공개값. 비면 GitHub Pages 주소.
+   * 커스텀 도메인으로 옮길 때 NEXT_PUBLIC_SITE_URL(배포 워크플로 Variables)과 BASE_PATH를 함께 바꾼다.
+   */
+  siteUrl: siteUrlFrom(process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_BASE_PATH ?? ""),
   /**
    * Supabase 프로젝트 주소(https://<ref>.supabase.co) — 카카오 로그인 + 사용자별 서버 저장(docs/SUPABASE_SETUP.md).
    * 이 값과 아래 키가 둘 다 있어야 켜진다. 비면 카카오 버튼은 "준비 중"이고 Supabase로 요청을 보내지 않는다.

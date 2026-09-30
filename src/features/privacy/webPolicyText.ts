@@ -14,10 +14,13 @@
 import {
   ACCESS_LOG_ITEMS,
   ACCOUNT_ITEMS,
+  AI_CONTEXT_MAX_MESSAGES,
   AI_TRANSFER_ITEMS,
   AI_USAGE_ITEMS,
   AI_USAGE_RETENTION_DAYS,
+  ANON_CLEANUP_DAYS,
   HEALTH_ITEMS,
+  PUSH_ITEMS,
   SETTING_ITEMS,
   STORAGE_REGION,
 } from "./dataItems";
@@ -37,9 +40,17 @@ export const WEB_POLICY_NOTE =
 export interface WebPolicyOptions {
   /** Cloudflare Turnstile(자동 가입 방지)을 쓰는가 */
   turnstile: boolean;
+  /**
+   * 매일 리마인더(웹 푸시)를 켤 수 있는 빌드인가(config.isReminderConfigured — Supabase + VAPID 공개 키).
+   * 켜면 알림 정보(구독 주소·암호화 키·시간대 — 2·3·5절)와 알림을 전달하는 브라우저 푸시 서비스(6절)를 적는다.
+   */
+  reminders: boolean;
 }
 
-export const DEFAULT_WEB_POLICY_OPTIONS: WebPolicyOptions = { turnstile: false };
+export const DEFAULT_WEB_POLICY_OPTIONS: WebPolicyOptions = { turnstile: false, reminders: false };
+
+/** 국외 이전 블록 번호 — 선택 블록(푸시·Turnstile)이 빠지면 번호가 당겨진다 */
+const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧"] as const;
 
 const CONTACT = "개인정보 관련 문의: inmani1555@gmail.com"; // 원문: PrivacyPolicyView.swift:64
 
@@ -55,19 +66,21 @@ function processorLines(o: WebPolicyOptions): string[] {
   ];
 }
 
-/** 국외 이전 블록 — 법 §28의8②: 항목 · 국가·시기·방법 · 이전받는 자 · 목적·보유 기간 · 거부 방법과 효과 */
+/** 국외 이전 블록 — 법 §28의8②: 항목 · 국가·시기·방법 · 이전받는 자 · 목적·보유 기간 · 거부 방법과 효과. 첫 줄은 번호 없이 두고 끝에서 매긴다. */
 function transferBlocks(o: WebPolicyOptions): string[] {
   const blocks = [
     [
-      "① Anthropic, PBC (미국)",
+      "Anthropic, PBC (미국)",
       `– 이전 항목: ${AI_TRANSFER_ITEMS}`,
+      // 웹은 같은 대화의 최근 메시지를 함께 보낸다(src/api/llm.ts functionMessages — 이전 질문·AI 답, 위기 표현 턴 제외)
+      `– 질문 내용에는 같은 대화의 최근 메시지(이전 질문과 AI 답변을 합해 최대 ${AI_CONTEXT_MAX_MESSAGES}개)가 함께 담깁니다.`,
       "– 이전 시기·방법: AI 상담, 약물·음식 체크(안전표에 없는 항목)에서 질문을 보낼 때마다 온맘 서버를 거쳐 암호화된 통신(HTTPS)으로 전송",
       "– 목적: AI 답변 생성",
       "– 보유 기간: Anthropic의 API 데이터 보관 정책에 따른 기간",
       "– 거부 방법과 효과: 해당 기능을 처음 쓸 때 묻는 동의에 동의하지 않으면 전송하지 않으며, 온맘에 담긴 안내로만 답합니다.",
     ],
     [
-      `② Supabase, Inc. (미국 법인 · 저장 위치 ${STORAGE_REGION} 리전)`,
+      `Supabase, Inc. (미국 법인 · 저장 위치 ${STORAGE_REGION} 리전)`,
       "– 이전 항목: 2절의 모든 정보",
       "– 이전 시기·방법: 서비스를 이용하는 동안 암호화된 통신(HTTPS)으로 전송해 저장",
       "– 목적: 데이터베이스·로그인·서버 기능 운영",
@@ -75,7 +88,7 @@ function transferBlocks(o: WebPolicyOptions): string[] {
       "– 거부 방법과 효과: 서비스 제공에 꼭 필요해 거부하면 서비스를 이용할 수 없습니다. 원하지 않으면 설정 > 계정 삭제로 모든 정보를 삭제할 수 있습니다.",
     ],
     [
-      "③ GitHub, Inc. (미국)",
+      "GitHub, Inc. (미국)",
       `– 이전 항목: ${ACCESS_LOG_ITEMS}`,
       "– 이전 시기·방법: 웹사이트에 접속할 때 자동으로 전송",
       "– 목적: 웹사이트 제공(호스팅)",
@@ -83,7 +96,7 @@ function transferBlocks(o: WebPolicyOptions): string[] {
       "– 거부 방법과 효과: 웹사이트 접속에 필요해 거부할 수 없습니다. 접속하지 않으면 전송되지 않습니다.",
     ],
     [
-      "④ Render (미국)",
+      "Render (미국)",
       "– 이전 항목: 분만 방식에 따른 운동 영상 분류값(이용자를 알아볼 수 있는 정보는 보내지 않습니다)",
       "– 이전 시기·방법: 운동 영상 목록을 불러올 때 온맘 서버를 거쳐 전송",
       "– 목적: 운동 영상 목록 조회",
@@ -91,9 +104,21 @@ function transferBlocks(o: WebPolicyOptions): string[] {
       "– 거부 방법과 효과: 운동 탭을 쓰지 않으면 전송되지 않습니다.",
     ],
   ];
+  if (o.reminders) {
+    // 매일 리마인더 — 발송 함수(supabase/functions/send-reminders)가 구독 주소로 암호화한 고정 문구를 보낸다. 받는 곳은 브라우저 회사의
+    // 푸시 서비스뿐(reminderModel.ts PUSH_SERVICE_HOSTS: FCM·Mozilla·WNS·Apple — 0004 check 제약과 같은 목록).
+    blocks.push([
+      "브라우저 푸시 서비스 — Google LLC(Firebase Cloud Messaging), Apple Inc.(Apple Push Notification service), Mozilla Corporation(Mozilla Push Service), Microsoft Corporation(Windows Push Notification Services) (미국)",
+      "– 이전 항목: 브라우저 푸시 구독 주소와 암호화된 알림(정해진 알림 문구뿐이며 건강 정보는 담지 않습니다)",
+      "– 이전 시기·방법: 매일 리마인더를 켠 경우, 매일 저녁 8시 알림을 보낼 때 온맘 서버에서 암호화된 통신(HTTPS)으로 전송",
+      "– 목적: 알림 전달",
+      "– 보유 기간: 각 푸시 서비스의 정책에 따른 기간",
+      "– 거부 방법과 효과: 알림을 켜지 않거나 끄면 전송하지 않습니다. 어느 푸시 서비스를 거칠지는 이용자가 쓰는 브라우저의 제조사가 정합니다(예: Chrome은 Google, Safari는 Apple, Firefox는 Mozilla, Edge는 Microsoft).",
+    ]);
+  }
   if (o.turnstile) {
     blocks.push([
-      "⑤ Cloudflare, Inc. (미국)",
+      "Cloudflare, Inc. (미국)",
       `– 이전 항목: ${ACCESS_LOG_ITEMS}와 브라우저 확인 정보`,
       "– 이전 시기·방법: 게스트로 시작할 때(예전 게스트 기록을 이어 쓸 때 포함) 자동 가입 방지 확인을 위해 전송",
       "– 목적: 자동 가입 방지",
@@ -101,7 +126,7 @@ function transferBlocks(o: WebPolicyOptions): string[] {
       "– 거부 방법과 효과: 게스트 시작에 필요해 거부하면 게스트로 이용할 수 없습니다. 카카오 로그인에는 쓰지 않습니다.",
     ]);
   }
-  return blocks.map((b) => b.join("\n"));
+  return blocks.map(([head, ...rest], i) => [`${CIRCLED[i]} ${head}`, ...rest].join("\n"));
 }
 
 /** 웹 처리방침 초안 본문 — 절 제목은 번호를 붙여 목차처럼 읽힌다 */
@@ -119,6 +144,8 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
         `• 계정 정보: ${ACCOUNT_ITEMS}`,
         `• 건강 정보(민감정보): ${HEALTH_ITEMS}`,
         `• 서비스 설정 정보: ${SETTING_ITEMS}`,
+        // 매일 리마인더(웹 푸시) 구독 — 0004_push_reminders.sql push_subscriptions. 알림을 켠 경우에만 생긴다.
+        ...(o.reminders ? [`• 알림 정보(매일 리마인더를 켠 경우에만): ${PUSH_ITEMS}`] : []),
         // AI 상담 이용 기록 — Edge Function chat이 남기는 사용자 id·시각(0003_llm_usage.sql). 질문·답은 남기지 않는다.
         `• 자동으로 생성되는 정보: ${ACCESS_LOG_ITEMS}, (AI 상담을 쓴 경우) ${AI_USAGE_ITEMS}`,
         "",
@@ -133,6 +160,7 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
         "• 회복 주차 계산, 즉시 병원 확인이 필요한 신호 안내, 회복 단계에 맞는 운동 안내 등 서비스 제공",
         "• 입력한 기록의 저장과 여러 기기에서 이어 쓰기",
         "• 계정 삭제 등 이용자 요청 처리와 문의 응대",
+        ...(o.reminders ? ["• (매일 리마인더를 켠 경우) 매일 저녁 8시 회복 체크 알림 보내기"] : []),
         "• 부정 이용 방지(AI 상담 이용 한도 계산 포함), 보안과 장애 대응",
         "• 서비스 운영 현황 파악(계정 수 등 집계 수치와 계정 정보만 쓰며, 건강 기록 내용은 보지 않습니다)",
       ].join("\n"),
@@ -155,6 +183,15 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
         "• 접속 기록은 각 서비스 제공 업체가 정한 기간 동안 보관된 뒤 삭제됩니다.",
         `• AI 상담 이용 시각은 이용 한도 계산에만 쓰고 ${AI_USAGE_RETENTION_DAYS}일이 지나면 자동으로 삭제합니다.`,
         "• 게스트 계정은 그 브라우저에 남은 로그인 정보로만 다시 열 수 있습니다. 브라우저의 사이트 데이터를 지우면 서버에 저장된 게스트 기록을 다시 열 수 없으니, 계속 쓰려면 카카오로 로그인해 주세요.",
+        // 0006_anon_cleanup.sql — 익명·user_states 없음·카카오 연결 없음·만든 지 30일 지남. 기록을 저장한 게스트는 해당하지 않는다(첫 줄 그대로).
+        `• 서버에 기록을 한 번도 저장하지 않은 게스트 계정(동의 전에 멈춘 경우 등)은 만든 지 ${ANON_CLEANUP_DAYS}일이 지나면 자동으로 삭제합니다.`,
+        // 0004_push_reminders.sql — 끄기 = 행 삭제, 계정 삭제 = cascade. 카카오 로그아웃은 세션을 끝내기 전에 지우고(최대 3초), 못 지웠거나
+        // 브라우저 구독이 끝난 행은 발송 함수가 푸시 서비스의 404/410 응답을 받을 때 지운다(docs/PWA_AND_REMINDERS.md §4)
+        ...(o.reminders
+          ? [
+              "• 알림 정보는 알림을 끄거나 계정을 삭제하면 즉시 삭제합니다. 로그아웃하거나 브라우저에서 알림 구독이 끝나 그때 지우지 못한 정보는 다음 알림을 보낼 때 삭제합니다.",
+            ]
+          : []),
         "• 법령에 따라 보관해야 하는 정보가 있으면 그 기간 동안 따로 보관합니다.",
         "• 파기 방법: 전자적 파일은 복구할 수 없는 방법으로 삭제합니다.",
       ].join("\n"),

@@ -566,6 +566,9 @@
 | `features/journal/journalView.ts` · `features/record/recordView.ts` | 서버판 기록장 배너 / 기분 각주("…동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장…") | Supabase 빌드만 |
 | `features/flow/callbackText.ts` | 콜백 문구 4개(설정 없는 빌드에서 콜백 주소를 연 경우 포함) | `/auth/callback/` |
 | `src/app/not-found.tsx` · `components/shell/ErrorScreen.tsx` | 404 4개 · 오류 3개 | `docs/ACCESSIBILITY.md` §8 |
+| `features/pwa/reminderModel.ts` `REMINDER_TEXT.needsAccount` | "지금은 온맘 서버에 연결되지 않은 게스트라 알림을 켤 수 없어요. 카카오 계정을 연결하면 켤 수 있어요." | 설정 > 알림(Supabase 빌드, 서버 세션 없는 게스트) — 10-7 |
+| `features/flow/staleTabNoticeView.ts` | "다른 탭에서 로그아웃하거나 계정이 바뀌어, 방금 입력한 내용은 저장하지 않았어요." (닫기 버튼 이름 "닫기"는 원문) | 모든 화면 위(여러 탭 보호로 쓰기를 버렸을 때) — 10-7 |
+| `features/privacy/webPolicyText.ts`(초안) | 5절 "서버에 기록을 한 번도 저장하지 않은 게스트 계정…30일…" · 6절 ① "질문 내용에는 같은 대화의 최근 메시지(…최대 20개)가 함께 담깁니다." · 리마인더 빌드만: 2절 알림 정보 · 3절 알림 목적 · 5절 알림 보유 · 6절 ⑤ 브라우저 푸시 서비스 | `/privacy/`(Supabase 빌드) — 10-7 |
 
 ### 10-4. 주인이 할 일 (순서)
 0. **어떤 Variable을 넣었는지**: 이 작업에서는 GitHub 값을 읽을 수 없습니다(`gh` 없음). 이름에 따라: `NEXT_PUBLIC_SUPABASE_URL`+`…_PUBLISHABLE_KEY` 둘 다 → 다음 사이트 배포부터 카카오 로그인·서버 저장이 켜짐(**LAUNCH_CHECKLIST 1~3단계 먼저**) · `NEXT_PUBLIC_KAKAO_JS_KEY` → 산부인과 찾기만 · `NEXT_PUBLIC_VAPID_PUBLIC_KEY` → Supabase 값과 함께일 때만 알림 토글(형식이 틀리면 사이트 빌드가 멈춤) · `NEXT_PUBLIC_SITE_INDEXABLE=true` → 서비스 소개만 색인 · `ANTHROPIC_WORKSPACE_ID` → "Supabase" 워크플로가 chat 함수 비밀값으로 넣음 · `NEXT_PUBLIC_AI_CHAT_ENABLED=true` → Supabase 값과 함께일 때만, LAUNCH_CHECKLIST 5단계 뒤. 어느 것이든 **다음 배포(Deploy to GitHub Pages) 전에는 공개 사이트에 반영되지 않습니다.**
@@ -584,14 +587,22 @@
 ### 10-6. 남은 것
 **CPO·법률 [필수 — 켜기 전]**
 - 웹 처리방침·동의 문구 확정(초안 표시·시행일, Anthropic 연락처·구체 보유 기간, 국외 이전 세부) — `LAUNCH_CHECKLIST` 1-1~1-4, §8-7. 문구를 바꾸면 `CURRENT_CONSENT_VERSION`·`AI_CONSENT_VERSION`을 올리고 `docs/privacy/CONSENT_AND_POLICY_DRAFT.md`를 함께(`draftDoc.test`). 이용약관 초안도 같은 검토.
-- **처리방침에 `push_subscriptions`(끝점·키·시간대)와 푸시 서비스(Google FCM·Mozilla·Microsoft·Apple — 끝점과 암호화된 고정 문구만) 추가** — 매일 리마인더(Vault 값)를 켜기 전 필수. 보유: 끄기·계정 삭제 즉시, 로그아웃·만료는 다음 발송 때.
+- ~~처리방침에 `push_subscriptions`와 푸시 서비스 추가~~ — 2026-09-29 초안에 넣음(10-7 ⑤, 리마인더를 켤 수 있는 빌드의 방침에만). **법률 검토·CPO 승인 전에는 Vault 값(켜기)을 넣지 않음.** 남은 판단: 국외 이전/위탁 여부, 동의 (a)에도 넣을지(넣으면 판을 올림), AI 카드·동의 (d)에 "최근 대화 최대 20개"를 적을지(카드는 `AI_CONSENT_VERSION`) — 검토 문서 5절.
 - `grep -rn '웹 신규 문구 — CPO 확인 필요' src`의 모든 줄(10-3 + §6·§7-5·§8-6), CPO 12 색(흰 글씨/코랄 2.76, 출처 칩 inverse 2.22, 토글 꺼짐 1.65, 레드플래그 카드), 영상 깨우기 문구·5xx 재시도(iOS 89505cf는 "최대 30초" 문구·재시도 없음 — 웹은 프록시가 시간 초과를 502로 알려 한 번 재시도), 게스트 로그아웃의 "브라우저 데이터를 지우면 기록이 사라짐" 안내(문구 없음), FAQ 칩을 AI 동의 전에도 보일지, `admin_audit` 보유 기간, 위험 증상 토글 저장(§3 CPO 3).
 **서버·운영**
-- 매일 리마인더는 실제 푸시 서비스로 한 번도 보내 보지 않음(RFC 시험 벡터만) — `PWA_AND_REMINDERS.md` §5 G. 네이버 웨일·삼성 인터넷의 끝점 호스트 확인. Supabase 빌드의 **브라우저 전용 게스트**(익명 가입 실패)에게도 알림 토글이 보이지만 서버 행을 저장할 수 없어 "알림 설정을 바꾸지 못했어요…"로 끝남(해가 없지만 이유 문구가 정확하지 않음).
-- 계정 삭제 때 카카오 연결 끊기(`KAKAO_ADMIN_KEY` 함수), 오래된 익명 계정 정리 작업, AI 동의의 서버 쪽 기록(지금은 브라우저 localStorage만), 카카오 동의항목 최소화(authorize에 `scopes` 없음 — 카카오 콘솔 A-7 "선택 동의"로 관리).
+- 매일 리마인더는 실제 푸시 서비스로 한 번도 보내 보지 않음(RFC 시험 벡터만) — `PWA_AND_REMINDERS.md` §5 G. 네이버 웨일·삼성 인터넷의 끝점 호스트 확인. ~~브라우저 전용 게스트에게도 토글이 보임~~ — 2026-09-29 해결(10-7 ①).
+- 계정 삭제 때 카카오 연결 끊기(`KAKAO_ADMIN_KEY` 함수), ~~오래된 익명 계정 정리 작업~~(2026-09-29 `0006` — 서버 저장 전 게스트만, 10-7 ③. 기록을 저장한 게스트의 장기 미접속 기준은 아직 없음), AI 동의의 서버 쪽 기록(지금은 브라우저 localStorage만), 카카오 동의항목 최소화(authorize에 `scopes` 없음 — 카카오 콘솔 A-7 "선택 동의"로 관리).
 - 실제 카카오 로그인·연결·동기화·삭제·관리자 도구를 끝에서 끝까지(SETUP F), 0004·0005를 운영 DB에(워크플로).
 **웹 [nice]**
 - 레거시 계정 API 설정(`NEXT_PUBLIC_ACCOUNT_URL`·`NEXT_PUBLIC_ONMOM_APP_KEY`·`isAccountBackendConfigured`·`APP_KEY_HEADER`) — CTO가 Render 계정 API를 버린다고 확정하면 `config.ts`·`.env.example`·`deploy.yml`·`api/http.ts`에서 지움(VIDEO/LLM 예전 경로는 유지).
 - CSP 메타 태그 — GitHub Pages는 헤더를 못 붙여 `<meta http-equiv>`만 가능. 허용 목록(script `self` dapi.kakao.com t1.daumcdn.net challenges.cloudflare.com · connect `self` *.supabase.co dapi.kakao.com · img `self` data: *.daumcdn.net · frame challenges.cloudflare.com)을 카카오 키 로컬 빌드에서 지도·Turnstile로 확인한 뒤에만(깨질 위험 큼 — 이번에 넣지 않음).
 - 기록·기분 전체 이력 화면과 기록별 고치기·지우기(지금은 최근 5개·내려받기만 — 지우기를 더하면 §10-1 여러 탭 합치기와 서버 합치기가 "합집합"이라 삭제 표시가 필요).
-- 제목 템플릿·OG 이미지, robots.txt·sitemap(프로젝트 페이지 `/onmom_web/`에서는 크롤러가 루트의 robots.txt만 읽으므로 커스텀 도메인 뒤에), CI의 브라우저 스모크(패키지 설치 필요), VoiceOver·TalkBack 실기기, 카카오 지도 `role="region"` 이름(새 문구).
+- ~~제목 템플릿·OG 이미지~~(2026-09-29, 10-7 ④ — 커스텀 도메인으로 옮길 때 `deploy.yml`·`.env.example`에 `NEXT_PUBLIC_SITE_URL` 한 줄), robots.txt·sitemap(프로젝트 페이지 `/onmom_web/`에서는 크롤러가 루트의 robots.txt만 읽으므로 커스텀 도메인 뒤에), CI의 브라우저 스모크(패키지 설치 필요), VoiceOver·TalkBack 실기기, 카카오 지도 `role="region"` 이름(새 문구).
+
+### 10-7. 후속 수정 (2026-09-29 — 통합 뒤 남은 것 5개)
+① **알림 토글은 서버 세션이 있을 때만**: Supabase 빌드에서 익명 가입이 안 된(이 브라우저 전용) 게스트는 토글 대신 안내 한 줄(`REMINDER_TEXT.needsAccount`, 10-3). 판단은 `src/auth/serverSession.ts`(순수 — 저장된 세션 없음 → none, 세션 사용자의 앱 계정 = 스토어 계정 → server, 읽는 중·읽지 못함 → checking) + `useServerSession.ts`(계정·동기화 켜짐/꺼짐이 바뀌면 다시 읽음, 네트워크 없음). 확인 중에는 토글을 잠금. `reminderModel.reminderView` 순서: 설정 → 브라우저 지원 → 서버 세션 → 권한 → 토글.
+② **여러 탭 보호의 안내**: 다른 탭의 로그아웃·계정 삭제·계정 전환 뒤 낡은 탭에서 누른 쓰기를 버리면 스토어가 `discardedWrites()`를 올리고(동기화 `replaceState`의 쓰기는 세지 않음), 앱 관문이 모든 화면 위에 둔 `features/flow/StaleTabNotice.tsx`가 조용히(`role="status"`) 한 번 알림(10-3). 이동은 그대로 관문 — 로그아웃·삭제면 `/login/`. §3 CPO 10의 "안내 문구 없음"은 이것으로 대신함(문구 확인만 남음).
+③ **서버 저장 전 게스트 계정 30일 정리**: `supabase/migrations/0006_anon_cleanup.sql` — `public.cleanup_stale_anonymous_users()`(SECURITY DEFINER, `search_path ''`, 브라우저·service_role 실행 권한 없음)가 익명 · 30일 지남 · `user_states` 없음 · 익명 말고 다른 로그인 수단(카카오 identity) 없음인 `auth.users`를 한 번에 1000명까지 지움(우리 표는 cascade). pg_cron `onmom-anon-cleanup` 매일 18:00 UTC(= 03:00 KST), 같은 이름이 있으면 지우고 다시 만듦. 숫자는 `dataItems.ts ANON_CLEANUP_DAYS`와 `anonCleanupSql.test.ts`로 묶음. 조건 SELECT는 운영 프로젝트에서 읽기 전용 `EXPLAIN`으로 확인(열·색인·권한 — postgres가 `auth.users` 삭제 가능, 기존 예약은 `onmom-send-reminders` 하나). **아직 적용 안 함** — main에 올리면 "Supabase" 워크플로가 적용.
+④ **제목 틀·공유 미리보기**: 제목 "%s · 온맘"(이름이 든 제목 — 서비스 소개·이용약관·관리자 — 는 `absolute`), `metadataBase` = `config.siteUrl`(`NEXT_PUBLIC_SITE_URL`, 기본 `https://5seoyoung.github.io/onmom_web/`, 값을 넣었는데 경로가 `BASE_PATH`와 다르면 빌드 중단), 모든 화면 `og:image`·`twitter:card summary_large_image`, 서비스 소개는 `LANDING_META` 제목·설명 그대로(새 문장 없음). 이미지 `public/og-image.png`(1200×630, 로고 2배 + 로고 배경색 — `PWA_AND_REMINDERS.md` §2-4). 코드 `features/landing/shareMeta.ts`.
+⑤ **처리방침 초안**(`webPolicyText.ts` + 검토 문서 3절·5절 체크리스트): 5절 게스트 30일 정리, 6절 ① AI 요청에 같은 대화의 최근 메시지 최대 20개(`AI_CONTEXT_MAX_MESSAGES` = 웹·서버 한도, 테스트로 묶음), 리마인더를 켤 수 있는 빌드(`activeWebPolicyOptions().reminders`)만 2·3·5절 알림 정보와 6절 ⑤ 브라우저 푸시 서비스(Google·Apple·Mozilla·Microsoft — 받는 목록 네 곳과 같게). 동의 문구(온보딩 (a)~(d)·AI 카드)는 바꾸지 않아 판 그대로.
+- 확인: `npx vitest run` 98파일 1741개 통과 + 기대 실패 5 · `tsc --noEmit` 통과 · 바꾼 파일 `eslint` 통과 · `BASE_PATH=/onmom_web npm run build` 통과 — `out/index.html`의 `og:image` = `https://5seoyoung.github.io/onmom_web/og-image.png`, 제목 "AI 상담 · 온맘"·"온맘 이용약관"·"페이지를 찾을 수 없어요 · 온맘", 아이콘·매니페스트 주소는 그대로 `/onmom_web/…`. 헤드리스 Chrome(스크립트는 저장소 밖): ① 설정 없는 빌드 10/10 — 기록장 글쓰기에서 다른 탭 로그아웃(이벤트 없이) 뒤 [등록] → `/login/`·안내 표시·글 저장 안 됨·[닫기]로 숨김·콘솔 오류 0, ② 가짜 Supabase 주소 + 시험용 VAPID 키 빌드(supabase.co 요청 전부 차단 — 운영 프로젝트에 요청 없음) 5/5 — 브라우저 전용 게스트의 설정 > 알림 = 안내 한 줄·토글 없음·[카카오 계정 연결] 있음. 확인 뒤 설정 없는 보통 빌드로 되돌림.

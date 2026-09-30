@@ -501,6 +501,36 @@ describe("페이지를 다시 열 때 — 올리기 전에 닫혀도 이 브라�
     expect(reopened.getSnapshot().state.profile.prePregnancyWeightKg).toBe(55);
   });
 
+  it("브라우저의 앱 기록만 사라지고(깨짐·일부 삭제) 합치기 기준이 남아 있어도, 서버의 출산일·분만 방식을 빈 값으로 덮지 않는다", async () => {
+    const memory = createMemoryStorage();
+    const store = setupStore(memory);
+    store.actions.signIn(ACCOUNT);
+    const remote = new FakeRemote();
+    remote.setServer(onboardedServerState({ symptomHistory: [symptom("s1", "2026-09-26T10:00:00.000Z")] }));
+    const first = start(store, remote);
+    await vi.advanceTimersByTimeAsync(0);
+    first.stop();
+
+    // 앱 상태만 지운다 — 로그인 계정과 합치기 기준(SYNC_BASE_KEY)은 남는다(실제 E2E에서 재현한 경로)
+    const stateKeys: string[] = [];
+    for (let i = 0; i < memory.length; i++) {
+      const k = memory.key(i);
+      if (k && k.startsWith(STORAGE_PREFIX) && k.includes("state")) stateKeys.push(k);
+    }
+    stateKeys.forEach((k) => memory.removeItem(k));
+    expect(memory.getItem(SYNC_BASE_KEY)).not.toBeNull();
+
+    const reopened = setupStore(memory);
+    start(reopened, remote);
+    await vi.advanceTimersByTimeAsync(3_000);
+    const s = reopened.getSnapshot().state;
+    expect(s.profile.deliveryDate).toBe("2026-08-01");
+    expect(s.profile.deliveryMethod).toBe("cesarean");
+    expect(s.symptomHistory.map((r) => r.id)).toContain("s1");
+    expect(remote.serverState().profile.deliveryDate).toBe("2026-08-01");
+    expect(remote.serverState().profile.deliveryMethod).toBe("cesarean");
+  });
+
   it("오프라인에서 고치고(쓰기 실패) 다시 열어도 고친 값이 남는다", async () => {
     const memory = createMemoryStorage();
     const store = setupStore(memory);

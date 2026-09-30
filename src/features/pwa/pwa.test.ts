@@ -309,7 +309,7 @@ describe("sw.js — 실제 실행(가짜 self)", () => {
 });
 
 describe("reminderView — 설정 화면이 보이는 상태", () => {
-  const base: ReminderEnv = { configured: true, supported: true, ios: false, standalone: false, permission: "default", subscribed: false };
+  const base: ReminderEnv = { configured: true, serverSession: "server", supported: true, ios: false, standalone: false, permission: "default", subscribed: false };
 
   it("설정 없는 빌드는 준비 중(지금과 같음)", () => {
     expect(reminderView({ ...base, configured: false })).toEqual({ kind: "comingSoon" });
@@ -328,12 +328,30 @@ describe("reminderView — 설정 화면이 보이는 상태", () => {
     expect(reminderView({ ...base, permission: "granted", subscribed: true })).toEqual({ kind: "toggle", on: true });
   });
 
+  it("서버 세션이 없는 게스트(익명 가입 실패 — 이 브라우저 전용)는 토글 대신 까닭 — 켜기를 눌러 실패 안내를 보는 일이 없다", () => {
+    expect(reminderView({ ...base, serverSession: "none" })).toEqual({ kind: "needsAccount" });
+    // 권한이 이미 허용됐거나 예전 구독이 남아 있어도 켜진 척하지 않는다
+    expect(reminderView({ ...base, serverSession: "none", permission: "granted", subscribed: true })).toEqual({ kind: "needsAccount" });
+    // 권한 거부보다 먼저(허용해도 켤 수 없으므로)
+    expect(reminderView({ ...base, serverSession: "none", permission: "denied" })).toEqual({ kind: "needsAccount" });
+    // 설정 없는 빌드·브라우저 미지원이 먼저(iOS Safari 탭은 설치 안내 — 홈 화면 앱은 저장소가 따로라 계정 사정이 달라진다)
+    expect(reminderView({ ...base, configured: false, serverSession: "none" })).toEqual({ kind: "comingSoon" });
+    expect(reminderView({ ...base, serverSession: "none", supported: false, ios: true })).toEqual({ kind: "installHint" });
+    expect(reminderView({ ...base, serverSession: "none", supported: false })).toEqual({ kind: "unsupported" });
+  });
+
+  it("서버 세션을 확인하는 동안은 토글(화면이 잠근다 — useReminder ready)", () => {
+    expect(reminderView({ ...base, serverSession: "checking" })).toEqual({ kind: "toggle", on: false });
+    expect(reminderView({ ...base, serverSession: "checking", permission: "denied" })).toEqual({ kind: "denied" });
+  });
+
   it("안내 문구는 토글이 아닌 상태에만", () => {
     expect(reminderHint({ kind: "toggle", on: true })).toBeNull();
     expect(reminderHint({ kind: "comingSoon" })).toBeNull();
     expect(reminderHint({ kind: "denied" })).toBe(REMINDER_TEXT.denied);
     expect(reminderHint({ kind: "installHint" })).toBe(REMINDER_TEXT.installHint);
     expect(reminderHint({ kind: "unsupported" })).toBe(REMINDER_TEXT.unsupported);
+    expect(reminderHint({ kind: "needsAccount" })).toBe(REMINDER_TEXT.needsAccount);
   });
 
   it("설정 없는 빌드(테스트 환경)에서 ReminderSection은 fallback을 그대로 그린다 — 훅·네트워크 없음", () => {

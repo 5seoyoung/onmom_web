@@ -3,15 +3,24 @@
 //
 // iOS 앱은 로컬 알림을 매일 20:00에 울렸다(NotificationManager.swift:20-33). 웹은 서버(Supabase pg_cron → Edge Function send-reminders)가
 // 같은 시각(KST 20:00)에 웹 푸시를 보내고, 브라우저의 서비스 워커(public/sw.js)가 같은 문구를 보인다.
-// 켤 수 있는 조건: Supabase 설정 + VAPID 공개 키(config.isReminderConfigured) + 푸시를 지원하는 브라우저 + 알림 권한.
-// 정직한 상태: 설정이 없으면 "준비 중"(지금까지와 같음), 권한이 거부됐으면 허용 방법, iOS Safari 탭이면 홈 화면 설치 안내.
+// 켤 수 있는 조건: Supabase 설정 + VAPID 공개 키(config.isReminderConfigured) + 푸시를 지원하는 브라우저 + 이 계정의 서버 세션 + 알림 권한.
+// 정직한 상태: 설정이 없으면 "준비 중"(지금까지와 같음), 권한이 거부됐으면 허용 방법, iOS Safari 탭이면 홈 화면 설치 안내,
+// 서버 세션이 없는 게스트(익명 가입 실패 — 이 브라우저 전용)면 켤 수 없는 까닭.
 // 토글의 "켜짐" = 이 브라우저에 지금 빌드의 키로 만든 구독이 있고 **그 끝점의 서버 행도 있다**(서버가 보낼 곳이 없는 켜짐은 없다).
 
 export type ReminderPermission = "default" | "granted" | "denied";
 
+/**
+ * 이 계정의 서버 세션(src/auth/serverSession.ts) — 구독은 서버 행(RLS 본인 행)으로만 저장되므로 세션이 없으면 켤 수 없다.
+ * checking = 아직 확인 중(토글을 잠근다), server = 이 계정의 Supabase 세션이 있다, none = 없다(익명 가입이 안 돼 이 브라우저 전용인 게스트 등).
+ */
+export type ReminderServerSession = "checking" | "server" | "none";
+
 export interface ReminderEnv {
   /** Supabase + VAPID 공개 키가 둘 다 있는 빌드(config.isReminderConfigured) */
   configured: boolean;
+  /** 이 계정의 서버 세션 */
+  serverSession: ReminderServerSession;
   /** serviceWorker + PushManager + Notification이 모두 있는 브라우저 */
   supported: boolean;
   /** iPhone·iPad(Safari) — 홈 화면에 추가한 뒤에만 웹 푸시가 된다(iOS 16.4+) */
@@ -31,14 +40,21 @@ export type ReminderView =
   | { kind: "installHint" }
   /** 푸시를 지원하지 않는 브라우저 */
   | { kind: "unsupported" }
+  /** 이 계정의 서버 세션이 없다(이 브라우저 전용 게스트) — 구독을 저장할 곳이 없어 토글 대신 안내 */
+  | { kind: "needsAccount" }
   /** 알림 권한이 차단됨 — 브라우저 설정에서 허용해야 한다 */
   | { kind: "denied" }
-  /** 토글 — on = 구독 중 */
+  /** 토글 — on = 구독 중. 서버 세션을 확인하는 동안(checking)에도 토글이지만 잠겨 있다(useReminder ready) */
   | { kind: "toggle"; on: boolean };
 
+/**
+ * 순서: 빌드 설정 → 브라우저 지원(iOS 설치 안내 포함 — 홈 화면 앱은 저장소가 따로라 계정 사정이 달라진다) → 서버 세션 → 권한 → 토글.
+ * 서버 세션이 없으면 켜기를 눌러도 저장에 실패해 "인터넷 연결을 확인" 안내로 끝났다 — 그 대신 켤 수 없는 까닭을 먼저 알린다.
+ */
 export function reminderView(env: ReminderEnv): ReminderView {
   if (!env.configured) return { kind: "comingSoon" };
   if (!env.supported) return env.ios && !env.standalone ? { kind: "installHint" } : { kind: "unsupported" };
+  if (env.serverSession === "none") return { kind: "needsAccount" };
   if (env.permission === "denied") return { kind: "denied" };
   return { kind: "toggle", on: env.subscribed };
 }
@@ -50,6 +66,9 @@ export const REMINDER_TEXT = {
   installHint: "iPhone·iPad에서는 Safari의 공유 버튼 → ‘홈 화면에 추가’로 설치한 뒤, 홈 화면의 온맘에서 알림을 켤 수 있어요.",
   // 웹 신규 문구 — CPO 확인 필요 (푸시를 지원하지 않는 브라우저)
   unsupported: "이 브라우저는 알림을 지원하지 않아요.",
+  // 웹 신규 문구 — CPO 확인 필요 (Supabase 빌드에서 익명 가입이 안 돼 서버 계정 없이 이 브라우저에만 기록하는 게스트 — 구독을 저장할 서버 행이 없다.
+  //   설정의 [카카오 계정 연결]로 서버 계정이 생기면 토글이 보인다)
+  needsAccount: "지금은 온맘 서버에 연결되지 않은 게스트라 알림을 켤 수 없어요. 카카오 계정을 연결하면 켤 수 있어요.",
   // 웹 신규 문구 — CPO 확인 필요 (구독·해지 실패 — 아무것도 바뀌지 않았다)
   failed: "알림 설정을 바꾸지 못했어요. 인터넷 연결을 확인하고 잠시 후 다시 시도해 주세요.",
   // 웹 신규 문구 — CPO 확인 필요 (진행 중 — 낭독용, aria-live)

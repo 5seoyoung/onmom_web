@@ -200,6 +200,10 @@ export function createSyncEngine(opts: SyncEngineOptions): SyncEngine {
 
   /** 첫 합치기의 기준 — 이 브라우저가 이 계정으로 서버와 맞춘 적이 있으면 그때의 프로필·산모수첩 */
   function savedBase(local: PersistedState) {
+    // 이 브라우저의 상태가 온보딩 전(= 저장 데이터를 잃었거나 깨져 기본값으로 읽힌 경우 포함)이면 기준을 쓰지 않는다.
+    // 기준과 비교하면 비어 있는 프로필 칸이 전부 "이 브라우저가 지운 것"으로 보여 서버의 출산일·분만 방식을 빈 값으로 덮는다.
+    // 온보딩 전에는 프로필을 편집할 수 없으므로 여기서 기준을 버려도 사용자의 변경은 잃지 않는다(첫 합치기 규칙 = 서버 우선).
+    if (!local.hasOnboarded) return null;
     return local.ownerAccountID === accountId ? marks.loadBase(accountId) : null;
   }
 

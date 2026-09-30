@@ -9,6 +9,7 @@
 // 이 훅은 브라우저에서만 마운트되는 화면(설정 — hydrated 뒤)에서 부른다.
 
 import { useCallback, useEffect, useState } from "react";
+import { useServerSession } from "@/auth/useServerSession";
 import { config, isReminderConfigured } from "@/config";
 import { useAppStore } from "@/store/useAppStore";
 import { hasPushSubscriptionRow } from "./pushSubscriptions";
@@ -69,6 +70,8 @@ export function useReminder(): ReminderControl {
   const configured = isReminderConfigured();
   const { account } = useAppStore();
   const accountId = account?.id ?? null;
+  // 구독은 이 계정의 서버 행으로만 저장된다 — 세션이 없는 게스트(익명 가입 실패)에게는 토글 대신 까닭을(reminderView needsAccount)
+  const serverSession = useServerSession();
   const [env] = useState<BrowserEnv>(detectBrowser);
   const [permission, setPermission] = useState<ReminderPermission | null>(null);
   const [subscribed, setSubscribed] = useState(false);
@@ -102,7 +105,8 @@ export function useReminder(): ReminderControl {
 
   const setEnabled = useCallback(
     async (on: boolean) => {
-      if (busy) return;
+      // 세션이 없으면 켜도 저장할 곳이 없다(토글은 보이지 않지만 확인 중에 눌린 경우 등 — 아무것도 하지 않는다)
+      if (busy || (on && serverSession !== "server")) return;
       setBusy(true);
       setError(null);
       try {
@@ -124,12 +128,21 @@ export function useReminder(): ReminderControl {
         setBusy(false);
       }
     },
-    [busy],
+    [busy, serverSession],
   );
 
   return {
-    view: reminderView({ configured, supported: env.supported && !serviceUnsupported, ios: env.ios, standalone: env.standalone, permission, subscribed }),
-    ready: !needsProbe || probed,
+    view: reminderView({
+      configured,
+      serverSession,
+      supported: env.supported && !serviceUnsupported,
+      ios: env.ios,
+      standalone: env.standalone,
+      permission,
+      subscribed,
+    }),
+    // 서버 세션을 확인하는 동안에도 잠근다(확인되면 토글, 없으면 안내로 바뀐다)
+    ready: (!needsProbe || probed) && serverSession !== "checking",
     busy,
     error,
     setEnabled,

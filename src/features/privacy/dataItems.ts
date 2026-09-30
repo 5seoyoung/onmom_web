@@ -32,6 +32,25 @@ export const AI_USAGE_RETENTION_DAYS = 2;
 /** AI 답변(Anthropic)으로 보내는 것 — CPO 결정 2026-09-28: 질문 내용 + 최소 맥락 3개 */
 export const AI_TRANSFER_ITEMS = "질문 내용, 산후 주차, 분만 방식, 수유 여부";
 
+/**
+ * AI 요청 한 번에 함께 보내는 같은 대화의 최근 메시지 수(이전 질문·AI 답 포함) — 웹 src/api/llm.ts LLM_FUNCTION_MAX_MESSAGES,
+ * 서버 supabase/functions/_shared/chat.ts CHAT_MAX_MESSAGES와 같아야 한다(webPolicy.test.ts). 방침 6절 ①에만 적는다 —
+ * AI_TRANSFER_ITEMS("질문 내용")는 동의 (d)·AI 동의 카드의 지문에 묶여 있어 바꾸면 판을 올려야 한다(검토 문서 체크리스트).
+ */
+export const AI_CONTEXT_MAX_MESSAGES = 20;
+
+/**
+ * 매일 리마인더(웹 푸시) 구독 — 알림을 켠 기기(브라우저)마다 한 행(supabase/migrations/0004_push_reminders.sql push_subscriptions).
+ * 켠 경우에만 생기고, 끄거나 계정을 삭제하면 바로 지운다. 건강 데이터는 없다(알림 문구도 고정 — docs/PWA_AND_REMINDERS.md).
+ */
+export const PUSH_ITEMS = "브라우저 푸시 구독 주소·암호화 키·시간대";
+
+/**
+ * 서버에 기록을 한 번도 저장하지 않은(동의 전에 멈춘 등) 게스트 계정을 자동으로 지우는 기준(일) —
+ * supabase/migrations/0006_anon_cleanup.sql의 `interval '30 days'`와 같아야 한다(anonCleanupSql.test.ts).
+ */
+export const ANON_CLEANUP_DAYS = 30;
+
 /** 서버 저장 위치 — Supabase 프로젝트(서울 리전) */
 export const STORAGE_REGION = "대한민국 서울";
 

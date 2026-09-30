@@ -2,7 +2,8 @@
 
 // 설정 > 알림 — iOS MoreView.swift:57-69의 토글을 웹 푸시로 옮긴 것(동작은 features/pwa/useReminder).
 // Supabase + VAPID 공개 키가 없는 빌드는 지금까지처럼 fallback("준비 중" 카드, D4)을 그대로 그린다.
-// 있는 빌드: 토글(라벨은 iOS 원문 그대로) / 권한 거부·iOS 설치 안내·미지원 브라우저는 토글 대신 한 줄로 정직하게(문구는 웹 신규 — reminderModel.ts).
+// 있는 빌드: 토글(라벨은 iOS 원문 그대로) / 권한 거부·iOS 설치 안내·미지원 브라우저·서버 세션 없는 게스트(익명 가입 실패 — 이 브라우저 전용)는
+// 토글 대신 한 줄로 정직하게(문구는 웹 신규 — reminderModel.ts).
 
 import type { ReactNode } from "react";
 import { Card, SectionTitle, Toggle } from "@/components/ui";
@@ -23,6 +24,8 @@ export function reminderHint(view: ReminderView): string | null {
       return REMINDER_TEXT.installHint;
     case "unsupported":
       return REMINDER_TEXT.unsupported;
+    case "needsAccount":
+      return REMINDER_TEXT.needsAccount;
     case "denied":
       return REMINDER_TEXT.denied;
     default:
