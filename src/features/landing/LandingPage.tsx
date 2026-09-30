@@ -53,7 +53,7 @@ import { StartLink, StartNote } from "./StartLink";
 const CONTAINER = "mx-auto w-full max-w-[72rem] px-5 md:px-8";
 /** 바닥글 링크(개인정보처리방침·이용약관·문의) — 누르는 영역 44, 밑줄 */
 const FOOTER_LINK_CLASS =
-  "inline-flex min-h-11 items-center rounded-button font-semibold text-text-primary underline underline-offset-4 hover:text-text-secondary";
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-button font-semibold text-text-primary underline underline-offset-4 hover:text-text-secondary";
 /** brand-logo.png의 바탕색 — 로고가 판 위에 떠 보이지 않고 한 장처럼 보이게 */
 const LOGO_BACKGROUND = "bg-[#fdefeb]";
 
