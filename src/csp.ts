@@ -3,17 +3,24 @@
 //
 // 메타 태그의 한계(헤더와 다른 점)
 // - frame-ancestors·report-uri·sandbox는 메타에서 무시된다 — 클릭재킹 막기는 GitHub Pages에서는 할 수 없다(커스텀 도메인 + 프록시 필요).
-// - 메타보다 앞에 나온 요소에는 적용되지 않는다. 레이아웃 <head>에 두지만 Next가 자기 CSS·스크립트 청크(<link>·<script src async>, 모두
-//   'self')를 그 앞으로 올린다 — 그 청크들은 어차피 허용 대상이고, 인라인 RSC 스크립트·화면이 불러오는 제3자 자원은 모두 메타 뒤라 적용된다.
+// - 메타보다 앞에 나온 요소에는 적용되지 않는다. React는 메타를 Next의 CSS·스크립트 청크 뒤에 두지만, 빌드 뒤 단계
+//   (scripts/csp-hash.mjs)가 메타를 <meta charset> 바로 뒤로 옮겨 문서 전체에 적용된다.
 // - 카카오 지도 SDK(kakao.js)는 옛 IE 확인용 try { eval("document.namespaces") } catch {}를 한 번 부른다 — CSP가 막아
 //   securitypolicyviolation(eval) 이벤트가 하나 생기지만 지도·검색은 그대로 동작한다(localhost:3000 실제 키로 확인). 'unsafe-eval'을 열 까닭이 아니다.
 //
-// script-src 'unsafe-inline'인 까닭: Next 정적 내보내기(output: "export")는 페이지마다 RSC 페이로드를 인라인 <script>
-// (self.__next_f.push(…))로 넣는다. 내용이 페이지·빌드마다 달라 해시를 쓰려면 빌드 뒤 모든 HTML을 다시 써야 하고, nonce는 요청마다
-// 새로 만드는 서버가 없어 쓸 수 없다. 대신 script-src를 'self'와 필요한 제3자 출처로 묶어 외부 스크립트 주입을 막고, 사용자가 쓴 글은
-// React가 늘 글자로만 그린다(dangerouslySetInnerHTML 없음 — docs/SECURITY.md).
+// 인라인 스크립트는 해시로만 허용한다('unsafe-inline' 없음). Next 정적 내보내기(output: "export")는 페이지마다 RSC 페이로드를 인라인
+// <script>(self.__next_f.push(…))로 넣고, 내용이 페이지·빌드마다 다르다. nonce는 요청마다 만드는 서버가 없어 쓸 수 없으므로
+// - 여기서는 script-src에 자리표시자 SCRIPT_HASHES_PLACEHOLDER를 넣고,
+// - `next build`가 out/을 다 쓴 뒤 scripts/csp-hash.mjs(next.config.ts의 adapterPath, 로직 src/cspHash.mts)가 페이지마다 실행되는
+//   인라인 스크립트의 sha256을 계산해 그 자리를 바꾼다. npm run build·npm run e2e·직접 `npx next build` 모두 같다.
+// 자리표시자는 브라우저가 모르는 값이라 무시된다 — 그 단계가 빠진 HTML은 인라인 스크립트가 모두 막혀 화면이 멈춘다(약한 정책으로
+// 조용히 나가지 않게 일부러 그렇게 둔다). npm run build는 마지막에 `node scripts/csp-hash.mjs --check`로 한 번 더 확인한다.
+// 메타는 브라우저에서 다시 그리지 않는다(src/components/CspMeta.tsx — 까닭은 그 파일).
+// 런타임에 인라인 스크립트를 새로 만드는 코드(<script>에 글자를 넣기, next/script의 인라인·beforeInteractive, on… 속성 문자열,
+// javascript: 주소)는 해시가 없어 막힌다 — 스크립트는 src로만 불러온다(카카오·Turnstile 로더처럼).
 // 'unsafe-eval'은 넣지 않는다(운영 빌드·카카오 지도 SDK·Turnstile 모두 필요 없음 — 브라우저에서 확인). 개발 서버(next dev)는
 // eval·HMR 웹소켓이 필요해 운영 빌드에서만 싣는다(cspMetaContent).
+// 사용자가 쓴 글은 React가 늘 글자로만 그린다(dangerouslySetInnerHTML 없음 — docs/SECURITY.md).
 
 export interface CspInput {
   /** https://<ref>.supabase.co — Auth·REST·Edge Functions(https)와 Realtime(wss) */
@@ -34,6 +41,12 @@ export const KAKAO_SCRIPT_ORIGINS = ["dapi.kakao.com", "t1.daumcdn.net"] as cons
 export const KAKAO_CONNECT_ORIGINS = ["dapi.kakao.com"] as const;
 export const KAKAO_IMG_ORIGINS = ["*.daumcdn.net"] as const;
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
+/**
+ * script-src의 인라인 스크립트 해시 자리 — 빌드 뒤 scripts/csp-hash.mjs가 그 페이지의 'sha256-…' 목록으로 바꾼다.
+ * src/cspHash.mts에 같은 값이 있다(테스트가 같은지 확인). CSP 키워드가 아니라 브라우저는 무시한다.
+ */
+export const SCRIPT_HASHES_PLACEHOLDER = "'onmom-script-hashes'";
 
 /** https 주소의 origin만(경로·쿼리 없이). 아니면 null — 잘못된 값이 정책을 깨뜨리거나 넓히지 않게. */
 export function httpsOrigin(raw: string | null | undefined): string | null {
@@ -61,7 +74,11 @@ export function cspDirectives(input: CspInput): [string, string[]][] {
 
   const d: [string, string[]][] = [
     ["default-src", ["'self'"]],
-    ["script-src", uniq(["'self'", "'unsafe-inline'", ...(kakao ? KAKAO_SCRIPT_ORIGINS : []), turnstile ? TURNSTILE_ORIGIN : null])],
+    [
+      "script-src",
+      uniq(["'self'", SCRIPT_HASHES_PLACEHOLDER, ...(kakao ? KAKAO_SCRIPT_ORIGINS : []), turnstile ? TURNSTILE_ORIGIN : null]),
+    ],
+    // 스타일은 인라인 허용 그대로 — Next·React의 style 속성과 카카오 지도 SDK가 인라인 스타일을 쓴다
     ["style-src", ["'self'", "'unsafe-inline'"]],
     ["img-src", uniq(["'self'", "data:", "blob:", ...(kakao ? KAKAO_IMG_ORIGINS : [])])],
     ["font-src", ["'self'"]],

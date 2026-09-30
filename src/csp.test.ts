@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCsp, cspDirectives, cspMetaContent, httpsOrigin, type CspInput } from "./csp";
+import { buildCsp, cspDirectives, cspMetaContent, httpsOrigin, SCRIPT_HASHES_PLACEHOLDER, type CspInput } from "./csp";
 
 const NONE: CspInput = { supabaseUrl: null, kakaoJsKey: null, turnstileSiteKey: null, legacyBackends: [] };
 const ALL: CspInput = {
@@ -20,7 +20,7 @@ describe("CSP — 설정된 기능의 출처만 넣는다", () => {
     expect(directive(NONE, "img-src")).toEqual(["'self'", "data:", "blob:"]);
   });
 
-  it("기본 지시어 — 스크립트는 self + 인라인(Next RSC 페이로드), eval 없음, 플러그인·base·form 막음", () => {
+  it("기본 지시어 — 스크립트는 self + 인라인 해시 자리(빌드 뒤 채움), 'unsafe-inline'·eval 없음, 플러그인·base·form 막음", () => {
     const csp = buildCsp(ALL);
     expect(csp.startsWith("default-src 'self'; ")).toBe(true);
     expect(csp).not.toContain("unsafe-eval");
@@ -31,7 +31,9 @@ describe("CSP — 설정된 기능의 출처만 넣는다", () => {
     expect(directive(ALL, "manifest-src")).toEqual(["'self'"]);
     expect(directive(ALL, "font-src")).toEqual(["'self'"]);
     expect(directive(ALL, "style-src")).toEqual(["'self'", "'unsafe-inline'"]);
-    expect(directive(ALL, "script-src")?.slice(0, 2)).toEqual(["'self'", "'unsafe-inline'"]);
+    // 인라인 스크립트는 해시로만 — 자리표시자는 scripts/csp-hash.mjs가 페이지마다 'sha256-…'로 바꾼다(src/cspHash.test.ts)
+    expect(directive(ALL, "script-src")?.slice(0, 2)).toEqual(["'self'", SCRIPT_HASHES_PLACEHOLDER]);
+    expect(directive(ALL, "script-src")).not.toContain("'unsafe-inline'");
     // 메타에서 무시되는 지시어는 넣지 않는다(콘솔 경고만 남는다)
     expect(csp).not.toMatch(/frame-ancestors|report-uri|sandbox/);
   });
@@ -42,13 +44,13 @@ describe("CSP — 설정된 기능의 출처만 넣는다", () => {
       "https://proj.supabase.test",
       "wss://proj.supabase.test",
     ]);
-    expect(directive(NONE, "script-src")).toEqual(["'self'", "'unsafe-inline'"]); // Supabase는 스크립트를 불러오지 않는다
+    expect(directive(NONE, "script-src")).toEqual(["'self'", SCRIPT_HASHES_PLACEHOLDER]); // Supabase는 스크립트를 불러오지 않는다
   });
 
   it("카카오 지도 — 키가 있을 때만 SDK·장소 검색·타일 출처", () => {
     const k = { ...NONE, kakaoJsKey: "k" };
     // scheme 없는 호스트 — 운영(https 페이지)에서는 https만 허용된다
-    expect(directive(k, "script-src")).toEqual(["'self'", "'unsafe-inline'", "dapi.kakao.com", "t1.daumcdn.net"]);
+    expect(directive(k, "script-src")).toEqual(["'self'", SCRIPT_HASHES_PLACEHOLDER, "dapi.kakao.com", "t1.daumcdn.net"]);
     expect(directive(k, "connect-src")).toEqual(["'self'", "dapi.kakao.com"]);
     expect(directive(k, "img-src")).toEqual(["'self'", "data:", "blob:", "*.daumcdn.net"]);
     expect(buildCsp({ ...NONE, kakaoJsKey: "  " })).not.toContain("kakao");

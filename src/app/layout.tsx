@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { config, robotsFor } from "@/config";
-import { cspMetaContent } from "@/csp";
+import { CspMeta } from "@/components/CspMeta";
 import { StoreProvider } from "@/store/StoreProvider";
 import { AppGate } from "@/features/flow/AppGate";
 import { BASE_OPEN_GRAPH, BASE_TWITTER, TITLE_TEMPLATE } from "@/features/landing/shareMeta";
@@ -40,19 +40,15 @@ export const viewport: Viewport = {
   themeColor: "#F9FAFB",
 };
 
-// 보안 정책(CSP) — GitHub Pages는 헤더를 못 붙여 메타로 싣는다. 설정된 기능의 출처만 들어간다(src/csp.ts, docs/SECURITY.md).
-// 운영 빌드에서만(개발 서버는 eval·HMR이 필요). 메타는 그보다 앞에 나온 요소에는 적용되지 않는다 — Next가 앞으로 올리는 자기 청크(self)만 해당.
-const CSP = cspMetaContent({
-  supabaseUrl: config.supabaseUrl,
-  kakaoJsKey: config.kakaoJsKey,
-  turnstileSiteKey: config.turnstileSiteKey,
-  legacyBackends: [config.videoURL, config.llmURL, config.accountURL],
-});
-
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <head>{CSP !== null && <meta httpEquiv="Content-Security-Policy" content={CSP} />}</head>
+      <head>
+        {/* 보안 정책(CSP) — GitHub Pages는 헤더를 못 붙여 메타로 싣는다. 설정된 기능의 출처만 들어간다(src/csp.ts, docs/SECURITY.md).
+            운영 빌드에서만(개발 서버는 eval·HMR이 필요). 인라인 스크립트는 해시로만 허용 — next build 뒤 scripts/csp-hash.mjs가 페이지마다
+            해시를 넣고 메타를 <meta charset> 바로 뒤로 옮긴다. 메타는 정적 HTML에만 있고 브라우저에서는 다시 그리지 않는다(까닭은 CspMeta). */}
+        <CspMeta />
+      </head>
       <body className="min-h-full">
         {/* 앱 상태(브라우저 저장소)는 여기서 한 번 연결한다. 레이아웃은 서버 컴포넌트로 두고 Provider만 클라이언트 경계다.
             저장소는 마운트 후 첫 구독 때 읽으므로 정적 HTML에는 사용자 데이터가 들어가지 않는다. */}

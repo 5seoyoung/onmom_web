@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/csp-hash.mjs --check",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "BASE_PATH=/onmom_web NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= next build && BASE_PATH=/onmom_web playwright test",
+    "e2e": "BASE_PATH=/onmom_web NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build && BASE_PATH=/onmom_web playwright test",
     "e2e:run": "playwright test"
   },
   "dependencies": {
