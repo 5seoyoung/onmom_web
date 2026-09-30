@@ -606,3 +606,16 @@
 ④ **제목 틀·공유 미리보기**: 제목 "%s · 온맘"(이름이 든 제목 — 서비스 소개·이용약관·관리자 — 는 `absolute`), `metadataBase` = `config.siteUrl`(`NEXT_PUBLIC_SITE_URL`, 기본 `https://5seoyoung.github.io/onmom_web/`, 값을 넣었는데 경로가 `BASE_PATH`와 다르면 빌드 중단), 모든 화면 `og:image`·`twitter:card summary_large_image`, 서비스 소개는 `LANDING_META` 제목·설명 그대로(새 문장 없음). 이미지 `public/og-image.png`(1200×630, 로고 2배 + 로고 배경색 — `PWA_AND_REMINDERS.md` §2-4). 코드 `features/landing/shareMeta.ts`.
 ⑤ **처리방침 초안**(`webPolicyText.ts` + 검토 문서 3절·5절 체크리스트): 5절 게스트 30일 정리, 6절 ① AI 요청에 같은 대화의 최근 메시지 최대 20개(`AI_CONTEXT_MAX_MESSAGES` = 웹·서버 한도, 테스트로 묶음), 리마인더를 켤 수 있는 빌드(`activeWebPolicyOptions().reminders`)만 2·3·5절 알림 정보와 6절 ⑤ 브라우저 푸시 서비스(Google·Apple·Mozilla·Microsoft — 받는 목록 네 곳과 같게). 동의 문구(온보딩 (a)~(d)·AI 카드)는 바꾸지 않아 판 그대로.
 - 확인: `npx vitest run` 98파일 1741개 통과 + 기대 실패 5 · `tsc --noEmit` 통과 · 바꾼 파일 `eslint` 통과 · `BASE_PATH=/onmom_web npm run build` 통과 — `out/index.html`의 `og:image` = `https://5seoyoung.github.io/onmom_web/og-image.png`, 제목 "AI 상담 · 온맘"·"온맘 이용약관"·"페이지를 찾을 수 없어요 · 온맘", 아이콘·매니페스트 주소는 그대로 `/onmom_web/…`. 헤드리스 Chrome(스크립트는 저장소 밖): ① 설정 없는 빌드 10/10 — 기록장 글쓰기에서 다른 탭 로그아웃(이벤트 없이) 뒤 [등록] → `/login/`·안내 표시·글 저장 안 됨·[닫기]로 숨김·콘솔 오류 0, ② 가짜 Supabase 주소 + 시험용 VAPID 키 빌드(supabase.co 요청 전부 차단 — 운영 프로젝트에 요청 없음) 5/5 — 브라우저 전용 게스트의 설정 > 알림 = 안내 한 줄·토글 없음·[카카오 계정 연결] 있음. 확인 뒤 설정 없는 보통 빌드로 되돌림.
+
+## 11. 브라우저 자동 시험 (2026-09-30)
+
+배포 전에 진짜 브라우저로 게스트 흐름을 한 번 돌린다 — Playwright(`@playwright/test` 1.63.0, 번들 Chromium).
+
+- **파일**: `playwright.config.ts`(폰 402×874·PC 1440×900 두 프로젝트, CI에서 재시도 1번·첫 재시도에 trace, 보고서 `playwright-report/` — 저장소에 올리지 않음), `e2e/serve.mjs`(의존성 없는 정적 서버 — `out/`을 `BASE_PATH` 아래 `http://localhost:4173{BASE_PATH}/`로, GitHub Pages처럼 디렉터리 → `index.html`, 끝 슬래시 없으면 301, 없는 주소 → 상태 404 + `404.html`), `e2e/guest-flow.spec.ts`.
+- **시험 내용**(두 크기 모두): ① 서비스 소개 → [시작하기] → `/login/` ② `/terms/` ③ 게스트 흐름 — [게스트로 시작] → 온보딩 4단계(출산일 40일 전·자연분만·전업·동의 토글, 동의 전에는 출산일이 저장소에 없음) → 홈 "40일차" → 기록 어지러움 → [확인하기] → "즉시 내원" → 홈 "확인 필요"·"운동 안내를 멈췄어요" → 운동 "운동 영상 추천을 멈췄어요" → 없는 주소 = 상태 404 + "페이지를 찾을 수 없어요" → 설정 > 계정 삭제 → 확인 창 첫 버튼(삭제) → `/login/`, `onmom.web.*` 키 0개.
+- **모든 시험의 공통 검사**: 콘솔 오류·페이지 예외 0개(허용 = 일부러 연 없는 주소 문서의 404 한 줄뿐), 이 사이트 밖으로 나가는 요청 0개(막고 기록 — 운영 서버·영상 서버·카카오에 요청하지 않는다). 서비스 워커는 막는다(옛 캐시로 시험하지 않게).
+- **Supabase 값이 든 빌드**: ③은 건너뛴다(로그인 화면의 카카오 버튼이 "준비 중"으로 잠겨 있지 않으면 — 게스트 시작이 운영 Supabase에 익명 계정을 만들기 때문). ①②와 공통 검사는 그대로 돈다. 가짜 Supabase 주소 빌드로 "4개 통과·2개 건너뜀" 확인.
+- **로컬**: `npx playwright install chromium`(한 번) → `npm run e2e` = `BASE_PATH=/onmom_web`·Supabase 값을 비워 빌드 + 시험(약 15초). 이미 빌드한 `out/`만 시험하려면 `BASE_PATH=<빌드 때 값> npm run e2e:run`. 4173 포트에 서버가 떠 있으면 로컬은 그것을 다시 쓴다.
+- **CI**(`.github/workflows/deploy.yml`): 단위 시험 → 빌드(configure-pages `base_path`) → `npx playwright install --with-deps --only-shell chromium` → `npm run e2e:run`(같은 `out/`, 같은 `BASE_PATH` — 커스텀 도메인 `""`도 확인함) → 실패하면 `playwright-report/`·`test-results/`를 아티팩트 `playwright-report`로 올리고 Pages 업로드·배포는 돌지 않는다.
+- **확인한 것**: 통과 6/6(폰·PC), 5번 반복 30/30, `BASE_PATH=""` 빌드 6/6, 일부러 틀린 기대값(41일차) → 실패·재시도·trace 생성, 일부러 넣은 `console.error`·외부 요청 → 실패.
+- 새 화면 문구를 바꾸면 이 시험의 글자(역할·이름)도 같이 고친다. Vitest는 `src/**`만 보고 `e2e/`는 제외.

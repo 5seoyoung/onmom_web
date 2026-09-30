@@ -51,3 +51,8 @@ next-env.d.ts
 
 # Supabase CLI 캐시
 /supabase/.temp/
+
+# Playwright(브라우저 자동 시험) 결과 — docs/DEV_NOTES.md §11
+/playwright-report/
+/test-results/
+/playwright/.cache/
