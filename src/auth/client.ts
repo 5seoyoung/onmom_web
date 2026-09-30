@@ -69,6 +69,27 @@ export function hasStoredAuthSession(): boolean {
   }
 }
 
+/**
+ * 이 브라우저에 저장된 Supabase 세션을 네트워크 없이 지운다(세션·사용자·PKCE code_verifier 키).
+ * 서버에서 방금 지운 사용자의 세션을 끝낼 때 쓴다 — 그대로 signOut을 부르면 auth-js가 지워진 사용자의 토큰으로
+ * POST /auth/v1/logout을 보내 403(user_not_found)이 나고, 브라우저 콘솔에 "Failed to load resource: 403"이 남는다.
+ * 저장소가 auth-js의 기준이라, 먼저 지우고 signOut({ scope: "local" })을 부르면 서버 요청 없이 SIGNED_OUT만 알린다.
+ */
+export function forgetStoredAuthSession(): void {
+  try {
+    if (typeof window === "undefined") return;
+    const ls = window.localStorage;
+    const keys: string[] = [];
+    for (let i = 0; i < ls.length; i++) {
+      const k = ls.key(i);
+      if (k !== null && (k === AUTH_STORAGE_KEY || k.startsWith(`${AUTH_STORAGE_KEY}-`))) keys.push(k);
+    }
+    for (const k of keys) ls.removeItem(k);
+  } catch {
+    // 저장소 차단(SecurityError) — 지울 세션도 없다
+  }
+}
+
 /** 카카오 → Supabase → 이 주소로 돌아온다(basePath 포함, 끝 슬래시). Supabase의 Redirect URLs에 같은 값을 등록한다. */
 export function authCallbackUrl(origin: string, basePath: string = config.basePath): string {
   return `${origin.replace(/\/+$/, "")}${basePath}${ROUTES.authCallback}`;

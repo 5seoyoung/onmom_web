@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isSecretSupabaseKey } from "@/config";
-import { AUTH_STORAGE_KEY, SUPABASE_CLIENT_OPTIONS, authCallbackUrl, createSupabaseClientIfConfigured } from "./client";
+import { AUTH_STORAGE_KEY, SUPABASE_CLIENT_OPTIONS, authCallbackUrl, createSupabaseClientIfConfigured, forgetStoredAuthSession } from "./client";
 import { STORAGE_PREFIX } from "@/store/persistence";
 
 // 테스트용 모양만 맞춘 JWT(서명 없음) — 실제 키가 아니다
@@ -97,5 +97,43 @@ describe("저장 키·콜백 주소", () => {
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "sb_publishable_legacy");
     const { config } = await import("@/config");
     expect(config.supabaseAnonKey).toBe("sb_publishable_legacy");
+  });
+});
+
+describe("forgetStoredAuthSession — 지운 사용자의 세션을 네트워크 없이 지운다", () => {
+  function memoryLocalStorage(init: Record<string, string>) {
+    const m = new Map(Object.entries(init));
+    return {
+      get length() {
+        return m.size;
+      },
+      key: (i: number) => [...m.keys()][i] ?? null,
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+      keys: () => [...m.keys()],
+    };
+  }
+
+  it("세션·사용자·code_verifier 키만 지우고 앱 기록은 남긴다", () => {
+    const ls = memoryLocalStorage({
+      [AUTH_STORAGE_KEY]: "{}",
+      [`${AUTH_STORAGE_KEY}-user`]: "{}",
+      [`${AUTH_STORAGE_KEY}-code-verifier`]: "x",
+      "onmom.web.state.v1": "{}",
+      "onmom.web.authx": "keep", // 접두만 같은 다른 키
+    });
+    vi.stubGlobal("window", { localStorage: ls });
+    forgetStoredAuthSession();
+    expect(ls.keys()).toEqual(["onmom.web.state.v1", "onmom.web.authx"]);
+  });
+
+  it("저장소가 막혀 있어도 던지지 않는다", () => {
+    vi.stubGlobal("window", {
+      get localStorage() {
+        throw new Error("SecurityError");
+      },
+    });
+    expect(() => forgetStoredAuthSession()).not.toThrow();
   });
 });

@@ -217,6 +217,8 @@ function setup(
     clientUnavailable?: number;
     captcha?: CaptchaResult;
     beforeSignOut?: () => Promise<unknown>;
+    /** 저장된 세션 지우기(forgetStoredSession)를 호출 기록에 "forget"으로 남긴다 — 없으면 의존성을 넘기지 않는다 */
+    trackForget?: boolean;
   } = {},
 ): Ctx {
   const remotes = opts.remotes ?? new Map<string, FakeRemote>();
@@ -260,6 +262,7 @@ function setup(
     firstFetchTimeoutMs: 5_000,
     flushTimeoutMs: 5_000,
     beforeSignOut: opts.beforeSignOut,
+    forgetStoredSession: opts.trackForget ? () => void fc.calls.push("forget") : undefined,
   });
   const goOnline = () => {
     for (const l of [...online]) l();
@@ -1230,6 +1233,25 @@ describe("계정 삭제", () => {
     expect(fc.calls.slice(-2)).toEqual([`rpc:delete_my_account:${anonId}`, "signOut:local"]);
     expect(store.getSnapshot().account).toBeNull();
     expect(keys(storage)).toEqual([]);
+  });
+
+  it("지운 사용자의 세션은 저장소에서 먼저 지우고 signOut — 지워진 토큰으로 /logout(403)을 보내지 않게", async () => {
+    const { manager, fc } = setup({ trackForget: true });
+    const store = setupStore();
+    await manager.signInGuest(store);
+    const anonId = fc.currentUserId()!;
+    onboardWithConsent(store);
+    expect(await manager.deleteAccount(store)).toEqual({ ok: true });
+    expect(fc.calls.slice(-3)).toEqual([`rpc:delete_my_account:${anonId}`, "forget", "signOut:local"]);
+  });
+
+  it("서버 삭제가 실패하면 저장된 세션을 지우지 않는다", async () => {
+    const { manager, fc } = setup({ client: fakeClient({ rpcFails: true }), trackForget: true });
+    const store = setupStore();
+    await manager.signInGuest(store);
+    onboardWithConsent(store);
+    expect(await manager.deleteAccount(store)).toEqual({ ok: false, reason: "failed" });
+    expect(fc.calls).not.toContain("forget");
   });
 
   it("익명 게스트 — 서버 삭제가 실패하면 아무것도 지우지 않는다", async () => {

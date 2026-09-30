@@ -45,7 +45,7 @@ import { createStorageSyncMarks, type SyncMarks } from "@/store/sync/marks";
 import type { RemoteStateStore } from "@/store/sync/remote";
 import { createAuthFlowStore, type AuthFlowStore, type PendingAuthFlow } from "./authFlow";
 import { parseCallbackUrl, stripCallbackParams } from "./callbackUrl";
-import { authCallbackUrl, getSupabaseClient, hasStoredAuthSession } from "./client";
+import { authCallbackUrl, forgetStoredAuthSession, getSupabaseClient, hasStoredAuthSession } from "./client";
 import { accountFromSessionUser, accountFromUser, guestAccountFromUser, guestUserId, isAnonymousUser } from "./kakaoAccount";
 import { createSupabaseRemote } from "./remote";
 import { browserCaptcha, type CaptchaResult } from "./turnstile";
@@ -128,6 +128,11 @@ export interface AuthSessionDeps {
   isConfigured: () => boolean;
   getClient: () => Promise<SupabaseClient | null>;
   hasStoredSession: () => boolean;
+  /**
+   * 이 브라우저에 저장된 세션을 네트워크 없이 지운다(client.forgetStoredAuthSession) — 서버에서 사용자를 지운 뒤
+   * signOut 전에 부른다(지워진 사용자의 토큰으로 /logout을 보내 403이 나지 않게). 없으면 아무것도 하지 않는다.
+   */
+  forgetStoredSession?: () => void;
   createRemote: (client: SupabaseClient, userId: string) => RemoteStateStore;
   /** 합치기 기준·가져온 기록 표시(store/sync/marks.ts) */
   marks: SyncMarks;
@@ -243,6 +248,19 @@ async function signOutLocal(client: SupabaseClient): Promise<void> {
   } catch {
     // signOut은 실패해도 이 브라우저의 세션은 지운다(auth-js) — 더 할 일이 없다
   }
+}
+
+/**
+ * 서버에서 방금 지운 사용자의 세션을 이 브라우저에서 끝낸다 — 저장된 세션을 먼저 지우고(forget) signOut을 부르면 auth-js는
+ * 보낼 토큰이 없어 /auth/v1/logout을 부르지 않고(부르면 403 user_not_found) 세션 정리·SIGNED_OUT 알림만 한다.
+ */
+async function signOutDeletedUser(client: SupabaseClient, forget: (() => void) | undefined): Promise<void> {
+  try {
+    forget?.();
+  } catch {
+    // 지우지 못해도 signOut이 세션을 지운다(요청이 403으로 끝날 뿐)
+  }
+  await signOutLocal(client);
 }
 
 /** 서버 함수 delete_my_account — 지금 세션의 사용자(행 + 로그인 계정)를 지운다. 성공하면 true. */
@@ -571,7 +589,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
         deps.flow.clear();
         // 전환 중 익명 사용자는 이미 지웠다 — 남은 (지워진 사용자의) 세션을 이 브라우저에서 끝낸다. 게스트 기록은 이 브라우저에
         // 그대로 있고, 다음에 페이지를 열 때 새 익명 계정으로 옮긴다(restore → upgradeGuest).
-        if (switchedFrom !== null) await signOutLocal(client);
+        if (switchedFrom !== null) await signOutDeletedUser(client, deps.forgetStoredSession);
         return { kind: "error", reason: "failed" };
       }
 
@@ -870,7 +888,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
               if (store.getSnapshot().account?.id === acct.id) startSync(store, client, session.user.id, acct.id);
               return { ok: false, reason: "failed" };
             }
-            await signOutLocal(client);
+            await signOutDeletedUser(client, deps.forgetStoredSession);
           }
           store.actions.deleteAccount();
           return { ok: true };
@@ -885,7 +903,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
           if (store.getSnapshot().account?.id === acct.id) startSync(store, client, session.user.id, acct.id);
           return { ok: false, reason: "failed" };
         }
-        await signOutLocal(client);
+        await signOutDeletedUser(client, deps.forgetStoredSession);
         store.actions.deleteAccount();
         return { ok: true };
       } finally {
@@ -948,6 +966,7 @@ export const authSession: AuthSessionManager = createAuthSessionManager({
   isConfigured: isSupabaseConfigured,
   getClient: getSupabaseClient,
   hasStoredSession: hasStoredAuthSession,
+  forgetStoredSession: forgetStoredAuthSession,
   createRemote: createSupabaseRemote,
   marks: createStorageSyncMarks(browserLocalStorage),
   flow: createAuthFlowStore(browserLocalStorage),
