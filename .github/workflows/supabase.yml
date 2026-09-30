@@ -219,6 +219,12 @@ jobs:
               echo "::notice title=건너뜀::${name} 값이 비어 있어 넣지 않습니다(서버에 이미 있으면 그대로 둡니다)."
               continue
             fi
+            # 공개 키는 비밀 키와 짝일 때만 의미가 있다 — 비밀 키를 서버에 직접 넣고(GitHub Secrets에는 없음) 공개 키만 여기서 덮으면
+            # 예전 Variable 값으로 짝이 어긋나 발송이 멈춘다(2026-09-30 실제로 겪음). 비밀 키도 함께 넣을 때만 공개 키를 넣는다.
+            if [ "${name}" = "VAPID_PUBLIC_KEY" ] && [ -z "${VAPID_PRIVATE_KEY//[[:space:]]/}" ]; then
+              echo "::notice title=건너뜀::VAPID_PUBLIC_KEY — VAPID_PRIVATE_KEY Secret이 없어 서버의 짝을 그대로 둡니다."
+              continue
+            fi
             case "${value}" in
               *[\"\'\#\$\\\`]*)
                 echo "::error title=${name} 형식::따옴표·#·\$·\\·\` 가 들어 있습니다. 값을 다시 복사해 넣으세요."
