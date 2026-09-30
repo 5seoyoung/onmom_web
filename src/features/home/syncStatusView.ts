@@ -28,7 +28,7 @@ export interface SyncStatusLine {
   refresh: boolean;
 }
 
-/** 설정 계정 카드의 상태 줄 — 보일 것이 없으면 null(설정 없는 빌드·첫 읽기 중). */
+/** 설정 계정 카드의 상태 줄(settings/SettingsScreen.tsx SyncLine) — 보일 것이 없으면 null(설정 없는 빌드·첫 읽기 중). */
 export function syncStatusLine(status: AccountSyncStatus): SyncStatusLine | null {
   switch (status) {
     case "synced":

@@ -181,6 +181,8 @@ export interface AuthSessionManager {
   deleteAccount(store: AppStore): Promise<DeleteAccountResult>;
   syncStatus(): AccountSyncStatus;
   subscribeSyncStatus(listener: () => void): () => void;
+  /** 설정 화면의 [다시 시도] — 재시도 대기를 건너뛰고 지금 다시 올린다. 동기화 중인 계정이 없으면 아무것도 하지 않는다. */
+  retrySync(): void;
   stopSync(): void;
 }
 
@@ -920,6 +922,10 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
     subscribeSyncStatus(listener) {
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
+    },
+
+    retrySync() {
+      active?.engine.retryNow();
     },
 
     stopSync,

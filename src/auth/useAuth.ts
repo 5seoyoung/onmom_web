@@ -69,6 +69,8 @@ export interface AccountSessionActions {
   signOut(opts?: { force?: boolean }): Promise<SignOutResult>;
   /** 계정 삭제 — 서버 계정(카카오·익명 게스트)은 서버 행·계정을 먼저 지우고, 성공했을 때만 이 브라우저를 비운다. */
   deleteAccount(): Promise<DeleteAccountResult>;
+  /** 서버 저장이 실패 중일 때 [다시 시도] — 엔진의 재시도 대기를 건너뛴다(설정 계정 카드의 상태 줄). */
+  retrySync(): void;
 }
 
 export function useAccountSession(): AccountSessionActions {
@@ -79,6 +81,7 @@ export function useAccountSession(): AccountSessionActions {
       signInWithKakao: () => authSession.signInWithKakao(store),
       signOut: (opts) => authSession.signOut(store, opts),
       deleteAccount: () => authSession.deleteAccount(store),
+      retrySync: () => authSession.retrySync(),
     }),
     [store],
   );

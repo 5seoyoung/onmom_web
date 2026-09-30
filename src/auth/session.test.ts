@@ -851,6 +851,21 @@ describe("카카오 로그인(로그인 화면)", () => {
     expect(await manager.completeCallback(store, `${CALLBACK}?code=abc`)).toEqual({ kind: "signedIn", sync: "error", linked: false });
     expect(await manager.retryFirstFetch(store)).toBe("ok");
   });
+
+  it("설정의 [다시 시도](retrySync)는 재시도 대기 없이 지금 다시 읽는다 — 동기화 중인 계정이 없으면 아무 일도 하지 않는다", async () => {
+    expect(() => setup().manager.retrySync()).not.toThrow();
+    const remotes = new Map([[KAKAO_USER_ID, new FakeRemote()]]);
+    remotes.get(KAKAO_USER_ID)!.failFetch = 1;
+    const { manager } = setup({ remotes, client: fakeClient({ codes: { abc: kakaoSession() } }) });
+    const store = setupStore();
+    await manager.completeCallback(store, `${CALLBACK}?code=abc`);
+    // 첫 재시도는 3초 뒤(SYNC_RETRY_DELAYS_MS) — 그 전에는 실패 그대로
+    await vi.advanceTimersByTimeAsync(100);
+    expect(manager.syncStatus()).toBe("error");
+    manager.retrySync();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(manager.syncStatus()).not.toBe("error");
+  });
 });
 
 describe("이 브라우저에 남아 있던 기록을 가져온 카카오 로그인 — 다시 동의 전에는 올리지 않는다(감사 #15, 공용 PC)", () => {

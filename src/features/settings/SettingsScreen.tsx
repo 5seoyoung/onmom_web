@@ -21,9 +21,10 @@ import { ChevronRight, Mail, Pencil } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, SubPageHeader, cx } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
-import { useAccountSession } from "@/auth";
+import { useAccountSession, useSyncStatus } from "@/auth";
 import { useAppStore } from "@/store/useAppStore";
 import { useNow } from "@/components/clock";
+import { SYNC_STATUS_TEXT, syncStatusLine, type SyncStatusLine } from "@/features/home/syncStatusView";
 import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contact";
 import { hasTermsText, TERMS_TEXT } from "@/features/terms/termsText";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -58,6 +59,8 @@ type Busy = "signOut" | "delete" | "link" | null;
 export function SettingsScreen() {
   const { hydrated, isSignedIn, state, account, displayName, actions } = useAppStore();
   const session = useAccountSession();
+  // 서버 저장 상태 줄 — 설정 없는 빌드("off")·첫 읽기 중("loading")은 null이라 그리지 않는다(syncStatusView.ts)
+  const syncLine = syncStatusLine(useSyncStatus());
   const nowMs = useNow();
   const [confirming, setConfirming] = useState<PendingConfirm>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -124,6 +127,8 @@ export function SettingsScreen() {
           <AccountCard
             displayName={displayName}
             actions={cardActions}
+            syncLine={syncLine}
+            onRetrySync={session.retrySync}
             busy={busy}
             failure={failure}
             onSignOut={() => setConfirming("signOut")}
@@ -186,6 +191,8 @@ function InfoRows({ rows }: { rows: ReadonlyArray<{ key: string; label: string; 
 function AccountCard({
   displayName,
   actions,
+  syncLine,
+  onRetrySync,
   busy,
   failure,
   onSignOut,
@@ -195,6 +202,9 @@ function AccountCard({
   displayName: string;
   /** 이 계정에 보이는 동작(settingsView.ts accountCardActions) */
   actions: AccountCardActions;
+  /** 서버 저장 상태 줄(서버 계정일 때만 — 없으면 null) */
+  syncLine: SyncStatusLine | null;
+  onRetrySync: () => void;
   /** 서버를 거치는 로그아웃·삭제·연결이 진행 중 — 버튼을 막고 진행 상태를 읽어 준다 */
   busy: Busy;
   /** 계정 삭제·연결 실패 안내(아무것도 지우지 않았다) */
@@ -209,6 +219,7 @@ function AccountCard({
     <Card as="section" aria-labelledby="settings-account" aria-busy={disabled} className="flex flex-col gap-2">
       <SectionTitle id="settings-account">{SETTINGS_TEXT.account}</SectionTitle>
       <InfoRows rows={[{ key: "signIn", label: SETTINGS_TEXT.signInRow, value: displayName }]} />
+      {syncLine !== null ? <SyncLine line={syncLine} onRetry={onRetrySync} /> : null}
       {actions.linkKakao ? (
         <>
           <hr className="border-divider" />
@@ -340,5 +351,39 @@ function PrivacyCard({ body }: { body: string }) {
         </>
       ) : null}
     </Card>
+  );
+}
+
+// 서버 저장 상태 줄(웹 신규 — 문구·규칙은 features/home/syncStatusView.ts, 홈의 작은 안내와 같은 말).
+// 실패면 [다시 시도](엔진의 재시도 대기를 건너뜀), 서버 형식이 더 새로우면 줄 전체가 새로 고침 버튼. 색만이 아니라 문장으로 알린다.
+const SYNC_TONE_CLASS: Record<SyncStatusLine["tone"], string> = {
+  normal: "text-state-normal-text",
+  watch: "text-state-watch-text",
+  alert: "text-state-alert-text",
+  muted: "text-text-subtle-aa",
+};
+
+function SyncLine({ line, onRetry }: { line: SyncStatusLine; onRetry: () => void }) {
+  const tone = SYNC_TONE_CLASS[line.tone];
+  if (line.refresh) {
+    return (
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className={cx("flex min-h-11 w-full items-center text-left text-[0.8125rem] font-semibold", tone)}
+      >
+        {line.text}
+      </button>
+    );
+  }
+  return (
+    <div className="flex min-h-11 items-center justify-between gap-3">
+      <p className={cx("min-w-0 text-[0.8125rem] font-semibold", tone)}>{line.text}</p>
+      {line.retry ? (
+        <button type="button" onClick={onRetry} className="min-h-11 shrink-0 px-2 text-[0.8125rem] font-semibold text-primary-text">
+          {SYNC_STATUS_TEXT.retry}
+        </button>
+      ) : null}
+    </div>
   );
 }
