@@ -18,7 +18,7 @@ import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { DeliveryMethod, IsoDateTimeString, LocalDateString, RecoveryGoal, UserProfile } from "@/domain/types";
 import { parseLocalDate } from "@/domain/date";
 import { ROUTES } from "@/routes";
-import { DELIVERY_TITLE } from "@/rules/exercise";
+import { GOAL_TITLE } from "@/rules/exercise";
 import { REQUIRED_CONSENT_IDS, SERVER_CONSENT_TEXT, type RequiredConsentId } from "./consentText";
 
 export const ONBOARDING_TOTAL_STEPS = 4; // 원문: OnboardingFlowView.swift:12
@@ -121,20 +121,13 @@ export const ONBOARDING_TEXT = {
   stepIndicatorLabel: "시작하기 진행 단계",
 } as const;
 
-/**
- * 분만 방식 선택지 — 순서·제목은 Models.swift:6-29(DeliveryMethod.allCases).
- * 온보딩 행은 아이콘·제목만 보여준다(OnboardingFlowView.swift:169-175 SelectableRow에 subtitle 없음).
- * DeliveryMethod.subtitle(Models.swift:23-28)은 이 화면에 쓰지 않는다.
- */
-export const DELIVERY_OPTIONS: ReadonlyArray<{ value: DeliveryMethod; title: string }> = [
-  { value: "vaginal", title: DELIVERY_TITLE.vaginal },
-  { value: "cesarean", title: DELIVERY_TITLE.cesarean },
-];
+// 분만 방식 선택지는 rules/exercise.ts DELIVERY_OPTIONS(분석·프로필 편집과 같은 배열).
+// 온보딩 행은 아이콘·제목만 보여준다(OnboardingFlowView.swift:169-175 SelectableRow에 subtitle 없음).
 
-/** 목표 선택지 — Models.swift:32-48(RecoveryGoal.allCases). */
+/** 목표 선택지 — Models.swift:32-48(RecoveryGoal.allCases). 제목은 rules/exercise.ts GOAL_TITLE. */
 export const GOAL_OPTIONS: ReadonlyArray<{ value: RecoveryGoal; title: string; subtitle: string }> = [
-  { value: "homemaker", title: "전업", subtitle: "복직 일정 없이 회복에 집중해요" }, // 원문: Models.swift:39, 45
-  { value: "returningToWork", title: "복직 예정", subtitle: "복직 예정일까지 남은 기간을 홈에서 확인해요" }, // 원문: Models.swift:40, 46
+  { value: "homemaker", title: GOAL_TITLE.homemaker, subtitle: "복직 일정 없이 회복에 집중해요" }, // 원문: Models.swift:39, 45
+  { value: "returningToWork", title: GOAL_TITLE.returningToWork, subtitle: "복직 예정일까지 남은 기간을 홈에서 확인해요" }, // 원문: Models.swift:40, 46
 ];
 
 // MARK: - 규칙

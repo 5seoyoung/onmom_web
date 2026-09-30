@@ -6,6 +6,7 @@ import { ROUTES } from "@/routes";
 import { rootScreenFor, type AppSnapshot } from "@/store/appStore";
 import { defaultProfile, initialState } from "@/store/defaults";
 import * as S from "@/store/state";
+import { DELIVERY_OPTIONS } from "@/rules/exercise";
 import { weightPlan } from "@/rules/weight";
 import { REQUIRED_CONSENT_IDS } from "./consentText";
 import {
@@ -16,7 +17,6 @@ import {
   consentKindFor,
   consentPatch,
   deliveryDateHint,
-  DELIVERY_OPTIONS,
   firstStepFor,
   GOAL_OPTIONS,
   initialDraft,

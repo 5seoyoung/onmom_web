@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { isSameLocalDay } from "@/domain/date";
-import { getLocalDaySnapshot, nextLocalDay } from "./localDay";
+import { getLocalDaySnapshot, nextLocalDay } from "./clock";
 
 const kst = (local: string) => new Date(`${local}:00+09:00`);
 

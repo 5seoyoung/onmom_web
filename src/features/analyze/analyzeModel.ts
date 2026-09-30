@@ -6,7 +6,7 @@ import { safeExternalUrl } from "@/api/safeUrl";
 import { parseLocalDate, toLocalDateString } from "@/domain/date";
 import type { DeliveryMethod, LocalDateString, MaternityRecord, UserProfile } from "@/domain/types";
 import { OFFLINE_TEXT } from "@/features/home/useOnline";
-import { DELIVERY_TITLE, HOME_STAGE_TEXT } from "@/rules/exercise";
+import { HOME_STAGE_TEXT } from "@/rules/exercise";
 import {
   ANALYSIS_GROUPS,
   ANALYSIS_TEXT,
@@ -55,12 +55,6 @@ export const CLINICAL_TOGGLES: readonly { key: keyof MaternityRecord; title: str
   { key: "anemia", title: "산후 빈혈(Hb 12 미만)", subtitle: "어지럼·낙상 위험 — 앉거나 누워서 위주" },
   { key: "pelvicPain", title: "골반통·치골결합 통증", subtitle: "비대칭·한다리·다리 벌리는 동작 배제" },
   { key: "diastasisRecti", title: "복직근 이개(DRA)", subtitle: "윗몸일으키기·레그레이즈 등 복압 올리는 동작 배제" },
-];
-
-/** 분만 방식 선택지 — DeliveryMethod.allCases 순서(Models.swift:7-8) */
-export const DELIVERY_OPTIONS: readonly { value: DeliveryMethod; title: string }[] = [
-  { value: "vaginal", title: DELIVERY_TITLE.vaginal },
-  { value: "cesarean", title: DELIVERY_TITLE.cesarean },
 ];
 
 // MARK: - 폼

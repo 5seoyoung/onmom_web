@@ -12,6 +12,7 @@
 // PC 틀은 pageFrame(탭 화면) — 좌우는 PC에서만 다른 화면과 같은 24(폰은 HomeView의 20 그대로).
 
 import { useMemo, useRef } from "react";
+import { useNow } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { cx } from "@/components/ui";
 import { useAppStore } from "@/store/useAppStore";
@@ -30,7 +31,6 @@ import {
 import { buildHomeViewModel } from "./homeViewModel";
 import { StorageWarning } from "./StorageWarning";
 import { SyncStatusNotice } from "./SyncStatusNotice";
-import { useNow } from "./useNow";
 
 /** PC(lg)에서 두 열. 폰에서는 세로 한 줄(간격 16 = main과 같은 gap-4). */
 const HOME_COLUMNS_CLASS = "flex flex-col gap-4 lg:grid lg:grid-cols-2 lg:items-start";
@@ -39,8 +39,7 @@ const HOME_COLUMN_CLASS = "flex min-w-0 flex-col gap-4";
 export function HomeScreen() {
   const { hydrated, state, actions } = useAppStore();
   const nowMs = useNow();
-  const ready = hydrated && nowMs > 0;
-  const vm = useMemo(() => (ready ? buildHomeViewModel(state, new Date(nowMs)) : null), [ready, state, nowMs]);
+  const vm = useMemo(() => (hydrated && nowMs !== null ? buildHomeViewModel(state, new Date(nowMs)) : null), [hydrated, state, nowMs]);
   const analyzeLinkRef = useRef<HTMLAnchorElement>(null);
 
   function snoozeMoodCard() {

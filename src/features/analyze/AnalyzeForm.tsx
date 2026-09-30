@@ -6,10 +6,10 @@ import { useId, useState } from "react";
 import { CircleAlert, LoaderCircle } from "lucide-react";
 import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle, cx } from "@/components/ui";
 import type { MaternityRecord } from "@/domain/types";
+import { DELIVERY_OPTIONS } from "@/rules/exercise";
 import {
   ANALYZE_TEXT,
   CLINICAL_TOGGLES,
-  DELIVERY_OPTIONS,
   canStartAnalysis,
   todayInputValue,
   type AnalyzeFormValues,

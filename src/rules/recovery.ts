@@ -28,7 +28,7 @@ import {
 
 // MARK: - 결과 타입 (iOS EngineOutput)
 
-/** 근거 칩 토큰 — "src:" 로 시작하면 출처 칩 */
+/** 근거 칩 토큰 — "src:" 로 시작하면 출처 칩(화면의 해석은 components/ui/evidence.ts parseEvidenceToken 한 곳) */
 export interface RecItem {
   item: string;
   label: string;
@@ -300,12 +300,6 @@ export function docTypeLabel(code: string): string {
     default:
       return "확인 불가"; // 원문: AnalyzeComponents.swift:27
   }
-}
-
-/** 근거 칩 토큰 → 표시. "src:"로 시작하면 출처 칩(문서 아이콘·primary 색), 접두어는 떼고 보여준다. */
-export function evidenceChip(token: string): { text: string; isSource: boolean } {
-  const isSource = token.startsWith("src:");
-  return { text: isSource ? token.slice(4) : token, isSource };
 }
 
 // MARK: - 결과 화면 문구 (Swift 원문)

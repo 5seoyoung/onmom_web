@@ -10,11 +10,11 @@ import content from "@/content";
 import { Card, MeasurementField, SelectableGroup, SelectableRow, Toggle } from "@/components/ui";
 import { cx } from "@/components/ui/cx";
 import type { DeliveryMethod, RecoveryGoal } from "@/domain/types";
+import { DELIVERY_OPTIONS } from "@/rules/exercise";
 import { weightPlan } from "@/rules/weight";
 import { BrandLogo } from "@/features/flow/BrandLogo";
 import { TermsSheetLink } from "@/features/terms/TermsSheetLink";
 import {
-  DELIVERY_OPTIONS,
   deliveryDateHint,
   GOAL_OPTIONS,
   isDeliveryDateInvalid,

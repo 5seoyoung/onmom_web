@@ -1,16 +1,13 @@
 // AI 상담 — iOS `OnmomEngine.chatReply`(규칙 폴백)와 `ChatView`의 서버 호출·폴백 흐름·표시 조건을 옮긴 것.
 //
 // 서버(LLM)에 먼저 묻고, 미설정·오류·빈 응답이면 앱 내 규칙 답으로 폴백한다(ChatView.swift:170-185).
-// iOS는 서버 호출 전에 클라이언트 안전 선필터를 두지 않는다 — 웹도 두지 않는다(검수 #7, 결정 대기).
+// iOS는 서버 호출 전에 클라이언트 안전 선필터를 두지 않는다 — 이 모듈도 iOS 흐름 그대로 두지 않는다(검수 #7).
+// 웹의 위기 표현 선필터는 화면 쪽 features/chat/chatModel.ts(isCrisisMessage)가 이 모듈을 부르기 전에 건다.
 // 규칙 폴백은 질문을 이해하지 못한다. 키워드 5분기로 안전 연계만 하고, 이해한 척하지 않는다.
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
 
 import content from "@/content";
-import { postpartumDayCount, weekFromDayCount } from "@/domain/date";
-import type { SymptomRecord, UserProfile } from "@/domain/types";
-import { DELIVERY_TITLE } from "./exercise";
 import { localizedCaseInsensitiveContains } from "./substance";
-import { bmi, formatOneDecimal } from "./weight";
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -24,6 +21,7 @@ export interface ChatMessage {
 export interface ChatLlmRequest {
   messages: { role: "user" | "assistant"; content: string }[];
   preset: "patient_edu";
+  /** iOS 컨텍스트 문자열 자리 — 웹은 비워 둔다(서버에는 features/chat/chatModel.ts chatLlmContext의 세 항목만 따로 보낸다) */
   context: string;
 }
 
@@ -106,32 +104,6 @@ export async function resolveChatReply(
   return { text: chatReply(history).text, fromFallback: true };
 }
 
-/**
- * 서버에 함께 보내는 산모 컨텍스트(ChatView.swift:188-196). 있는 항목만 쉼표로 잇는다.
- * 예: "산후 63일차(9주차), 제왕절개, 모유수유 중, 목표: 전업, BMI 24.4, 최근 기록에 위험 신호 있음"
- * ⚠️ BMI·목표·위험 신호 여부는 처리방침 고지 범위를 넘는다(검수 #14) — CPO 결정 전까지 iOS 그대로 둔다.
- */
-export function buildChatContext(input: {
-  profile: Pick<
-    UserProfile,
-    "deliveryDate" | "deliveryMethod" | "goal" | "isBreastfeeding" | "heightCm" | "currentWeightKg"
-  >;
-  /** 최신순 증상 기록 — 맨 앞 기록만 본다 */
-  symptomHistory: readonly Pick<SymptomRecord, "redFlagCode">[];
-  now: Date;
-}): string {
-  const { profile, symptomHistory, now } = input;
-  const dayCount = postpartumDayCount(profile.deliveryDate, now);
-  const parts = [`산후 ${dayCount}일차(${weekFromDayCount(dayCount)}주차)`]; // 원문: ChatView.swift:189
-  if (profile.deliveryMethod) parts.push(DELIVERY_TITLE[profile.deliveryMethod]); // 원문: ChatView.swift:190
-  parts.push(profile.isBreastfeeding ? "모유수유 중" : "모유수유 안 함"); // 원문: ChatView.swift:191
-  if (profile.goal) parts.push(`목표: ${GOAL_TITLE[profile.goal]}`); // 원문: ChatView.swift:192
-  const b = bmi(profile); // 키·현재 체중이 모두 있을 때만(Models.swift:98-102)
-  if (b !== null) parts.push(`BMI ${formatOneDecimal(b)}`); // 원문: ChatView.swift:193 — Swift %.1f 반올림은 weight.ts
-  if (symptomHistory[0]?.redFlagCode != null) parts.push("최근 기록에 위험 신호 있음"); // 원문: ChatView.swift:194
-  return parts.join(", ");
-}
-
 /** FAQ 칩 — 서버가 답할 수 있고, 인사말만 있고, 응답 대기 중이 아닐 때만(ChatView.swift:31-36, 검수 #6). */
 export function shouldShowFaq(state: { llmConfigured: boolean; messageCount: number; thinking: boolean }): boolean {
   return state.llmConfigured && state.messageCount === 1 && !state.thinking;
@@ -144,12 +116,6 @@ export function shouldShowFaq(state: { llmConfigured: boolean; messageCount: num
 export function shouldShowChatBanner(state: { llmConfigured: boolean; lastReplyFromFallback: boolean | null }): boolean {
   return state.lastReplyFromFallback ?? !state.llmConfigured;
 }
-
-// 원문: Models.swift:39-40
-const GOAL_TITLE: Record<NonNullable<UserProfile["goal"]>, string> = {
-  homemaker: "전업",
-  returningToWork: "복직 예정",
-};
 
 function lastUserText(history: readonly ChatMessage[]): string {
   for (let i = history.length - 1; i >= 0; i--) {

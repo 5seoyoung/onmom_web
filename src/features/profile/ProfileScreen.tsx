@@ -19,6 +19,7 @@ import {
   UserRound,
   type LucideIcon,
 } from "lucide-react";
+import { useNow } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, SectionTitle, cx } from "@/components/ui";
 import { StorageWarning } from "@/features/home/StorageWarning";
@@ -32,7 +33,6 @@ import {
   type ProfileMenuItem,
   type ProfileMenuKey,
 } from "./profileView";
-import { useNowMs } from "./useNow";
 
 // SF Symbol → lucide (ProfileView.swift:19-25)
 const MENU_ICON: Record<ProfileMenuKey, LucideIcon> = {
@@ -49,7 +49,7 @@ const INFO_HEADING_ID = "profile-info-heading";
 
 export function ProfileScreen() {
   const { hydrated, state, displayName } = useAppStore();
-  const nowMs = useNowMs();
+  const nowMs = useNow();
 
   return (
     // VStack(spacing: md) · 좌우 lg · 위 sm — ProfileView.swift:32-44. PC 틀은 pageFrame(탭 화면)

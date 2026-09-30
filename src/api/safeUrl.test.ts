@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXTERNAL_LINK_PROPS, EXTERNAL_LINK_REL, safeExternalUrl } from "./safeUrl";
+import { EXTERNAL_LINK_PROPS, EXTERNAL_LINK_REL, safeExternalUrl, SUPPORT_LINK_HOSTS } from "./safeUrl";
 
 describe("safeExternalUrl", () => {
   it.each([
@@ -31,6 +31,15 @@ describe("safeExternalUrl", () => {
     ["빈 문자열", ""],
   ])("거부: %s", (_label, url) => {
     expect(safeExternalUrl(url)).toBeNull();
+  });
+
+  it("지원사업 공식 페이지 호스트는 기본 목록에 없다 — 넘긴 호출에서만 허용하고 검사 규칙은 같다", () => {
+    expect(safeExternalUrl("https://www.gov.kr/portal")).toBeNull();
+    expect(safeExternalUrl("https://www.gov.kr/portal", SUPPORT_LINK_HOSTS)).toBe("https://www.gov.kr/portal");
+    expect(safeExternalUrl("https://youtu.be/abc", SUPPORT_LINK_HOSTS)).toBe("https://youtu.be/abc");
+    expect(safeExternalUrl("http://www.gov.kr/portal", SUPPORT_LINK_HOSTS)).toBeNull();
+    expect(safeExternalUrl("https://user:pw@www.gov.kr/", SUPPORT_LINK_HOSTS)).toBeNull();
+    expect(safeExternalUrl("https://www.gov.kr:8443/", SUPPORT_LINK_HOSTS)).toBeNull();
   });
 
   it("문자열이 아니면 null", () => {

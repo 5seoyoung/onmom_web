@@ -23,7 +23,7 @@ import { Card, SectionTitle, SubPageHeader, cx } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import { useAccountSession } from "@/auth";
 import { useAppStore } from "@/store/useAppStore";
-import { useNowMs } from "@/features/profile/useNow";
+import { useNow } from "@/components/clock";
 import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contact";
 import { hasTermsText, TERMS_TEXT } from "@/features/terms/termsText";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -58,7 +58,7 @@ type Busy = "signOut" | "delete" | "link" | null;
 export function SettingsScreen() {
   const { hydrated, isSignedIn, state, account, displayName, actions } = useAppStore();
   const session = useAccountSession();
-  const nowMs = useNowMs();
+  const nowMs = useNow();
   const [confirming, setConfirming] = useState<PendingConfirm>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [failure, setFailure] = useState<string | null>(null);

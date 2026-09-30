@@ -11,7 +11,6 @@ import {
   analysisProfileSubtitle,
   analysisSections,
   docTypeLabel,
-  evidenceChip,
   recoveryRecommendation,
   runRecoveryAnalysis,
   severityLabel,
@@ -318,12 +317,7 @@ describe("단계 코드·라벨(감사 #25)", () => {
   });
 });
 
-describe("근거 칩·묶음", () => {
-  it("'src:' 접두어는 출처 칩 — 접두어를 떼고 보여준다", () => {
-    expect(evidenceChip("src:회복 단계 기준")).toEqual({ text: "회복 단계 기준", isSource: true });
-    expect(evidenceChip("6주차부터 가능")).toEqual({ text: "6주차부터 가능", isSource: false });
-  });
-
+describe("묶음", () => {
   it("가능/주의/금지 묶음 순서와 색", () => {
     expect(ANALYSIS_GROUPS.map((g) => [g.key, g.title, g.tone])).toEqual([
       ["allowed", "가능", "normal"],

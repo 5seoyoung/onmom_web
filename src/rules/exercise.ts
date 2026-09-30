@@ -8,7 +8,7 @@
 // 순수 함수만 둔다 — 네트워크·현재 시각은 호출하는 쪽이 넘긴다.
 
 import content from "@/content";
-import type { DeliveryMethod, MaternityRecord } from "@/domain/types";
+import type { DeliveryMethod, MaternityRecord, RecoveryGoal } from "@/domain/types";
 
 // MARK: - 단계 버킷
 
@@ -213,6 +213,21 @@ export { isRedFlagActive } from "./record";
 export const DELIVERY_TITLE: Readonly<Record<DeliveryMethod, string>> = {
   vaginal: "자연분만", // 원문: Models.swift:13
   cesarean: "제왕절개", // 원문: Models.swift:14
+};
+
+/**
+ * 분만 방식 선택지 — 순서·제목은 Models.swift:6-29(DeliveryMethod.allCases). 온보딩·분석·프로필 편집이 같이 쓴다.
+ * DeliveryMethod.subtitle(Models.swift:23-28)은 싣지 않는다 — 어느 화면의 선택 행에도 부제가 없다.
+ */
+export const DELIVERY_OPTIONS: ReadonlyArray<{ value: DeliveryMethod; title: string }> = [
+  { value: "vaginal", title: DELIVERY_TITLE.vaginal },
+  { value: "cesarean", title: DELIVERY_TITLE.cesarean },
+];
+
+/** 목표 표시명 — Models.swift:37-41. 홈 히어로 칩·프로필·프로필 편집·온보딩 선택지가 같이 쓴다. */
+export const GOAL_TITLE: Readonly<Record<RecoveryGoal, string>> = {
+  homemaker: "전업", // 원문: Models.swift:39
+  returningToWork: "복직 예정", // 원문: Models.swift:40
 };
 
 export const EXERCISE_TEXT = {

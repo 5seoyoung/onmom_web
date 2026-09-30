@@ -4,8 +4,8 @@
 
 import content from "@/content";
 import { calendarDaysBetween, parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
-import type { PersistedState, RecoveryGoal, SymptomRecord, UserProfile } from "@/domain/types";
-import { DELIVERY_TITLE, homeStageCard, type HomeStageCard } from "@/rules/exercise";
+import type { PersistedState, SymptomRecord, UserProfile } from "@/domain/types";
+import { DELIVERY_TITLE, GOAL_TITLE, homeStageCard, type HomeStageCard } from "@/rules/exercise";
 import { moodCardSignal } from "@/rules/mood";
 import {
   isRedFlagActive,
@@ -53,12 +53,6 @@ export const MOOD_CALLS: readonly { name: string; number: string }[] = [
   { name: "정신건강복지센터", number: "1577-0199" },
   { name: "중앙난임·우울증상담센터", number: "02-2276-2276" },
 ];
-
-/** 목표 표시명 — 원문: Models.swift:39-40. rules/chat.ts에 같은 표가 있지만 내보내지 않아 여기 둔다(DEV_NOTES §5). */
-export const GOAL_TITLE: Readonly<Record<RecoveryGoal, string>> = {
-  homemaker: "전업",
-  returningToWork: "복직 예정",
-};
 
 /** 분만 방식을 고르지 않았을 때의 히어로 칩 — 원문: HomeView.swift:99 `?? "분만"` */
 export const DELIVERY_CHIP_FALLBACK = "분만";

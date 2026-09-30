@@ -11,17 +11,15 @@
 // 폰 기둥(최대 30rem)에서는 카드 3장 + [저장]이 한 줄로 쌓인다(iOS 순서 그대로 — 읽는 순서·탭 순서도 같다).
 
 import { useId, useRef, useState } from "react";
+import { useNow } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle, cx } from "@/components/ui";
 import { toLocalDateString } from "@/domain/date";
 import type { MaternityRecord } from "@/domain/types";
 import { useAppStore } from "@/store/useAppStore";
-import { DELIVERY_TITLE } from "@/rules/exercise";
-import { GOAL_TITLE } from "@/features/profile/profileView";
-import { useNowMs } from "@/features/profile/useNow";
+import { DELIVERY_OPTIONS, GOAL_TITLE } from "@/rules/exercise";
 import { LeaveSubPageHeader, useLeaveSubPage, type SubPageExit } from "@/features/profile/LeaveSubPage";
 import {
-  DELIVERY_OPTIONS,
   GOAL_OPTIONS,
   MATERNITY_TOGGLES,
   PROFILE_EDIT_TEXT,
@@ -35,7 +33,7 @@ import {
 
 export function ProfileEditScreen() {
   const { hydrated, isSignedIn, state } = useAppStore();
-  const nowMs = useNowMs();
+  const nowMs = useNow();
   const exit = useLeaveSubPage(SETTINGS_HREF);
 
   return (
@@ -124,7 +122,7 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
         <SegmentedChoice
           legend={PROFILE_EDIT_TEXT.deliveryMethod}
           name={ids.deliveryName}
-          options={DELIVERY_OPTIONS.map((v) => ({ value: v, label: DELIVERY_TITLE[v] }))}
+          options={DELIVERY_OPTIONS.map((o) => ({ value: o.value, label: o.title }))}
           value={draft.deliveryMethod}
           onChange={(v) => set("deliveryMethod", v)}
         />

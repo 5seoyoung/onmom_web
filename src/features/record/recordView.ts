@@ -135,8 +135,8 @@ export function submitSymptomCheck(
   deliveryDate: string | null,
   now: Date,
 ): { newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean>; result: RedFlagResult } {
-  // id 인자는 저장에 쓰이지 않는다 — 스토어가 새 id를 붙인다(DEV_NOTES §4).
-  const { record, result } = buildSymptomRecord(form, deliveryDate, now, "");
+  // id는 스토어가 새로 붙인다(DEV_NOTES §4).
+  const { record, result } = buildSymptomRecord(form, deliveryDate, now);
   // 위험 증상 토글 4개도 함께 싣는다(RiskSymptomFlags 주석) — 스토어에 필드가 생기면 그대로 저장된다.
   const newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean> = {
     date: record.date,

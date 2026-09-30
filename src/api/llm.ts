@@ -14,6 +14,7 @@
 import { getSupabaseClient } from "@/auth/client";
 import type { DeliveryMethod } from "@/domain/types";
 import { DELIVERY_TITLE } from "@/rules/exercise";
+import { SUBSTANCE_LLM_MAX_TOKENS } from "@/rules/substance";
 import { defaultBackendConfig, joinBackendUrl, requestJson, type BackendConfig } from "./http";
 
 /** 서버가 소유한 시스템 프롬프트 프리셋 */
@@ -47,7 +48,7 @@ export const LLM_MESSAGES: Record<LLMFailureKind, string> = {
 /** 호출 지점별 iOS 값 — 챗봇은 LLMClient 기본값, 약물 조회는 SubstanceCheckView가 준 값(예전 NEXT_PUBLIC_LLM_URL 경로) */
 export const LLM_PRESET_DEFAULTS: Record<LLMPreset, { maxTokens: number; timeoutMs: number }> = {
   patient_edu: { maxTokens: 1024, timeoutMs: 40_000 }, // LLMClient.swift:27, :64
-  substance: { maxTokens: 512, timeoutMs: 25_000 }, // SubstanceCheckView.swift:121, :125
+  substance: { maxTokens: SUBSTANCE_LLM_MAX_TOKENS, timeoutMs: 25_000 }, // SubstanceCheckView.swift:121(rules/substance.ts), :125
 };
 
 /**

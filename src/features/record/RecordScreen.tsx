@@ -16,6 +16,7 @@
 // 오늘의 질문 각주는 저장 위치에 맞게(서버 저장 빌드면 "동의를 받은 뒤 온맘 서버에" — recordView moodNoteFor).
 
 import { useRef, useState } from "react";
+import { useLocalDay } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton, cx } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
@@ -24,7 +25,6 @@ import { StorageWarning } from "@/features/home/StorageWarning";
 import type { SymptomForm } from "@/rules/record";
 import type { RedFlagResult } from "@/rules/redflag";
 import { useAppStore } from "@/store/useAppStore";
-import { useLocalDay } from "./localDay";
 import { MoodQuestionCard } from "./MoodQuestionCard";
 import { RecentRecordsCard } from "./RecentRecordsCard";
 import { RecordResult } from "./RecordResult";

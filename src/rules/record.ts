@@ -21,14 +21,13 @@ export function showsLochiaInputs(postpartumDays: number): boolean {
  * 폼 → 판정 + 저장할 기록 1건(RecordFlowView.swift:304-327).
  * - 산후 경과일은 기록 시점 값을 기록에 함께 남긴다(나중에 출산일을 고쳐도 판정을 되짚을 수 있게).
  * - 위험 증상 토글 4개는 판정에만 쓰고 저장하지 않는다(iOS SymptomRecord에 필드가 없다 — 감사 #46).
- * - id는 호출하는 쪽이 만든다(여기엔 무작위가 없다).
+ * - id는 붙이지 않는다 — 저장할 때 스토어가 붙인다(여기엔 무작위가 없다).
  */
 export function buildSymptomRecord(
   form: SymptomForm,
   deliveryDate: LocalDateString | null,
   now: Date,
-  id: string,
-): { record: SymptomRecord; result: RedFlagResult } {
+): { record: Omit<SymptomRecord, "id">; result: RedFlagResult } {
   const postpartumDays = postpartumDayCount(deliveryDate, now);
   // 10일 전에는 오로 질문이 화면에 없다 — 묻지 않은 값이 기록에 남지 않게 한다
   const asksLochia = showsLochiaInputs(postpartumDays);
@@ -40,8 +39,7 @@ export function buildSymptomRecord(
     painNrs: clampNrs(form.painNrs),
   };
   const result = checkRedFlags(input);
-  const record: SymptomRecord = {
-    id,
+  const record: Omit<SymptomRecord, "id"> = {
     date: now.toISOString(),
     lochiaIncreased: input.lochiaIncreased,
     lochiaRed: input.lochiaRed,

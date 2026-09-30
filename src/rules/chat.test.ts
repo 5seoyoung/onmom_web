@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import content from "@/content";
-import type { UserProfile } from "@/domain/types";
 import {
   CHAT_GREETING,
-  buildChatContext,
   buildChatLlmRequest,
   chatReply,
   resolveChatReply,
@@ -107,51 +105,6 @@ describe("서버 우선, 실패하면 규칙 폴백 (ChatView.swift:170-185)", (
       context,
     });
     expect(buildChatLlmRequest(history, context)).not.toHaveProperty("maxTokens");
-  });
-});
-
-describe("산모 컨텍스트 (ChatView.swift:188-196)", () => {
-  const base: UserProfile = {
-    deliveryDate: "2026-07-22",
-    deliveryMethod: "cesarean",
-    goal: "homemaker",
-    returnToWorkDate: null,
-    isBreastfeeding: true,
-    consentAccepted: true,
-    consentVersion: null,
-    consentAcceptedAt: null,
-    heightCm: 162,
-    currentWeightKg: 64,
-    prePregnancyWeightKg: 56,
-    neighborhood: "",
-  };
-  const now = new Date("2026-09-23T12:00:00+09:00");
-
-  it("모든 항목이 있을 때 — 05 §2 예시와 같은 형식", () => {
-    expect(buildChatContext({ profile: base, symptomHistory: [{ redFlagCode: "pph_suspect" }], now })).toBe(
-      "산후 63일차(9주차), 제왕절개, 모유수유 중, 목표: 전업, BMI 24.4, 최근 기록에 위험 신호 있음",
-    );
-  });
-
-  it("없는 항목은 뺀다 — 가장 최근 기록만 본다", () => {
-    const profile = { ...base, deliveryMethod: null, goal: null, isBreastfeeding: false, heightCm: 0 };
-    const history = [{ redFlagCode: null }, { redFlagCode: "pph_suspect" }];
-    expect(buildChatContext({ profile, symptomHistory: history, now })).toBe("산후 63일차(9주차), 모유수유 안 함");
-  });
-
-  it("출산일 미입력이면 0일차", () => {
-    const profile = { ...base, deliveryDate: null, deliveryMethod: "vaginal" as const, goal: "returningToWork" as const };
-    expect(buildChatContext({ profile, symptomHistory: [], now })).toBe(
-      "산후 0일차(0주차), 자연분만, 모유수유 중, 목표: 복직 예정, BMI 24.4",
-    );
-  });
-
-  it("BMI는 Swift %.1f와 같게 — 정확히 반이면 짝수 쪽", () => {
-    const ctx = (heightCm: number, currentWeightKg: number) =>
-      buildChatContext({ profile: { ...base, deliveryMethod: null, goal: null, heightCm, currentWeightKg }, symptomHistory: [], now });
-    expect(ctx(200, 97)).toBe("산후 63일차(9주차), 모유수유 중, BMI 24.2"); // 24.25
-    expect(ctx(200, 99)).toBe("산후 63일차(9주차), 모유수유 중, BMI 24.8"); // 24.75
-    expect(ctx(160, 58.8)).toBe("산후 63일차(9주차), 모유수유 중, BMI 23.0");
   });
 });
 

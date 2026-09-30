@@ -25,9 +25,6 @@ function pageRoutes(): { path: string; inAppGroup: boolean }[] {
   return out;
 }
 
-/** 아직 페이지가 없어도 되는 주소 — 카카오 로그인 콜백(서버 준비 전) */
-const NO_PAGE_YET: ReadonlySet<string> = new Set([ROUTES.authCallback]);
-
 describe("ROUTES", () => {
   const values = Object.values(ROUTES);
 
@@ -47,9 +44,9 @@ describe("ROUTES", () => {
     for (const p of pages) expect(values).toContain(p);
   });
 
-  it("모든 ROUTES 값에 페이지가 있다(로그인 콜백 제외)", () => {
+  it("모든 ROUTES 값에 페이지가 있다", () => {
     const pages = new Set(pageRoutes().map((r) => r.path));
-    for (const v of values) if (!NO_PAGE_YET.has(v)) expect(pages).toContain(v);
+    for (const v of values) expect(pages).toContain(v);
   });
 
   it("(app) 묶음 페이지는 모두 관문이 지키고(main), 묶음 밖 페이지는 아니다", () => {

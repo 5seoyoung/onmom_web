@@ -89,8 +89,8 @@ export interface LandingBuild {
   /** 카카오 로그인 + 서버 저장(Supabase) — config.isSupabaseConfigured */
   kakaoLoginReady: boolean;
   /**
-   * AI 서버(NEXT_PUBLIC_LLM_URL) — config.isLLMBackendConfigured. 켜지면 AI 상담이 산모 정보(BMI·최근 위험 신호 여부 등,
-   * rules/chat.ts buildChatContext)를 함께 보내고, 약물·음식 체크의 표에 없는 항목은 AI가 답한다(rules/substance.ts).
+   * AI 서버 — config.isLLMBackendConfigured. 켜지면 AI 상담이 대화와 산모 정보(산후 주차·분만 방식·수유 여부,
+   * features/chat/chatModel.ts chatLlmContext)를 함께 보내고, 약물·음식 체크의 표에 없는 항목은 AI가 답한다(rules/substance.ts).
    */
   llmReady: boolean;
 }
@@ -222,8 +222,9 @@ export const FEATURES: ReadonlyArray<LandingSection> = [
         // "서버로 전송되지 않습니다"를 말하지 않으므로 AI 켜짐에도 사실이다)
         whenKakaoLogin:
           "게스트로 시작해도, 카카오로 로그인해도 증상 기록, 오늘의 질문 답변, 산모수첩 확인 항목, 체중, 기록장 글은 동의를 받은 뒤 온맘 서버(대한민국 서울)에 저장돼요. 언제든 설정에서 계정과 모든 데이터를 삭제할 수 있어요.",
-        // 웹 신규 문구 — CPO 확인 필요 (AI 연결 시 문구: AI 상담이 체중에서 계산한 BMI·최근 기록의 위험 신호 여부를
-        // 서버로 보내므로(rules/chat.ts buildChatContext) "서버로 전송되지 않습니다"를 뺐다. 나머지 글자는 위와 같다)
+        // 웹 신규 문구 — CPO 확인 필요 (AI 연결 시 문구: AI 상담·약물 체크가 입력한 글과 산후 주차·수유 여부 등을
+        // 서버로 보내므로(features/chat/chatModel.ts chatLlmContext, features/substance/substanceModel.ts substanceLlmContext)
+        // "서버로 전송되지 않습니다"를 뺐다. 나머지 글자는 위와 같다)
         whenLlm:
           "게스트로 시작하면 증상 기록, 오늘의 질문 답변, 산모수첩 확인 항목, 체중, 기록장 글은 이 브라우저에만 저장됩니다. 언제든 설정에서 계정과 모든 데이터를 삭제할 수 있어요.",
       },

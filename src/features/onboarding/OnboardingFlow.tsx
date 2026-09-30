@@ -19,6 +19,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
+import { useLocalToday } from "@/components/clock";
 import { PrimaryButton, StepIndicator } from "@/components/ui";
 import { useAccountSession, type DeleteAccountResult } from "@/auth";
 import { isSupabaseConfigured } from "@/config";
@@ -49,7 +50,6 @@ import {
 } from "./onboardingModel";
 import { ConsentStep, DeliveryStep, GoalStep, WelcomeStep } from "./OnboardingSteps";
 import { ServerConsentStep } from "./ServerConsentStep";
-import { useLocalToday } from "./useLocalToday";
 
 export function OnboardingFlow() {
   const { hydrated, state, actions } = useAppStore();

@@ -46,15 +46,9 @@ describe("buildSymptomRecord", () => {
 
   it("산후 10일(D+10 00:01) · 증가+붉음 → pph_suspect, 그때의 일수를 함께 저장", () => {
     const now = at("2026-09-23T00:01:00+09:00");
-    const { record: r, result } = buildSymptomRecord(
-      form({ lochiaIncreased: true, lochiaRed: true }),
-      DELIVERY,
-      now,
-      "id-1",
-    );
+    const { record: r, result } = buildSymptomRecord(form({ lochiaIncreased: true, lochiaRed: true }), DELIVERY, now);
     expect(result.hospitalSignal?.code).toBe("pph_suspect");
     expect(r).toEqual({
-      id: "id-1",
       date: now.toISOString(),
       lochiaIncreased: true,
       lochiaRed: true,
@@ -70,7 +64,6 @@ describe("buildSymptomRecord", () => {
       form({ lochiaIncreased: true, lochiaRed: true }),
       DELIVERY,
       at("2026-09-22T23:59:00+09:00"),
-      "id-2",
     );
     expect(result.hospitalSignal).toBeNull();
     expect(result.trace.firedRules).toEqual(["redflag:none"]);
@@ -80,17 +73,18 @@ describe("buildSymptomRecord", () => {
   });
 
   it("위험 증상 토글은 판정에만 쓰고 저장하지 않는다 → 지표는 정상인데 상태는 '확인 필요'(감사 #42)", () => {
-    const { record: r } = buildSymptomRecord(form({ dizzinessFainting: true }), DELIVERY, at("2026-09-30T09:00:00+09:00"), "id-3");
+    const { record: r } = buildSymptomRecord(form({ dizzinessFainting: true }), DELIVERY, at("2026-09-30T09:00:00+09:00"));
     expect(Object.keys(r).sort()).toEqual(
-      ["date", "feverEvent", "id", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode"].sort(),
+      ["date", "feverEvent", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode"].sort(),
     );
     expect(r.redFlagCode).toBe("neuro_flag");
-    expect(metrics(r).every((m) => m.status === "normal")).toBe(true);
-    expect(recoveryStateLabel(r)).toBe("확인 필요");
+    const stored = { ...r, id: "x" }; // 스토어가 id를 붙여 저장한 기록
+    expect(metrics(stored).every((m) => m.status === "normal")).toBe(true);
+    expect(recoveryStateLabel(stored)).toBe("확인 필요");
   });
 
   it("통증은 0~10 정수(iOS Int(pain))", () => {
-    const pain = (n: number) => buildSymptomRecord(form({ painNrs: n }), DELIVERY, at("2026-09-30T09:00:00+09:00"), "x");
+    const pain = (n: number) => buildSymptomRecord(form({ painNrs: n }), DELIVERY, at("2026-09-30T09:00:00+09:00"));
     expect(pain(8.7).record).toMatchObject({ painNrs: 8, redFlagCode: "severe_pain" });
     expect(pain(7.9).record).toMatchObject({ painNrs: 7, redFlagCode: null });
     expect(pain(11).record.painNrs).toBe(10);
@@ -98,7 +92,7 @@ describe("buildSymptomRecord", () => {
   });
 
   it("출산일이 없으면 0일차로 판정", () => {
-    const { record: r } = buildSymptomRecord(form(), null, at("2026-09-30T09:00:00+09:00"), "x");
+    const { record: r } = buildSymptomRecord(form(), null, at("2026-09-30T09:00:00+09:00"));
     expect(r.postpartumDays).toBe(0);
   });
 
@@ -107,7 +101,6 @@ describe("buildSymptomRecord", () => {
       form({ painNrs: 9, feverEvent: true, calfPainSwelling: true }),
       DELIVERY,
       at("2026-09-30T09:00:00+09:00"),
-      "x",
     );
     expect(r.redFlagCode).toBe("severe_pain");
     expect(result.trace.firedRules).toEqual(["redflag:severe_pain", "redflag:fever_infection", "redflag:dvt_suspect"]);

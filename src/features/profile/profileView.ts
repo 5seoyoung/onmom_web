@@ -3,7 +3,7 @@
 
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { DeliveryMethod, LocalDateString, MaternityRecord, RecoveryGoal, UserProfile } from "@/domain/types";
-import { DELIVERY_TITLE } from "@/rules/exercise";
+import { DELIVERY_TITLE, GOAL_TITLE } from "@/rules/exercise";
 import { bmi, formatOneDecimal } from "@/rules/weight";
 import { ROUTES } from "@/routes";
 
@@ -17,15 +17,6 @@ export const PROFILE_TEXT = {
   maternityFlags: "재활 고려사항", // 원문: ProfileView.swift:90
   unset: "미설정", // 원문: ProfileView.swift:76
 } as const;
-
-/**
- * 목표 표시명 — Models.swift:37-41.
- * 같은 표가 rules/chat.ts(GOAL_TITLE, 비공개)에도 있다. 규칙 모듈은 읽기 전용이라 여기 따로 두었다(DEV_NOTES §5 정리 후보).
- */
-export const GOAL_TITLE: Readonly<Record<RecoveryGoal, string>> = {
-  homemaker: "전업", // 원문: Models.swift:39
-  returningToWork: "복직 예정", // 원문: Models.swift:40
-};
 
 export function deliveryMethodLabel(method: DeliveryMethod | null): string {
   return method ? DELIVERY_TITLE[method] : PROFILE_TEXT.unset;

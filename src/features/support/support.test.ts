@@ -2,9 +2,10 @@
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
+import { SUPPORT_LINK_HOSTS } from "@/api/safeUrl";
 import { SUPPORT_DOMAINS, SUPPORT_TEXT, SUPPORT_UNIVERSAL } from "@/rules/support";
 import { SolutionCard, SupportProgramScreen } from "./SupportProgramScreen";
-import { SUPPORT_LINK_HOSTS, supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
+import { supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
 
 // next.config의 trailingSlash: true를 흉내 낸다(빌드 때 주입되는 값 — 없으면 Link가 끝 슬래시를 뗀다).
 vi.stubEnv("__NEXT_TRAILING_SLASH", "true");

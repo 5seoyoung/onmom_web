@@ -144,6 +144,12 @@ export function parseSubstanceAnswer(text: string): LlmSubstanceAnswer | null {
 }
 
 /**
+ * 약물 조회 답의 최대 토큰 — 원문: SubstanceCheckView.swift:121 `LLMClient(maxTokens: 512)`.
+ * 단일 출처: src/api/llm.ts `LLM_PRESET_DEFAULTS.substance`도 이 값을 쓴다.
+ */
+export const SUBSTANCE_LLM_MAX_TOKENS = 512;
+
+/**
  * 약물 조회 요청 본문 — SubstanceCheckView.swift:118-126과 같은 값(system 없음).
  * 타임아웃(25초, :125)은 전송 계층 값이라 여기 두지 않는다 — src/api/llm.ts `LLM_PRESET_DEFAULTS.substance`.
  */
@@ -159,7 +165,7 @@ export function buildSubstanceLlmRequest(input: {
     messages: [{ role: "user", content: input.query }],
     preset: "substance",
     context,
-    maxTokens: 512, // 원문: SubstanceCheckView.swift:121 `LLMClient(maxTokens: 512)`
+    maxTokens: SUBSTANCE_LLM_MAX_TOKENS,
   };
 }
 
