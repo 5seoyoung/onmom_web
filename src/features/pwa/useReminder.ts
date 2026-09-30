@@ -6,6 +6,8 @@
 //   절차 자체는 reminderModel.ts(enableReminder·disableReminder — vitest가 가짜 의존성으로 확인), 실제 의존성은 reminderActions.ts.
 // 토글의 켜짐은 저장된 플래그가 아니라 실제 상태로 본다 — 이 브라우저에 지금 빌드의 키로 만든 구독이 있고 그 끝점의 서버 행도 있을 때
 // (reminderModel.subscribedState). 서버가 보낼 곳이 없는 "켜짐"은 없다.
+// 상태를 읽기 전에 앱을 열 때 맞추기(reminderActions.reconcileReminderOnce — 브라우저가 구독을 갈아 끼운 경우)가 끝나기를 기다린다(최대 몇 초).
+// 실제로 켜져 있으면 이 브라우저의 켜 둔 표시(reminderSetting.ts)도 그 끝점으로 맞춘다 — 다음에 구독이 바뀌어도 되살릴 수 있게.
 // 이 훅은 브라우저에서만 마운트되는 화면(설정 — hydrated 뒤)에서 부른다.
 
 import { useCallback, useEffect, useState } from "react";
@@ -13,7 +15,7 @@ import { useServerSession } from "@/auth/useServerSession";
 import { config, isReminderConfigured } from "@/config";
 import { useAppStore } from "@/store/useAppStore";
 import { hasPushSubscriptionRow } from "./pushSubscriptions";
-import { currentApplicationServerKey, disableReminderNow, enableReminderNow } from "./reminderActions";
+import { currentApplicationServerKey, disableReminderNow, enableReminderNow, settleReminderReconcile } from "./reminderActions";
 import {
   isIosDevice,
   normalizePermission,
@@ -24,6 +26,7 @@ import {
   type ReminderPermission,
   type ReminderView,
 } from "./reminderModel";
+import { rememberReminder } from "./reminderSetting";
 import { currentPushSubscription, pushSupported } from "./serviceWorker";
 
 export interface ReminderControl {
@@ -90,10 +93,13 @@ export function useReminder(): ReminderControl {
     if (!needsProbe || key === null) return;
     let cancelled = false;
     (async () => {
+      // 맞추기 전의 "꺼짐"(브라우저가 갈아 끼운 새 끝점의 행이 아직 없음)을 보이지 않게
+      if (accountId !== null) await settleReminderReconcile(accountId);
       const subscription = await currentPushSubscription(config.basePath);
       const withCurrentKey = subscription !== null && sameApplicationServerKey(subscription.options.applicationServerKey, key);
       const rowExists = withCurrentKey ? await hasPushSubscriptionRow(subscription.endpoint) : false;
       if (cancelled) return;
+      if (accountId !== null && subscription !== null && withCurrentKey && rowExists === true) rememberReminder(accountId, subscription.endpoint);
       setPermission(currentPermission());
       setSubscribed(subscribedState(withCurrentKey, rowExists));
       setProbed(true);
@@ -111,7 +117,7 @@ export function useReminder(): ReminderControl {
       setError(null);
       try {
         if (on) {
-          const result = await enableReminderNow();
+          const result = await enableReminderNow(accountId);
           setPermission(result.kind === "permission" ? result.permission : currentPermission());
           setSubscribed(result.kind === "enabled");
           if (result.kind === "unsupportedService") setServiceUnsupported(true);
@@ -128,7 +134,7 @@ export function useReminder(): ReminderControl {
         setBusy(false);
       }
     },
-    [busy, serverSession],
+    [busy, serverSession, accountId],
   );
 
   return {

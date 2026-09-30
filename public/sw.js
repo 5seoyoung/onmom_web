@@ -16,9 +16,10 @@
 // - 알림 문구는 content.json `notification.daily_reminder`의 원문을 그대로 옮긴 상수다(src/features/pwa/pwa.test.ts가 같은지 확인).
 //   서버가 보낸 본문은 화면에 쓰지 않는다 — 서버가 무엇을 보내든 이 문구만 보인다(건강 데이터가 알림에 실릴 길이 없다).
 // - 알림을 누르면 기록 화면(`${basePath}/record/` = ROUTES.record)을 연다. 열린 창이 있으면 그 창을 앞으로.
+// - 구독이 갈아 끼워지면(pushsubscriptionchange) 다시 구독만 한다(맨 아래). 서버 행은 앱이 다음에 열릴 때 맞춘다.
 "use strict";
 
-const CACHE_VERSION = "onmom-2026-09-29-1";
+const CACHE_VERSION = "onmom-2026-09-30-1";
 const STATIC_CACHE = `${CACHE_VERSION}:static`;
 const PAGES_CACHE = `${CACHE_VERSION}:pages`;
 const CACHE_PREFIX = "onmom-";
@@ -143,5 +144,19 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-// 푸시 서비스가 구독을 갈아 끼우면(pushsubscriptionchange) 새 구독을 서버에 알려야 하지만, 워커에는 로그인 세션이 없다.
-// 다음에 앱을 열면 설정 화면의 토글이 실제 구독 상태를 그대로 보이므로(꺼짐), 사용자가 다시 켤 수 있다.
+// 푸시 서비스가 구독을 갈아 끼우면(pushsubscriptionchange) — 브라우저가 새 구독을 주지 않았으면(newSubscription 없음) 예전 구독과
+// 같은 설정(같은 VAPID 키)으로 다시 구독만 해 둔다. 워커에는 로그인 세션이 없어 서버 행은 고치지 못한다 — 다음에 앱을 열면
+// 앱이 새 끝점을 이 계정의 행으로 저장하고 예전 끝점의 행을 지운다(src/features/pwa/reminderActions.ts reconcileReminderOnce).
+// 권한이 없어졌거나 푸시 서비스에 닿지 못하면 그대로 둔다(앱을 열 때, 권한이 허용이면 앱이 다시 구독한다 — 권한을 묻지는 않는다).
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      if (event.newSubscription) return;
+      const manager = self.registration && self.registration.pushManager;
+      const options = event.oldSubscription && event.oldSubscription.options;
+      if (!manager || typeof manager.subscribe !== "function" || !options || !options.applicationServerKey) return;
+      if (await manager.getSubscription()) return; // 이미 새 구독이 있다
+      await manager.subscribe({ userVisibleOnly: options.userVisibleOnly !== false, applicationServerKey: options.applicationServerKey });
+    })().catch(() => undefined),
+  );
+});

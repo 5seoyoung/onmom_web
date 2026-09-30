@@ -9,14 +9,17 @@
 //        reminderActions.disableReminderNow()를 부르면 그 자리에서 지운다(docs/PWA_AND_REMINDERS.md §8).
 //      - 다른 계정으로 바로 바뀌면(게스트 → 이미 있던 카카오 계정 전환은 익명 사용자와 그 서버 행을 먼저 지운다) 끝점을 새 계정의 행으로
 //        다시 저장한다. 저장하지 못하면(행이 아직 다른 사용자의 것 — RLS) 구독을 푼다 → 설정 화면은 "꺼짐"(서버가 보낼 곳이 없는 "켜짐"은 없다).
-//   계정이 빠르게 여러 번 바뀌어도 순서대로 하나씩 처리한다.
+//   3) 앱을 열 때 한 번(계정이 있을 때) — 이 브라우저에서 켜 둔 알림의 구독을 브라우저가 갈아 끼웠거나(pushsubscriptionchange) 잃었으면
+//      서버 행을 맞춘다(reminderActions.reconcileReminderOnce). 켜 둔 표시가 없으면 아무 요청도 하지 않는다. Supabase + VAPID 설정이 없는
+//      빌드에서는 부르지도 않는다.
+//   모두 순서대로 하나씩 처리한다(계정이 빠르게 여러 번 바뀌어도). 화면을 막지 않는다.
 
 import { useEffect, useRef } from "react";
-import { config } from "@/config";
+import { config, isReminderConfigured } from "@/config";
 import { useAppStore } from "@/store/useAppStore";
-import { rebindReminderNow } from "./reminderActions";
+import { rebindReminderNow, reconcileReminderOnce, releaseReminderNow } from "./reminderActions";
 import { accountTransition, shouldAutoRegisterServiceWorker } from "./reminderModel";
-import { pushSupported, registerServiceWorker, unsubscribeLocalPush } from "./serviceWorker";
+import { pushSupported, registerServiceWorker } from "./serviceWorker";
 
 export function PwaClient() {
   const { hydrated, account } = useAppStore();
@@ -32,9 +35,15 @@ export function PwaClient() {
     if (!hydrated) return;
     const transition = accountTransition(previousAccountId.current, accountId);
     previousAccountId.current = accountId;
-    if (transition === "none" || !pushSupported()) return;
-    const run = async (): Promise<unknown> => (transition === "signedOut" ? unsubscribeLocalPush(config.basePath) : rebindReminderNow());
-    queue.current = queue.current.then(run).catch(() => undefined);
+    if (!pushSupported()) return;
+    let run: (() => Promise<unknown>) | null = null;
+    if (transition === "signedOut") run = releaseReminderNow;
+    else if (accountId !== null) {
+      const id = accountId;
+      if (transition === "switched") run = () => rebindReminderNow(id);
+      else if (isReminderConfigured()) run = () => reconcileReminderOnce(id);
+    }
+    if (run !== null) queue.current = queue.current.then(run).catch(() => undefined);
   }, [hydrated, accountId]);
 
   return null;

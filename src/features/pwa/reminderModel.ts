@@ -1,4 +1,4 @@
-// 매일 리마인더(웹 푸시) — 화면이 어떤 상태를 보일지 정하는 순수 규칙, 구독 값 변환, 켜기·끄기·계정 전환 절차(의존성을 받아 돈다).
+// 매일 리마인더(웹 푸시) — 화면이 어떤 상태를 보일지 정하는 순수 규칙, 구독 값 변환, 켜기·끄기·계정 전환·앱을 열 때 맞추기 절차(의존성을 받아 돈다).
 // 브라우저 API는 serviceWorker.ts, 서버 저장은 pushSubscriptions.ts, 둘을 이 절차에 넣는 곳은 reminderActions.ts. 이 파일은 브라우저 전역을 쓰지 않아 vitest가 가짜 의존성으로 전부 돌려 본다.
 //
 // iOS 앱은 로컬 알림을 매일 20:00에 울렸다(NotificationManager.swift:20-33). 웹은 서버(Supabase pg_cron → Edge Function send-reminders)가
@@ -336,4 +336,176 @@ export async function rebindReminder(deps: RebindReminderDeps): Promise<RebindRe
   if (row !== null && (await deps.save(row)).ok) return "rebound";
   await unsubscribeQuietly(subscription);
   return "dropped";
+}
+
+// MARK: 앱을 열 때 맞추기 — 브라우저가 구독을 갈아 끼우거나 잃었을 때(pushsubscriptionchange·만료·VAPID 키 교체)
+//
+// 푸시 서비스는 구독을 갈아 끼울 수 있다. 워커(public/sw.js)는 새 구독을 만들 수는 있지만 로그인 세션이 없어 서버 행을 고치지 못한다 —
+// 그대로 두면 서버는 죽은 끝점으로 보내고(404/410 → 행 삭제) 이 기기에는 알림이 오지 않는다. 그래서 앱을 열 때 한 번 맞춘다.
+// 무엇이 "켜 둔 것"인가: 토글의 켜짐은 실제 상태(구독 + 서버 행)라 구독이 바뀌면 그 근거가 사라진다. 그래서 켜기에 성공할 때
+// 이 브라우저에 표시를 남긴다(ReminderSetting — 계정과 그때 저장한 끝점, reminderSetting.ts). 끄기·로그아웃·계정 전환 실패에서 지운다.
+// 표시가 없으면(한 번도 켜지 않았거나 껐다) 워커·서버에 아무것도 묻지 않는다.
+
+/** 이 브라우저에서 켜기에 성공했다는 표시 — 어느 계정으로, 어느 끝점을 서버에 저장했는가(reminderSetting.ts가 localStorage에 둔다) */
+export interface ReminderSetting {
+  account: string;
+  endpoint: string;
+}
+
+/** 저장된 표시(JSON 글자) → 표시. 모양이 틀리면 null(없는 것으로 본다 — 아무것도 하지 않는다). */
+export function parseReminderSetting(raw: string | null | undefined): ReminderSetting | null {
+  if (typeof raw !== "string" || raw.length === 0) return null;
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (typeof v !== "object" || v === null) return null;
+    const { account, endpoint } = v as Record<string, unknown>;
+    if (typeof account !== "string" || account.length === 0 || typeof endpoint !== "string" || endpoint.length === 0) return null;
+    return { account, endpoint };
+  } catch {
+    return null;
+  }
+}
+
+/** 서버 행과 브라우저 구독을 비교하는 값(시간대는 비교하지 않는다 — 저장할 때 지금 값으로 함께 간다) */
+export type PushSubscriptionKeys = Pick<PushSubscriptionRow, "endpoint" | "p256dh" | "auth">;
+
+export interface ReminderReconcileInput {
+  /** 이 브라우저에서 이 계정으로 켜 둔 표시(켤 때 저장한 끝점) — 없거나 다른 계정의 것이면 null */
+  setting: { endpoint: string } | null;
+  /** 지금 알림 권한(묻지 않고 읽은 값) */
+  permission: ReminderPermission | null;
+  /** 이 브라우저의 지금 구독 — 없으면 null. currentKey = 지금 빌드의 VAPID 키로 만든 구독인가 */
+  browserSub: (PushSubscriptionKeys & { currentKey: boolean }) | null;
+  /** 이 계정의 서버 행(RLS 본인 행 — 기기마다 한 행). 읽지 못했으면 null */
+  serverRows: readonly PushSubscriptionKeys[] | null;
+}
+
+/** stale = 먼저 지울 이 브라우저의 예전 끝점 행(더는 이 기기에 닿지 않는다). 없으면 null */
+export type ReminderReconcileAction =
+  /** 할 일 없음 — 켜 둔 표시 없음·권한이 허용이 아님·서버 행을 읽지 못함·이미 맞음 */
+  | { kind: "none" }
+  /** 서버 행은 이미 맞다 — 표시의 끝점만 지금 것으로 바꾼다 */
+  | { kind: "track"; stale: string | null }
+  /** 브라우저의 지금 구독을 서버 행으로 저장한다(새 끝점 — 브라우저가 갈아 끼움, 또는 같은 끝점의 키가 다름) */
+  | { kind: "save"; stale: string | null }
+  /** 쓸 수 있는 구독이 없다(없음·예전 키·서버가 지운 끝점) — 권한을 묻지 않고 새로 구독해 저장한다 */
+  | { kind: "resubscribe"; stale: string | null };
+
+/**
+ * 앱을 열 때 무엇을 할지(순수 규칙). 권한을 묻는 길은 없다 — 허용일 때만 움직인다. 서버 행을 읽지 못했으면(오프라인) 아무것도 하지 않는다.
+ * - 구독이 없거나 예전 키 → resubscribe
+ * - 구독의 끝점 행이 없다: 끝점이 표시와 같으면 발송 함수가 지운 것(푸시 서비스가 404/410 — 구독이 끝남)이라 같은 끝점을 다시 저장해도
+ *   또 지워진다 → resubscribe. 다르면 브라우저가 갈아 끼운 새 구독 → save
+ * - 행은 있는데 키가 다르다 → save(같은 끝점 upsert가 키를 갱신)
+ * - 행이 맞는데 표시의 끝점이 예전 것 → track
+ */
+export function reminderReconcileAction(input: ReminderReconcileInput): ReminderReconcileAction {
+  const { setting, permission, browserSub, serverRows } = input;
+  if (setting === null || permission !== "granted" || serverRows === null) return { kind: "none" };
+  const hasRow = (endpoint: string) => serverRows.some((r) => r.endpoint === endpoint);
+  /** 표시의 끝점이 지금 쓰는 끝점이 아니고 그 행이 남아 있으면 지운다 */
+  const staleBesides = (endpoint: string | null) => (setting.endpoint !== endpoint && hasRow(setting.endpoint) ? setting.endpoint : null);
+
+  if (browserSub === null || !browserSub.currentKey) return { kind: "resubscribe", stale: staleBesides(null) };
+  const row = serverRows.find((r) => r.endpoint === browserSub.endpoint);
+  if (row === undefined) {
+    if (browserSub.endpoint === setting.endpoint) return { kind: "resubscribe", stale: null };
+    return { kind: "save", stale: staleBesides(browserSub.endpoint) };
+  }
+  if (row.p256dh !== browserSub.p256dh || row.auth !== browserSub.auth) return { kind: "save", stale: staleBesides(browserSub.endpoint) };
+  if (setting.endpoint !== browserSub.endpoint) return { kind: "track", stale: staleBesides(browserSub.endpoint) };
+  return { kind: "none" };
+}
+
+export interface ReconcileReminderDeps {
+  /** 지금 빌드의 VAPID 공개 키 */
+  applicationServerKey: Uint8Array<ArrayBuffer>;
+  /** 이 브라우저에서 이 계정으로 켜 둔 표시(reminderSetting.ts — 저장소 읽기만) */
+  setting(): { endpoint: string } | null;
+  /** 지금 알림 권한(Notification.permission — 묻지 않는다) */
+  permission(): ReminderPermission | null;
+  /** 이미 등록된 활성 워커의 pushManager — 없으면 null(새로 등록하지 않는다) */
+  pushManager(): Promise<PushManagerLike | null>;
+  /** 이 계정의 서버 행(pushSubscriptions.ts listPushSubscriptionRows) — 확인하지 못하면 null */
+  listRows(): Promise<readonly PushSubscriptionKeys[] | null>;
+  timeZone(): string | null;
+  /** 서버 행 upsert(켜기와 같은 저장) */
+  save(row: PushSubscriptionRow): Promise<SaveRowResult>;
+  /** 끝점의 행 삭제 — 실패해도 던지지 않는다 */
+  deleteRow(endpoint: string): Promise<boolean>;
+  /** 표시의 끝점을 바꾼다 */
+  remember(endpoint: string): void;
+  /** 표시를 지운다 */
+  forget(): void;
+}
+
+export type ReconcileReminderResult =
+  /** 할 일이 없었다(묻지 않았거나 이미 맞음) */
+  | "none"
+  /** 표시의 끝점만 바꿨다 */
+  | "tracked"
+  /** 브라우저의 새 구독을 서버 행으로 저장했다 */
+  | "saved"
+  /** 새로 구독해 저장했다 */
+  | "resubscribed"
+  /** 저장·구독하지 못했다(오프라인 등) — 표시는 두고 다음에 앱을 열 때 다시 */
+  | "failed"
+  /** 이 브라우저로는 받을 수 없게 됐다(권한·받는 목록 밖 푸시 서비스) — 표시를 지웠다 */
+  | "dropped";
+
+/**
+ * 앱을 열 때 한 번(reminderActions.reconcileReminderOnce). 저장·새 구독은 켜기와 같은 길(enableReminder)을 쓴다 —
+ * 권한은 묻지 않고 지금 값을 넘기며, 저장에 실패하면 구독을 도로 푼다(서버에 없는 켜짐은 없다).
+ * 표시가 없거나 권한이 허용이 아니면 워커·서버에 아무것도 묻지 않는다.
+ */
+export async function reconcileReminder(deps: ReconcileReminderDeps): Promise<ReconcileReminderResult> {
+  const setting = deps.setting();
+  const permission = deps.permission();
+  if (setting === null || permission !== "granted") return "none";
+  const manager = await deps.pushManager();
+  if (!manager) return "none";
+  const subscription = await manager.getSubscription();
+  const serverRows = await deps.listRows();
+  const keys = subscription?.toJSON().keys;
+  const browserSub = subscription
+    ? {
+        endpoint: subscription.endpoint,
+        p256dh: keys?.p256dh ?? "",
+        auth: keys?.auth ?? "",
+        currentKey: sameApplicationServerKey(subscription.options.applicationServerKey, deps.applicationServerKey),
+      }
+    : null;
+  const action = reminderReconcileAction({ setting, permission, browserSub, serverRows });
+  if (action.kind === "none") return "none";
+  // 예전 끝점의 행을 먼저 지운다 — 기기 수 한도(10)에 걸리지 않게. 이 기기에는 더는 닿지 않는 행이다.
+  if (action.stale !== null) await deps.deleteRow(action.stale);
+  if (action.kind === "track") {
+    if (browserSub !== null) deps.remember(browserSub.endpoint);
+    return "tracked";
+  }
+
+  let savedEndpoint: string | null = null;
+  const result = await enableReminder({
+    applicationServerKey: deps.applicationServerKey,
+    requestPermission: async () => permission,
+    pushManager: async () => manager,
+    timeZone: deps.timeZone,
+    save: async (row) => {
+      const saved = await deps.save(row);
+      if (saved.ok) savedEndpoint = row.endpoint;
+      return saved;
+    },
+    // resubscribe: 남은 구독(예전 키·서버가 지운 끝점)은 쓰지 않고 새로 만든다. save: 지금 구독을 그대로 저장한다.
+    rowExists: action.kind === "resubscribe" ? async () => false : undefined,
+  });
+  if (result.kind === "enabled" && savedEndpoint !== null) {
+    deps.remember(savedEndpoint);
+    return action.kind === "save" ? "saved" : "resubscribed";
+  }
+  if (result.kind === "permission" || result.kind === "unsupportedService") {
+    // 이 브라우저로는 받을 수 없다 — 앱을 열 때마다 구독을 만들었다 풀지 않게 표시를 지운다(설정 화면은 실제 상태를 보인다)
+    deps.forget();
+    return "dropped";
+  }
+  return "failed";
 }

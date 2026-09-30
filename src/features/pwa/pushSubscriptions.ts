@@ -3,7 +3,8 @@
 // 저장하는 것은 푸시 끝점·암호화 키·시간대뿐이다 — 건강 데이터는 없다. 알림 본문도 서버의 고정 문구(_shared/reminders.ts)뿐이다.
 
 import { getSupabaseClient } from "@/auth/client";
-import { PUSH_SUBSCRIPTIONS_TABLE, type PushSubscriptionRow } from "./reminderModel";
+import { accountFromSessionUser } from "@/auth/kakaoAccount";
+import { PUSH_SUBSCRIPTIONS_TABLE, type PushSubscriptionKeys, type PushSubscriptionRow } from "./reminderModel";
 
 export type SaveSubscriptionResult = { ok: true } | { ok: false; reason: "noClient" | "noSession" | "failed" };
 
@@ -34,6 +35,26 @@ export async function hasPushSubscriptionRow(endpoint: string): Promise<boolean 
     const { data, error } = await client.from(PUSH_SUBSCRIPTIONS_TABLE).select("endpoint").eq("endpoint", endpoint).maybeSingle();
     if (error) return null;
     return data !== null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 이 계정의 행 전부(RLS 본인 행 — 기기마다 한 행, 10개까지). 앱을 열 때 이 브라우저의 구독과 맞추는 데 쓴다(reminderModel.reconcileReminder).
+ * 세션 사용자가 이 계정이 아니면(계정 전환 중 등) 남의 행을 고치지 않게 null. 확인하지 못하면(설정 없음·세션 없음·오프라인·오류) null.
+ */
+export async function listPushSubscriptionRows(accountId: string): Promise<PushSubscriptionKeys[] | null> {
+  const client = await getSupabaseClient();
+  if (!client) return null;
+  try {
+    const { data: auth } = await client.auth.getSession();
+    if (!auth.session || accountFromSessionUser(auth.session.user)?.id !== accountId) return null;
+    const { data, error } = await client.from(PUSH_SUBSCRIPTIONS_TABLE).select("endpoint, p256dh, auth");
+    if (error || !Array.isArray(data)) return null;
+    return data.flatMap((r: Record<string, unknown>) =>
+      typeof r.endpoint === "string" && typeof r.p256dh === "string" && typeof r.auth === "string" ? [{ endpoint: r.endpoint, p256dh: r.p256dh, auth: r.auth }] : [],
+    );
   } catch {
     return null;
   }

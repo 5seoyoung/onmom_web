@@ -170,7 +170,7 @@ interface FetchEvent {
   request: FakeRequest;
   respondWith(p: Promise<unknown>): void;
 }
-function loadServiceWorker(swUrl: string) {
+function loadServiceWorker(swUrl: string, opts: { pushManager?: unknown } = {}) {
   const sw = readFileSync(join(PUBLIC, SW_PATH), "utf8");
   const listeners = new Map<string, (event: unknown) => void>();
   const stores = new Map<string, Map<string, FakeResponse>>();
@@ -201,7 +201,10 @@ function loadServiceWorker(swUrl: string) {
     caches,
     skipWaiting: async () => undefined,
     clients: { claim: async () => undefined, matchAll: async () => [], openWindow: async (u: string) => void opened.push(u) },
-    registration: { showNotification: async (title: string, options: Record<string, unknown>) => void notifications.push({ title, options }) },
+    registration: {
+      showNotification: async (title: string, options: Record<string, unknown>) => void notifications.push({ title, options }),
+      ...(opts.pushManager !== undefined ? { pushManager: opts.pushManager } : {}),
+    },
   };
   const fetch = async (req: FakeRequest) => {
     fetched.push(req.url);
@@ -292,6 +295,42 @@ describe("sw.js — 실제 실행(가짜 self)", () => {
     const w = loadServiceWorker(`${BASE}/sw.js`);
     await w.request(`${BASE}/home/redirected`, { mode: "navigate" });
     expect([...w.stores.values()].every((s) => s.size === 0)).toBe(true);
+  });
+
+  it("pushsubscriptionchange — 새 구독이 없으면 예전 구독과 같은 키로 다시 구독만 한다(서버에는 아무것도 보내지 않는다)", async () => {
+    const calls: Array<{ userVisibleOnly: boolean; applicationServerKey: ArrayBuffer }> = [];
+    const pushManager = { getSubscription: async () => null, subscribe: async (o: (typeof calls)[number]) => (calls.push(o), {}) };
+    const w = loadServiceWorker(`${BASE}/sw.js`, { pushManager });
+    const key = new Uint8Array([4, 1, 2, 3]).buffer;
+    await w.waited("pushsubscriptionchange", { oldSubscription: { options: { userVisibleOnly: true, applicationServerKey: key } }, newSubscription: null });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].userVisibleOnly).toBe(true);
+    expect(calls[0].applicationServerKey).toBe(key);
+    expect(w.fetched).toEqual([]);
+    expect(w.notifications).toEqual([]);
+  });
+
+  it("pushsubscriptionchange — 브라우저가 새 구독을 줬거나·예전 설정이 없거나·이미 구독이 있거나·pushManager가 없으면 아무것도 하지 않고, 실패는 삼킨다", async () => {
+    const key = new Uint8Array([4, 1, 2, 3]).buffer;
+    const old = { options: { userVisibleOnly: true, applicationServerKey: key } };
+    let subscribed = 0;
+    const manager = (existing: unknown) => ({ getSubscription: async () => existing, subscribe: async () => (subscribed++, {}) });
+
+    await loadServiceWorker(`${BASE}/sw.js`, { pushManager: manager(null) }).waited("pushsubscriptionchange", { oldSubscription: old, newSubscription: { endpoint: `${FCM}-new` } });
+    await loadServiceWorker(`${BASE}/sw.js`, { pushManager: manager(null) }).waited("pushsubscriptionchange", { oldSubscription: null, newSubscription: null });
+    await loadServiceWorker(`${BASE}/sw.js`, { pushManager: manager(null) }).waited("pushsubscriptionchange", { oldSubscription: { options: { applicationServerKey: null } } });
+    await loadServiceWorker(`${BASE}/sw.js`, { pushManager: manager({ endpoint: `${FCM}-kept` }) }).waited("pushsubscriptionchange", { oldSubscription: old });
+    await loadServiceWorker(`${BASE}/sw.js`).waited("pushsubscriptionchange", { oldSubscription: old });
+    expect(subscribed).toBe(0);
+
+    // 권한이 없어졌거나 푸시 서비스에 닿지 못함 — waitUntil의 약속은 실패하지 않는다(앱을 열 때 다시)
+    const failing = {
+      getSubscription: async () => null,
+      subscribe: async () => {
+        throw new Error("NotAllowedError");
+      },
+    };
+    await expect(loadServiceWorker(`${BASE}/sw.js`, { pushManager: failing }).waited("pushsubscriptionchange", { oldSubscription: old })).resolves.toBeUndefined();
   });
 
   it("activate — 예전 판의 onmom- 캐시만 지우고 남의 캐시는 둔다", async () => {
