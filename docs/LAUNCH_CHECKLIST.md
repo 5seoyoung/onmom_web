@@ -25,6 +25,7 @@
 - [ ] **개발** D-1이 성공했고 Table Editor·Edge Functions·Migrations가 설정 안내 D-1의 3과 같음
 - [ ] **개발** 내 컴퓨터(`.env.local`, `http://localhost:3000`)에서 설정 안내 F를 한 번 돌려 봄 — 공개 사이트는 그대로
 - [ ] **개발** 시험 계정을 Supabase **Authentication → Users**에서 지움(관리자로 지정한 계정은 빼고)
+- [ ] **CPO** GitHub Variable `NEXT_PUBLIC_VAPID_PUBLIC_KEY`가 서버 함수의 `VAPID_PUBLIC_KEY`와 같은 값(2026-09-30에 새로 만든 짝 — 값은 개발이 전달, `docs/private/supabase.env`). 다르면 켠 뒤 알림 구독이 서버 키와 맞지 않아 리마인더가 오지 않습니다(`docs/PWA_AND_REMINDERS.md`)
 
 ---
 
@@ -97,16 +98,20 @@
   - 게스트 시작: 기본 IP당 시간당 30번(설정 안내 B-7). 사용자가 늘면 CAPTCHA(B-6)를 켠 뒤 올립니다.
   - AI 상담: `CHAT_HOURLY_LIMIT`(한 사람 시간당, 기본 30 — 처음 켤 때 10 권장)·`CHAT_GLOBAL_DAILY_LIMIT`(전체 하루, 기본 500) + Anthropic 월 한도.
   - CAPTCHA가 없으면 한 사람이 IP 하나로 시간당 게스트 계정 30개를 만들 수 있어, 한 시간 안에 AI 상담의 하루 전체 한도를 다 써 버릴 수 있습니다(그러면 24시간 동안 모두에게 AI 상담이 멈춤). AI 상담을 켜기 전에 CAPTCHA를 켭니다(5-0).
-- [ ] **2-6 익명(게스트) 계정 정리 정책 결정** (CPO → 개발)
+- [ ] **2-6 익명(게스트) 계정 정리 정책 확정** (CPO → 개발)
   - 게스트는 브라우저 데이터를 지우면 다시 들어올 수 없어, 주인이 없는 익명 계정이 쌓입니다.
-  - 정할 것: 서버 기록이 없는 익명 계정을 며칠 뒤 지울지, 서버 기록이 있는 게스트를 마지막 접속 뒤 얼마 동안 둘지. 정하면 방침(1-7)에 적고 개발이 마이그레이션으로 자동 정리를 만듭니다. **대시보드에서 손으로 일괄 삭제하지 않습니다.**
+  - 이미 적용됨(`supabase/migrations/0006_anon_cleanup.sql`, 매일 03:00): **서버 기록을 한 번도 저장하지 않았고 카카오를 연결하지 않은 게스트 계정은 만든 지 30일 뒤 자동 삭제** — 처리방침 초안 5절과 같은 기준.
+  - 정할 것: 30일이 맞는지, 서버 기록이 있는 게스트를 마지막 접속 뒤 얼마 동안 둘지(지금은 계정을 삭제할 때까지 보관). 바꾸면 방침(1-7)과 마이그레이션을 함께 고칩니다. **대시보드에서 손으로 일괄 삭제하지 않습니다.**
 - [ ] **2-7 건드리지 않을 설정** (모두)
   - Supabase **Project Settings → API Keys**의 **Secret keys** `default` 키를 지우거나 다시 만들지 않음 — AI 상담 함수가 씀. **Legacy API keys**(예전 `service_role`)는 chat 함수 Logs에 `"server_key":"secret_keys"`가 보인 뒤에만 끔(설정 안내 B-4).
   - 무료 요금제에서 일시 중지된 프로젝트를 **Restore**하면 예전 방식 키가 돌아오지 않습니다 — Restore 뒤 설정 안내 D-1을 다시 돌려 경고를 봅니다.
   - `supabase config push`를 실행하지 않음 — 대시보드의 인증 설정이 덮임.
   - 표·권한을 대시보드에서 손으로 고치지 않음 — `supabase/migrations`로만.
+  - 새 외부 서비스(스크립트·API·이미지)를 붙이면 `src/csp.ts`의 허용 출처도 같이 고침 — 안 고치면 브라우저가 막고, 배포 전 브라우저 시험(e2e)이 실패합니다(`docs/SECURITY.md`).
 - [ ] **2-8 도메인을 바꿀 때 목록** (개발) — 한 번에 모두
   - 카카오 A-3 JavaScript SDK 도메인 · Supabase B-3 Site URL·Redirect URLs · GitHub Variable `ALLOWED_ORIGINS` → D-1 · Turnstile Hostname(B-6) · 처리방침의 사이트 주소
+  - GitHub Variable `NEXT_PUBLIC_SITE_URL`(공유 카드 주소 — `https://<도메인>/`, 커스텀 도메인은 basePath가 없어짐)
+  - 커스텀 도메인부터는 `public/robots.txt`가 실제로 읽힙니다 — 검색 공개 시점에 `docs/SECURITY.md` "검색 노출"대로 바꿈
 
 ---
 

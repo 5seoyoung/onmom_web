@@ -59,6 +59,9 @@ jobs:
           # 검색 노출 — "true"면 서비스 소개(/)만 색인 허용, 나머지는 계속 noindex. 비우면 전부 noindex(1.0 공개 전).
           # src/app/page.tsx가 robotsFor("landing")을 쓰는 빌드에서만 효과가 있다(docs/PWA_AND_REMINDERS.md §8).
           NEXT_PUBLIC_SITE_INDEXABLE: ${{ vars.NEXT_PUBLIC_SITE_INDEXABLE }}
+          # 공유 미리보기(OG)의 절대 주소 — 비우면 https://5seoyoung.github.io/onmom_web/. 커스텀 도메인이면 https://<도메인>/
+          # (경로가 BASE_PATH와 다르면 빌드가 멈춘다 — src/config.ts siteUrlFrom, docs/PWA_AND_REMINDERS.md §2-3).
+          NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
       # 브라우저 자동 시험(e2e, docs/DEV_NOTES.md §11) — 방금 만든 out/(배포할 그 파일)을 같은 BASE_PATH로 띄워 폰·PC Chromium으로 연다.
       # 실패하면 이 job이 실패해 아래 업로드·deploy job이 돌지 않는다.
       - name: Install Playwright Chromium

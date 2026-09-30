@@ -43,7 +43,7 @@
 
 ### 2-3. 커스텀 도메인으로 옮길 때
 매니페스트는 정적 파일이라 basePath를 알지 못합니다. `BASE_PATH`가 ""가 되면 `public/manifest.webmanifest`의 세 값을 고칩니다: `"id": "/"`, `"start_url": "/home/"`, `"scope": "/"`. 그리고 `src/features/pwa/pwaAssets.ts`의 `PRODUCTION_BASE_PATH`를 ""로 — `pwa.test.ts`가 둘이 어긋나면 실패합니다. 서비스 워커·레이아웃 메타·아이콘 주소는 자동으로 따라갑니다.
-공유 미리보기(§2-4)의 절대 주소는 `NEXT_PUBLIC_SITE_URL=https://<도메인>/`을 함께 넣어야 새 도메인을 가리킵니다(비우면 `https://5seoyoung.github.io/onmom_web/`). 값을 넣었는데 경로가 `BASE_PATH`와 다르면 빌드가 멈춥니다(`src/config.ts siteUrlFrom`). 배포 워크플로(`.github/workflows/deploy.yml`)는 아직 이 Variable을 넘기지 않으니, 도메인을 옮길 때 `NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}` 한 줄을 build 단계 env에 더합니다(`.env.example`에도).
+공유 미리보기(§2-4)의 절대 주소는 `NEXT_PUBLIC_SITE_URL=https://<도메인>/`을 함께 넣어야 새 도메인을 가리킵니다(비우면 `https://5seoyoung.github.io/onmom_web/`). 값을 넣었는데 경로가 `BASE_PATH`와 다르면 빌드가 멈춥니다(`src/config.ts siteUrlFrom`). 배포 워크플로(`.github/workflows/deploy.yml`)는 GitHub Variable `NEXT_PUBLIC_SITE_URL`을 build 단계에 넘깁니다(2026-09-30) — 도메인을 옮길 때 이 Variable만 넣습니다.
 
 ### 2-4. 공유 미리보기(Open Graph·트위터) — 2026-09-29
 - 모든 화면: `og:image`·`twitter:image` = `public/og-image.png`(1200×630), 카드 `summary_large_image`, `og:site_name` "온맘", `og:locale` ko_KR. 제목·설명은 화면의 것(제목 틀 "%s · 온맘" — 이름이 든 제목(서비스 소개·이용약관·관리자)은 틀을 건너뜀). 서비스 소개는 `og:url`·제목·설명을 서비스 소개 문구 그대로(`LANDING_META` — 새 문장 없음). 코드: `src/features/landing/shareMeta.ts`, 루트 레이아웃 `metadataBase: new URL(config.siteUrl)`.

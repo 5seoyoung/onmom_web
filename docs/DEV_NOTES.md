@@ -595,9 +595,9 @@
 - 실제 카카오 로그인·연결·동기화·삭제·관리자 도구를 끝에서 끝까지(SETUP F), 0004·0005를 운영 DB에(워크플로).
 **웹 [nice]**
 - 레거시 계정 API 설정(`NEXT_PUBLIC_ACCOUNT_URL`·`NEXT_PUBLIC_ONMOM_APP_KEY`·`isAccountBackendConfigured`·`APP_KEY_HEADER`) — CTO가 Render 계정 API를 버린다고 확정하면 `config.ts`·`.env.example`·`deploy.yml`·`api/http.ts`에서 지움(VIDEO/LLM 예전 경로는 유지).
-- CSP 메타 태그 — GitHub Pages는 헤더를 못 붙여 `<meta http-equiv>`만 가능. 허용 목록(script `self` dapi.kakao.com t1.daumcdn.net challenges.cloudflare.com · connect `self` *.supabase.co dapi.kakao.com · img `self` data: *.daumcdn.net · frame challenges.cloudflare.com)을 카카오 키 로컬 빌드에서 지도·Turnstile로 확인한 뒤에만(깨질 위험 큼 — 이번에 넣지 않음).
+- ~~CSP 메타 태그~~ — 2026-09-30 `src/csp.ts`(설정된 기능의 출처만, 운영 빌드에만) — 카카오 키 로컬 빌드에서 지도·장소 검색·Turnstile·AI 상담·영상으로 확인. 남은 것: script `'unsafe-inline'`(정적 내보내기의 인라인 RSC 스크립트 — 빌드 뒤 해시 단계나 헤더를 붙일 수 있는 호스팅이 필요), `docs/SECURITY.md`.
 - 기록·기분 전체 이력 화면과 기록별 고치기·지우기(지금은 최근 5개·내려받기만 — 지우기를 더하면 §10-1 여러 탭 합치기와 서버 합치기가 "합집합"이라 삭제 표시가 필요).
-- ~~제목 템플릿·OG 이미지~~(2026-09-29, 10-7 ④ — 커스텀 도메인으로 옮길 때 `deploy.yml`·`.env.example`에 `NEXT_PUBLIC_SITE_URL` 한 줄), robots.txt·sitemap(프로젝트 페이지 `/onmom_web/`에서는 크롤러가 루트의 robots.txt만 읽으므로 커스텀 도메인 뒤에), CI의 브라우저 스모크(패키지 설치 필요), VoiceOver·TalkBack 실기기, 카카오 지도 `role="region"` 이름(새 문구).
+- ~~제목 템플릿·OG 이미지~~(2026-09-29, 10-7 ④ — `NEXT_PUBLIC_SITE_URL`은 2026-09-30부터 `deploy.yml`이 넘김), ~~robots.txt~~(2026-09-30 — 검색 크롤러는 막고 링크 미리보기 봇만 허용, 커스텀 도메인에서 효력), sitemap(검색 공개 때), ~~CI의 브라우저 스모크~~(2026-09-30 §11), VoiceOver·TalkBack 실기기, 카카오 지도 `role="region"` 이름(새 문구).
 
 ### 10-7. 후속 수정 (2026-09-29 — 통합 뒤 남은 것 5개)
 ① **알림 토글은 서버 세션이 있을 때만**: Supabase 빌드에서 익명 가입이 안 된(이 브라우저 전용) 게스트는 토글 대신 안내 한 줄(`REMINDER_TEXT.needsAccount`, 10-3). 판단은 `src/auth/serverSession.ts`(순수 — 저장된 세션 없음 → none, 세션 사용자의 앱 계정 = 스토어 계정 → server, 읽는 중·읽지 못함 → checking) + `useServerSession.ts`(계정·동기화 켜짐/꺼짐이 바뀌면 다시 읽음, 네트워크 없음). 확인 중에는 토글을 잠금. `reminderModel.reminderView` 순서: 설정 → 브라우저 지원 → 서버 세션 → 권한 → 토글.
