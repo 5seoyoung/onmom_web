@@ -116,8 +116,9 @@ export function HeroCard({ dayCount, chips }: { dayCount: number | null; chips: 
             <span className="text-xl font-semibold">{HOME_TEXT.dayUnit}</span>
           </p>
         ) : null}
-        {/* Swift는 가로 스크롤 한 줄 — 웹은 글씨를 키웠을 때 잘리지 않게 줄바꿈한다 */}
-        <ul className="flex flex-wrap gap-1.5">
+        {/* Swift는 가로 스크롤 한 줄 — 웹은 글씨를 키웠을 때 잘리지 않게 줄바꿈한다.
+            목록 이름은 스크린리더가 "분만 방식·목표, 목록 2개"처럼 칩이 무엇인지 먼저 알리게 한다. */}
+        <ul aria-label={HOME_TEXT.heroChipsLabel} className="flex flex-wrap gap-1.5">
           {chips.map((chip) => (
             <li
               key={chip}

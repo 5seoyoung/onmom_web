@@ -16,6 +16,8 @@ export const CLINICS_TEXT = {
   notConfigured: "가까운 산부인과 찾기는 준비 중이에요.",
   // 웹 신규 문구 — CPO 확인 필요 (검색 중 스크린리더 안내. iOS는 ProgressView만 — NearbyClinicsView.swift:56)
   loading: "산부인과를 찾고 있어요",
+  // 웹 신규 문구 — CPO 확인 필요 (지도 영역의 스크린리더 이름 — 카카오 SDK는 지도에 이름을 붙이지 않는다)
+  mapRegion: "가까운 산부인과 지도",
 } as const;
 
 /** 전화 버튼 접근성 이름 — 원문: NearbyClinicsView.swift:128 */

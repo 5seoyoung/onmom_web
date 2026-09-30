@@ -27,6 +27,8 @@ export const HOME_TEXT = {
   askButton: "AI 상담",
   heroTitle: "산후 회복", // 원문: HomeView.swift:86
   dayUnit: "일차", // 원문: HomeView.swift:93
+  // 웹 신규 문구 — CPO 확인 필요 (히어로 칩 목록의 스크린리더 이름. 칩 = 분만 방식 + 목표 또는 복직 D-n — heroChips)
+  heroChipsLabel: "분만 방식·목표",
   emptyStateTitle: "오늘의 회복 상태", // 원문: HomeView.swift:191
   emptyStateHeadline: "아직 기록이 없어요", // 원문: HomeView.swift:194
   emptyStateBody: "오로·통증·발열을 기록하면 상태를 알려드려요.", // 원문: HomeView.swift:197

@@ -1,8 +1,9 @@
-// 가까운 산부인과 마크업 검사 — 키 없음(현재 배포) 상태와 병원 한 줄의 링크·접근성(서버 렌더로 확인).
+// 가까운 산부인과 마크업 검사 — 키 없음(현재 배포) 상태와 병원 한 줄의 링크·접근성, 지도 영역 이름(서버 렌더로 확인).
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { READING_BLOCK } from "@/components/shell/pageFrame";
+import { ClinicMap, hideSdkVectorLayer } from "./ClinicMap";
 import { ClinicRow } from "./ClinicRow";
 import { clinicRowView, CLINICS_TEXT } from "./clinicsView";
 import { NearbyClinics } from "./NearbyClinics";
@@ -74,5 +75,30 @@ describe("ClinicRow", () => {
     const html = renderToStaticMarkup(h(ClinicRow, { row: clinicRowView({ ...base, phone: null, placeUrl: null }) }));
     expect(html).not.toContain("<a ");
     expect(html).toContain("직선거리 132m");
+  });
+});
+
+describe("ClinicMap — 접근성", () => {
+  it("지도 컨테이너는 이름 있는 영역(가까운 산부인과 지도)", () => {
+    // 서버 렌더에서는 effect(SDK 로드)가 돌지 않는다 — 컨테이너만 나온다
+    const html = renderToStaticMarkup(
+      h(ClinicMap, { kakaoJsKey: "test-key", center: { lat: 37.5, lng: 127.03 }, clinics: [] }),
+    );
+    expect(CLINICS_TEXT.mapRegion).toBe("가까운 산부인과 지도");
+    expect(html).toMatch(/^<div role="region" aria-label="가까운 산부인과 지도" class="[^"]*"><\/div>$/);
+  });
+
+  it("hideSdkVectorLayer: aria-hidden이 없는 svg만 골라(svg:not([aria-hidden])) aria-hidden=true", () => {
+    const attrs: Record<string, string>[] = [{}, {}];
+    const selectors: string[] = [];
+    const fake = {
+      querySelectorAll(selector: string) {
+        selectors.push(selector);
+        return attrs.map((a) => ({ setAttribute: (k: string, v: string) => void (a[k] = v) }));
+      },
+    } as unknown as Pick<ParentNode, "querySelectorAll">;
+    hideSdkVectorLayer(fake);
+    expect(selectors).toEqual(["svg:not([aria-hidden])"]);
+    expect(attrs).toEqual([{ "aria-hidden": "true" }, { "aria-hidden": "true" }]);
   });
 });
