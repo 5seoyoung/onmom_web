@@ -55,9 +55,15 @@ revoke execute on function public.cleanup_stale_anonymous_users() from public, a
 
 -- 2) 매일 예약 — 03:00 KST = 18:00 UTC(pg_cron은 UTC) -------------------------------------------------------
 
-create extension if not exists pg_cron with schema pg_catalog;
-grant usage on schema cron to postgres;
-grant all privileges on all tables in schema cron to postgres;
+-- pg_cron은 0004_push_reminders.sql이 이미 켠다. 여기서 create extension을 다시 부르면 Supabase가 확장 권한을 다시 매기다
+-- "dependent privileges exist(2BP01)"로 실패한다(2026-09-30 db push에서 확인) — 켜져 있는지만 확인한다.
+do $$
+begin
+  if not exists (select 1 from pg_extension where extname = 'pg_cron') then
+    raise exception 'pg_cron이 없습니다 — 0004_push_reminders.sql을 먼저 적용하세요';
+  end if;
+end;
+$$;
 
 -- 같은 이름의 예약이 있으면 지우고 다시 만든다(여러 번 실행해도 하나만 남는다)
 do $$

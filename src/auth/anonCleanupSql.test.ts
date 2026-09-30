@@ -56,7 +56,9 @@ describe("0006_anon_cleanup.sql — 정리 함수", () => {
 describe("0006_anon_cleanup.sql — 매일 예약", () => {
   it("pg_cron, 매일 03:00 KST(= 18:00 UTC)에 함수 하나만 부른다", () => {
     expect(utcHourOfKst(3)).toBe(18);
-    expect(CODE).toContain("create extension if not exists pg_cron with schema pg_catalog");
+    // 확장은 0004가 켠다 — 다시 create extension 하면 Supabase에서 2BP01로 실패하므로 있는지만 확인한다
+    expect(CODE).not.toContain("create extension");
+    expect(CODE).toContain("if not exists (select 1 from pg_extension where extname = 'pg_cron')");
     expect(CODE).toContain(`select cron.schedule( 'onmom-anon-cleanup', '0 ${utcHourOfKst(3)} * * *', $job$ select ${FN}; $job$ )`);
   });
 
