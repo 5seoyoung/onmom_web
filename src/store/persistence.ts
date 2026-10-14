@@ -7,7 +7,8 @@
 // 브라우저 저장은 늘 먼저 되고, 동기화 엔진이 스토어 변경을 받아 서버에 올린다(첫 읽기 전 쓰기 금지 #13,
 // 지금 판의 동의 전 전송 금지 #15·#20 — domain/consent.ts, 삭제 실패 시 로컬 유지 #18, 로그아웃 시 브라우저 사본 삭제 #19).
 // 합치기 기준·가져온 기록 표시는 store/sync/marks.ts가, 로그인 흐름 표시는 src/auth/authFlow.ts가, Supabase 세션은
-// "onmom.web.auth" 키에 둔다 — 모두 "onmom.web." 접두라 eraseAll이 함께 지운다.
+// "onmom.web.auth"(+ "onmom.web.auth-…") 키에 둔다 — 모두 "onmom.web." 접두라 계정 삭제(eraseAll)가 함께 지운다.
+// 다른 사람의 기록을 지우는 계정 전환(eraseAll keepAuthSession)만 로그인 세션 키를 남긴다 — 그 세션은 방금 로그인한 사람의 것이다.
 
 import type { PersistedState } from "@/domain/types";
 import type { Account } from "./account";
@@ -19,6 +20,25 @@ export const GUEST_ID_KEY = "onmom.web.account.guestID";
 export const ACCOUNT_KEY = "onmom.web.account.current";
 /** 쓰기 가능 여부 확인용 — 다른 탭 변경 알림에서는 무시한다(무시하지 않으면 탭끼리 서로 다시 읽기를 반복한다). */
 const PROBE_KEY = "onmom.web.probe";
+/**
+ * Supabase 로그인 세션 키(supabase-js storageKey — src/auth/client.ts가 이 값을 쓴다). supabase-js는 이 키 뒤에 "-"를 붙인 키도 쓴다
+ * (PKCE "-code-verifier", 사용자 "-user"). "onmom.web.authflow.…"(로그인 흐름 표시)는 세션 키가 아니다.
+ */
+export const AUTH_SESSION_KEY = `${STORAGE_PREFIX}auth`;
+
+/** Supabase 로그인 세션 키인가("onmom.web.auth" 또는 "onmom.web.auth-…") */
+export function isAuthSessionKey(key: string): boolean {
+  return key === AUTH_SESSION_KEY || key.startsWith(`${AUTH_SESSION_KEY}-`);
+}
+
+export interface EraseOptions {
+  /**
+   * 로그인 세션 키(isAuthSessionKey)는 남긴다 — 계정 전환으로 앞사람의 기록을 지울 때. 그때 저장소의 세션은 방금 로그인한 사람의 것이다
+   * (카카오 콜백의 code 교환·[게스트로 시작]의 익명 가입이 스토어에 계정을 묶기 직전에 썼다). 남은 다른 사람의 세션은 src/auth/session.ts가 끝낸다.
+   * 기본(false) = 계정 삭제·로그아웃 뒤 정리 — 세션까지 전부 지운다.
+   */
+  keepAuthSession?: boolean;
+}
 
 /** window.localStorage와 같은 모양(테스트에서는 메모리 구현을 넣는다) */
 export interface StorageLike {
@@ -41,8 +61,11 @@ export interface PersistenceAdapter {
   saveAccount(account: Account | null): boolean;
   loadGuestID(): string | null;
   saveGuestID(id: string): boolean;
-  /** STORAGE_PREFIX 키 전부 삭제 — 상태·계정·게스트 id·다른 모듈의 설정값까지(AppStore.swift:128-131) */
-  eraseAll(): void;
+  /**
+   * STORAGE_PREFIX 키 전부 삭제 — 상태·계정·게스트 id·다른 모듈의 설정값까지(AppStore.swift:128-131).
+   * keepAuthSession이면 로그인 세션 키만 남긴다(계정 전환 — EraseOptions).
+   */
+  eraseAll(options?: EraseOptions): void;
   /**
    * 저장된 상태·계정의 지금 내용을 가리키는 값(불투명) — 이 탭이 마지막으로 읽거나 쓴 뒤 다른 탭이 바꿨는지 비교하는 데만 쓴다
    * (appStore의 여러 탭 보호). 저장소를 읽을 수 없으면 null(비교하지 않는다). 없으면(테스트용 어댑터) 보호 없이 지금까지처럼 쓴다.
@@ -96,7 +119,7 @@ export function createStoragePersistence(getStorage: () => StorageLike | null): 
     saveAccount: (account) => write(ACCOUNT_KEY, account === null ? null : JSON.stringify(account)),
     loadGuestID: () => read(GUEST_ID_KEY),
     saveGuestID: (id) => write(GUEST_ID_KEY, id),
-    eraseAll() {
+    eraseAll(options = {}) {
       try {
         const s = getStorage();
         if (!s) return;
@@ -104,7 +127,9 @@ export function createStoragePersistence(getStorage: () => StorageLike | null): 
         const keys: string[] = [];
         for (let i = 0; i < s.length; i++) {
           const k = s.key(i);
-          if (k !== null && k.startsWith(STORAGE_PREFIX)) keys.push(k);
+          if (k === null || !k.startsWith(STORAGE_PREFIX)) continue;
+          if (options.keepAuthSession && isAuthSessionKey(k)) continue;
+          keys.push(k);
         }
         for (const k of keys) s.removeItem(k);
       } catch {

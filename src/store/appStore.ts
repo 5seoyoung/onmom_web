@@ -18,7 +18,7 @@ import { isSupabaseConfigured } from "@/config";
 import { decodeAccount, displayName, isGuestID, makeGuestID, type Account } from "./account";
 import { decodePersisted } from "./decode";
 import { initialState } from "./defaults";
-import type { PersistenceAdapter } from "./persistence";
+import type { EraseOptions, PersistenceAdapter } from "./persistence";
 import * as S from "./state";
 import { rebaseOnStored } from "./tabRebase";
 
@@ -48,7 +48,7 @@ export interface AppActions {
   /** 로그아웃 — 계정만 지운다. 데이터는 남고, 다음에 다른 실제 계정·게스트가 들어오면 그때 지운다(iOS와 같음). */
   signOut(): void;
   /**
-   * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id 등 "onmom.web." 키 전부 삭제.
+   * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id·로그인 세션 등 "onmom.web." 키 전부 삭제.
    * 서버 탈퇴는 src/auth deleteAccountEverywhere가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
    */
   deleteAccount(): void;
@@ -167,19 +167,26 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     if (storedChangedElsewhere()) load();
   }
 
-  /** 이전 사람의 흔적을 저장소에서 지운다 — 게스트 id도 지워 다음 게스트는 새 id를 받는다(AppStore.swift:128-131). */
-  function eraseStorage() {
-    persistence.eraseAll();
+  /**
+   * 이전 사람의 흔적을 저장소에서 지운다 — 게스트 id도 지워 다음 게스트는 새 id를 받는다(AppStore.swift:128-131).
+   * keepAuthSession = 계정 전환: 로그인 세션 키(persistence EraseOptions)는 남긴다.
+   */
+  function eraseStorage(options?: EraseOptions) {
+    persistence.eraseAll(options);
     guestIDCache = null;
   }
 
   /**
    * 계정에 데이터를 묶고 저장한다(RootView.swift:22-24 → AppStore.bind).
    * 지워야 하면 저장소를 먼저 비운 뒤 계정 → 상태 순으로 쓴다 — 중간에 탭이 닫혀도 다음 load의 bind가 다시 지운다.
+   * 이때 로그인 세션 키는 남긴다: 저장소의 Supabase 세션은 방금 로그인한 이 계정의 것이다(카카오 콜백의 code 교환·[게스트로 시작]의
+   * 익명 가입이 이 호출 직전에 썼다). 지우면 세션이 사라져 서버 요청이 anon으로 나가 실패하고, 게스트의 익명 계정은 주인 없이 남는다.
+   * 남아 있던 다른 사람의 세션은 src/auth/session.ts가 끝낸다(restore·signInGuest의 signOutLocal). 세션은 로그아웃(supabase-js signOut)과
+   * 계정 삭제(deleteAccount — 다 올린 뒤의 카카오 로그아웃도 이것으로 이 브라우저를 비운다)만 지운다.
    */
   function bindAndSave(state: PersistedState, account: Account, accountNeedsSave: boolean): PersistedState {
     const erase = S.shouldEraseOnBind(state.ownerAccountID, account.id);
-    if (erase) eraseStorage();
+    if (erase) eraseStorage({ keepAuthSession: true });
     if (accountNeedsSave || erase) persistence.saveAccount(account);
     const next = S.bindToAccount(state, account.id);
     if (next !== state) saveState(next);

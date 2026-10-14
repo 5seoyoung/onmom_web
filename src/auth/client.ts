@@ -6,13 +6,15 @@
 // 남이 만든 code를 이 브라우저에 밀어 넣는 로그인 CSRF도 교환 단계에서 실패한다.
 //
 // 세션 저장 키는 "onmom.web.auth" — 계정 삭제(store eraseAll)가 "onmom.web." 키를 모두 지울 때 로그인 세션도 같이 지워진다.
+// 계정 전환(다른 사람의 기록이 남은 브라우저에서 로그인)은 앞사람의 기록만 지우고 이 세션 키는 남긴다(store persistence isAuthSessionKey).
 
 import type { SupabaseClient, SupabaseClientOptions } from "@supabase/supabase-js";
 import { config, isSupabaseConfigured } from "@/config";
 import { ROUTES } from "@/routes";
+import { AUTH_SESSION_KEY, isAuthSessionKey } from "@/store/persistence";
 
-/** Supabase 세션을 두는 localStorage 키(접두 "onmom.web." — 계정 삭제가 지운다) */
-export const AUTH_STORAGE_KEY = "onmom.web.auth";
+/** Supabase 세션을 두는 localStorage 키(접두 "onmom.web." — 계정 삭제가 지운다, 계정 전환은 남긴다) */
+export const AUTH_STORAGE_KEY = AUTH_SESSION_KEY;
 
 export interface SupabaseSettings {
   url: string | null;
@@ -82,7 +84,7 @@ export function forgetStoredAuthSession(): void {
     const keys: string[] = [];
     for (let i = 0; i < ls.length; i++) {
       const k = ls.key(i);
-      if (k !== null && (k === AUTH_STORAGE_KEY || k.startsWith(`${AUTH_STORAGE_KEY}-`))) keys.push(k);
+      if (k !== null && isAuthSessionKey(k)) keys.push(k);
     }
     for (const k of keys) ls.removeItem(k);
   } catch {

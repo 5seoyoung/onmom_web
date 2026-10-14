@@ -4,10 +4,12 @@ import { initialState } from "./defaults";
 import { createAppStore, rootScreenFor } from "./appStore";
 import {
   ACCOUNT_KEY,
+  AUTH_SESSION_KEY,
   GUEST_ID_KEY,
   STATE_KEY,
   createMemoryStorage,
   createStoragePersistence,
+  isAuthSessionKey,
   type StorageLike,
 } from "./persistence";
 
@@ -184,6 +186,72 @@ describe("게스트·로그인·로그아웃", () => {
     store.actions.signIn({ id: "", name: null, provider: "kakao" });
     expect(store.getSnapshot().account).toBeNull();
   });
+
+  it("계정 전환으로 앞사람의 기록을 지워도 방금 만든 로그인 세션(onmom.web.auth·auth-…)은 남긴다 — 다른 onmom.web. 키는 지운다", () => {
+    const { store, storage } = setup();
+    store.actions.signIn({ id: "kakao-A", name: null, provider: "kakao" });
+    store.actions.completeOnboarding();
+    storage.setItem("onmom.web.sync.base.v1", "{}");
+    storage.setItem("onmom.web.reminder.v1", "{}");
+    store.actions.signOut();
+    // 새 사람의 로그인 — supabase-js가 세션을 먼저 쓰고(code 교환·익명 가입) 그다음 스토어에 계정을 묶는다
+    storage.setItem(AUTH_SESSION_KEY, '{"access_token":"new"}');
+    storage.setItem(`${AUTH_SESSION_KEY}-user`, '{"id":"new"}');
+    storage.setItem(`${AUTH_SESSION_KEY}-code-verifier`, "v");
+    storage.setItem("onmom.web.authflow.v1", "{}"); // 로그인 흐름 표시는 세션 키가 아니다
+
+    store.actions.signIn({ id: "kakao-B", name: null, provider: "kakao" });
+    expect(store.getSnapshot().state).toEqual({ ...initialState(), ownerAccountID: "kakao-B" });
+    expect(storage.getItem(AUTH_SESSION_KEY)).toBe('{"access_token":"new"}');
+    expect(storage.getItem(`${AUTH_SESSION_KEY}-user`)).toBe('{"id":"new"}');
+    expect(storage.getItem(`${AUTH_SESSION_KEY}-code-verifier`)).toBe("v");
+    for (const k of ["onmom.web.sync.base.v1", "onmom.web.reminder.v1", "onmom.web.authflow.v1"]) expect(storage.getItem(k), k).toBeNull();
+
+    // 게스트로 들어와 지울 때도 같다([게스트로 시작] — 익명 가입이 세션을 먼저 쓴다)
+    store.actions.signOut();
+    store.actions.signInGuest();
+    expect(store.getSnapshot().state.ownerAccountID).toMatch(/^guest-/);
+    expect(storage.getItem(AUTH_SESSION_KEY)).toBe('{"access_token":"new"}');
+  });
+
+  it("열 때 계정과 주인이 달라 지울 때도 로그인 세션은 남긴다(세션이 맞는지는 src/auth가 확인한다)", () => {
+    const storage = createMemoryStorage();
+    storage.setItem(STATE_KEY, JSON.stringify({ hasOnboarded: true, ownerAccountID: "kakao-A" }));
+    storage.setItem(ACCOUNT_KEY, JSON.stringify({ id: "kakao-B", provider: "kakao" }));
+    storage.setItem(AUTH_SESSION_KEY, "{}");
+    const { store } = setup(storage);
+    store.load();
+    expect(store.getSnapshot().state.hasOnboarded).toBe(false);
+    expect(storage.getItem(AUTH_SESSION_KEY)).toBe("{}");
+  });
+});
+
+describe("eraseAll(persistence)", () => {
+  function seeded() {
+    const storage = createMemoryStorage();
+    for (const k of [STATE_KEY, ACCOUNT_KEY, GUEST_ID_KEY, AUTH_SESSION_KEY, `${AUTH_SESSION_KEY}-user`, "onmom.web.authflow.v1", "onmom.web.authflow.anonpause.v1"]) {
+      storage.setItem(k, "x");
+    }
+    storage.setItem("other.app", "keep");
+    return storage;
+  }
+  const left = (s: StorageLike) => Array.from({ length: s.length }, (_, i) => s.key(i)).sort();
+
+  it("기본은 onmom.web. 키 전부(로그인 세션 포함) — 다른 앱의 키는 둔다", () => {
+    const storage = seeded();
+    createStoragePersistence(() => storage).eraseAll();
+    expect(left(storage)).toEqual(["other.app"]);
+  });
+
+  it("keepAuthSession이면 세션 키(onmom.web.auth, onmom.web.auth-…)만 남긴다 — onmom.web.authflow…는 세션 키가 아니다", () => {
+    const storage = seeded();
+    createStoragePersistence(() => storage).eraseAll({ keepAuthSession: true });
+    expect(left(storage)).toEqual([AUTH_SESSION_KEY, `${AUTH_SESSION_KEY}-user`, "other.app"].sort());
+    expect(isAuthSessionKey(AUTH_SESSION_KEY)).toBe(true);
+    expect(isAuthSessionKey(`${AUTH_SESSION_KEY}-code-verifier`)).toBe(true);
+    expect(isAuthSessionKey("onmom.web.authflow.v1")).toBe(false);
+    expect(isAuthSessionKey("onmom.web.auth.v2")).toBe(false);
+  });
 });
 
 describe("계정 삭제", () => {
@@ -193,6 +261,8 @@ describe("계정 삭제", () => {
     store.actions.signInGuest();
     const g1 = store.getSnapshot().account!.id;
     store.actions.completeOnboarding();
+    storage.setItem(AUTH_SESSION_KEY, "{}");
+    storage.setItem(`${AUTH_SESSION_KEY}-user`, "{}");
     store.actions.deleteAccount();
 
     expect(store.getSnapshot().state).toEqual(initialState());
@@ -201,6 +271,8 @@ describe("계정 삭제", () => {
     expect(storage.getItem(STATE_KEY)).toBeNull();
     expect(storage.getItem(ACCOUNT_KEY)).toBeNull();
     expect(storage.getItem(GUEST_ID_KEY)).toBeNull();
+    expect(storage.getItem(AUTH_SESSION_KEY)).toBeNull(); // 계정 삭제는 로그인 세션까지 지운다
+    expect(storage.getItem(`${AUTH_SESSION_KEY}-user`)).toBeNull();
     expect(storage.getItem("other.app")).toBe("keep");
 
     store.actions.signInGuest();
