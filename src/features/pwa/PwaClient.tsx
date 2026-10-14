@@ -13,10 +13,13 @@
 //      서버 행을 맞춘다(reminderActions.reconcileReminderOnce). 켜 둔 표시가 없으면 아무 요청도 하지 않는다. Supabase + VAPID 설정이 없는
 //      빌드에서는 부르지도 않는다.
 //   모두 순서대로 하나씩 처리한다(계정이 빠르게 여러 번 바뀌어도). 화면을 막지 않는다.
+//   4) 앱을 열 때 한 번 — 브라우저 저장소를 지우지 말아 달라고 요청한다(navigator.storage.persist, 이미 지속이면 하지 않음). Safari가
+//      7일 동안 쓰지 않은 저장소를 지우는 것을 막으려는 것이다. 우리 화면은 띄우지 않고, 던지지 않고, 네트워크를 쓰지 않는다(persistentStorage).
 
 import { useEffect, useRef } from "react";
 import { config, isReminderConfigured } from "@/config";
 import { useAppStore } from "@/store/useAppStore";
+import { requestPersistentStorageOnce } from "./persistentStorage";
 import { rebindReminderNow, reconcileReminderOnce, releaseReminderNow } from "./reminderActions";
 import { accountTransition, shouldAutoRegisterServiceWorker } from "./reminderModel";
 import { pushSupported, registerServiceWorker } from "./serviceWorker";
@@ -29,6 +32,7 @@ export function PwaClient() {
 
   useEffect(() => {
     if (shouldAutoRegisterServiceWorker(process.env.NODE_ENV, "serviceWorker" in navigator)) void registerServiceWorker(config.basePath);
+    void requestPersistentStorageOnce();
   }, []);
 
   useEffect(() => {
