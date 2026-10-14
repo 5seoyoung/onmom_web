@@ -140,8 +140,10 @@ describe("sw.js — 알림 문구는 content.json 원문, 눌렀을 때 여는 �
     expect(sw).toContain("if (url.origin !== ORIGIN) return;");
     const code = sw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/[^\n]*/gm, "");
     expect(code).not.toMatch(/supabase|kakao|anthropic|onrender/i); // 외부 주소를 알지도, 캐시하지도 않는다
-    // 캐시 이름에 판이 있고, 예전 판을 지운다
-    expect(sw).toMatch(/const CACHE_VERSION = "onmom-[^"]+";/);
+    // 캐시 이름에 판이 있고, 예전 판을 지운다. 2026-10-15 판부터 HTML을 경로만으로 저장한다 — 쿼리(로그인 코드·글 id)가 열쇠에 남은
+    // 예전 판(onmom-2026-09-30-1)의 저장본이 활성화 때 지워지도록 판을 올렸다.
+    expect(constant("CACHE_VERSION")).toMatch(/^onmom-\d{4}-\d{2}-\d{2}-\d+$/);
+    expect(constant("CACHE_VERSION") > "onmom-2026-09-30-1").toBe(true);
     expect(sw).toContain("self.caches.delete(name)");
     // 서버 본문은 읽지 않는다 — 고정 문구만
     expect(sw).not.toMatch(/event\.data\.(json|text)\(/);
@@ -183,12 +185,14 @@ function loadServiceWorker(swUrl: string, opts: { pushManager?: unknown } = {}) 
       if (!stores.has(name)) stores.set(name, new Map());
       const store = stores.get(name)!;
       return {
-        match: async (req: FakeRequest, opts?: { ignoreSearch?: boolean }) => {
-          const key = opts?.ignoreSearch ? req.url.split("?")[0] : req.url;
+        // Cache API처럼 Request와 주소 문자열을 모두 받는다
+        match: async (req: FakeRequest | string, opts?: { ignoreSearch?: boolean }) => {
+          const url = typeof req === "string" ? req : req.url;
+          const key = opts?.ignoreSearch ? url.split("?")[0] : url;
           return store.get(key) ?? undefined;
         },
-        put: async (req: FakeRequest, res: FakeResponse) => {
-          store.set(req.url, res);
+        put: async (req: FakeRequest | string, res: FakeResponse) => {
+          store.set(typeof req === "string" ? req : req.url, res);
         },
       };
     },
@@ -289,6 +293,30 @@ describe("sw.js — 실제 실행(가짜 self)", () => {
     expect((await w.request(`${settings}?consent=1`, { mode: "navigate" }))?.body).toBe(`live:${settings}`);
     await expect(w.request(`${BASE}/journal/`, { mode: "navigate" })).rejects.toThrow("Failed to fetch");
     expect(w.fetched.filter((u) => u === settings)).toHaveLength(2); // 온라인 때도 늘 네트워크를 먼저 부른다
+  });
+
+  it("HTML은 경로만으로 저장한다 — 쿼리(글 id 등)는 저장 열쇠에 남지 않고, 오프라인이면 쿼리가 달라도 같은 저장본", async () => {
+    const w = loadServiceWorker(`${BASE}/sw.js`);
+    const post = `${BASE}${ROUTES.journalPost}`;
+    expect((await w.request(`${post}?id=secret-post-1`, { mode: "navigate" }))?.body).toBe(`live:${post}?id=secret-post-1`);
+    const pages = [...w.stores.entries()].find(([name]) => name.endsWith(":pages"))?.[1];
+    expect([...(pages?.keys() ?? [])]).toEqual([post]);
+    w.setOnline(false);
+    expect((await w.request(`${post}?id=other`, { mode: "navigate" }))?.body).toBe(`live:${post}?id=secret-post-1`);
+    expect([...w.stores.values()].flatMap((s) => [...s.keys()]).some((k) => k.includes("?"))).toBe(false);
+  });
+
+  it("로그인 콜백(/auth/callback/?code=…)은 저장하지 않는다 — 한 번 쓰는 코드가 캐시에 남지 않고, 오프라인 저장본도 없다", async () => {
+    const w = loadServiceWorker(`${BASE}/sw.js`);
+    const callback = `${BASE}${ROUTES.authCallback}`;
+    expect((await w.request(`${callback}?code=one-time-code`, { mode: "navigate" }))?.body).toBe(`live:${callback}?code=one-time-code`);
+    expect((await w.request(callback, { mode: "navigate" }))?.body).toBe(`live:${callback}`);
+    expect((await w.request(`${callback}index.html?code=x`, { mode: "navigate" }))?.body).toBe(`live:${callback}index.html?code=x`);
+    expect([...w.stores.values()].every((s) => s.size === 0)).toBe(true);
+    w.setOnline(false);
+    await expect(w.request(`${callback}?code=again`, { mode: "navigate" })).rejects.toThrow("Failed to fetch");
+    // sw.js의 상수가 ROUTES와 같다
+    expect(readFileSync(join(PUBLIC, SW_PATH), "utf8")).toContain(`const AUTH_CALLBACK_PATH = "${ROUTES.authCallback}";`);
   });
 
   it("리다이렉트를 거친 응답은 저장하지 않는다(/home → /home/ 301)", async () => {

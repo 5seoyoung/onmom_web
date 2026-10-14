@@ -8,6 +8,9 @@
 // - `${basePath}/_next/static/*`·`${basePath}/icons/*`: 캐시 먼저(내용이 바뀌면 파일 이름도 바뀌는 정적 파일).
 // - HTML 이동(navigate): 네트워크 먼저. 성공한 응답만 저장해 두었다가, 오프라인이면 같은 주소의 저장본을 준다(한 번 연 화면만).
 //   저장본도 없으면 브라우저의 오프라인 화면이 그대로 뜬다(가짜 화면을 만들지 않는다).
+//   저장 열쇠는 경로만이다(쿼리·# 없음) — 정적 export라 쿼리가 달라도 같은 HTML이고, 쿼리에는 한 번 쓰는 값(/auth/callback/?code=…
+//   로그인 코드)이나 글 id(/journal/post/?id=…)가 실린다. 그런 값이 캐시 열쇠로 남지 않게 한다.
+//   로그인 콜백(`${basePath}/auth/callback/`)은 아예 저장하지 않는다(오프라인에서 열 일이 없고, 로그인 흐름의 응답을 남기지 않는다).
 // - 그 밖(같은 origin의 나머지·다른 origin 전부 — Supabase·카카오·Anthropic·영상 서버): 손대지 않는다(캐시 없음). 건강 데이터가
 //   담긴 응답이 이 캐시에 남지 않게 하려는 것이다.
 // - 캐시 이름에 판이 있다(CACHE_VERSION). 새 판이 활성화되면 예전 판의 캐시를 지운다.
@@ -19,7 +22,7 @@
 // - 구독이 갈아 끼워지면(pushsubscriptionchange) 다시 구독만 한다(맨 아래). 서버 행은 앱이 다음에 열릴 때 맞춘다.
 "use strict";
 
-const CACHE_VERSION = "onmom-2026-09-30-1";
+const CACHE_VERSION = "onmom-2026-10-15-1";
 const STATIC_CACHE = `${CACHE_VERSION}:static`;
 const PAGES_CACHE = `${CACHE_VERSION}:pages`;
 const CACHE_PREFIX = "onmom-";
@@ -36,6 +39,8 @@ const REMINDER_TAG = "onmom-daily-reminder";
 const RECORD_PATH = "/record/";
 const RECORD_URL = `${ORIGIN}${BASE}${RECORD_PATH}`;
 const ICON_URL = `${BASE}/icons/icon-192.png`;
+/** ROUTES.authCallback — 로그인 공급자에서 돌아오는 화면. 쿼리에 한 번 쓰는 로그인 코드가 실려 저장하지 않는다. */
+const AUTH_CALLBACK_PATH = "/auth/callback/";
 
 function isStaticAsset(pathname) {
   return pathname.startsWith(`${BASE}/_next/static/`) || pathname.startsWith(`${BASE}/icons/`);
@@ -55,15 +60,27 @@ async function cacheFirst(request) {
   return response;
 }
 
-async function networkFirst(request) {
+/** 로그인 콜백 화면인가(끝 슬래시 없는 주소·…/index.html 포함) — 저장하지 않는다. */
+function isAuthCallback(pathname) {
+  const callback = `${BASE}${AUTH_CALLBACK_PATH}`;
+  return pathname === callback.slice(0, -1) || pathname.startsWith(callback);
+}
+
+/** HTML 저장 열쇠 — 같은 origin의 경로만(쿼리·# 없음). "…/journal/post/?id=…" → "…/journal/post/" */
+function pageCacheKey(url) {
+  return `${url.origin}${url.pathname}`;
+}
+
+async function networkFirst(request, url) {
   const cache = await self.caches.open(PAGES_CACHE);
+  const store = !isAuthCallback(url.pathname);
   try {
     const response = await fetch(request);
-    if (cacheable(response)) await cache.put(request, response.clone());
+    if (store && cacheable(response)) await cache.put(pageCacheKey(url), response.clone());
     return response;
   } catch (error) {
     // 쿼리(?id=…)가 달라도 같은 정적 HTML이다(정적 export). 저장본이 없으면 브라우저의 오프라인 화면으로.
-    const hit = await cache.match(request, { ignoreSearch: true });
+    const hit = store ? await cache.match(pageCacheKey(url), { ignoreSearch: true }) : undefined;
     if (hit) return hit;
     throw error;
   }
@@ -100,7 +117,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(request, url));
   }
 });
 
