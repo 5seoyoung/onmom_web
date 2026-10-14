@@ -102,12 +102,41 @@ export function validateChatRequest(body: unknown): ChatValidation {
   return { ok: true, request: { preset: preset as ChatPreset, messages: parsed, context: ctx } };
 }
 
-/** 마지막 사용자 메시지 — 안전 선필터가 본다 */
+/** 마지막 사용자 메시지 — LLM이 답하는 질문. 안전 선필터는 이것만이 아니라 사용자 메시지 모두를 본다(safety.ts hasSelfHarmUserMessage). */
 export function latestUserMessage(messages: readonly ChatMessageInput[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "user") return messages[i].content;
   }
   return "";
+}
+
+/**
+ * 요청 본문을 maxBytes까지만 읽는다 — 넘으면 거기서 읽기를 멈추고(스트림 취소) null.
+ * Content-Length가 없거나(청크 전송) 실제보다 작게 적혀 있어도 상한을 지킨다. req.arrayBuffer()는 끝까지 메모리에 모은 뒤에야
+ * 크기를 알 수 있어, 큰 본문을 보내 함수 메모리를 채우는 요청을 막지 못한다.
+ */
+export async function readBodyWithLimit(req: Request, maxBytes: number): Promise<Uint8Array | null> {
+  if (req.body === null) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 // MARK: 요청 한도(0003_llm_usage.sql llm_consume_quota)

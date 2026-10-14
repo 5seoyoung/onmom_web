@@ -2,7 +2,7 @@
 // handler는 웹 표준 Request/Response만 써서 Node(vitest)에서도 Deno와 같게 돈다. Deno 연결(index.ts)은 `deno check`로 본다.
 
 import { describe, expect, it } from "vitest";
-import type { QuotaResult } from "../../supabase/functions/_shared/chat";
+import { CHAT_MAX_BODY_BYTES, CHAT_MAX_MESSAGE_CHARS, type QuotaResult } from "../../supabase/functions/_shared/chat";
 import { SUBSTANCE_OUTPUT_SCHEMA } from "../../supabase/functions/_shared/prompts";
 import { CRISIS_REPLY } from "../../supabase/functions/_shared/safety";
 import {
@@ -225,6 +225,142 @@ describe("Edge Function chat", () => {
     expect(get.status).toBe(405);
     expect(get.headers.get("allow")).toBe("POST, OPTIONS");
     expect(calls.llm).toHaveLength(0);
+  });
+
+  const CHUNK = 64 * 1024;
+  /** 상한의 8배(2MB)를 64KB씩 — 다 읽었다면 read.bytes가 상한을 한참 넘는다 */
+  const HUGE = Array.from({ length: (8 * CHAT_MAX_BODY_BYTES) / CHUNK }, () => new Uint8Array(CHUNK).fill(0x20));
+
+  /** Content-Length 없이(청크 전송처럼) 조각으로 오는 본문. 읽힌 바이트 수·취소 여부를 센다. */
+  function streamed(chunks: Uint8Array[], headers: Record<string, string> = {}) {
+    const read = { bytes: 0, cancelled: false };
+    let i = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks[i++];
+        if (chunk === undefined) return controller.close();
+        read.bytes += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+      cancel() {
+        read.cancelled = true;
+      },
+    });
+    const req = new Request("https://proj.supabase.co/functions/v1/chat", {
+      method: "POST",
+      headers: { Origin: SITE, Authorization: "Bearer user.jwt.token", "Content-Type": "application/json", ...headers },
+      body,
+      duplex: "half",
+    } as RequestInit);
+    return { req, read };
+  }
+
+  it("Content-Length가 없어도 상한(CHAT_MAX_BODY_BYTES)까지만 읽고 413 too_large — 큰 본문을 끝까지 모으지 않는다", async () => {
+    const { handler, calls, logs } = setup();
+    expect(new Request("https://x.example", { method: "POST", body: "{}" }).headers.get("content-length")).toBeNull(); // 시험 전제
+    const { req, read } = streamed(HUGE);
+    expect(req.headers.get("content-length")).toBeNull();
+    const res = await handler(req);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ ok: false, code: "too_large" });
+    expect(read.cancelled).toBe(true);
+    // 상한을 넘긴 조각에서 멈춘다(스트림이 미리 당겨 둔 조각 몇 개 정도만 더 읽힐 수 있다)
+    expect(read.bytes).toBeLessThanOrEqual(CHAT_MAX_BODY_BYTES + 4 * CHUNK);
+    expect(calls.verify.length + calls.quota.length + calls.llm.length).toBe(0);
+    expect(logs.map((l) => l.code)).toEqual(["too_large"]);
+  });
+
+  it("Content-Length를 작게 적고 더 보내도 413 — 적힌 값이 아니라 읽은 바이트로 센다", async () => {
+    const { handler, calls } = setup();
+    const { req, read } = streamed(HUGE, { "Content-Length": "100" });
+    expect(req.headers.get("content-length")).toBe("100");
+    expect((await handler(req)).status).toBe(413);
+    expect(read.bytes).toBeLessThanOrEqual(CHAT_MAX_BODY_BYTES + 4 * CHUNK);
+    expect(calls.llm).toHaveLength(0);
+  });
+
+  it("적힌 Content-Length가 상한보다 크면 본문을 읽지 않고 413", async () => {
+    const { handler } = setup();
+    const { req, read } = streamed(HUGE, { "Content-Length": String(CHAT_MAX_BODY_BYTES + 1) });
+    expect((await handler(req)).status).toBe(413);
+    expect(read.bytes).toBeLessThanOrEqual(4 * CHUNK); // 스트림이 미리 당겨 둔 조각뿐
+  });
+
+  it("상한 안의 본문은 조각으로 와도(Content-Length 없음) 그대로 처리한다 — 여러 바이트 글자가 조각 경계에 걸려도", async () => {
+    const { handler, calls } = setup();
+    const bytes = new TextEncoder().encode(JSON.stringify(ask("오로가 언제까지 나오나요? ".repeat(40).trim())));
+    const exact = new TextEncoder().encode(JSON.stringify(ask("가".repeat(CHAT_MAX_MESSAGE_CHARS))));
+    // 한글(3바이트) 가운데에서 자른다
+    const cut = bytes.indexOf(0xec) + 1;
+    const { req } = streamed([bytes.slice(0, cut), bytes.slice(cut)]);
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(calls.llm[0].messages[0].content).toBe("오로가 언제까지 나오나요? ".repeat(40).trim());
+    // 상한 이하 큰 본문(2000자 × 3바이트)도 받는다
+    expect(exact.byteLength).toBeLessThan(CHAT_MAX_BODY_BYTES);
+    const big = streamed([exact.slice(0, 1000), exact.slice(1000)]);
+    expect((await handler(big.req)).status).toBe(200);
+    expect(big.read.cancelled).toBe(false);
+  });
+
+  it("빈 본문은 400 bad_request(413 아님)", async () => {
+    const { handler } = setup();
+    const { req } = streamed([]);
+    const res = await handler(req);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, code: "bad_request" });
+  });
+
+  it("자해 표현 — 마지막이 아닌 앞선 사용자 메시지에 있어도 LLM 없이 고정 위기 안내", async () => {
+    const { handler, calls, logs } = setup();
+    const res = await handler(
+      post({
+        preset: "patient_edu",
+        messages: [
+          { role: "user", content: "요즘 죽고 싶어요" },
+          { role: "assistant", content: "그 말씀을 들으니 걱정돼요." },
+          { role: "user", content: "오로가 언제까지 나오나요?" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, text: CRISIS_REPLY, flagged: true });
+    expect(calls.verify.length + calls.quota.length + calls.llm.length).toBe(0);
+    expect(logs.map((l) => l.code)).toEqual(["flagged"]);
+    expect(JSON.stringify(logs)).not.toContain("죽고");
+
+    // 가운데 사용자 메시지도 본다
+    const middle = await handler(
+      post({
+        preset: "patient_edu",
+        messages: [
+          { role: "user", content: "산후 3주차예요" },
+          { role: "assistant", content: "네." },
+          { role: "user", content: "self-harm 생각이 들어요" },
+          { role: "assistant", content: "네." },
+          { role: "user", content: "커피 마셔도 되나요?" },
+        ],
+      }),
+    );
+    expect(await middle.json()).toEqual({ ok: true, text: CRISIS_REPLY, flagged: true });
+    expect(calls.llm).toHaveLength(0);
+  });
+
+  it("어시스턴트 메시지는 선필터가 보지 않는다 — 앱의 위기 안내 글(\"자살예방상담\")이 대화에 남아 있어도 다음 질문은 LLM으로", async () => {
+    const { handler, calls } = setup();
+    const res = await handler(
+      post({
+        preset: "patient_edu",
+        messages: [
+          { role: "user", content: "산후 우울이 걱정돼요" },
+          { role: "assistant", content: CRISIS_REPLY },
+          { role: "user", content: "오로가 언제까지 나오나요?" },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, text: "보통 4~6주 정도 나와요." });
+    expect(calls.llm).toHaveLength(1);
   });
 });
 

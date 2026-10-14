@@ -1,6 +1,6 @@
 // Edge Function chat 공용 — 자해·자살 표현 안전 선필터(Deno·vitest 양쪽에서 읽는다. cors.ts 머리말 참고).
 //
-// 마지막 사용자 메시지에 자해·자살 의도 표현이 있으면 LLM을 부르지 않고, 앱 규칙 폴백과 같은 고정 위기 안내를 돌려준다(검수 #7).
+// 요청에 담긴 사용자 메시지 중 하나라도 자해·자살 의도 표현이 있으면 LLM을 부르지 않고, 앱 규칙 폴백과 같은 고정 위기 안내를 돌려준다(검수 #7).
 // LLM은 판정 경로 밖이다(원칙 2) — 이 분기는 정해진 규칙(키워드)이 정한다.
 // 놓치는 것보다 잘못 걸리는 쪽이 낫다(잘못 걸리면 위기 안내가 한 번 나올 뿐이고, 놓쳐도 시스템 프롬프트가 같은 연락처를 안내한다).
 // 다만 산후 질문에 흔한 말("통증이 사라지고", "붓기가 사라지고")까지 막지 않도록 "사라지고"는 "사라지고 싶"처럼 의도가 드러나는 꼴로만 본다.
@@ -103,4 +103,14 @@ export function isSelfHarmMessage(text: string): boolean {
   const t = normalizeForSafety(text);
   if (t === "") return false;
   return KEYWORDS.some((k) => k !== "" && t.includes(k));
+}
+
+/**
+ * 대화의 사용자 메시지 중 하나라도 자해·자살 표현인가 — Edge Function chat의 선필터가 요청마다 본다.
+ * 마지막 메시지만 보면 앞선 턴에 위기 표현을 넣고 끝에 평범한 질문을 붙인 요청이 LLM으로 넘어간다.
+ * 웹은 위기 턴을 AI 요청에서 이미 뺀다(chatModel withoutCrisisTurns) — 그래서 정상 대화는 여기 걸리지 않는다.
+ * 어시스턴트 메시지는 보지 않는다 — 앱의 위기 안내(CRISIS_REPLY)에도 "자살예방상담"이 들어 있다.
+ */
+export function hasSelfHarmUserMessage(messages: readonly { role: string; content: string }[]): boolean {
+  return messages.some((m) => m.role === "user" && isSelfHarmMessage(m.content));
 }

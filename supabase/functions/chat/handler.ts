@@ -4,8 +4,8 @@
 //
 // POST { preset, messages, context? } (Authorization: Bearer <Supabase 로그인 토큰> — 익명 게스트 계정도 된다)
 // 순서
-//   1) CORS·메서드·본문 크기 → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
-//   3) 안전 선필터: 마지막 사용자 메시지에 자해·자살 표현 → LLM을 부르지 않고 고정 위기 안내(로그인·한도와 무관하게 늘 답한다)
+//   1) CORS·메서드·본문 크기(Content-Length가 없어도 상한까지만 읽는다) → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
+//   3) 안전 선필터: 사용자 메시지 중 하나라도 자해·자살 표현 → LLM을 부르지 않고 고정 위기 안내(로그인·한도와 무관하게 늘 답한다)
 //   4) 로그인 확인 → 5) 사용자별 한도(1시간 30회)·서비스 전체 하루 상한 → 6) LLM(claude-opus-5, 거절 시 서버 쪽 대체 모델)
 // 응답: 성공 { ok: true, text } | { ok: true, json } (약물), 실패 { ok: false, code } + 4xx/5xx. 스택·내부 메시지는 내보내지 않는다.
 // 로그: 상태·코드·preset·소요 시간·토큰 수·대체 모델 사용 여부만. 질문·답·컨텍스트·사용자 id는 기록하지 않는다(민감정보).
@@ -13,12 +13,12 @@
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { checkOrigin, corsHeaders, failure, jsonResponse, preflightHeaders } from "../_shared/cors.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { bearerToken, CHAT_MAX_BODY_BYTES, latestUserMessage, validateChatRequest } from "../_shared/chat.ts";
+import { bearerToken, CHAT_MAX_BODY_BYTES, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
 import type { ChatMessageInput, ChatPreset, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseSubstanceOutput, SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../_shared/prompts.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { CRISIS_REPLY, isSelfHarmMessage } from "../_shared/safety.ts";
+import { CRISIS_REPLY, hasSelfHarmUserMessage } from "../_shared/safety.ts";
 
 export interface LlmCallInput {
   preset: ChatPreset;
@@ -92,11 +92,11 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
         return done(failure(405, "method_not_allowed", { ...cors, Allow: METHODS }), { code: "method_not_allowed" });
       }
 
-      // 본문 — 크기 상한 → JSON → 형식
+      // 본문 — 크기 상한 → JSON → 형식. 적힌 Content-Length가 크면 읽지 않고, 없거나(청크 전송) 틀려도 상한까지만 읽는다.
       const declared = Number(req.headers.get("content-length") ?? "0");
       if (Number.isFinite(declared) && declared > CHAT_MAX_BODY_BYTES) return fail(413, "too_large");
-      const raw = await req.arrayBuffer();
-      if (raw.byteLength > CHAT_MAX_BODY_BYTES) return fail(413, "too_large");
+      const raw = await readBodyWithLimit(req, CHAT_MAX_BODY_BYTES);
+      if (raw === null) return fail(413, "too_large");
       let body: unknown;
       try {
         body = JSON.parse(new TextDecoder().decode(raw));
@@ -109,7 +109,8 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
       preset = request.preset;
 
       // 안전 선필터 — LLM을 부르지 않는다. 로그인·한도보다 먼저: 위기 안내는 늘 나가야 한다.
-      if (isSelfHarmMessage(latestUserMessage(request.messages))) {
+      // 마지막 메시지만이 아니라 사용자 메시지 모두를 본다 — 앞선 턴의 위기 표현이 이어지는 질문과 함께 LLM으로 넘어가지 않게.
+      if (hasSelfHarmUserMessage(request.messages)) {
         // 약물 체크 화면에는 위기 안내를 보일 자리가 없다 — 표의 결과("정보 부족")를 그대로 두게 거절만 한다
         if (request.preset === "substance") return fail(422, "flagged");
         return done(jsonResponse(200, { ok: true, text: CRISIS_REPLY, flagged: true }, cors), { code: "flagged" });
