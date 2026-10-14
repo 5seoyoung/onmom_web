@@ -164,7 +164,7 @@ export function deleteConfirmMessage(serverAccount: boolean): string {
   return serverAccount ? SERVER_ACCOUNT_TEXT.deleteMessage : SETTINGS_TEXT.deleteMessage;
 }
 
-/** 서버 계정 삭제 실패 안내(deleteAccountEverywhere의 실패 이유별). */
+/** 서버 계정 삭제 실패 안내(useAccountSession().deleteAccount — 결과 DeleteAccountResult의 실패 이유별). */
 export function deleteFailureMessage(reason: "failed" | "noSession"): string {
   return reason === "noSession" ? SERVER_ACCOUNT_TEXT.deleteNoSession : SERVER_ACCOUNT_TEXT.deleteFailed;
 }
@@ -177,7 +177,8 @@ export type AccountActionOutcome = { kind: "done" } | { kind: "redirecting" } | 
 
 /**
  * 로그아웃. Supabase가 없는 빌드는 지금까지처럼 스토어에서 바로(기록은 남는다 — iOS와 같음).
- * 있는 빌드는 signOutEverywhere(카카오는 남은 변경을 올린 뒤) — 못 올렸으면 unsynced(아무것도 하지 않았다).
+ * 있는 빌드는 deps.signOutEverywhere(화면이 useAccountSession().signOut을 넘긴다 — 카카오는 남은 변경을 올린 뒤) — 못 올렸으면
+ * unsynced(아무것도 하지 않았다).
  * 있는 빌드의 게스트는 로그아웃하지 않는다(화면에 버튼이 없다).
  */
 export async function performSignOut(deps: {
@@ -204,7 +205,8 @@ export async function performLinkKakao(deps: { signInWithKakao: () => Promise<Ka
 
 /**
  * 계정 삭제. Supabase가 없는 빌드는 이 브라우저만 비운다(MoreView.swift:113-118).
- * 있는 빌드는 deleteAccountEverywhere — 카카오·익명 게스트 계정은 서버를 먼저 지우고, 실패하면 아무것도 지우지 않아 안내만 한다.
+ * 있는 빌드는 deps.deleteAccountEverywhere(화면이 useAccountSession().deleteAccount를 넘긴다) — 카카오·익명 게스트 계정은 서버를
+ * 먼저 지우고, 실패하면 아무것도 지우지 않아 안내만 한다.
  */
 export async function performDeleteAccount(deps: {
   supabaseConfigured: boolean;
