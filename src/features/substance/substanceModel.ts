@@ -80,22 +80,16 @@ export function substanceLlmContext(profile: Pick<UserProfile, "deliveryDate" | 
 
 /**
  * LLM 조회 함수(SubstanceCheckView.swift:117-141). 대화·preset·토큰 수는 rules의 buildSubstanceLlmRequest,
- * 산모 정보는 substanceLlmContext의 두 항목(rules가 만드는 iOS 컨텍스트 문자열은 보내지 않는다).
+ * 산모 정보는 substanceLlmContext의 두 항목(수유 여부·산후 주차 — iOS의 컨텍스트 문자열은 보내지 않는다).
  * 답 해석은 parseSubstanceAnswer — 실패·빈 응답·형식 오류는 전부 null(→ 표의 "정보 부족" 유지).
  */
 export function makeSubstanceLlmLookup(input: {
   complete: LlmCompleteFn;
-  isBreastfeeding: boolean;
-  dayCount: number;
   context: LLMContext | null;
   signal?: AbortSignal;
 }): (query: string) => Promise<LlmSubstanceAnswer | null> {
   return async (query) => {
-    const { messages, preset, maxTokens } = buildSubstanceLlmRequest({
-      query,
-      isBreastfeeding: input.isBreastfeeding,
-      dayCount: input.dayCount,
-    });
+    const { messages, preset, maxTokens } = buildSubstanceLlmRequest({ query });
     const request: LLMRequest = { preset, messages, context: input.context, maxTokens };
     const res = await input.complete(request, { signal: input.signal });
     return res.ok ? parseSubstanceAnswer(res.text) : null;
@@ -108,8 +102,6 @@ export function makeSubstanceLlmLookup(input: {
 export function substanceDeps(input: {
   llmConfigured: boolean;
   complete: LlmCompleteFn;
-  isBreastfeeding: boolean;
-  dayCount: number;
   context: LLMContext | null;
   signal?: AbortSignal;
 }): SubstanceDeps {

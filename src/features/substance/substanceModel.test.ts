@@ -63,7 +63,7 @@ describe("판정 배지", () => {
 describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
   it("미설정이면 llmLookup이 없다 → 표만 본다, 서버 호출 없음", async () => {
     const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');
-    const deps = substanceDeps({ llmConfigured: false, complete, isBreastfeeding: true, dayCount: 10, context: null });
+    const deps = substanceDeps({ llmConfigured: false, complete, context: null });
     expect(deps.llmLookup).toBeUndefined();
     const r = await checkSubstance("모르는약", deps);
     expect(r).toMatchObject({ verdict: "unknown", source: "table", query: "모르는약" });
@@ -74,7 +74,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("설정돼 있어도 표에 있는 항목은 LLM에 묻지 않는다(검수 #1)", async () => {
     const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');
-    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 10, context: null });
+    const deps = substanceDeps({ llmConfigured: true, complete, context: null });
     const r = await checkSubstance("아스피린", deps);
     expect(r).toMatchObject({ verdict: "avoid", source: "table" });
     expect(complete).not.toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("표에 없으면 LLM 답 — AI 답변 칩과 병기 문구", async () => {
     const complete = okText('```json\n{"verdict":"caution","detail":"근거가 제한적이에요.","sources":["LactMed"]}\n```');
-    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: false, dayCount: 23, context: null });
+    const deps = substanceDeps({ llmConfigured: true, complete, context: null });
     const r = await checkSubstance(" 모르는약 ", deps);
     expect(r).toMatchObject({ verdict: "caution", source: "llm", query: "모르는약" });
     expect(r.evidenceChips).toEqual(["src:LactMed", "AI 답변"]);
@@ -91,7 +91,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
   it("LLM 실패·형식 오류면 표의 정보 부족을 그대로 둔다", async () => {
     for (const complete of [failed(), okText("모르겠어요"), okText('{"verdict":"maybe","detail":"x","sources":[]}')]) {
-      const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 1, context: null });
+      const deps = substanceDeps({ llmConfigured: true, complete, context: null });
       const r = await checkSubstance("모르는약", deps);
       expect(r).toMatchObject({ verdict: "unknown", source: "table" });
       expect(complete).toHaveBeenCalledTimes(1);
@@ -104,10 +104,10 @@ describe("makeSubstanceLlmLookup — 요청 본문(SubstanceCheckView.swift:118-
     const complete = okText('{"verdict":"safe","detail":"d","sources":["FDA"]}');
     const signal = new AbortController().signal;
     const context = { week: 6, breastfeeding: true };
-    const lookup = makeSubstanceLlmLookup({ complete, isBreastfeeding: true, dayCount: 42, context, signal });
+    const lookup = makeSubstanceLlmLookup({ complete, context, signal });
     await expect(lookup("모르는약")).resolves.toEqual({ verdict: "safe", detail: "d", sources: ["FDA"] });
     const [req, opts] = complete.mock.calls[0] as unknown as [LLMRequest, { signal?: AbortSignal }];
-    // rules가 만드는 iOS 컨텍스트 문자열("모유수유 중, 산후 42일차")은 보내지 않는다
+    // iOS의 컨텍스트 문자열("모유수유 중, 산후 N일차")은 만들지도 보내지도 않는다 — 산모 정보는 넘긴 컨텍스트 두 항목뿐
     expect(req).toEqual({
       messages: [{ role: "user", content: "모르는약" }],
       preset: "substance",
@@ -119,7 +119,7 @@ describe("makeSubstanceLlmLookup — 요청 본문(SubstanceCheckView.swift:118-
 
   it("실패 결과는 null", async () => {
     await expect(
-      makeSubstanceLlmLookup({ complete: failed(), isBreastfeeding: true, dayCount: 1, context: null })("x"),
+      makeSubstanceLlmLookup({ complete: failed(), context: null })("x"),
     ).resolves.toBeNull();
   });
 });
@@ -203,7 +203,7 @@ describe("substanceResultChips — AI가 제시한 출처는 확인된 출처 �
 
   it("AI 답 전체 흐름: 표에 없는 항목 → LLM 출처는 aiSource 셋", async () => {
     const complete = okText('{"verdict":"caution","detail":"d","sources":["LactMed","FDA"]}');
-    const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 3, context: null });
+    const deps = substanceDeps({ llmConfigured: true, complete, context: null });
     const r = await checkSubstance("모르는약", deps);
     expect(substanceResultChips(r).map((c) => c.kind)).toEqual(["aiSource", "aiSource", "evidence"]);
   });

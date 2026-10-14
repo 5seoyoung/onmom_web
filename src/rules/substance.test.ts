@@ -175,16 +175,12 @@ describe("LLM 답변 파싱", () => {
 });
 
 describe("LLM 요청 (SubstanceCheckView.swift:118-126, 검수 #24)", () => {
-  it("입력어 1개 · preset substance · 수유 여부와 산후 일차 · 512토큰", () => {
-    expect(buildSubstanceLlmRequest({ query: "없는약", isBreastfeeding: true, dayCount: 12 })).toEqual({
+  it("입력어 1개 · preset substance · 512토큰 — 산모 정보(수유 여부·산후 주차)는 화면이 따로 붙인다(substanceLlmContext)", () => {
+    expect(buildSubstanceLlmRequest({ query: "없는약" })).toEqual({
       messages: [{ role: "user", content: "없는약" }],
       preset: "substance",
-      context: "모유수유 중, 산후 12일차",
       maxTokens: 512,
     });
-    expect(buildSubstanceLlmRequest({ query: "x", isBreastfeeding: false, dayCount: 0 }).context).toBe(
-      "모유수유 안 함, 산후 0일차",
-    );
   });
 });
 

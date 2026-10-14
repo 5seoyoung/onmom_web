@@ -27,10 +27,14 @@ export interface LlmSubstanceAnswer {
   sources: string[];
 }
 
+/**
+ * 약물 조회 요청의 대화·preset·토큰 수. 산모 정보는 여기 없다 — 서버에는 화면이 정한 두 항목(수유 여부·산후 주차, substanceModel
+ * substanceLlmContext)만 간다. iOS가 보내던 컨텍스트 문자열("모유수유 중, 산후 N일차", SubstanceCheckView.swift:119-120)은 웹에서
+ * 서버로 보내지 않아 만들지 않는다.
+ */
 export interface SubstanceLlmRequest {
   messages: { role: "user"; content: string }[];
   preset: "substance";
-  context: string;
   maxTokens: number;
 }
 
@@ -150,21 +154,13 @@ export function parseSubstanceAnswer(text: string): LlmSubstanceAnswer | null {
 export const SUBSTANCE_LLM_MAX_TOKENS = 512;
 
 /**
- * 약물 조회 요청 본문 — SubstanceCheckView.swift:118-126과 같은 값(system 없음).
+ * 약물 조회 요청 본문 — SubstanceCheckView.swift:118-126과 같은 대화·preset·토큰 수(system 없음). 컨텍스트는 SubstanceLlmRequest 참고.
  * 타임아웃(25초, :125)은 전송 계층 값이라 여기 두지 않는다 — src/api/llm.ts `LLM_PRESET_DEFAULTS.substance`.
  */
-export function buildSubstanceLlmRequest(input: {
-  query: string;
-  isBreastfeeding: boolean;
-  dayCount: number;
-}): SubstanceLlmRequest {
-  const context = input.isBreastfeeding
-    ? `모유수유 중, 산후 ${input.dayCount}일차` // 원문: SubstanceCheckView.swift:119
-    : `모유수유 안 함, 산후 ${input.dayCount}일차`; // 원문: SubstanceCheckView.swift:120
+export function buildSubstanceLlmRequest(input: { query: string }): SubstanceLlmRequest {
   return {
     messages: [{ role: "user", content: input.query }],
     preset: "substance",
-    context,
     maxTokens: SUBSTANCE_LLM_MAX_TOKENS,
   };
 }

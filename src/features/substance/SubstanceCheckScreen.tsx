@@ -14,7 +14,6 @@ import { llmComplete } from "@/api/llm";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, ChipFlow, DisclaimerBanner, EvidenceChip, PrimaryButton, SubPageHeader, cx } from "@/components/ui";
 import { isLLMBackendConfigured } from "@/config";
-import { postpartumDayCount } from "@/domain/date";
 import { AiConsentCard } from "@/features/chat/AiConsentCard";
 import { aiMode, useAiConsent } from "@/features/chat/aiConsent";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
@@ -89,8 +88,7 @@ export function SubstanceCheckScreen() {
         const deps = substanceDeps({
           llmConfigured: useAi,
           complete: llmComplete,
-          isBreastfeeding: state.profile.isBreastfeeding,
-          dayCount: postpartumDayCount(state.profile.deliveryDate, now),
+          // 서버에 함께 보내는 산모 정보 — 수유 여부·산후 주차만(서버에 물을 때만 쓰인다)
           context: useAi ? substanceLlmContext(state.profile, now) : null,
           signal: controller.signal,
         });
