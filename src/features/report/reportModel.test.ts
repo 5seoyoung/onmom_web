@@ -74,10 +74,10 @@ describe("buildReport — 머리·순서", () => {
     expect(on.sections.map((s) => s.key)).toEqual(["profile", "maternity", "symptoms", "moods", "journal"]);
   });
 
-  it("바닥글: content.json 면책 원문 · 판정 규칙 버전 · 만든 곳", () => {
+  it("바닥글: content.json 면책 원문 · 안내 규칙 버전 · 만든 곳", () => {
     const r = buildReport(onboarded(), GUEST, NOW, { includeJournal: false });
     expect(r.footer.disclaimer).toBe(content.disclaimers.home_footer);
-    expect(r.footer.rulesVersion).toBe(`판정 규칙 버전 ${RULES_VERSION}`);
+    expect(r.footer.rulesVersion).toBe(`리포트를 만든 때의 안내 규칙 버전 ${RULES_VERSION}`);
     expect(r.footer.origin).toBe(REPORT_TEXT.origin);
   });
 });

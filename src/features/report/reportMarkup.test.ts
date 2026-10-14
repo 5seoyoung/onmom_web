@@ -134,11 +134,11 @@ describe("리포트 본문", () => {
     expect(html).toMatch(/<dt[^>]*>키 \(cm\)<\/dt><dd[^>]*>160<\/dd>/);
   });
 
-  it("바닥글: 면책 원문 · 만든 곳 · 판정 규칙 버전(작은 글씨)", () => {
+  it("바닥글: 면책 원문 · 만든 곳 · 안내 규칙 버전(작은 글씨)", () => {
     expect(html).toMatch(/<footer /);
     expect(html).toContain("온맘은 의료기기가 아니며");
     expect(html).toContain(REPORT_TEXT.origin);
-    expect(html).toMatch(/<p class="text-xs[^"]*">판정 규칙 버전 rules-/);
+    expect(html).toMatch(/<p class="text-xs[^"]*">리포트를 만든 때의 안내 규칙 버전 rules-/);
   });
 
   it("기록장 꺼짐: 기록장 제목도 글도 없다", () => {
