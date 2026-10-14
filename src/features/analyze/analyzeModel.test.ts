@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { MaternityRecord, UserProfile } from "@/domain/types";
 import type { Video } from "@/rules/exercise";
@@ -115,6 +117,16 @@ describe("출산일 · [분석 시작] 활성", () => {
     expect(canStartAnalysis(form(), NOW)).toBe(true);
     expect(canStartAnalysis(form({ deliveryMethod: null }), NOW)).toBe(false);
     expect(canStartAnalysis(form({ deliveryDate: "" }), NOW)).toBe(false);
+  });
+
+  it("화면을 연 채 자정이 지나면 오늘도 바뀐다 — 폼은 마운트 때 시각을 얼리지 않고 공용 시계(useLocalDay)를 쓴다", () => {
+    const tomorrow = new Date(2026, 8, 24, 0, 1);
+    expect(isValidDeliveryDate("2026-09-24", NOW)).toBe(false);
+    expect(isValidDeliveryDate("2026-09-24", tomorrow)).toBe(true);
+    expect(todayInputValue(tomorrow)).toBe("2026-09-24");
+    const src = readFileSync(fileURLToPath(new URL("./AnalyzeForm.tsx", import.meta.url)), "utf8");
+    expect(src).toContain("const day = useLocalDay();");
+    expect(src).not.toMatch(/useState\(\(\) => new Date\(\)\)/);
   });
 });
 

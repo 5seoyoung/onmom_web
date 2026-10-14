@@ -4,6 +4,7 @@
 
 import { useId, useState } from "react";
 import { CircleAlert, LoaderCircle } from "lucide-react";
+import { useLocalDay } from "@/components/clock";
 import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle, cx } from "@/components/ui";
 import type { MaternityRecord } from "@/domain/types";
 import { DELIVERY_OPTIONS } from "@/rules/exercise";
@@ -24,11 +25,12 @@ export interface AnalyzeFormProps {
 }
 
 export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
-  // 날짜 제한(오늘까지)은 브라우저 시각으로 — 이 컴포넌트는 hydrated 뒤에만 마운트된다
-  const [now] = useState(() => new Date());
+  // 날짜 제한(오늘까지)은 브라우저 시각으로 — 공용 시계(components/clock useLocalDay)라 화면을 연 채 자정이 지나면 오늘도 따라 바뀐다.
+  // 이 컴포넌트는 hydrated 뒤에만 마운트되어 값이 바로 있지만, 아직 없으면(null) 제한 없이 그리고 [분석 시작]은 끈다.
+  const day = useLocalDay();
   const [values, setValues] = useState(initial);
-  const today = todayInputValue(now);
-  const canStart = canStartAnalysis(values, now);
+  const today = day === null ? undefined : todayInputValue(day);
+  const canStart = day !== null && canStartAnalysis(values, day);
 
   const deliveryTitleId = useId();
   const dateId = useId();

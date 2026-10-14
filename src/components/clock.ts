@@ -1,7 +1,7 @@
 "use client";
 
 // 브라우저 시계 — 화면이 쓰는 "지금 시각"(useNow)과 "오늘(로컬 달력)"(useLocalDay·useLocalToday)을 한 곳에 둔다.
-// 홈·프로필·설정·프로필 편집은 useNow, 기록 탭은 useLocalDay, 온보딩은 useLocalToday를 쓴다.
+// 홈·프로필·설정·프로필 편집은 useNow, 기록 탭·PDF 리포트·분석 폼(출산일 max)은 useLocalDay, 온보딩은 useLocalToday를 쓴다.
 // 브라우저에서만 읽는다. 서버 렌더링(정적 HTML)과 하이드레이션 첫 렌더는 값이 없다(null·"") —
 // 빌드 시각이 "n일차"·"3시간 전"에 박히지 않게(DEV_NOTES §4). 화면은 값이 없으면 시각에 따라 달라지는 것을 그리지 않는다.
 // 구독이 모두 끊기면 타이머·이벤트를 걷는다.
