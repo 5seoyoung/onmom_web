@@ -55,6 +55,11 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
+/* 클릭재킹 막기 — 다른 사이트의 iframe 안이면 FrameGuard(components/FrameGuard.tsx)가 이 표시를 붙여 문서 전체를 숨긴다. */
+html[data-framed] {
+  display: none !important;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-text-primary);

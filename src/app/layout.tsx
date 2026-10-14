@@ -3,6 +3,7 @@ import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { config, robotsFor } from "@/config";
 import { CspMeta } from "@/components/CspMeta";
+import { FrameGuard } from "@/components/FrameGuard";
 import { StoreProvider } from "@/store/StoreProvider";
 import { AppGate } from "@/features/flow/AppGate";
 import { BASE_OPEN_GRAPH, BASE_TWITTER, TITLE_TEMPLATE } from "@/features/meta/shareMeta";
@@ -50,19 +51,23 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <CspMeta />
       </head>
       <body className="min-h-full">
-        {/* 앱 상태(브라우저 저장소)는 여기서 한 번 연결한다. 레이아웃은 서버 컴포넌트로 두고 Provider만 클라이언트 경계다.
-            저장소는 마운트 후 첫 구독 때 읽으므로 정적 HTML에는 사용자 데이터가 들어가지 않는다. */}
-        <StoreProvider>
-          {/* 앱 관문 — 로그인 전 → /login/, 온보딩 전 → /onboarding/, 그 외 → 홈 탭 /home/(RootView.swift:10-17).
-              저장소를 읽기 전에는 보호된 화면을 그리지 않는다(시작 주소 /·개인정보처리방침·이용약관·로그인 콜백·관리자는 늘 연다 —
-              시작 주소는 화면 없이 로그인 또는 앱 홈으로 옮긴다, features/flow/RootRedirect).
-              폭은 여기서 정하지 않는다 — 앱은 components/shell/AppShell(폰 = 폰 폭 기둥, PC = 사이드바),
-              로그인·온보딩·처리방침은 components/shell/CardColumn(폰 = 폰 폭 기둥, PC = 가운데 카드). */}
-          <AppGate>{children}</AppGate>
-          {/* PWA — 운영 빌드에서만 서비스 워커(public/sw.js)를 등록하고, 계정이 바뀌면 이 브라우저의 푸시 구독을 맞춘다
-              (로그아웃·계정 삭제 = 해지, 다른 계정으로 전환 = 새 계정의 행으로 다시 저장). 화면은 그리지 않는다. */}
-          <PwaClient />
-        </StoreProvider>
+        {/* 클릭재킹 막기 — 다른 사이트의 iframe 안이면 앱을 숨기고 그리지 않으며, 맨 위 창을 온맘 주소로 옮겨 본다(GitHub Pages는
+            frame-ancestors 헤더를 못 붙인다). 인라인 스크립트 없이 클라이언트 컴포넌트로 — 까닭은 components/FrameGuard.tsx. */}
+        <FrameGuard>
+          {/* 앱 상태(브라우저 저장소)는 여기서 한 번 연결한다. 레이아웃은 서버 컴포넌트로 두고 Provider만 클라이언트 경계다.
+              저장소는 마운트 후 첫 구독 때 읽으므로 정적 HTML에는 사용자 데이터가 들어가지 않는다. */}
+          <StoreProvider>
+            {/* 앱 관문 — 로그인 전 → /login/, 온보딩 전 → /onboarding/, 그 외 → 홈 탭 /home/(RootView.swift:10-17).
+                저장소를 읽기 전에는 보호된 화면을 그리지 않는다(시작 주소 /·개인정보처리방침·이용약관·로그인 콜백·관리자는 늘 연다 —
+                시작 주소는 화면 없이 로그인 또는 앱 홈으로 옮긴다, features/flow/RootRedirect).
+                폭은 여기서 정하지 않는다 — 앱은 components/shell/AppShell(폰 = 폰 폭 기둥, PC = 사이드바),
+                로그인·온보딩·처리방침은 components/shell/CardColumn(폰 = 폰 폭 기둥, PC = 가운데 카드). */}
+            <AppGate>{children}</AppGate>
+            {/* PWA — 운영 빌드에서만 서비스 워커(public/sw.js)를 등록하고, 계정이 바뀌면 이 브라우저의 푸시 구독을 맞춘다
+                (로그아웃·계정 삭제 = 해지, 다른 계정으로 전환 = 새 계정의 행으로 다시 저장). 화면은 그리지 않는다. */}
+            <PwaClient />
+          </StoreProvider>
+        </FrameGuard>
       </body>
     </html>
   );
