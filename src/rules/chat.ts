@@ -21,8 +21,7 @@ export interface ChatMessage {
 export interface ChatLlmRequest {
   messages: { role: "user" | "assistant"; content: string }[];
   preset: "patient_edu";
-  /** iOS 컨텍스트 문자열 자리 — 웹은 비워 둔다(서버에는 features/chat/chatModel.ts chatLlmContext의 세 항목만 따로 보낸다) */
-  context: string;
+  // iOS의 컨텍스트 문자열은 없다 — 산모 정보는 features/chat/chatModel.ts chatLlmContext의 세 항목만 서버에 따로 보낸다.
 }
 
 export interface ChatReplyResult {
@@ -59,6 +58,8 @@ export function chatReply(history: readonly ChatMessage[]): ChatMessage {
 
   let text: string;
   if (has(fallback.self_harm_keywords)) {
+    // 앱 화면에서는 여기까지 오지 않는다 — features/chat/chatModel.ts requestChatReply가 위기 표현(isCrisisMessage — 이 키워드 포함)을
+    // 먼저 위기 안내로 답한다. 이 함수를 다른 곳에서 불러도 위기 표현이 기본 답을 받지 않게 iOS 순서 그대로 남겨 둔다(안전망).
     text = fallback.replies.self_harm;
   } else if (has(fallback.mood_keywords)) {
     // 우울·기분 상담은 의료행위라 챗봇이 진행하지 않는다 — 알림·연계만 안내
@@ -77,24 +78,20 @@ export function chatReply(history: readonly ChatMessage[]): ChatMessage {
  * 서버에 보낼 대화 — 첫 메시지가 user여야 하므로 앱이 심은 인사말(앞쪽 assistant)은 뺀다(ChatView.swift:171-174).
  * 시스템 프롬프트와 임산부 수첩 코퍼스는 서버가 소유하므로 보내지 않는다.
  */
-export function buildChatLlmRequest(history: readonly ChatMessage[], context: string): ChatLlmRequest {
+export function buildChatLlmRequest(history: readonly ChatMessage[]): ChatLlmRequest {
   const firstUser = history.findIndex((m) => m.role !== "assistant");
   const messages = (firstUser === -1 ? [] : history.slice(firstUser)).map((m) => ({
     role: m.role,
     content: m.text,
   }));
-  return { messages, preset: "patient_edu", context };
+  return { messages, preset: "patient_edu" };
 }
 
 /** 서버 우선, 미설정·실패·빈 응답이면 규칙 폴백(ChatView.swift:170-185). */
-export async function resolveChatReply(
-  history: readonly ChatMessage[],
-  context: string,
-  deps: ChatDeps = {},
-): Promise<ChatReplyResult> {
+export async function resolveChatReply(history: readonly ChatMessage[], deps: ChatDeps = {}): Promise<ChatReplyResult> {
   if (deps.llmComplete) {
     try {
-      const text = await deps.llmComplete(buildChatLlmRequest(history, context));
+      const text = await deps.llmComplete(buildChatLlmRequest(history));
       // LLMClient는 빈 text를 오류로 본다(LLMClient.swift:86)
       if (typeof text === "string" && text.length > 0) return { text, fromFallback: false };
     } catch {

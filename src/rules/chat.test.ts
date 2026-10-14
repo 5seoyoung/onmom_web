@@ -64,15 +64,13 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
 });
 
 describe("서버 우선, 실패하면 규칙 폴백 (ChatView.swift:170-185)", () => {
-  const context = "산후 12일차(1주차), 모유수유 중";
-
   it("서버 미설정 → 폴백", async () => {
-    expect(await resolveChatReply(ask("출혈이 있어요"), context)).toEqual({ text: replies.bleeding, fromFallback: true });
+    expect(await resolveChatReply(ask("출혈이 있어요"))).toEqual({ text: replies.bleeding, fromFallback: true });
   });
 
   it("서버 답이 있으면 그대로 — 클라이언트 안전 선필터 없음(iOS 그대로, 검수 #7)", async () => {
     const llmComplete = vi.fn(async () => "서버 답");
-    expect(await resolveChatReply(ask("죽고 싶어요"), context, { llmComplete })).toEqual({
+    expect(await resolveChatReply(ask("죽고 싶어요"), { llmComplete })).toEqual({
       text: "서버 답",
       fromFallback: false,
     });
@@ -83,11 +81,11 @@ describe("서버 우선, 실패하면 규칙 폴백 (ChatView.swift:170-185)", (
     const failing = async (): Promise<string> => {
       throw new Error("offline");
     };
-    expect(await resolveChatReply(ask("죽고 싶어요"), context, { llmComplete: failing })).toEqual({
+    expect(await resolveChatReply(ask("죽고 싶어요"), { llmComplete: failing })).toEqual({
       text: replies.self_harm,
       fromFallback: true,
     });
-    expect(await resolveChatReply(ask("운동"), context, { llmComplete: async () => "" })).toEqual({
+    expect(await resolveChatReply(ask("운동"), { llmComplete: async () => "" })).toEqual({
       text: replies.exercise,
       fromFallback: true,
     });
@@ -95,16 +93,17 @@ describe("서버 우선, 실패하면 규칙 폴백 (ChatView.swift:170-185)", (
 
   it("요청: 앞쪽 인사말 제외 · preset patient_edu · maxTokens는 넘기지 않는다(LLMClient 기본값, iOS 그대로)", () => {
     const history: ChatMessage[] = [greeting, { role: "user", text: "q1" }, { role: "assistant", text: "a1" }, { role: "user", text: "q2" }];
-    expect(buildChatLlmRequest(history, context)).toEqual({
+    expect(buildChatLlmRequest(history)).toEqual({
       messages: [
         { role: "user", content: "q1" },
         { role: "assistant", content: "a1" },
         { role: "user", content: "q2" },
       ],
       preset: "patient_edu",
-      context,
     });
-    expect(buildChatLlmRequest(history, context)).not.toHaveProperty("maxTokens");
+    expect(buildChatLlmRequest(history)).not.toHaveProperty("maxTokens");
+    // iOS의 컨텍스트 문자열은 만들지 않는다 — 산모 정보는 chatModel의 chatLlmContext가 서버 요청에 따로 싣는다
+    expect(buildChatLlmRequest(history)).not.toHaveProperty("context");
   });
 });
 

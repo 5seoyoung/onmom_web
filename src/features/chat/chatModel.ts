@@ -281,8 +281,7 @@ export async function requestChatReply(
         },
       }
     : {};
-  // 둘째 인자(iOS 컨텍스트 문자열)는 서버로 보내지 않으므로 비워 둔다
-  const reply = await resolveChatReply(history, "", deps);
+  const reply = await resolveChatReply(history, deps);
   if (!reply.fromFallback) {
     // 서버 함수의 안전 선필터가 걸려 LLM 대신 고정 위기 안내를 돌려줬다(handler.ts `{ ok, text: CRISIS_REPLY, flagged }`) —
     // 웹 선필터가 먼저 거르므로 보통 오지 않지만, 오면 AI 답이 아니라 앱 안내(위기 안내)로 표시한다("AI 답변" 표시를 붙이지 않는다).
