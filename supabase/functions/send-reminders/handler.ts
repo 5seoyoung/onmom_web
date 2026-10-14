@@ -2,7 +2,8 @@
 // Edge Function "send-reminders"의 요청 처리 — 의존성(부른 쪽 확인·구독 읽기/지우기·발송·시각·로그)을 받아 만든다.
 // 실제 연결은 index.ts(Deno), 테스트는 src/features/pwa/sendReminders.test.ts(vitest — 웹 표준 Request/Response만 쓴다).
 //
-// POST (x-reminder-secret: <REMINDER_CRON_SECRET> 또는 Authorization: Bearer <서버 키>) — pg_cron이 매일 11:00 UTC에 부른다(0004_push_reminders.sql).
+// POST (x-reminder-secret: <REMINDER_CRON_SECRET> 또는 Authorization: Bearer <서버 키>) — pg_cron이 매시 정각에 부른다(0007_schedules_and_limits.sql —
+// 처음 0004는 하루 한 번 11:00 UTC였다). 매시 불러도 구독마다 그 기기 시간대의 발송 시(REMINDER_HOUR)에만 보내므로 하루 한 번씩이다.
 // 순서: 1) 메서드·부른 쪽 확인 → 2) 발송 준비(VAPID 키·subject) → 3) 구독 전부 읽기 → 4) 행의 시간대에서 지금이 20시인 것만
 //       → 5) 동시 20개씩 발송(받는 푸시 서비스 밖의 끝점은 요청하지 않고 rejected) → 6) 404/410(구독 사라짐)은 행 삭제 → 7) 숫자만 응답·기록.
 // 로그: 상태·소요 시간·건수만. 끝점·키·사용자 id는 기록하지 않는다. 오류도 종류(코드)만.

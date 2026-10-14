@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno 전용 가져오기(npm:·".ts")를 Next tsc가 읽지 못하는 줄에만 @ts-ignore를 쓴다. */
 // Supabase Edge Function "send-reminders" — 매일 리마인더(웹 푸시) 발송. 설명·비밀값·예약: docs/PWA_AND_REMINDERS.md
 //
-// - 부르는 쪽: pg_cron(0004_push_reminders.sql, 매일 11:00 UTC = 20:00 KST) — 헤더 x-reminder-secret(Vault reminder_cron_secret)로 확인한다.
+// - 부르는 쪽: pg_cron(매시 정각 — 0007_schedules_and_limits.sql, 처음 0004는 하루 한 번 11:00 UTC) — 헤더 x-reminder-secret(Vault reminder_cron_secret)로 확인한다.
+//   예약은 Vault에 reminder_cron_secret과 project_url(https://<ref>.supabase.co)이 둘 다 있을 때만 요청을 만든다.
 //   서버 키(Authorization: Bearer <secret/service_role 키>)로도 부를 수 있다(사람이 손으로 시험할 때). 그 밖은 401.
 //   게이트웨이 JWT 검사는 끈다(supabase/config.toml [functions.send-reminders] verify_jwt = false) — pg_cron 요청에는 사용자 토큰이 없다.
 // - 비밀값: VAPID_PRIVATE_KEY(scripts/generate-vapid.mjs), VAPID_SUBJECT(mailto:… 또는 https://…), REMINDER_CRON_SECRET.
-//   선택: VAPID_PUBLIC_KEY(있으면 비밀 키에서 만든 공개 키와 같은지 확인 — 웹의 NEXT_PUBLIC_VAPID_PUBLIC_KEY와 어긋남 방지), REMINDER_HOUR(기본 20).
+//   선택: VAPID_PUBLIC_KEY(있으면 비밀 키에서 만든 공개 키와 같은지 확인 — 웹의 NEXT_PUBLIC_VAPID_PUBLIC_KEY와 어긋남 방지),
+//   REMINDER_HOUR(기본 20 — 기기 시간대의 시. 예약이 매시라 이 값만 바꾸면 되고 예약은 고치지 않는다).
 //   서버 키(SUPABASE_SECRET_KEYS "default" 또는 SUPABASE_SERVICE_ROLE_KEY)와 SUPABASE_URL은 Supabase가 넣어 준다.
 // - 보내는 것: 고정 문구(_shared/reminders.ts REMINDER_NOTIFICATION)뿐. 구독 표에도 알림에도 건강 데이터는 없다.
 // - 암호화·서명은 _shared/reminders.ts(RFC 8291·8292, Web Crypto). 푸시 서비스가 404/410으로 답한 구독 행은 지운다.
