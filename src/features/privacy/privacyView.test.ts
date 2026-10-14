@@ -7,23 +7,23 @@ describe("privacyBackHref", () => {
     expect(privacyBackHref({ hydrated: true, isSignedIn: true, hasOnboarded: true })).toBe(ROUTES.settings);
   });
 
-  it("로그인 전 방문자는 서비스 소개로 — 설정으로 보내면 관문이 로그인 화면으로 돌린다", () => {
-    expect(privacyBackHref({ hydrated: true, isSignedIn: false, hasOnboarded: false })).toBe(ROUTES.landing);
-    // 로그아웃해도 기록(hasOnboarded)은 남는다 — 계정이 없으면 여전히 서비스 소개로
-    expect(privacyBackHref({ hydrated: true, isSignedIn: false, hasOnboarded: true })).toBe(ROUTES.landing);
+  it("로그인 전 방문자는 시작 주소(/)로 — 그 주소가 로그인 화면으로 옮긴다", () => {
+    expect(privacyBackHref({ hydrated: true, isSignedIn: false, hasOnboarded: false })).toBe(ROUTES.root);
+    // 로그아웃해도 기록(hasOnboarded)은 남는다 — 계정이 없으면 여전히 시작 주소로
+    expect(privacyBackHref({ hydrated: true, isSignedIn: false, hasOnboarded: true })).toBe(ROUTES.root);
   });
 
-  it("로그인했지만 온보딩 전이면 서비스 소개로", () => {
-    expect(privacyBackHref({ hydrated: true, isSignedIn: true, hasOnboarded: false })).toBe(ROUTES.landing);
+  it("로그인했지만 온보딩 전이면 시작 주소로(앱 홈을 거쳐 관문이 온보딩으로 보낸다)", () => {
+    expect(privacyBackHref({ hydrated: true, isSignedIn: true, hasOnboarded: false })).toBe(ROUTES.root);
   });
 
-  it("저장소를 읽기 전에는 공개 주소(서비스 소개)", () => {
-    expect(privacyBackHref({ hydrated: false, isSignedIn: true, hasOnboarded: true })).toBe(ROUTES.landing);
+  it("저장소를 읽기 전에는 공개 주소(시작 주소)", () => {
+    expect(privacyBackHref({ hydrated: false, isSignedIn: true, hasOnboarded: true })).toBe(ROUTES.root);
   });
 });
 
 describe("PRIVACY_BACK_FROM", () => {
-  it("이 화면으로 링크하는 서비스 소개·설정 — 앞 기록이 이 중 하나면 [뒤로]가 그 화면으로 돌아간다", () => {
-    expect([...PRIVACY_BACK_FROM].sort()).toEqual([ROUTES.landing, ROUTES.settings].sort());
+  it("이 화면으로 링크하는 설정 — 앞 기록이 그 화면이면 [뒤로]가 그 화면으로 돌아간다(시작 주소는 화면이 없어 빠진다)", () => {
+    expect([...PRIVACY_BACK_FROM]).toEqual([ROUTES.settings]);
   });
 });

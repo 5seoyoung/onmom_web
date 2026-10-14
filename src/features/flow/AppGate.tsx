@@ -4,7 +4,8 @@
 // 서버 저장(Supabase)이 설정된 빌드에서 온보딩을 마쳤지만 지금 판의 동의가 없으면 → /onboarding/?consent=1(동의 단계만).
 // 루트 레이아웃의 <StoreProvider> 안에서 모든 화면을 감싼다. 판단은 gate.ts(순수 함수).
 //
-// - 공개 주소(서비스 소개 /, 개인정보처리방침, 로그인 콜백, 관리자 화면)는 저장소와 무관하게 늘 그린다.
+// - 공개 주소(시작 주소 /, 개인정보처리방침, 이용약관, 로그인 콜백, 관리자 화면)는 저장소와 무관하게 늘 그린다.
+//   시작 주소는 화면이 없고 그 페이지(RootRedirect)가 같은 불러오는 중 표시(GateLoading)를 그리며 로그인 또는 앱 홈으로 옮긴다.
 // - 저장소를 읽기 전(정적 HTML·첫 렌더)에는 보호된 화면을 그리지 않는다 — 로그인 전 사용자에게
 //   메인 화면이나 기본값이 번쩍이지 않게.
 // - 주소가 어긋나면 router.replace로 맞춘다(뒤로 가기에 잘못된 주소가 남지 않게). 그동안은 화면 대신 불러오는 중 표시(GateLoading) —
@@ -29,8 +30,8 @@ import { StaleTabNotice } from "./StaleTabNotice";
 // 웹 신규 문구 — CPO 확인 필요 (저장소를 읽거나 주소를 맞추는 동안의 낭독 문구 — 화면에는 스피너만)
 export const GATE_LOADING_TEXT = "불러오는 중이에요";
 
-/** 관문이 화면을 그리기 전 — 스피너는 0.4초 뒤에 나타나고(animate-gate-in), 움직임 줄이기면 돌지 않는다. */
-function GateLoading() {
+/** 관문이 화면을 그리기 전 — 스피너는 0.4초 뒤에 나타나고(animate-gate-in), 움직임 줄이기면 돌지 않는다. 시작 주소(RootRedirect)도 쓴다. */
+export function GateLoading() {
   return (
     <div role="status" className="flex min-h-dvh items-center justify-center">
       <span aria-hidden className="animate-gate-in">
@@ -45,7 +46,7 @@ export function AppGate({ children }: { children?: ReactNode }) {
   const store = useAppStore();
   const pathname = usePathname();
   const router = useRouter();
-  // 게스트를 익명 계정으로 옮기는 것은 앱 화면에서만 — 공개 화면(소개·개인정보처리방침·관리자)을 연 것만으로는 서버에 계정을 만들지 않는다.
+  // 게스트를 익명 계정으로 옮기는 것은 앱 화면에서만 — 공개 화면(시작 주소·개인정보처리방침·관리자)을 연 것만으로는 서버에 계정을 만들지 않는다.
   useAuthSession(pathname, routeKindFor(pathname) !== "public");
   const decision = gateDecision(rootScreenFor(store), pathname);
   const redirectTo = decision.kind === "redirect" ? decision.to : null;

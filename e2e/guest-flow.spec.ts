@@ -1,6 +1,6 @@
 // 브라우저 자동 시험 — 브라우저 전용 빌드(Supabase 값 없음)의 게스트 흐름 전체. docs/DEV_NOTES.md §11.
-// 소개 → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 기록(어지러움 → 즉시 내원) → 홈 "확인 필요" → 운동 멈춤
-// → 이용약관 → 한국어 404 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
+// 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 기록(어지러움 → 즉시 내원) → 홈 "확인 필요" → 운동 멈춤
+// → 이용약관 → 한국어 404 → 시작 주소(/) → 홈 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
 // 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다).
 import { expect, test as base, type Page } from "@playwright/test";
 
@@ -74,14 +74,16 @@ async function isBrowserOnlyBuild(page: Page): Promise<boolean> {
   return (await kakao.isDisabled()) && /준비 중/.test((await kakao.textContent()) ?? "");
 }
 
-test("서비스 소개가 열리고 [시작하기]가 로그인으로 간다", async ({ page }) => {
+test("처음 온 사람이 시작 주소(/)를 열면 로그인(/login/)으로 간다", async ({ page }) => {
   await page.goto("./");
-  await expect(page.getByRole("heading", { level: 1, name: "산후 회복, 하루 1분 기록으로" })).toBeVisible();
-  // 운영 빌드에는 CSP 메타가 실린다(src/app/layout.tsx) — 위반 0개는 guard가 확인한다.
-  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
-  await page.getByRole("banner").getByRole("link", { name: "시작하기" }).click();
   await expect(page).toHaveURL(/\/login\/$/);
   await expect(page.getByRole("button", { name: "게스트로 시작" })).toBeVisible();
+  // 운영 빌드에는 CSP 메타가 실린다(src/app/layout.tsx) — 위반 0개는 guard가 확인한다.
+  await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
+  // 예전 서비스 소개 바닥글의 개인정보처리방침·이용약관·문의는 로그인 화면 아래에 있다
+  await expect(page.getByRole("button", { name: "개인정보처리방침 보기" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이용약관 보기" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "문의" })).toHaveAttribute("href", /^mailto:/);
 });
 
 test("이용약관이 열린다", async ({ page }) => {
@@ -171,6 +173,11 @@ test("게스트 흐름: 온보딩 → 위험 신호 → 계정 삭제", async ({
   await expect(page.getByRole("heading", { level: 1, name: "페이지를 찾을 수 없어요" })).toBeVisible();
   await page.getByRole("link", { name: "홈으로" }).click();
   await expect(page).toHaveURL(/\/home\/$/);
+
+  // 시작 주소(/) — 온보딩을 마친 사람은 앱 홈으로
+  await page.goto("./");
+  await expect(page).toHaveURL(/\/home\/$/);
+  await expect(page.getByRole("region", { name: "산후 회복" })).toBeVisible();
 
   // 프로필 → 설정 → 계정 삭제
   expect(await onmomKeys(page)).not.toEqual([]);

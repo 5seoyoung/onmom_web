@@ -2,15 +2,16 @@
 //
 // - trailingSlash: true라 모두 "/"로 끝난다. 쿼리는 슬래시 뒤에 붙인다(`${ROUTES.chat}?from=home`).
 // - basePath(/onmom_web)는 붙이지 않는다 — next/link·useRouter가 붙이고, usePathname은 떼고 준다.
-// - "/"는 서비스 소개(랜딩)다. 앱의 홈 탭은 ROUTES.home("/home/").
+// - "/"는 시작 주소다 — 화면 없이 로그인 전이면 로그인(/login/), 로그인했으면 앱 홈 탭(ROUTES.home "/home/")으로 옮긴다
+//   (서비스 소개 화면은 2026-10-14 CPO 결정으로 없앴다 — features/flow/RootRedirect).
 // - 새 화면을 만들면 여기에 먼저 더한다. routes.test.ts가 src/app의 페이지 파일과 맞는지 확인한다.
 
 export const ROUTES = {
-  /** 서비스 소개 — 누구나 */
-  landing: "/",
+  /** 시작 주소 — 누구나. 화면 없이 로그인 또는 앱 홈으로 옮긴다(features/flow/RootRedirect). */
+  root: "/",
   /** 개인정보처리방침 — 누구나 */
   privacy: "/privacy/",
-  /** 이용약관(초안 — 법률 검토 전) — 누구나. 서비스 소개 바닥글·설정·온보딩 동의 옆에서 연다(features/terms). */
+  /** 이용약관(초안 — 법률 검토 전) — 누구나. 설정에서 연다(로그인 화면·온보딩 동의 옆에서는 같은 본문을 시트로 — features/terms). */
   terms: "/terms/",
   /** 로그인 공급자에서 돌아오는 주소 — 누구나(아직 페이지 없음, 카카오 로그인 준비 중) */
   authCallback: "/auth/callback/",
@@ -59,7 +60,7 @@ export function normalizePathname(pathname: string | null | undefined): string {
 
 /**
  * pathname이 route 화면이거나 그 아래 화면인가 — 끝 슬래시는 무시하고, 접두만 같은 주소("/homework")는 아니다.
- * "/"(랜딩)는 정확히 "/"일 때만.
+ * "/"(시작 주소)는 정확히 "/"일 때만.
  */
 export function isPathWithin(pathname: string | null | undefined, route: string): boolean {
   const p = normalizePathname(pathname);

@@ -177,7 +177,7 @@ export function termsDocument(): TermsDocument {
 }
 
 /**
- * 약관 본문이 있는가 — 링크(서비스 소개 바닥글·설정·온보딩 동의 옆)는 본문이 있을 때만 그린다.
+ * 약관 본문이 있는가 — 링크(로그인 화면·설정·온보딩 동의 옆)는 본문이 있을 때만 그린다.
  * 지금은 초안이 있어 늘 true다. 법률 검토에서 초안을 내리기로 하면 termsSections를 비워 링크가 함께 사라지게 한다(빈 화면을 링크하지 않는다).
  */
 export function hasTermsText(): boolean {

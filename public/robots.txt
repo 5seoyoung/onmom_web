@@ -1,5 +1,5 @@
 # 온맘 — 1.0 공개 전: 검색 크롤러의 수집을 막는다(docs/SECURITY.md "검색 노출").
-# 정적 파일이라 빌드 값(NEXT_PUBLIC_SITE_INDEXABLE)에 따라 바뀌지 않는다 — 서비스 소개(/)를 검색에 열 때는
+# 정적 파일이라 빌드 값(NEXT_PUBLIC_SITE_INDEXABLE)에 따라 바뀌지 않는다 — 시작 주소(/)를 검색에 열 때는
 # 그 값을 true로 넣고 아래 "*" 그룹의 "Disallow: /"를 "Allow: /$" + "Disallow: /"로 함께 바꾼다(앱 화면은 늘 noindex).
 # GitHub 프로젝트 페이지(/onmom_web/)에서는 크롤러가 도메인 루트의 robots.txt만 읽으므로, 이 파일은 커스텀 도메인에서 효력이 생긴다.
 # 그때까지는 화면마다 넣는 <meta name="robots" content="noindex, nofollow">가 검색 노출을 막는다.

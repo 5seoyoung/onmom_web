@@ -84,12 +84,9 @@ export function HomeTopBar() {
   return (
     // PC: 위 여백 없이(py-0) — [AI 상담] 줄이 사이드바 로고 줄·다른 화면의 [뒤로] 줄과 같은 높이에 온다(pageFrame)
     <header className="flex items-center justify-between gap-2 py-1 lg:justify-end lg:py-0">
-      {/* "온맘"을 누르면 소개 페이지로. PC는 사이드 메뉴에 로고가 있어 글자를 숨기고 제목만 스크린 리더에 남긴다. */}
-      <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">
-        <Link href={ROUTES.landing} className="-mx-1 inline-flex min-h-11 items-center rounded-button px-1">
-          {HOME_TEXT.brand}
-        </Link>
-      </h1>
+      {/* "온맘" 제목(HomeView.swift:63 — 링크 아님. 이 화면이 앱 홈이다). PC는 사이드 메뉴에 로고가 있어 글자를 숨기고
+          제목만 스크린 리더에 남긴다. */}
+      <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">{HOME_TEXT.brand}</h1>
       <h1 className="hidden lg:block lg:sr-only">{HOME_TEXT.brand}</h1>
       <Link
         href={HOME_CHAT_HREF}

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
-import { FEATURES, LANDING_TEXT } from "@/features/landing/landingContent";
 import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { policyFor } from "./policy";
 import { webPolicySections } from "./webPolicyText";
@@ -55,14 +54,5 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
     }
   });
 
-  it("서비스 소개 저장 카드 — 빌드별 문구", () => {
-    const storage = FEATURES.find((f) => f.icon === "storage")!;
-    expect(DOC).toContain(storage.title);
-    expect(DOC).toContain(storage.titleWhenKakaoLogin!);
-    for (const p of storage.body) {
-      for (const t of [p.text, p.whenKakaoLogin, p.whenLlm]) if (t !== undefined) expect(DOC, t).toContain(t);
-    }
-    expect(DOC).toContain(LANDING_TEXT.ctaNote);
-    expect(DOC).toContain(LANDING_TEXT.ctaNoteKakao);
-  });
+  // 서비스 소개 저장 카드(빌드별 문구) 대조는 없앴다 — 서비스 소개 화면을 없앴다(2026-10-14 CPO 결정).
 });

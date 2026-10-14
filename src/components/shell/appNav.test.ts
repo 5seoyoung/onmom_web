@@ -59,7 +59,7 @@ describe("isNavItemActive — 지금 화면 표시", () => {
     expect(activeServices("/guide/")).toEqual(["회복 가이드"]);
   });
 
-  it("서비스 소개(/)·접두만 같은 주소·메뉴 밖 화면에서는 아무것도 켜지지 않는다", () => {
+  it("시작 주소(/)·접두만 같은 주소·메뉴 밖 화면에서는 아무것도 켜지지 않는다", () => {
     for (const p of ["/", "/homework/", "/recordings/", "/analyze/"]) {
       expect(activeTabs(p), p).toEqual([]);
       expect(activeServices(p), p).toEqual([]);

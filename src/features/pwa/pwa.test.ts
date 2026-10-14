@@ -664,16 +664,16 @@ describe("disableReminder · rebindReminder", () => {
 });
 
 describe("검색 노출(robots)", () => {
-  it("기본(NEXT_PUBLIC_SITE_INDEXABLE 없음)은 서비스 소개도 앱 화면도 noindex", () => {
+  it("기본(NEXT_PUBLIC_SITE_INDEXABLE 없음)은 시작 주소도 앱 화면도 noindex", () => {
     expect(config.siteIndexable).toBe(false);
-    expect(robotsFor("landing")).toEqual({ index: false, follow: false });
+    expect(robotsFor("root")).toEqual({ index: false, follow: false });
     expect(robotsFor("app")).toEqual({ index: false, follow: false });
   });
 
-  it("서비스 소개 페이지만 robotsFor(\"landing\")을 쓴다 — 스위치가 서비스 소개에 닿고, 다른 공개 화면은 레이아웃의 noindex를 물려받는다", () => {
-    expect(read("src/app/page.tsx")).toContain('robots: robotsFor("landing")');
+  it("시작 주소(/) 페이지만 robotsFor(\"root\")를 쓴다 — 스위치가 시작 주소에 닿고, 다른 공개 화면은 레이아웃의 noindex를 물려받는다", () => {
+    expect(read("src/app/page.tsx")).toContain('robots: robotsFor("root")');
     for (const page of ["src/app/privacy/page.tsx", "src/app/terms/page.tsx", "src/app/admin/page.tsx", "src/app/login/page.tsx"]) {
-      expect(read(page), page).not.toContain('robotsFor("landing")');
+      expect(read(page), page).not.toContain('robotsFor("root")');
     }
   });
 });

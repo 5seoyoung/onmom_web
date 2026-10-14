@@ -60,7 +60,7 @@ describe("오류 경계 화면", () => {
     }
   });
 
-  it("오류 화면: 한국어 제목·[다시 시도]·[홈으로](앱 홈 /home/, 서비스 소개 아님)", () => {
+  it("오류 화면: 한국어 제목·[다시 시도]·[홈으로](앱 홈 /home/, 시작 주소 / 아님)", () => {
     const html = renderToStaticMarkup(h(ErrorScreen, { onRetry: () => {} }));
     expect(html).toContain("<h1");
     expect(html).toContain(ERROR_SCREEN_TEXT.title);
@@ -82,12 +82,13 @@ describe("오류 경계 화면", () => {
     expect(code).toMatch(/useEffect\(\(\) => \{\s*headingRef\.current\?\.focus\(\);?\s*\}, \[\]\)/);
   });
 
-  it("not-found.tsx: 서버 컴포넌트, 한국어 제목 metadata + noindex, 홈·서비스 소개 링크(ROUTES)", () => {
+  it("not-found.tsx: 서버 컴포넌트, 한국어 제목 metadata + noindex, [홈으로] 링크(ROUTES)", () => {
     expect(notFound.trimStart().startsWith('"use client"')).toBe(false);
     expect(notFound).toContain("export const metadata");
     expect(notFound).toMatch(/robots:\s*\{\s*index:\s*false/);
     expect(notFound).toContain("ROUTES.home");
-    expect(notFound).toContain("ROUTES.landing");
+    // 서비스 소개 화면은 없앴다(2026-10-14) — 시작 주소("/")로 가는 두 번째 링크를 두지 않는다
+    expect(notFound).not.toMatch(/ROUTES\.(root|landing)/);
     expect(notFound).not.toMatch(/href="\//); // 문자열 경로 금지(DEV_NOTES §4)
     expect(notFound).toContain("CardColumn");
     expect(notFound).toContain("웹 신규 문구 — CPO 확인 필요");

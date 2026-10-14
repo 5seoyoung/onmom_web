@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CardColumn } from "@/components/shell/CardColumn";
-import { primaryButtonClass, secondaryButtonClass } from "@/components/ui/Buttons";
+import { primaryButtonClass } from "@/components/ui/Buttons";
 import { BrandLogo } from "@/features/flow/BrandLogo";
 import { ROUTES } from "@/routes";
 
@@ -16,8 +16,6 @@ export const NOT_FOUND_TEXT = {
   body: "주소가 바뀌었거나 잘못 입력됐을 수 있어요.",
   // 웹 신규 문구 — CPO 확인 필요 (앱 홈 탭 /home/ 으로. 로그인 전이면 관문이 로그인으로 보낸다)
   home: "홈으로",
-  // 웹 신규 문구 — CPO 확인 필요 (서비스 소개 "/" 로)
-  landing: "서비스 소개 보기",
 } as const;
 
 export const metadata: Metadata = {
@@ -34,14 +32,10 @@ export default function NotFound() {
           <h1 className="text-2xl font-bold text-neutral">{NOT_FOUND_TEXT.title}</h1>
           <p className="text-base text-text-secondary">{NOT_FOUND_TEXT.body}</p>
         </div>
-        <div className="flex flex-col gap-3">
-          <Link href={ROUTES.home} className={primaryButtonClass}>
-            {NOT_FOUND_TEXT.home}
-          </Link>
-          <Link href={ROUTES.landing} className={secondaryButtonClass}>
-            {NOT_FOUND_TEXT.landing}
-          </Link>
-        </div>
+        {/* 서비스 소개 화면이 없어져(2026-10-14) 링크는 [홈으로] 하나 — 로그인 전이면 관문이 로그인 화면으로 보낸다 */}
+        <Link href={ROUTES.home} className={primaryButtonClass}>
+          {NOT_FOUND_TEXT.home}
+        </Link>
       </main>
     </CardColumn>
   );

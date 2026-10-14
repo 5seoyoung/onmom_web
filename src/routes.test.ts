@@ -33,8 +33,8 @@ describe("ROUTES", () => {
     expect(new Set(values).size).toBe(values.length);
   });
 
-  it("서비스 소개는 /, 앱 홈 탭은 /home/", () => {
-    expect(ROUTES.landing).toBe("/");
+  it("시작 주소는 /, 앱 홈 탭은 /home/", () => {
+    expect(ROUTES.root).toBe("/");
     expect(ROUTES.home).toBe("/home/");
   });
 
@@ -64,7 +64,7 @@ describe("ROUTES", () => {
     expect(routeKindFor(ROUTES.admin)).toBe("public");
   });
 
-  it("이용약관은 /terms/ — 개인정보처리방침처럼 (app) 묶음 밖의 공개 주소(로그인 전 서비스 소개·온보딩에서도 연다)", () => {
+  it("이용약관은 /terms/ — 개인정보처리방침처럼 (app) 묶음 밖의 공개 주소(설정에서 연다 — 로그인 전에도 주소로 열린다)", () => {
     expect(ROUTES.terms).toBe("/terms/");
     const terms = pageRoutes().find((r) => r.path === ROUTES.terms);
     expect(terms).toBeDefined();
@@ -109,9 +109,9 @@ describe("isPathWithin", () => {
     expect(isPathWithin("/record/", ROUTES.journal)).toBe(false);
   });
 
-  it("서비스 소개(/)는 정확히 /일 때만", () => {
-    expect(isPathWithin("/", ROUTES.landing)).toBe(true);
-    expect(isPathWithin("/home/", ROUTES.landing)).toBe(false);
-    expect(isPathWithin(null, ROUTES.landing)).toBe(true);
+  it("시작 주소(/)는 정확히 /일 때만", () => {
+    expect(isPathWithin("/", ROUTES.root)).toBe(true);
+    expect(isPathWithin("/home/", ROUTES.root)).toBe(false);
+    expect(isPathWithin(null, ROUTES.root)).toBe(true);
   });
 });

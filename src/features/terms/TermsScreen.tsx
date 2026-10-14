@@ -3,7 +3,7 @@ import { TermsHeader } from "./TermsHeader";
 import { termsDocument } from "./termsText";
 
 // /terms/ — 이용약관 전체 화면(초안 — 법률 검토 전). 누구나 볼 수 있게 앱 관문이 이 주소는 늘 연다(features/flow/gate.ts).
-// 서비스 소개 바닥글·설정 > 개인정보·안전에서 들어온다. 본문은 사용자 데이터를 쓰지 않는 정적 화면이라 서버 컴포넌트로 두고,
+// 설정 > 개인정보·안전에서 들어온다(로그인 화면·온보딩 동의 옆에서는 같은 본문을 시트로 연다). 본문은 사용자 데이터를 쓰지 않는 정적 화면이라 서버 컴포넌트로 두고,
 // 뒤로 링크가 있는 머리(TermsHeader)만 클라이언트다. 개인정보처리방침 화면(features/privacy/PrivacyPolicyScreen)과 같은 틀.
 export function TermsScreen() {
   const terms = termsDocument();

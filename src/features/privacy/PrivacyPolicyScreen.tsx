@@ -3,8 +3,8 @@ import { PolicySections, PolicyWebNote } from "./PrivacyPolicy";
 import { PrivacyPolicyHeader } from "./PrivacyPolicyHeader";
 
 // /privacy/ — 설정에서 푸시로 여는 전체 화면(MoreView.swift:76, PrivacyPolicyView(showsCloseButton: false)).
-// 누구나 볼 수 있게 앱 관문이 이 주소는 늘 연다(features/flow/gate.ts) — 서비스 소개에서도 들어온다.
-// 뒤로 = 앞 화면(서비스 소개·설정)으로 돌아간다. 주소로 바로 들어왔으면 앱을 쓰는 사람은 설정, 그 밖은 서비스 소개(privacyView.ts).
+// 누구나 볼 수 있게 앱 관문이 이 주소는 늘 연다(features/flow/gate.ts) — 주소로 바로 들어올 수도 있다.
+// 뒤로 = 앞 화면(설정)으로 돌아간다. 주소로 바로 들어왔으면 앱을 쓰는 사람은 설정, 그 밖은 시작 주소 "/"(privacyView.ts).
 // 본문은 사용자 데이터를 쓰지 않는 정적 화면이라 서버 컴포넌트로 두고, 뒤로 링크가 있는 머리만 클라이언트다.
 // 어느 방침인지는 빌드 설정으로 정해진다(policy.ts activePolicy — Supabase 설정이 있으면 웹 초안, 없으면 iOS 원문).
 export function PrivacyPolicyScreen() {

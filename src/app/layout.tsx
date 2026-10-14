@@ -5,7 +5,7 @@ import { config, robotsFor } from "@/config";
 import { CspMeta } from "@/components/CspMeta";
 import { StoreProvider } from "@/store/StoreProvider";
 import { AppGate } from "@/features/flow/AppGate";
-import { BASE_OPEN_GRAPH, BASE_TWITTER, TITLE_TEMPLATE } from "@/features/landing/shareMeta";
+import { BASE_OPEN_GRAPH, BASE_TWITTER, TITLE_TEMPLATE } from "@/features/meta/shareMeta";
 import { PwaClient } from "@/features/pwa/PwaClient";
 import { PWA_APP_TITLE, PWA_ICONS, pwaAssetUrl } from "@/features/pwa/pwaAssets";
 
@@ -13,7 +13,7 @@ import { PWA_APP_TITLE, PWA_ICONS, pwaAssetUrl } from "@/features/pwa/pwaAssets"
 // 매니페스트 자체(public/manifest.webmanifest)는 정적 파일이라 start_url·scope에 /onmom_web이 적혀 있다 — 도메인을 바꾸면 그 파일도 고친다
 // (docs/PWA_AND_REMINDERS.md).
 // 공유 미리보기(Open Graph·트위터)의 절대 주소는 metadataBase(config.siteUrl — origin + basePath, 기본 https://5seoyoung.github.io/onmom_web/)
-// 아래로 붙는다(features/landing/shareMeta.ts). 아이콘·매니페스트 주소는 metadataBase를 쓰지 않아 위처럼 basePath를 직접 붙인다.
+// 아래로 붙는다(features/meta/shareMeta.ts). 아이콘·매니페스트 주소는 metadataBase를 쓰지 않아 위처럼 basePath를 직접 붙인다.
 export const metadata: Metadata = {
   metadataBase: new URL(config.siteUrl),
   // 화면 제목은 "AI 상담 · 온맘"처럼 — 제목이 없는 화면은 "온맘"
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   description: "엄마의 산후 회복 케어 - 퇴원부터 산후 6주 검진까지",
   openGraph: BASE_OPEN_GRAPH,
   twitter: BASE_TWITTER,
-  // 1.0 공개 전까지 검색 노출 막기. NEXT_PUBLIC_SITE_INDEXABLE=true여도 앱 화면은 noindex — 서비스 소개(src/app/page.tsx)만 robotsFor("landing")로 연다.
+  // 1.0 공개 전까지 검색 노출 막기. NEXT_PUBLIC_SITE_INDEXABLE=true여도 앱 화면은 noindex — 시작 주소(src/app/page.tsx)만 robotsFor("root")로 연다.
   robots: robotsFor("app"),
   manifest: pwaAssetUrl(config.basePath, "manifest"),
   icons: {
@@ -54,8 +54,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             저장소는 마운트 후 첫 구독 때 읽으므로 정적 HTML에는 사용자 데이터가 들어가지 않는다. */}
         <StoreProvider>
           {/* 앱 관문 — 로그인 전 → /login/, 온보딩 전 → /onboarding/, 그 외 → 홈 탭 /home/(RootView.swift:10-17).
-              저장소를 읽기 전에는 보호된 화면을 그리지 않는다(서비스 소개 /·개인정보처리방침·로그인 콜백은 늘 연다).
-              폭은 여기서 정하지 않는다 — 서비스 소개는 전체 폭, 앱은 components/shell/AppShell(폰 = 폰 폭 기둥, PC = 사이드바),
+              저장소를 읽기 전에는 보호된 화면을 그리지 않는다(시작 주소 /·개인정보처리방침·이용약관·로그인 콜백·관리자는 늘 연다 —
+              시작 주소는 화면 없이 로그인 또는 앱 홈으로 옮긴다, features/flow/RootRedirect).
+              폭은 여기서 정하지 않는다 — 앱은 components/shell/AppShell(폰 = 폰 폭 기둥, PC = 사이드바),
               로그인·온보딩·처리방침은 components/shell/CardColumn(폰 = 폰 폭 기둥, PC = 가운데 카드). */}
           <AppGate>{children}</AppGate>
           {/* PWA — 운영 빌드에서만 서비스 워커(public/sw.js)를 등록하고, 계정이 바뀌면 이 브라우저의 푸시 구독을 맞춘다

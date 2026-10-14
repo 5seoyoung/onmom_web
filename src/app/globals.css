@@ -74,7 +74,7 @@ body {
     outline-offset: 2px;
   }
 
-  /* 어두운 면(bg-neutral 카드 — 예: 랜딩 마지막 CTA) 안의 컨트롤은 neutral 링이 배경과 같아(1:1) 안 보인다 → 흰(surface) 링(16.6:1).
+  /* 어두운 면(bg-neutral 카드) 안의 컨트롤은 neutral 링이 배경과 같아(1:1) 안 보인다 → 흰(surface) 링(16.6:1).
      자손 선택자라 neutral 주 버튼 자신(밝은 페이지 위에 링이 그려진다)은 그대로 neutral 링. */
   .bg-neutral :focus-visible {
     outline-color: var(--color-surface);

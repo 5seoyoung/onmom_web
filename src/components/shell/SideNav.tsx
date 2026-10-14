@@ -9,7 +9,7 @@ import { ROUTES } from "@/routes";
 import { APP_NAV_TEXT, APP_TABS, isNavItemActive, SERVICE_LINKS } from "./appNav";
 
 // PC(lg 이상) 왼쪽 사이드바 — 폰의 하단 탭바 대신. 화면 높이에 붙어(sticky) 본문과 따로 스크롤된다.
-// 위에서 아래로: 로고·온맘(→ 소개 페이지) · 탭 5개 · "더보기" 서비스 7개(프로필 허브와 같은 순서) · 의료기기 아님 면책.
+// 위에서 아래로: 로고·온맘(→ 앱 홈 탭) · 탭 5개 · "더보기" 서비스 7개(프로필 허브와 같은 순서) · 의료기기 아님 면책.
 // 활성 항목 = 코랄 글자(글자 전용 토큰) + 원색 코랄 아이콘 + 옅은 코랄 배경 + 굵게 + aria-current(색만으로 알리지 않는다).
 // lg 미만에서는 display:none이라 낭독·키보드 순서에서도 빠진다.
 // 창 높이가 낮으면(52rem 이하 — 1366×768 노트북 브라우저 등) 로고·묶음·면책 사이 여백만 줄여 메뉴 12개가 한 화면에 들어오게 한다.
@@ -33,7 +33,7 @@ export function SideNav() {
   return (
     <div className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto border-r border-neutral/[0.06] bg-surface lg:flex print:hidden">
       <div className="px-4 pt-6 pb-5 [@media(max-height:52rem)]:pt-3 [@media(max-height:52rem)]:pb-2">
-        <Link href={ROUTES.landing} className="inline-flex min-h-11 items-center gap-2.5 rounded-button px-2">
+        <Link href={ROUTES.home} className="inline-flex min-h-11 items-center gap-2.5 rounded-button px-2">
           <Image src={brandLogo} alt="" aria-hidden width={36} height={36} className="size-9 shrink-0 rounded-[0.625rem] object-contain" />
           {/* 로고 글자(워드마크)는 대비 요구에서 제외(WCAG 1.4.3 logotype) — 원색 코랄 그대로 */}
           <span className="text-[1.375rem] font-bold text-primary">{APP_NAV_TEXT.brand}</span>

@@ -91,7 +91,7 @@ export const config = {
    */
   vapidPublicKey: vapidPublicKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
   /**
-   * 검색 노출 — "true"면 서비스 소개(/)만 색인을 허용하고, 나머지 화면은 계속 noindex(robotsFor). 기본은 전부 noindex(1.0 공개 전).
+   * 검색 노출 — "true"면 시작 주소(/)만 색인을 허용하고, 나머지 화면은 계속 noindex(robotsFor). 기본은 전부 noindex(1.0 공개 전).
    */
   siteIndexable: (process.env.NEXT_PUBLIC_SITE_INDEXABLE ?? "").trim() === "true",
 } as const;
@@ -100,12 +100,13 @@ export const config = {
 export const isReminderConfigured = () => isSupabaseConfigured() && config.vapidPublicKey !== null;
 
 /**
- * 화면별 robots 메타 — 서비스 소개("landing")만 NEXT_PUBLIC_SITE_INDEXABLE=true일 때 색인을 허용한다.
+ * 화면별 robots 메타 — 시작 주소("root", 제목·설명·공유 미리보기가 있는 "/")만 NEXT_PUBLIC_SITE_INDEXABLE=true일 때 색인을 허용한다.
  * 앱 화면("app")은 정적 HTML에 내용이 없고(관문이 저장소를 읽기 전에는 그리지 않음) 건강 기록 화면이라 늘 noindex.
- * 루트 레이아웃은 "app"을 쓰고, 서비스 소개 페이지(src/app/page.tsx)가 "landing"으로 덮어쓴다.
+ * 루트 레이아웃은 "app"을 쓰고, 시작 주소 페이지(src/app/page.tsx)가 "root"로 덮어쓴다.
+ * (시작 주소는 화면 없이 로그인으로 옮긴다 — 로그인 화면은 noindex라, 검색에 내보낼 때는 무엇을 색인할지 다시 정한다.)
  */
-export function robotsFor(page: "landing" | "app"): { index: boolean; follow: boolean } {
-  const index = page === "landing" && config.siteIndexable;
+export function robotsFor(page: "root" | "app"): { index: boolean; follow: boolean } {
+  const index = page === "root" && config.siteIndexable;
   return { index, follow: index };
 }
 

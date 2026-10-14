@@ -20,7 +20,7 @@ export const ERROR_SCREEN_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (기록은 화면을 그리다 난 오류로 지워지지 않는다 — 브라우저 저장소·서버 사본 그대로)
   body: "잠시 후 다시 시도해 주세요. 기록은 이 브라우저에 그대로 있어요.",
   retry: "다시 시도", // 원문: ExerciseView.swift:184
-  // 웹 신규 문구 — CPO 확인 필요 (앱 홈 탭 /home/ 으로 — 서비스 소개 "/"가 아니다, DEV_NOTES §4)
+  // 웹 신규 문구 — CPO 확인 필요 (앱 홈 탭 /home/ 으로 — 시작 주소 "/"가 아니다, DEV_NOTES §4)
   home: "홈으로",
 } as const;
 

@@ -1,5 +1,5 @@
 // 문서 제목 틀 · 공유 미리보기(Open Graph·트위터) · 사이트 주소(metadataBase). 정적 파일·레이아웃은 글자·바이트로 확인한다(DOM 없음).
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAbsoluteUrlWithPathname, resolveUrl } from "next/dist/lib/metadata/resolvers/resolve-url";
@@ -8,11 +8,14 @@ import { config, DEFAULT_SITE_URL, siteUrlFrom } from "@/config";
 import { ADMIN_TEXT } from "@/features/admin/adminModel";
 import { PRODUCTION_BASE_PATH } from "@/features/pwa/pwaAssets";
 import { TERMS_TEXT } from "@/features/terms/termsText";
-import { LANDING_META, LANDING_TEXT } from "./landingContent";
-import { BASE_OPEN_GRAPH, BASE_TWITTER, LANDING_OPEN_GRAPH, SHARE_IMAGE, TITLE_TEMPLATE } from "./shareMeta";
+import { BASE_OPEN_GRAPH, BASE_TWITTER, ROOT_META, ROOT_OPEN_GRAPH, SHARE_IMAGE, SHARE_TEXT, TITLE_TEMPLATE } from "./shareMeta";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+
+// iOS 원본·App Store 문안(web/)은 공개 저장소에 없다 — 로컬에 있을 때만 원문과 대조하고, CI에서는 건너뛴다.
+const LOGIN_SWIFT = join(ROOT, "web/reference/swift/LoginView.swift");
+const APP_STORE_MD = join(ROOT, "web/reference/docs/APP_STORE.md");
 
 describe("사이트 주소(NEXT_PUBLIC_SITE_URL → metadataBase)", () => {
   it("비면 GitHub Pages 주소 — 경로는 운영 basePath(/onmom_web)", () => {
@@ -45,7 +48,7 @@ describe("사이트 주소(NEXT_PUBLIC_SITE_URL → metadataBase)", () => {
   it("Next가 상대 주소를 metadataBase의 경로 아래로 붙인다 — basePath와 커스텀 도메인 모두(이 설계가 기대는 동작)", () => {
     expect(resolveUrl(SHARE_IMAGE.path, new URL(DEFAULT_SITE_URL)).href).toBe("https://5seoyoung.github.io/onmom_web/og-image.png");
     expect(resolveUrl(SHARE_IMAGE.path, new URL(siteUrlFrom("https://onmom.example/", ""))).href).toBe("https://onmom.example/og-image.png");
-    // og:url("/") — 서비스 소개 주소(trailingSlash)
+    // og:url("/") — 시작 주소(trailingSlash)
     expect(resolveAbsoluteUrlWithPathname("/", new URL(DEFAULT_SITE_URL), "/", { trailingSlash: true, isStaticMetadataRouteFile: false })).toBe(
       "https://5seoyoung.github.io/onmom_web/",
     );
@@ -65,32 +68,49 @@ describe("문서 제목 틀", () => {
     expect(read("src/app/layout.tsx")).toContain('title: { default: "온맘", template: TITLE_TEMPLATE }');
   });
 
-  it("이름이 이미 든 제목(서비스 소개·이용약관·관리자)은 틀을 건너뛴다 — \"온맘 이용약관 · 온맘\"이 되지 않게", () => {
-    for (const title of [LANDING_META.title, TERMS_TEXT.title, ADMIN_TEXT.title]) expect(title).toContain(LANDING_TEXT.brand);
-    expect(read("src/app/page.tsx")).toContain("title: { absolute: LANDING_META.title }");
+  it("이름이 이미 든 제목(시작 주소·이용약관·관리자)은 틀을 건너뛴다 — \"온맘 이용약관 · 온맘\"이 되지 않게", () => {
+    for (const title of [ROOT_META.title, TERMS_TEXT.title, ADMIN_TEXT.title]) expect(title).toContain(SHARE_TEXT.brand);
+    expect(read("src/app/page.tsx")).toContain("title: { absolute: ROOT_META.title }");
     expect(read("src/app/terms/page.tsx")).toContain("title: { absolute: TERMS_TEXT.title }");
     expect(read("src/app/admin/page.tsx")).toContain("title: { absolute: ADMIN_TEXT.title }");
   });
 });
 
+describe("시작 주소(/)의 제목·설명", () => {
+  it("문서 제목은 이름 + 부제, 설명은 App Store 설명 문구", () => {
+    expect(ROOT_META.title).toBe("온맘 - 산후 회복, 하루 1분 기록으로");
+    expect(ROOT_META.description).toBe(SHARE_TEXT.promo);
+    expect(read("src/app/page.tsx")).toContain("description: ROOT_META.description");
+  });
+
+  it.skipIf(!existsSync(LOGIN_SWIFT))("이름은 Swift 원문 그대로", () => {
+    expect(readFileSync(LOGIN_SWIFT, "utf8")).toContain(`"${SHARE_TEXT.brand}"`);
+  });
+
+  it.skipIf(!existsSync(APP_STORE_MD))("부제·설명은 App Store 문안 그대로(줄바꿈만 공백으로)", () => {
+    const doc = readFileSync(APP_STORE_MD, "utf8").replace(/\s+/g, " ");
+    for (const text of [SHARE_TEXT.tagline, SHARE_TEXT.promo]) expect(doc, text).toContain(text);
+  });
+});
+
 describe("공유 미리보기", () => {
-  it("서비스 소개 — 제목·설명은 서비스 소개 문구 그대로(새 문장 없음), 주소는 서비스 소개, 이미지 포함", () => {
-    expect(LANDING_OPEN_GRAPH).toMatchObject({
-      title: LANDING_META.title,
-      description: LANDING_META.description,
+  it("시작 주소 — 제목·설명은 위 문구 그대로(새 문장 없음), 주소는 /, 이미지 포함", () => {
+    expect(ROOT_OPEN_GRAPH).toMatchObject({
+      title: ROOT_META.title,
+      description: ROOT_META.description,
       url: "/",
-      siteName: LANDING_TEXT.brand,
+      siteName: SHARE_TEXT.brand,
       locale: "ko_KR",
     });
-    expect(LANDING_OPEN_GRAPH.images).toEqual(BASE_OPEN_GRAPH.images);
-    expect(read("src/app/page.tsx")).toContain("openGraph: LANDING_OPEN_GRAPH");
+    expect(ROOT_OPEN_GRAPH.images).toEqual(BASE_OPEN_GRAPH.images);
+    expect(read("src/app/page.tsx")).toContain("openGraph: ROOT_OPEN_GRAPH");
   });
 
   it("기본값(모든 화면) — 제목·설명은 두지 않아 화면 제목을 따르고, 큰 이미지 카드", () => {
     expect(BASE_OPEN_GRAPH).not.toHaveProperty("title");
     expect(BASE_OPEN_GRAPH).not.toHaveProperty("description");
     expect(BASE_OPEN_GRAPH.images).toEqual([
-      { url: "/og-image.png", width: 1200, height: 630, alt: LANDING_TEXT.brand, type: "image/png" },
+      { url: "/og-image.png", width: 1200, height: 630, alt: SHARE_TEXT.brand, type: "image/png" },
     ]);
     expect(BASE_TWITTER).toEqual({ card: "summary_large_image" });
   });

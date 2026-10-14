@@ -60,7 +60,7 @@ export function canLeaveWithHistoryBack(s: HistorySnapshot): boolean {
 }
 
 /**
- * 앞 화면이 여럿인 화면(개인정보처리방침 — 서비스 소개·설정에서 들어온다): 앞 기록이 parentHrefs 중 하나면 back().
+ * 앞 화면이 여럿일 수 있는 화면(개인정보처리방침·이용약관 — 지금은 설정에서 들어온다): 앞 기록이 parentHrefs 중 하나면 back().
  * Navigation API가 없을 때의 대체 판단은 canLeaveWithHistoryBack과 같다(앱 안에서 이동해 왔으면 back()).
  */
 export function canLeaveWithHistoryBackToAny(s: Omit<HistorySnapshot, "parentHref">, parentHrefs: readonly string[]): boolean {

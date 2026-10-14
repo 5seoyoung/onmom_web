@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { initialState } from "@/store/defaults";
 import { rootScreenFor, type AppSnapshot } from "@/store/appStore";
-import { gateDecision, normalizePathname, routeKindFor, SCREEN_PATH } from "./gate";
+import { gateDecision, normalizePathname, rootPathFor, routeKindFor, SCREEN_PATH } from "./gate";
 
 function snap(over: Partial<AppSnapshot> & { hasOnboarded?: boolean }): AppSnapshot {
   const { hasOnboarded = false, ...rest } = over;
@@ -35,7 +35,7 @@ describe("routeKindFor", () => {
     expect(routeKindFor("/onboarding/")).toBe("onboarding");
   });
 
-  it("서비스 소개·개인정보처리방침·로그인 콜백·관리자 화면은 늘 연다", () => {
+  it("시작 주소·개인정보처리방침·로그인 콜백·관리자 화면은 늘 연다(시작 주소는 그 페이지가 스스로 옮긴다)", () => {
     expect(routeKindFor("/admin/")).toBe("public");
     expect(routeKindFor("/admin")).toBe("public");
     expect(routeKindFor("/")).toBe("public");
@@ -146,5 +146,58 @@ describe("다시 동의(consent) — 서버 저장이 설정된 빌드에서 지
 
   it("동의하면 main — 다시 동의 화면(온보딩 주소)에 남아 있으면 홈으로", () => {
     expect(gateDecision("main", "/onboarding/")).toEqual({ kind: "redirect", to: "/home/" });
+  });
+});
+
+describe("시작 주소(/) — 화면 없이 로그인 또는 앱 홈으로(RootRedirect)", () => {
+  /** "/"에서 시작해 관문이 더 옮기지 않을 때까지 따라간 주소들 — 되돌이(같은 주소를 다시 지남)가 있으면 실패한다 */
+  function follow(screen: ReturnType<typeof rootScreenFor>): string[] {
+    const first = rootPathFor(screen);
+    if (first === null) return [];
+    const visited = [first];
+    for (;;) {
+      const d = gateDecision(screen, visited[visited.length - 1].split("?")[0]);
+      if (d.kind !== "redirect") return visited;
+      expect(visited, `되돌이: ${[...visited, d.to].join(" → ")}`).not.toContain(d.to);
+      visited.push(d.to);
+    }
+  }
+
+  it("저장소를 읽기 전에는 옮기지 않는다(불러오는 중 표시만)", () => {
+    expect(rootPathFor("loading")).toBeNull();
+    expect(rootPathFor(rootScreenFor({ ...snap({}), hydrated: false }))).toBeNull();
+  });
+
+  it("처음 온 사람(계정 없음) → /login/ — 거기서 그린다", () => {
+    const screen = rootScreenFor(snap({}));
+    expect(screen).toBe("login");
+    expect(follow(screen)).toEqual(["/login/"]);
+    expect(gateDecision(screen, "/login/")).toEqual({ kind: "render" });
+  });
+
+  it("온보딩 중인 게스트 → /home/ → 관문이 /onboarding/으로", () => {
+    const screen = rootScreenFor(snap({ account: guest }));
+    expect(screen).toBe("onboarding");
+    expect(follow(screen)).toEqual(["/home/", "/onboarding/"]);
+  });
+
+  it("로그인 + 온보딩을 마친 사람 → /home/에서 그린다", () => {
+    const screen = rootScreenFor(snap({ account: guest, hasOnboarded: true }), false);
+    expect(screen).toBe("main");
+    expect(follow(screen)).toEqual(["/home/"]);
+  });
+
+  it("다시 동의가 필요한 사람(서버 저장 빌드) → /home/ → 관문이 /onboarding/?consent=1로", () => {
+    const screen = rootScreenFor(snap({ account: guest, hasOnboarded: true }), true);
+    expect(screen).toBe("consent");
+    expect(follow(screen)).toEqual(["/home/", "/onboarding/?consent=1"]);
+  });
+
+  it("어느 단계에서도 시작 주소로 되돌아오지 않고, 관문은 시작 주소를 옮기지 않는다(두 곳이 함께 옮기지 않게)", () => {
+    for (const screen of ["login", "onboarding", "consent", "main"] as const) {
+      expect(follow(screen)).not.toContain("/");
+      expect(SCREEN_PATH[screen]).not.toBe("/");
+      expect(gateDecision(screen, "/")).toEqual({ kind: "render" });
+    }
   });
 });

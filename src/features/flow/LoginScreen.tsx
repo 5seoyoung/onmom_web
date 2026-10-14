@@ -10,19 +10,26 @@
 //   계정이 생기면 앱 관문(AppGate)이 온보딩(또는 이미 마쳤으면 홈)으로 보낸다. 익명 계정을 만드는 동안 두 버튼을 잠근다.
 // 방침 링크 위 한 줄(loginText.ts loginConsentText): 설정 없는 빌드는 원문("로그인 시 … 동의하게 됩니다"), 서버 저장 빌드는 알림만 —
 //   민감정보(건강 정보) 동의는 온보딩 동의 단계에서 따로 받는다.
+// 앱은 이 화면에서 시작한다(시작 주소 "/"가 여기로 옮긴다 — 서비스 소개 화면은 2026-10-14 CPO 결정으로 없앴다). 그 바닥글에 있던
+//   개인정보처리방침·이용약관·문의는 이 화면 아래 한 줄에 둔다: 방침·약관은 시트(로그인 전 입력이 없어도 화면을 떠나지 않게),
+//   문의는 방침의 이메일로 mailto(features/terms/contact.ts). 약관 본문·문의 이메일이 없는 빌드면 그 링크는 그리지 않는다.
+//   로고·이름은 링크가 아니다 — 누를 곳(시작 주소)이 다시 이 화면이다.
 // 폭: 폰 = 폰 폭 기둥, PC = 가운데 카드(페이지의 CardColumn). 카드 안에서는 위아래 빈칸(flex-1)이 로고를 가운데 둔다.
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { useAccountSession } from "@/auth";
 import { SecondaryButton } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
-import { ROUTES } from "@/routes";
 import { PrivacyPolicyDialog } from "@/features/privacy/PrivacyPolicyDialog";
 import { useOnline } from "@/features/home/useOnline";
+import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contact";
+import { TermsSheetLink } from "@/features/terms/TermsSheetLink";
 import { BrandLogo } from "./BrandLogo";
 import { kakaoFailedMessage, LOGIN_TEXT, loginConsentText } from "./loginText";
+
+/** 아래 글자 링크(개인정보처리방침 보기 · 이용약관 보기 · 문의) — 누르는 영역은 높이 44 이상(min-h-11) */
+const FOOTER_LINK_CLASS = "inline-flex min-h-11 items-center rounded-button px-2 text-xs font-semibold text-primary-text";
 
 export function LoginScreen() {
   const session = useAccountSession();
@@ -71,12 +78,9 @@ export function LoginScreen() {
     <main className="flex flex-1 flex-col gap-6 bg-background">
       <div aria-hidden className="flex-1" />
       <div className="flex flex-col items-center gap-2 px-6 text-center">
-        {/* 로고·온맘을 누르면 소개 페이지로 */}
-        <h1 className="text-[2.125rem] leading-tight font-bold text-primary">
-          <Link href={ROUTES.landing} className="flex flex-col items-center gap-2 rounded-card">
-            <BrandLogo size="login" />
-            {LOGIN_TEXT.brand}
-          </Link>
+        <h1 className="flex flex-col items-center gap-2 text-[2.125rem] leading-tight font-bold text-primary">
+          <BrandLogo size="login" />
+          {LOGIN_TEXT.brand}
         </h1>
         <p className="text-base text-text-secondary">{LOGIN_TEXT.tagline}</p>
       </div>
@@ -110,14 +114,17 @@ export function LoginScreen() {
 
         <div className="flex flex-col items-center text-center">
           <p className="text-[0.8125rem] text-text-secondary">{loginConsentText(kakaoEnabled)}</p>
-          <button
-            type="button"
-            onClick={() => setPolicyOpen(true)}
-            aria-haspopup="dialog"
-            className="-mt-2 inline-flex min-h-11 items-center rounded-button px-2 text-xs font-semibold text-primary-text"
-          >
-            {LOGIN_TEXT.policy}
-          </button>
+          <div className="-mt-2 flex flex-wrap items-center justify-center">
+            <button type="button" onClick={() => setPolicyOpen(true)} aria-haspopup="dialog" className={FOOTER_LINK_CLASS}>
+              {LOGIN_TEXT.policy}
+            </button>
+            <TermsSheetLink className={FOOTER_LINK_CLASS} />
+            {CONTACT_EMAIL !== null ? (
+              <a href={mailtoHref(CONTACT_EMAIL)} className={FOOTER_LINK_CLASS}>
+                {CONTACT_TEXT.label}
+              </a>
+            ) : null}
+          </div>
         </div>
       </div>
 
