@@ -117,10 +117,10 @@ describe("리포트 본문", () => {
     expect(count(html, /<section [^>]*class="[^"]*print:shadow-none/)).toBe(5);
   });
 
-  it("결과는 글자로(색만이 아님), 값 없는 칸은 '—'(낭독 제외) + 범례", () => {
+  it("결과는 글자로(색만이 아님), 값 없는 칸은 '-'(낭독 제외) + 범례", () => {
     expect(html).toContain("병원 신호");
     expect(html).toContain("위험신호 없음");
-    expect(html).toContain('<span aria-hidden="true">—</span>');
+    expect(html).toContain('<span aria-hidden="true">-</span>');
     expect(html).toContain(REPORT_TEXT.noValueNote);
   });
 

@@ -50,7 +50,7 @@ export const LANDING_TEXT = {
 /** 문서 제목·설명·공유 미리보기(Open Graph) — src/app/page.tsx가 metadata로 내보낸다. 검색 노출 막기(robots)는 루트 레이아웃 것을 그대로 받는다. */
 export const LANDING_META = {
   // 웹 신규 문구 — CPO 확인 필요 (브라우저 탭 제목 = 이름 + APP_STORE.md §1 부제)
-  title: `${LANDING_TEXT.brand} — ${LANDING_TEXT.tagline}`,
+  title: `${LANDING_TEXT.brand} - ${LANDING_TEXT.tagline}`,
   description: LANDING_TEXT.promo,
 } as const;
 

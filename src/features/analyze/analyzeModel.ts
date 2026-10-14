@@ -31,7 +31,7 @@ export const ANALYZE_TEXT = {
   deliverySection: "분만 방식", // 원문: AnalyzeFlowView.swift:80
   deliveryDate: "출산일", // 원문: AnalyzeFlowView.swift:91
   historySection: "임신·분만 이력 (산모수첩·EMR)", // 원문: AnalyzeFlowView.swift:100
-  weightSection: "체중 (선택 — 체중 관리·강도 조절)", // 원문: AnalyzeFlowView.swift:113
+  weightSection: "체중 (선택 - 체중 관리·강도 조절)", // 원문: AnalyzeFlowView.swift:113
   height: "키(cm)", // 원문: AnalyzeFlowView.swift:114
   preWeight: "임신 전 체중(kg)", // 원문: AnalyzeFlowView.swift:115
   currentWeight: "현재 체중(kg)", // 원문: AnalyzeFlowView.swift:116
@@ -52,7 +52,7 @@ export const CLINICAL_TOGGLES: readonly { key: keyof MaternityRecord; title: str
   { key: "gdm", title: "임신성 당뇨(GDM)", subtitle: "회복 후 유산소 강도를 단계적으로 높여요" },
   { key: "preeclampsia", title: "임신중독증(자간전증)·고혈압", subtitle: "머리 내려가는 자세·힘주기(발살바) 운동 제한" },
   { key: "heavyBleeding", title: "분만 시 출혈이 많았어요", subtitle: "초기 운동 강도를 제한해요" },
-  { key: "anemia", title: "산후 빈혈(Hb 12 미만)", subtitle: "어지럼·낙상 위험 — 앉거나 누워서 위주" },
+  { key: "anemia", title: "산후 빈혈(Hb 12 미만)", subtitle: "어지럼·낙상 위험 - 앉거나 누워서 위주" },
   { key: "pelvicPain", title: "골반통·치골결합 통증", subtitle: "비대칭·한다리·다리 벌리는 동작 배제" },
   { key: "diastasisRecti", title: "복직근 이개(DRA)", subtitle: "윗몸일으키기·레그레이즈 등 복압 올리는 동작 배제" },
 ];

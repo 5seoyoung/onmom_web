@@ -16,7 +16,7 @@ import type { FetchVideosOptions, FetchVideosResult } from "@/api/video";
 /** 응답 없이 이만큼 지나면 "서버를 깨우는 중" 안내(05 §0 콜드스타트) */
 export const COLD_START_NOTICE_MS = 8_000;
 /** 웹 신규 문구 — CPO 확인 필요 (05 §0 "서버를 깨우는 중(최대 30초)"를 화면 말투로 — 시간 약속은 뺐다, 위 설명) */
-export const COLD_START_TEXT = "서버를 깨우는 중이에요 — 조금만 기다려 주세요";
+export const COLD_START_TEXT = "서버를 깨우는 중이에요 - 조금만 기다려 주세요";
 /** 자동 재시도 때의 타임아웃(05 §0 "재시도 시 35초") */
 export const VIDEO_RETRY_TIMEOUT_MS = 35_000;
 

@@ -114,7 +114,7 @@ export function videoCardModel(item: PlanVideo): VideoCardModel {
 
 /** "{단계} 제외 — {사유}" — 홈 "지금 회복 단계" 카드와 같은 줄(원문: HomeView.swift:428). 운동 탭 "영상 준비 중"에도 붙인다(D7). */
 export function excludedStageLines(delivery: DeliveryMethod, week: number, maternity: MaternityRecord): string[] {
-  return blockedNow(delivery, week, maternity).map(({ bucket, reason }) => `${bucket.title} 제외 — ${reason}`); // 원문: HomeView.swift:428
+  return blockedNow(delivery, week, maternity).map(({ bucket, reason }) => `${bucket.title} 제외 - ${reason}`); // 원문: HomeView.swift:428
 }
 
 /**

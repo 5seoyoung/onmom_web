@@ -191,7 +191,7 @@ describe("서비스 소개 문구", () => {
   });
 
   it("문서 제목은 이름 + 부제, 설명은 프로모션 문구", () => {
-    expect(LANDING_META.title).toBe("온맘 — 산후 회복, 하루 1분 기록으로");
+    expect(LANDING_META.title).toBe("온맘 - 산후 회복, 하루 1분 기록으로");
     expect(LANDING_META.description).toBe(LANDING_TEXT.promo);
   });
 });

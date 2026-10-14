@@ -101,10 +101,10 @@ describe("buildHomeViewModel — home.png", () => {
   it("지금 회복 단계: 9주차 골반저근, 막힌 단계 줄, 다음 단계 없음(코어 강화도 막힘)", () => {
     expect(vm.stageCard).toEqual({
       kind: "stage",
-      heading: "지금 회복 단계 — 9주차",
+      heading: "지금 회복 단계 - 9주차",
       current: "골반저근 · 케겔(골반저근 운동)",
       next: null,
-      excluded: ["기능 강화 제외 — 골반통·치골결합 통증이 있어 한다리·비대칭 동작(클램·런지 등)은 피해요"],
+      excluded: ["기능 강화 제외 - 골반통·치골결합 통증이 있어 한다리·비대칭 동작(클램·런지 등)은 피해요"],
     });
   });
 

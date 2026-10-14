@@ -29,9 +29,9 @@ const ROW = "break-inside-avoid border-b border-neutral/10 last:border-b-0";
 
 const sectionId = (key: ReportSection["key"]) => `report-${key}`;
 
-/** 값 없음(묻지 않음·옛 기록) — 보이는 "—"(범례가 뜻을 말한다), 낭독은 빈 칸 */
+/** 값 없음(묻지 않음·옛 기록) — 보이는 "-"(범례가 뜻을 말한다), 낭독은 빈 칸 */
 function NoValue() {
-  return <span aria-hidden>—</span>;
+  return <span aria-hidden>-</span>;
 }
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {

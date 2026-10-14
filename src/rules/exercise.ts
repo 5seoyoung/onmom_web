@@ -368,9 +368,9 @@ export function homeStageCard(
   const next = nextStage(delivery, week, maternity);
   return {
     kind: "stage",
-    heading: `지금 회복 단계 — ${week}주차`, // 원문: HomeView.swift:415
+    heading: `지금 회복 단계 - ${week}주차`, // 원문: HomeView.swift:415
     current: `${current.title} · ${current.summary}`, // 원문: HomeView.swift:418
     next: next ? `${startWeek(next, delivery)}주차부터 '${next.title}' 단계가 열려요.` : null, // 원문: HomeView.swift:423
-    excluded: blockedNow(delivery, week, maternity).map(({ bucket, reason }) => `${bucket.title} 제외 — ${reason}`), // 원문: HomeView.swift:428
+    excluded: blockedNow(delivery, week, maternity).map(({ bucket, reason }) => `${bucket.title} 제외 - ${reason}`), // 원문: HomeView.swift:428
   };
 }

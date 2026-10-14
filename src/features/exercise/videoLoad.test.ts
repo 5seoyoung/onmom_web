@@ -24,7 +24,7 @@ describe("콜드스타트 값(05 §0)", () => {
   it("8초 뒤 안내, 재시도 타임아웃 35초, 안내 문구", () => {
     expect(COLD_START_NOTICE_MS).toBe(8_000);
     expect(VIDEO_RETRY_TIMEOUT_MS).toBe(35_000);
-    expect(COLD_START_TEXT).toBe("서버를 깨우는 중이에요 — 조금만 기다려 주세요");
+    expect(COLD_START_TEXT).toBe("서버를 깨우는 중이에요 - 조금만 기다려 주세요");
   });
 
   it("안내는 시간을 약속하지 않는다 — 프록시 빌드의 첫 시도(45초) + 재시도(35초)는 05 §0의 '최대 30초'를 넘는다", () => {

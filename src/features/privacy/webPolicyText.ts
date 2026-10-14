@@ -27,7 +27,7 @@ import {
 import type { PolicySection } from "./policyText";
 
 /** 제목 위 표시 — 초안임을 늘 먼저 보인다 */
-export const WEB_POLICY_DRAFT_LABEL = "초안 — 법률 검토 전";
+export const WEB_POLICY_DRAFT_LABEL = "초안 - 법률 검토 전";
 
 /** 시행일 줄 자리 — 검토 전이라 시행일이 없다 */
 export const WEB_POLICY_EFFECTIVE = "작성일: 2026년 9월 28일 · 시행일: 법률 검토 후 정함";
@@ -108,7 +108,7 @@ function transferBlocks(o: WebPolicyOptions): string[] {
     // 매일 리마인더 — 발송 함수(supabase/functions/send-reminders)가 구독 주소로 암호화한 고정 문구를 보낸다. 받는 곳은 브라우저 회사의
     // 푸시 서비스뿐(reminderModel.ts PUSH_SERVICE_HOSTS: FCM·Mozilla·WNS·Apple — 0004 check 제약과 같은 목록).
     blocks.push([
-      "브라우저 푸시 서비스 — Google LLC(Firebase Cloud Messaging), Apple Inc.(Apple Push Notification service), Mozilla Corporation(Mozilla Push Service), Microsoft Corporation(Windows Push Notification Services) (미국)",
+      "브라우저 푸시 서비스 - Google LLC(Firebase Cloud Messaging), Apple Inc.(Apple Push Notification service), Mozilla Corporation(Mozilla Push Service), Microsoft Corporation(Windows Push Notification Services) (미국)",
       "– 이전 항목: 브라우저 푸시 구독 주소와 암호화된 알림(정해진 알림 문구뿐이며 건강 정보는 담지 않습니다)",
       "– 이전 시기·방법: 매일 리마인더를 켠 경우, 매일 저녁 8시 알림을 보낼 때 온맘 서버에서 암호화된 통신(HTTPS)으로 전송",
       "– 목적: 알림 전달",

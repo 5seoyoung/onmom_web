@@ -100,7 +100,7 @@ describe("영상 준비 중 블록(D7)", () => {
       title: "영상 준비 중",
       message: "운동 영상 추천은 준비 중이에요. 곧 만나보실 수 있어요.",
       stage: { line: "지금은 9주차 · 골반저근 단계예요", summary: "케겔(골반저근 운동)" },
-      excluded: [`기능 강화 제외 — ${R_PELVIC}`],
+      excluded: [`기능 강화 제외 - ${R_PELVIC}`],
     });
   });
 
@@ -111,7 +111,7 @@ describe("영상 준비 중 블록(D7)", () => {
 
   it("주차가 아직 안 된 차단 단계는 제외 줄에 나오지 않는다(홈과 같은 blockedNow)", () => {
     expect(excludedStageLines("vaginal", 5, maternity("diastasisRecti"))).toEqual([]);
-    expect(excludedStageLines("vaginal", 13, maternity("diastasisRecti"))).toEqual([`코어 강화 제외 — ${R_DRA}`]);
+    expect(excludedStageLines("vaginal", 13, maternity("diastasisRecti"))).toEqual([`코어 강화 제외 - ${R_DRA}`]);
   });
 });
 
@@ -136,7 +136,7 @@ describe("연결 실패 · 조회 중", () => {
   it("8초가 지났거나 자동 재시도 중(waking)이면 스피너 아래 콜드스타트 안내(05 §0)", () => {
     expect(exerciseBody(null, "vaginal", 3, maternity(), { waking: true })).toMatchObject({
       kind: "loading",
-      notice: "서버를 깨우는 중이에요 — 조금만 기다려 주세요",
+      notice: "서버를 깨우는 중이에요 - 조금만 기다려 주세요",
     });
     const body = exerciseBody(null, "vaginal", 3, maternity(), { waking: true });
     if (body.kind !== "loading") throw new Error("loading");

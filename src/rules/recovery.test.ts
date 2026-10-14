@@ -170,6 +170,9 @@ const SWIFT_VECTORS: SwiftVector[] = [
   },
 ];
 
+// 2026-10-14 CPO 결정: 화면의 em dash(—)는 하이픈(-)으로 — 위 벡터는 Swift 출력 그대로 두고, 대조할 때만 라벨의 em dash를 하이픈으로 바꾼다.
+const toWebLabels = (items: RecItem[]): RecItem[] => items.map((i) => ({ ...i, label: i.label.replaceAll("—", "-") }));
+
 describe("회복 단계 분석 — Swift 벡터", () => {
   for (const v of SWIFT_VECTORS) {
     it(v.name, () => {
@@ -183,9 +186,9 @@ describe("회복 단계 분석 — Swift 벡터", () => {
       });
       expect(out.recommendation).toEqual({
         hospitalSignal: null,
-        allowed: v.allowed,
-        caution: v.caution,
-        forbidden: v.forbidden,
+        allowed: toWebLabels(v.allowed),
+        caution: toWebLabels(v.caution),
+        forbidden: toWebLabels(v.forbidden),
         trace: { firedRules: v.firedRules, configVersion: "rules-1.1" },
       });
     });
@@ -378,7 +381,7 @@ describe("분석과 운동 탭·홈은 같은 저장값으로 같은 판정(감�
     const reason = blockedBuckets(stored).full_core!;
     expect(reason).toBeTruthy();
     const out = analyze("cesarean", 91, stored)!;
-    expect(out.recommendation.forbidden.find((f) => f.item === "full_core")?.label).toBe(`코어 강화 — ${reason}`);
+    expect(out.recommendation.forbidden.find((f) => f.item === "full_core")?.label).toBe(`코어 강화 - ${reason}`);
     expect(out.recommendation.allowed.map((a) => a.item)).not.toContain("full_core");
 
     const fc: Video = { video_id: "fc", title: "코어", url: "https://example.invalid/fc", description: "", tags: ["route_cesarean_section", "stage_full_core"] };
@@ -387,7 +390,7 @@ describe("분석과 운동 탭·홈은 같은 저장값으로 같은 판정(감�
 
     expect(currentStage("cesarean", 13, stored)?.key).not.toBe("full_core");
     const card = homeStageCard("cesarean", 13, stored, false);
-    expect(card?.kind === "stage" && card.excluded).toEqual([`코어 강화 제외 — ${reason}`]);
+    expect(card?.kind === "stage" && card.excluded).toEqual([`코어 강화 제외 - ${reason}`]);
   });
 
   it("병원 신호 타입은 레드플래그 모양(severity: string)을 그대로 받는다", () => {

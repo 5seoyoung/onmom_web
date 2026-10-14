@@ -179,7 +179,7 @@ export function substanceHeader(isBreastfeeding: boolean): { lead: string; note:
     : {
         lead: "약·음식을 입력하면 산후 안전 분류를 확인해요.", // 원문: SubstanceCheckView.swift:20
         // 원문: SubstanceCheckView.swift:24
-        note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 — 분류 기준이 달라져요.",
+        note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 - 분류 기준이 달라져요.",
       };
 }
 

@@ -182,8 +182,8 @@ describe("숫자·날짜 표시", () => {
     expect(formatSeoulDate("2026-09-27T15:30:00+00:00")).toBe("2026.09.28");
     expect(formatSeoulDateTime("2026-09-27T15:30:00+00:00")).toBe("2026.09.28 00:30");
     expect(formatSeoulDateTime("2026-09-28T05:05:00Z")).toBe("2026.09.28 14:05");
-    expect(formatSeoulDate(null)).toBe("—");
-    expect(formatSeoulDateTime("nope")).toBe("—");
+    expect(formatSeoulDate(null)).toBe("-");
+    expect(formatSeoulDateTime("nope")).toBe("-");
     expect(generatedAtLabel("2026-09-28T05:05:00Z")).toBe("2026.09.28 14:05 기준");
   });
 
@@ -327,10 +327,10 @@ describe("사용자 목록 행", () => {
       id: base.id,
       shortId: "3f0f9b2e",
       created: "2026.09.28",
-      lastSignIn: "—",
+      lastSignIn: "-",
       kind: "guest",
       kindLabel: "게스트",
-      consent: "—",
+      consent: "-",
       consentCurrent: false,
       hasState: false,
       stateLabel: "없음",
@@ -474,7 +474,7 @@ describe("parseAdminRows", () => {
       id: ROW.user_id,
       shortId: "3f0f9b2e",
       added: "2026.09.28",
-      lastSignIn: "—",
+      lastSignIn: "-",
       isMe: true,
     });
   });
@@ -626,6 +626,9 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(csvCell("=1+1")).toBe("'=1+1");
     expect(csvCell("@cmd")).toBe("'@cmd");
     expect(csvCell("-1")).toBe("'-1");
+    // 값 없음 표시(하이픈 하나)는 수식이 아니라 그대로
+    expect(csvCell(ADMIN_TEXT.none)).toBe("-");
+    expect(csvCell("--1")).toBe("'--1");
   });
 
   it("첫 줄은 칸 이름, UTF-8 BOM + CRLF, 표에 보이는 칸만(이메일·닉네임·건강 기록 없음)", () => {
@@ -636,7 +639,7 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(lines[3]).toBe("");
     expect(lines[0]).toBe("계정 ID,가입일,최근 접속,유형,동의 버전,현재 판 동의,기록 저장,마지막 저장일");
     expect(lines[1]).toBe(`${kakao.id},2026.09.28 00:30,2026.09.28 10:02,카카오,${VERSION},예,있음,2026.09.28`);
-    expect(lines[2]).toBe(`${guest.id},2026.09.28 00:30,—,게스트,,아니요,없음,`);
+    expect(lines[2]).toBe(`${guest.id},2026.09.28 00:30,-,게스트,,아니요,없음,`);
     expect(text).not.toMatch(/email|이메일|닉네임|state\b/);
     expect(usersCsv([], VERSION).slice(1).split("\r\n")).toEqual([lines[0], ""]);
   });

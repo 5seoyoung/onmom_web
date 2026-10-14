@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(config.siteUrl),
   // 화면 제목은 "AI 상담 · 온맘"처럼 — 제목이 없는 화면은 "온맘"
   title: { default: "온맘", template: TITLE_TEMPLATE },
-  description: "엄마의 산후 회복 케어 — 퇴원부터 산후 6주 검진까지",
+  description: "엄마의 산후 회복 케어 - 퇴원부터 산후 6주 검진까지",
   openGraph: BASE_OPEN_GRAPH,
   twitter: BASE_TWITTER,
   // 1.0 공개 전까지 검색 노출 막기. NEXT_PUBLIC_SITE_INDEXABLE=true여도 앱 화면은 noindex — 서비스 소개(src/app/page.tsx)만 robotsFor("landing")로 연다.

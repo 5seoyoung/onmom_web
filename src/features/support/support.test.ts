@@ -135,7 +135,7 @@ describe("해결책 행의 전화번호(web/07 §5 — 전화 링크로)", () =>
   it("링크가 없는 행의 설명 속 번호(고용노동부 고객상담 1350)는 번호만 tel: 링크 — 글자는 그대로", () => {
     const html = renderToStaticMarkup(h(SolutionCard, { title: "t", solutions: domainOf(2).solutions }));
     expect(html).toContain(
-      '고용노동부 — 고객상담 <a href="tel:1350" aria-label="1350에 전화 걸기" class="whitespace-nowrap rounded-xs underline underline-offset-2 text-primary-text">1350</a>',
+      '고용노동부 - 고객상담 <a href="tel:1350" aria-label="1350에 전화 걸기" class="whitespace-nowrap rounded-xs underline underline-offset-2 text-primary-text">1350</a>',
     );
     expect(html.match(/<a /g)).toHaveLength(1);
   });

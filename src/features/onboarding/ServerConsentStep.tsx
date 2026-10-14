@@ -161,7 +161,7 @@ export function ConsentDetails({ item }: { item: ConsentItemText }) {
       <summary className="-mb-1 inline-flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-button text-[0.8125rem] font-semibold text-text-secondary [&::-webkit-details-marker]:hidden">
         {S.more}
         {/* 여러 "자세히"를 목록으로 들을 때 무엇의 자세히인지 */}
-        <span className="sr-only"> — {item.title}</span>
+        <span className="sr-only"> - {item.title}</span>
         <ChevronDown aria-hidden className="size-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
       </summary>
       <dl className="mb-2 flex flex-col gap-2.5 rounded-chip bg-background p-3.5 text-[0.8125rem] leading-relaxed">

@@ -58,7 +58,7 @@ describe("[분석 시작] — 저장 먼저, 저장된 값으로 분석(D10, 감
     if (!outcome.ok) throw new Error(outcome.message);
     const forbidden = outcome.output.recommendation.forbidden;
     expect(forbidden.map((f) => f.item)).toEqual(["full_core"]);
-    expect(forbidden[0].label).toBe(`코어 강화 — ${R_DRA}`);
+    expect(forbidden[0].label).toBe(`코어 강화 - ${R_DRA}`);
     expect(outcome.output.recommendation.allowed.map((a) => a.item)).not.toContain("full_core");
     expect(outcome.output.exerciseVideos).toEqual([]);
 
@@ -72,7 +72,7 @@ describe("[분석 시작] — 저장 먼저, 저장된 값으로 분석(D10, 감
 
     // 홈 "지금 회복 단계" 카드
     const card = homeStageCard("vaginal", week!, saved.maternity, isRedFlagActive(saved.symptomHistory));
-    expect(card).toMatchObject({ kind: "stage", excluded: [`코어 강화 제외 — ${R_DRA}`] });
+    expect(card).toMatchObject({ kind: "stage", excluded: [`코어 강화 제외 - ${R_DRA}`] });
   });
 
   it("저장 → 다시 읽기 → 조회 순서이고, 분석은 폼 값이 아니라 다시 읽은 저장값을 쓴다", async () => {

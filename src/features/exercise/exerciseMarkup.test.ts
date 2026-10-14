@@ -107,7 +107,7 @@ describe("상태 블록 — 늘 있는 live region 안에서 바뀐다", () => {
     expect(html).toContain(EXERCISE_TEXT.unavailableTitle);
     expect(html).toContain(EXERCISE_TEXT.unavailableBody);
     expect(html).toContain("지금은 9주차 · 골반저근 단계예요");
-    expect(html).toContain(`기능 강화 제외 — ${R_PELVIC}`);
+    expect(html).toContain(`기능 강화 제외 - ${R_PELVIC}`);
     expect(html).not.toContain(EXERCISE_TEXT.retry);
   });
 

@@ -2,7 +2,7 @@
   "id": "/onmom_web/",
   "name": "온맘",
   "short_name": "온맘",
-  "description": "엄마의 산후 회복 케어 — 퇴원부터 산후 6주 검진까지",
+  "description": "엄마의 산후 회복 케어 - 퇴원부터 산후 6주 검진까지",
   "lang": "ko",
   "dir": "ltr",
   "start_url": "/onmom_web/home/",

@@ -177,7 +177,7 @@ describe("결과 화면", () => {
     if (forbidden.kind !== "group") throw new Error("group");
     expect(forbidden.group.items[0]).toEqual({
       item: "full_core",
-      label: "코어 강화 — 복근·코어 강화·요가 (분만 무관)",
+      label: "코어 강화 - 복근·코어 강화·요가 (분만 무관)",
       evidenceChips: ["12주차부터 (현재 9주차)", "src:회복 단계 기준"],
     });
   });
@@ -191,7 +191,7 @@ describe("결과 화면", () => {
         key: "caution",
         title: "주의",
         tone: "accent",
-        items: [{ item: "anemia", label: "빈혈 — 어지럼·낙상 위험, 앉거나 누운 자세 위주로", evidenceChips: ["Hb<12", "src:산모수첩 확인항목"] }],
+        items: [{ item: "anemia", label: "빈혈 - 어지럼·낙상 위험, 앉거나 누운 자세 위주로", evidenceChips: ["Hb<12", "src:산모수첩 확인항목"] }],
       },
     });
   });
@@ -226,7 +226,7 @@ describe("결과 화면", () => {
     expect(failed.videos).toEqual({
       kind: "info",
       title: "운동 영상을 불러오지 못했어요",
-      body: "오프라인이에요 — 인터넷에 연결되면 다시 시도해 주세요",
+      body: "오프라인이에요 - 인터넷에 연결되면 다시 시도해 주세요",
     });
     expect(failed.blocks.map((b) => (b.kind === "group" ? b.group.title : b.kind))).toEqual(["가능", "금지"]);
     expect(analyzeResultModel(analyze(P, {}, { state: "notConfigured" }), false, { offline: true }).videos).toMatchObject({

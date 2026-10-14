@@ -12,6 +12,6 @@ describe("readOnline — navigator.onLine", () => {
 
 describe("오프라인 문구", () => {
   it("웹 신규 문구(CPO 확인) — 서버가 필요한 기능의 실패 자리에만 쓴다", () => {
-    expect(OFFLINE_TEXT).toBe("오프라인이에요 — 인터넷에 연결되면 다시 시도해 주세요");
+    expect(OFFLINE_TEXT).toBe("오프라인이에요 - 인터넷에 연결되면 다시 시도해 주세요");
   });
 });

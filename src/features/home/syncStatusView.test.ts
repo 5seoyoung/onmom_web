@@ -22,7 +22,7 @@ describe("설정 계정 카드의 상태 줄(syncStatusLine)", () => {
     expect(syncStatusLine("error")).toEqual({ text: "서버에 저장하지 못했어요", tone: "alert", retry: true, refresh: false });
     expect(syncStatusLine("waitingConsent")).toEqual({ text: "동의 후 저장돼요", tone: "muted", retry: false, refresh: false });
     expect(syncStatusLine("outdated")).toEqual({
-      text: "새 버전의 온맘이 필요해요 — 새로 고침",
+      text: "새 버전의 온맘이 필요해요 - 새로 고침",
       tone: "watch",
       retry: false,
       refresh: true,

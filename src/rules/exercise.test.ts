@@ -324,34 +324,34 @@ describe("홈 '지금 회복 단계' 카드", () => {
   it("02 §11 #8 — 제왕절개 9주 + 골반통(키 early_core_activation, 감사 #41)", () => {
     expect(homeStageCard("cesarean", 9, maternity("pelvicPain"), false)).toEqual({
       kind: "stage",
-      heading: "지금 회복 단계 — 9주차",
+      heading: "지금 회복 단계 - 9주차",
       current: "골반저근 · 케겔(골반저근 운동)",
       next: "12주차부터 '코어 강화' 단계가 열려요.",
-      excluded: [`기능 강화 제외 — ${R3}`],
+      excluded: [`기능 강화 제외 - ${R3}`],
     });
   });
 
   it("02 §11 #11 — DRA + 임신중독증, 13주: 코어 강화 제외 사유 = R1 + APPEND, 다음 단계 없음", () => {
     expect(homeStageCard("vaginal", 13, maternity("diastasisRecti", "preeclampsia"), false)).toEqual({
       kind: "stage",
-      heading: "지금 회복 단계 — 13주차",
+      heading: "지금 회복 단계 - 13주차",
       current: "기능 강화 · 브릿지·클램·하체 근력",
       next: null,
-      excluded: [`코어 강화 제외 — ${R1}${APPEND}`],
+      excluded: [`코어 강화 제외 - ${R1}${APPEND}`],
     });
   });
 
   it("임신중독증 단독(R2) — 제왕절개 13주", () => {
     expect(homeStageCard("cesarean", 13, maternity("preeclampsia"), false)).toMatchObject({
       current: "기능 강화 · 브릿지·클램·하체 근력",
-      excluded: [`코어 강화 제외 — ${R2}`],
+      excluded: [`코어 강화 제외 - ${R2}`],
     });
   });
 
   it("02 §11 #9 — 자연분만 6주, 소견 없음", () => {
     expect(homeStageCard("vaginal", 6, maternity(), false)).toEqual({
       kind: "stage",
-      heading: "지금 회복 단계 — 6주차",
+      heading: "지금 회복 단계 - 6주차",
       current: "기능 강화 · 브릿지·클램·하체 근력",
       next: "12주차부터 '코어 강화' 단계가 열려요.",
       excluded: [],

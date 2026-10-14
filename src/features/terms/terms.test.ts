@@ -47,7 +47,7 @@ describe("이용약관 초안 — 내용", () => {
   it("초안 표시는 웹 처리방침 초안과 같은 글자, 시행일은 정하지 않았다", () => {
     const doc = termsDocument();
     expect(doc.draftLabel).toBe(WEB_POLICY_DRAFT_LABEL);
-    expect(doc.draftLabel).toBe("초안 — 법률 검토 전");
+    expect(doc.draftLabel).toBe("초안 - 법률 검토 전");
     expect(doc.effective).toContain("시행일: 법률 검토 후 정함");
     expect(doc.title).toBe(TERMS_TEXT.title);
     expect(hasTermsText()).toBe(true);

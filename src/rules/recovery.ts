@@ -136,7 +136,7 @@ export function recoveryRecommendation(delivery: DeliveryMethod, week: number, m
     .filter((b) => blocked[b.key] === undefined)
     .map((b) => ({
       item: b.key,
-      label: `${b.title} — ${b.summary}`, // 원문: RecoveryAnalysis.swift:28
+      label: `${b.title} - ${b.summary}`, // 원문: RecoveryAnalysis.swift:28
       evidenceChips: [`${startWeek(b, delivery)}주차부터 가능`, SRC_STAGE_BASIS], // 원문: RecoveryAnalysis.swift:29
     }));
 
@@ -147,7 +147,7 @@ export function recoveryRecommendation(delivery: DeliveryMethod, week: number, m
     if (reason === undefined) continue;
     forbidden.push({
       item: b.key,
-      label: `${b.title} — ${reason}`, // 원문: RecoveryAnalysis.swift:34
+      label: `${b.title} - ${reason}`, // 원문: RecoveryAnalysis.swift:34
       evidenceChips: [...BLOCKED_CHIPS],
     });
   }
@@ -155,7 +155,7 @@ export function recoveryRecommendation(delivery: DeliveryMethod, week: number, m
   for (const b of notYet) {
     forbidden.push({
       item: b.key,
-      label: `${b.title} — ${b.summary}`, // 원문: RecoveryAnalysis.swift:39
+      label: `${b.title} - ${b.summary}`, // 원문: RecoveryAnalysis.swift:39
       evidenceChips: [`${startWeek(b, delivery)}주차부터 (현재 ${week}주차)`, SRC_STAGE_BASIS], // 원문: RecoveryAnalysis.swift:40
     });
   }

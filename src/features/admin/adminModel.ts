@@ -40,7 +40,7 @@ export const ADMIN_TEXT = {
   kindOther: "기타",
   empty: "사용자가 없어요",
   prev: "이전",
-  none: "—",
+  none: "-",
   // 원문 그대로
   kpiGuests: "게스트", // 원문: AccountStore.swift:77
   kindGuest: "게스트", // 원문: AccountStore.swift:77
@@ -71,7 +71,7 @@ export const ADMIN_TEXT = {
   deleteTitle: "이 계정을 삭제할까요?",
   deleteMessage: "서버에 저장된 기록과 로그인 계정이 즉시 삭제되고 되돌릴 수 없어요. 확인을 위해 계정 ID 앞 8자리를 입력해 주세요.",
   deleteInputLabel: "계정 ID 앞 8자리",
-  deleteReasonLabel: "사유(선택) — 감사 기록에 남아요. 이메일·건강 정보는 적지 마세요.",
+  deleteReasonLabel: "사유(선택) - 감사 기록에 남아요. 이메일·건강 정보는 적지 마세요.",
   deleteReasonHasEmail: "사유에 이메일 주소가 있어요. 지우고 다시 시도해 주세요.",
   deleteMismatch: "입력한 글자가 계정 ID 앞 8자리와 달라요.",
   deleting: "삭제하고 있어요",
@@ -333,13 +333,13 @@ function seoulParts(iso: string | null | undefined): Record<"year" | "month" | "
   return { year: out.year, month: out.month, day: out.day, hour: out.hour, minute: out.minute };
 }
 
-/** 한국 날짜 "2026.09.28" — 없거나 읽을 수 없으면 "—" */
+/** 한국 날짜 "2026.09.28" — 없거나 읽을 수 없으면 "-" */
 export function formatSeoulDate(iso: string | null | undefined): string {
   const p = seoulParts(iso);
   return p === null ? ADMIN_TEXT.none : `${p.year}.${p.month}.${p.day}`;
 }
 
-/** 한국 시각 "2026.09.28 14:05" — 없거나 읽을 수 없으면 "—" */
+/** 한국 시각 "2026.09.28 14:05" — 없거나 읽을 수 없으면 "-" */
 export function formatSeoulDateTime(iso: string | null | undefined): string {
   const p = seoulParts(iso);
   return p === null ? ADMIN_TEXT.none : `${p.year}.${p.month}.${p.day} ${p.hour}:${p.minute}`;
@@ -703,10 +703,13 @@ export function adminRowView(row: AdminListRow): AdminRowView {
 /** 한 번에 내려받는 최대 행 수 — 서버 함수를 100명씩 여러 번 불러 모은다(adminApi fetchAllUsers) */
 export const CSV_MAX_ROWS = 5000;
 
-/** CSV 한 칸 — 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 따옴표는 두 번. 수식으로 읽힐 수 있는 첫 글자(=+-@)는 앞에 따옴표를 붙여 막는다. */
+/**
+ * CSV 한 칸 — 쉼표·따옴표·줄바꿈이 있으면 따옴표로 감싸고 따옴표는 두 번. 수식으로 읽힐 수 있는 첫 글자(=+-@)는 앞에 따옴표를 붙여 막는다.
+ * 하이픈 하나뿐인 칸(값 없음 표시 ADMIN_TEXT.none)은 수식이 될 수 없어 그대로 둔다.
+ */
 export function csvCell(value: string): string {
   let v = value;
-  if (/^[=+\-@\t\r]/.test(v)) v = `'${v}`;
+  if (v !== "-" && /^[=+\-@\t\r]/.test(v)) v = `'${v}`;
   return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
 

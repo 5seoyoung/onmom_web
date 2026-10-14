@@ -10,7 +10,7 @@
 import { useSyncExternalStore } from "react";
 
 /** 오프라인일 때 서버가 필요한 기능의 실패 문구 — 웹 신규 문구 — CPO 확인 필요 (05 §3 오프라인 동작, 08 §4) */
-export const OFFLINE_TEXT = "오프라인이에요 — 인터넷에 연결되면 다시 시도해 주세요";
+export const OFFLINE_TEXT = "오프라인이에요 - 인터넷에 연결되면 다시 시도해 주세요";
 
 function subscribe(listener: () => void): () => void {
   window.addEventListener("online", listener);

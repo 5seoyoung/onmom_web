@@ -14,7 +14,7 @@ export const SYNC_STATUS_TEXT = {
   error: "서버에 저장하지 못했어요", // 웹 신규 문구 — CPO 확인 필요
   retry: "다시 시도", // 원문: ExerciseView.swift:184
   waitingConsent: "동의 후 저장돼요", // 웹 신규 문구 — CPO 확인 필요
-  outdated: "새 버전의 온맘이 필요해요 — 새로 고침", // 웹 신규 문구 — CPO 확인 필요
+  outdated: "새 버전의 온맘이 필요해요 - 새로 고침", // 웹 신규 문구 — CPO 확인 필요
   /** 홈의 작은 안내(오래 실패했을 때) — 기록이 사라진 것은 아니라는 점을 함께 말한다 */
   homeError: "서버에 저장하지 못했어요. 기록은 이 브라우저에 남아 있고, 연결되면 다시 저장을 시도해요.", // 웹 신규 문구 — CPO 확인 필요
 } as const;

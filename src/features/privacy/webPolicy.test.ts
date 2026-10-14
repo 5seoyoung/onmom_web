@@ -47,7 +47,7 @@ describe("어느 방침을 보이나", () => {
 
   it("설정이 있는 빌드 — 웹 초안, '초안 — 법률 검토 전'을 먼저 보인다", () => {
     expect(web.kind).toBe("webDraft");
-    expect(web.draftLabel).toBe("초안 — 법률 검토 전");
+    expect(web.draftLabel).toBe("초안 - 법률 검토 전");
     expect(web.title).toBe(ios.title);
     expect(web.effective).toContain("법률 검토 후");
     const note = renderToStaticMarkup(h(PolicyWebNote, { policy: web }));
