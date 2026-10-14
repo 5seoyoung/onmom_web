@@ -3,7 +3,7 @@
 // 설정 — iOS SettingsView(MoreView.swift:4-142).
 // 순서: 계정(로그인 표시 · 로그아웃 · 계정 삭제) → 프로필(편집 · 산후 일수 · 분만 방식 · 목표 · 내 동네)
 //       → 알림(웹 미구현 — 준비 중, D4) → 개인정보·안전(면책 · 개인정보처리방침 — 서버 저장 빌드는 "내 기기에만 저장" 문장을 바꾼다
-//       · 이용약관(초안) · 문의 mailto) → 내 데이터(웹 신규 — 동의 내역·철회 방법·내 데이터 내려받기, DataRightsCard).
+//       · 이용약관(초안) · 문의 mailto) → 내 데이터(웹 신규 — 동의 내역·철회 방법·내 데이터 내려받기·PDF 리포트, DataRightsCard).
 // 로그아웃·계정 삭제는 확인 창을 거친다. 계정이 없어지면 앱 관문(features/flow/AppGate)이 로그인 화면으로 보낸다.
 //
 // 계정 카드(settingsView.ts accountModeFor·accountCardActions)
@@ -138,7 +138,7 @@ export function SettingsScreen() {
           <ProfileCard rows={settingsProfileRows(state.profile, new Date(nowMs))} />
           <ReminderSection fallback={<NotificationCard />} />
           <PrivacyCard body={privacyBodyFor(supabase)} />
-          {/* 내 데이터(웹 신규) — 동의 내역·철회 방법·내려받기(열람권). 계정·처리방침 카드 뒤, 마지막. */}
+          {/* 내 데이터(웹 신규) — 동의 내역·철회 방법·내려받기(열람권)·PDF 리포트. 계정·처리방침 카드 뒤, 마지막. */}
           <DataRightsCard snapshot={{ state, account }} />
         </>
       ) : null}

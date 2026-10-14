@@ -14,6 +14,7 @@ import { APP_NAV_TEXT, APP_TABS, isNavItemActive, SERVICE_LINKS } from "./appNav
 // lg 미만에서는 display:none이라 낭독·키보드 순서에서도 빠진다.
 // 창 높이가 낮으면(52rem 이하 — 1366×768 노트북 브라우저 등) 로고·묶음·면책 사이 여백만 줄여 메뉴 12개가 한 화면에 들어오게 한다.
 // 항목 높이(2.75rem)는 줄이지 않는다. 그래도 넘치면 사이드바만 따로 스크롤된다.
+// 인쇄(PDF 리포트 등)에서는 빠진다(print:hidden) — 종이에는 본문만.
 
 const SERVICES_LABEL_ID = "side-nav-services-label";
 
@@ -30,7 +31,7 @@ export function SideNav() {
   const pathname = usePathname();
 
   return (
-    <div className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto border-r border-neutral/[0.06] bg-surface lg:flex">
+    <div className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col overflow-y-auto border-r border-neutral/[0.06] bg-surface lg:flex print:hidden">
       <div className="px-4 pt-6 pb-5 [@media(max-height:52rem)]:pt-3 [@media(max-height:52rem)]:pb-2">
         <Link href={ROUTES.landing} className="inline-flex min-h-11 items-center gap-2.5 rounded-button px-2">
           <Image src={brandLogo} alt="" aria-hidden width={36} height={36} className="size-9 shrink-0 rounded-[0.625rem] object-contain" />

@@ -73,6 +73,14 @@ describe("ROUTES", () => {
     expect(routeKindFor(ROUTES.privacy)).toBe("public");
   });
 
+  it("PDF 리포트는 /settings/report/ — (app) 묶음 안이라 로그인·온보딩을 마친 뒤에만(설정과 같은 관문)", () => {
+    expect(ROUTES.settingsReport).toBe("/settings/report/");
+    const report = pageRoutes().find((r) => r.path === ROUTES.settingsReport);
+    expect(report?.inAppGroup).toBe(true);
+    expect(routeKindFor(ROUTES.settingsReport)).toBe("main");
+    expect(isPathWithin(ROUTES.settingsReport, ROUTES.settings)).toBe(true);
+  });
+
   it("개발용 카탈로그(/dev/)는 없다", () => {
     expect(pageRoutes().some((r) => r.path.startsWith("/dev/"))).toBe(false);
   });

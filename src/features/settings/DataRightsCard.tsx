@@ -8,14 +8,18 @@
 //   그 값이 아니어서 화면에 보이지 않는다. 이 브라우저에 저장된 세션에서 읽기만 한다(네트워크 요청 없음) — 설정 없는 빌드·세션 없음이면
 //   행을 그리지 않는다. 내려받기 파일의 account.serverUserId도 같은 값.
 // 내려받기는 스토어 스냅샷을 파일로 만들 뿐이다 — 네트워크 요청 없음, 로그 없음(건강 정보). 실패하면 문장으로 알린다.
+// 그 아래 [PDF 리포트 만들기](웹 신규) — 같은 스냅샷을 인쇄용 화면(/settings/report/, features/report)으로 보여 주고 브라우저 인쇄로 PDF를 만든다.
+//   화면을 옮기는 것이라 버튼이 아니라 링크다.
 
 import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import Link from "next/link";
+import { Download, FileText } from "lucide-react";
 import { getSupabaseClient, hasStoredAuthSession } from "@/auth/client";
 import { Card, SectionTitle } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import type { UserProfile } from "@/domain/types";
 import type { AppSnapshot } from "@/store/appStore";
+import { REPORT_HREF, REPORT_TEXT } from "@/features/report/reportText";
 import { buildDataExport, downloadTextFile, exportFileName, serializeDataExport } from "./dataExport";
 import { DATA_RIGHTS_TEXT, accountIdRow, consentRows } from "./settingsView";
 
@@ -110,6 +114,16 @@ export function DataRightsCard({ snapshot }: { snapshot: Pick<AppSnapshot, "stat
       <div role="alert" className="empty:hidden">
         {failed ? <p className="text-[0.8125rem] font-semibold text-state-alert-text">{DATA_RIGHTS_TEXT.exportFailed}</p> : null}
       </div>
+
+      <hr className="border-divider" />
+      {/* PDF 리포트 — 내려받기와 같은 모양(아이콘 + 이름 + 설명 줄). 다른 화면으로 가므로 링크 */}
+      <Link href={REPORT_HREF} className="flex min-h-11 w-full flex-col items-start gap-0.5 rounded-button py-1 text-left">
+        <span className="inline-flex items-center gap-1.5 text-[0.9375rem] font-semibold text-primary-text">
+          <FileText aria-hidden className="size-4" strokeWidth={2.5} />
+          {REPORT_TEXT.entryLink}
+        </span>
+        <span className="text-[0.8125rem] text-text-secondary">{REPORT_TEXT.entryHint}</span>
+      </Link>
     </Card>
   );
 }

@@ -29,6 +29,7 @@ export interface SubPageHeaderProps {
 
 // 탭 밖의 전체 화면(분석·가이드·약물·챗·지역·생활·지원사업·설정 등) 공통 머리 — 뒤로가기 + ScreenHeader.
 // PC 위치(왼쪽 선·위 여백)는 화면의 <main>이 components/shell/pageFrame.ts로 맞춘다.
+// [뒤로]는 인쇄에서 빠진다(print:hidden — 종이에서는 누를 수 없다). 제목은 남는다.
 export function SubPageHeader({
   title,
   subtitle,
@@ -58,7 +59,7 @@ export function SubPageHeader({
         href={backHref}
         onClick={handleBackClick}
         className={cx(
-          "-ml-2 inline-flex min-h-11 w-fit items-center gap-0.5 rounded-button px-2 text-[0.9375rem] font-medium text-text-secondary",
+          "-ml-2 inline-flex min-h-11 w-fit items-center gap-0.5 rounded-button px-2 text-[0.9375rem] font-medium text-text-secondary print:hidden",
           hideBackWithSidebar && "lg:hidden",
         )}
       >

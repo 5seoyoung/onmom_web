@@ -45,10 +45,12 @@ describe("isNavItemActive — 지금 화면 표시", () => {
     expect(activeTabs("/profile/")).toEqual(["프로필"]);
   });
 
-  it("아래 화면도 부모 항목을 켠다 — 글쓰기·글 상세 → 기록장, 프로필 편집 → 설정", () => {
+  it("아래 화면도 부모 항목을 켠다 — 글쓰기·글 상세 → 기록장, 프로필 편집·PDF 리포트 → 설정", () => {
     expect(activeTabs("/journal/write/")).toEqual(["기록장"]);
     expect(activeTabs("/journal/post/")).toEqual(["기록장"]);
     expect(activeServices("/settings/profile/")).toEqual(["설정"]);
+    expect(activeServices(ROUTES.settingsReport)).toEqual(["설정"]);
+    expect(activeTabs(ROUTES.settingsReport)).toEqual([]);
   });
 
   it("서비스 화면에서는 탭이 켜지지 않고 그 서비스만 켜진다", () => {

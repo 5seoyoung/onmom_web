@@ -42,6 +42,8 @@ export const ROUTES = {
   region: "/region/",
   settings: "/settings/",
   settingsProfile: "/settings/profile/",
+  /** 설정 > 내 데이터 > PDF 리포트(인쇄용 화면 — 브라우저 인쇄로 PDF 저장, features/report) */
+  settingsReport: "/settings/report/",
 } as const;
 
 export type RouteName = keyof typeof ROUTES;

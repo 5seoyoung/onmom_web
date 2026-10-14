@@ -69,8 +69,8 @@ describe("PC 화면 틀(pageFrame)", () => {
     for (const { href } of SERVICE_LINKS) expect(byRoute(href), href).toMatch(/<SubPageHeader[^>]*\bhideBackWithSidebar\b/);
   });
 
-  it("더 깊은 화면(프로필 편집·글쓰기·글 상세·분석)은 PC에서도 [뒤로]를 같은 자리에 둔다", () => {
-    for (const route of [ROUTES.settingsProfile, ROUTES.journalWrite, ROUTES.journalPost, ROUTES.analyze]) {
+  it("더 깊은 화면(프로필 편집·PDF 리포트·글쓰기·글 상세·분석)은 PC에서도 [뒤로]를 같은 자리에 둔다", () => {
+    for (const route of [ROUTES.settingsProfile, ROUTES.settingsReport, ROUTES.journalWrite, ROUTES.journalPost, ROUTES.analyze]) {
       expect(byRoute(route), route).not.toMatch(/hideBackWithSidebar/);
     }
   });

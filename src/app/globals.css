@@ -100,3 +100,16 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* 인쇄 — PDF 리포트(설정 > 내 데이터 > PDF 리포트 만들기, features/report)를 브라우저 인쇄로 PDF로 저장할 때.
+   흰 종이·쪽 여백만 여기서 정한다. 앱 껍데기(사이드바·탭바·[뒤로]·떠 있는 안내)는 각 컴포넌트의 print:hidden, 본문 폭은 AppShell의 print:,
+   표의 한 줄이 쪽 사이에서 갈라지지 않게 하는 것(break-inside: avoid)은 화면(ReportDocument)이 정한다. 글자는 rem 그대로. */
+@page {
+  margin: 16mm 14mm;
+}
+
+@media print {
+  body {
+    background: var(--color-surface);
+  }
+}

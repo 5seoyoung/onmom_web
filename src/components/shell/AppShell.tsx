@@ -17,6 +17,8 @@ import { SideNav } from "./SideNav";
 // 사이드바가 본문보다 앞에 있어 PC 키보드 사용자를 위해 "본문 바로가기"를 둔다(초점을 받을 때만 보임, lg 이상만).
 //   폰·태블릿은 탭바가 본문 뒤(DOM 순서)라 건너뛸 것이 없어 두지 않는다 — 첫 Tab이 곧 본문의 첫 컨트롤이다.
 // 화면이 바뀌면 초점을 본문 묶음으로 옮긴다(RouteFocus) — 라우터는 스크롤만 올리고 초점은 메뉴 링크에 남기므로.
+// 인쇄(PDF 리포트 등 — @media print): 사이드바·탭바는 각자 print:hidden. 본문 묶음은 종이 폭 전부·흰 바탕·최소 높이 없음 —
+//   인쇄 폭(A4 약 18cm)은 폰 폭 기준(48rem 미만)이라 그대로 두면 30rem 기둥에 갇히고, 화면 높이(min-h-dvh)가 빈 쪽을 만들 수 있다.
 export const APP_CONTENT_ID = "app-content";
 
 export function AppShell({ children }: { children?: ReactNode }) {
@@ -33,7 +35,7 @@ export function AppShell({ children }: { children?: ReactNode }) {
       <div
         id={APP_CONTENT_ID}
         tabIndex={-1}
-        className="mx-auto flex min-h-dvh w-full max-w-[30rem] flex-col bg-background focus:outline-none md:max-w-[36rem] lg:max-w-[64rem] lg:min-w-0 lg:flex-1 lg:px-8"
+        className="mx-auto flex min-h-dvh w-full max-w-[30rem] flex-col bg-background focus:outline-none md:max-w-[36rem] lg:max-w-[64rem] lg:min-w-0 lg:flex-1 lg:px-8 print:min-h-0 print:max-w-none print:bg-surface print:px-0"
       >
         {children}
       </div>
