@@ -334,6 +334,17 @@ describe("시스템 프롬프트·약물 답", () => {
     expect(line).toBe("사용자 정보: 모유수유 중. 모유수유 중인 사람을 기준으로 분류합니다.");
   });
 
+  it("병원 신호 — content.json guide_red_flags의 모든 항목을 글자 그대로 담는다(Deno라 복사본 — 한쪽만 바뀌면 여기서 멈춘다)", () => {
+    const [edu] = systemPromptBlocks("patient_edu", null);
+    expect(content.guide_red_flags.length).toBeGreaterThan(0);
+    for (const flag of content.guide_red_flags) expect(edu, flag).toContain(flag);
+    // 위기 연락처는 고정 위기 안내(CRISIS_REPLY)와 같다
+    for (const number of ["1577-0199", "109", "119"]) {
+      expect(CRISIS_REPLY).toContain(number);
+      expect(edu).toContain(number);
+    }
+  });
+
   it("약물 답 형식(structured outputs) — 웹 판정 4값과 같다", () => {
     const verdict = (SUBSTANCE_OUTPUT_SCHEMA.properties as Record<string, { enum?: string[] }>).verdict.enum;
     expect(verdict).toEqual(Object.keys(content.verdict_labels));

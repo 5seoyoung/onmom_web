@@ -21,6 +21,8 @@ export const LLM_EFFORT: Record<ChatPreset, "low" | "medium" | "high"> = {
 export const LLM_DEADLINE_MS = 50_000;
 
 // 웹 서버 신규 — CPO·임상 자문 확인 필요 (LLM 지시문 · 사용자에게 직접 보이지 않음)
+// 병원 신호 줄은 content.json guide_red_flags(회복 가이드의 위험 신호)를 한 글자도 바꾸지 않고 모두 담는다 — Deno는 "@/content"를
+// 읽을 수 없어 여기 복사해 둔다. src/api/edgeFunctions.test.ts가 항목마다 들어 있는지 확인한다(content.json이 바뀌면 여기도 바꾼다).
 export const PATIENT_EDU_SYSTEM_PROMPT = `당신은 산후 회복 기록 서비스 '온맘'의 AI 상담 도우미입니다. 출산 후 회복 중인 사용자에게 산후 회복에 관한 일반적인 건강 정보를 쉬운 한국어로 안내합니다. 온맘은 의료기기가 아니며, 이 대화는 진료나 상담을 대신하지 않습니다.
 
 반드시 지킬 것
