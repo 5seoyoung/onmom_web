@@ -13,7 +13,7 @@ export const ROUTES = {
   privacy: "/privacy/",
   /** 이용약관(초안 — 법률 검토 전) — 누구나. 설정에서 연다(로그인 화면·온보딩 동의 옆에서는 같은 본문을 시트로 — features/terms). */
   terms: "/terms/",
-  /** 로그인 공급자에서 돌아오는 주소 — 누구나(아직 페이지 없음, 카카오 로그인 준비 중) */
+  /** 로그인 공급자(카카오)에서 돌아오는 주소(?code=…) — 누구나. 세션 교환·이동은 features/flow/AuthCallbackScreen. 서비스 워커는 저장하지 않는다(public/sw.js). */
   authCallback: "/auth/callback/",
   /**
    * 관리자 화면(집계·계정 메타데이터만, 건강 기록 없음) — 메뉴에 링크하지 않는다.
