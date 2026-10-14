@@ -39,6 +39,16 @@ export interface RedFlagResult {
   trace: { firedRules: string[]; configVersion: string };
 }
 
+// 판정 기준값 — 레드플래그와 홈 회복 지표(아래 metrics)가 같은 값을 쓴다. 바꾸면 RULES_VERSION을 함께 올린다
+// (src/rules/version.test.ts가 판마다 기록해 둔 값과 비교한다). 근거는 아래 "홈 회복 지표" 머리말.
+
+/** 오로를 묻고 판정하는 산후 경과일 — 이 날부터(RedFlagEngine.swift:57-78, RecordFlowView.swift:167). 그 전의 붉은 오로는 정상이다. */
+export const LOCHIA_GATE_DAYS = 10;
+/** 통증 NRS 이 값 이상 = 즉시 병원 신호(severe_pain)이자 홈 지표 "확인 필요" */
+export const SEVERE_PAIN_NRS = 8;
+/** 통증 NRS 이 값 이상(SEVERE_PAIN_NRS 미만) = 홈 지표 "관찰" — 임상 판정이 아니라 표시 구간 */
+export const PAIN_WATCH_NRS = 4;
+
 // 규칙 집합과 평가 순서는 코드가 정한다(RedFlagEngine.swift:107-143). 순서는 대표 신호 동률 처리와 trace 순서를 바꾸므로
 // content.json 교체(임상 회신 반영)로 규칙이 빠지거나 순서가 바뀌면 안 된다.
 const RED_FLAG_ORDER = [
@@ -55,9 +65,9 @@ type RedFlagCode = (typeof RED_FLAG_ORDER)[number];
 // (사용자에게 질병명을 추정해 말하지 않는다 — 의료기기 경계).
 const MATCHERS: Record<RedFlagCode, (i: SymptomInput) => boolean> = {
   // 겨냥: 산후출혈·자궁복고부전. 산후 10일 이전의 붉은 오로는 정상이라 판정하지 않는다.
-  pph_suspect: (i) => i.postpartumDays >= 10 && i.lochiaIncreased && i.lochiaRed,
+  pph_suspect: (i) => i.postpartumDays >= LOCHIA_GATE_DAYS && i.lochiaIncreased && i.lochiaRed,
   // 겨냥: 상처 감염·혈종 등
-  severe_pain: (i) => i.painNrs >= 8 || i.woundPainWorsening,
+  severe_pain: (i) => i.painNrs >= SEVERE_PAIN_NRS || i.woundPainWorsening,
   // 겨냥: 산욕열·감염
   fever_infection: (i) => i.feverEvent,
   // 겨냥: 빈혈·저혈압·자간전증 등 신경학적 징후
@@ -161,9 +171,9 @@ export function metrics(record: SymptomRecord | null | undefined): RecoveryMetri
   const days = record.postpartumDays;
   const items: RecoveryMetric[] = [];
 
-  if (days == null || days >= 10) {
+  if (days == null || days >= LOCHIA_GATE_DAYS) {
     let lochia: MetricStatus = "normal";
-    if (days != null && days >= 10) {
+    if (days != null && days >= LOCHIA_GATE_DAYS) {
       lochia =
         record.lochiaIncreased && record.lochiaRed
           ? "alert"
@@ -177,7 +187,7 @@ export function metrics(record: SymptomRecord | null | undefined): RecoveryMetri
   const nrs = record.painNrs;
   items.push({
     name: `통증 NRS ${nrs}/10`, // 원문: RedFlagEngine.swift:75
-    status: nrs >= 8 ? "alert" : nrs >= 4 ? "watch" : "normal",
+    status: nrs >= SEVERE_PAIN_NRS ? "alert" : nrs >= PAIN_WATCH_NRS ? "watch" : "normal",
   });
   return items;
 }

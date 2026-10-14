@@ -6,6 +6,14 @@ import type { UserProfile } from "@/domain/types";
 
 type WeightFields = Pick<UserProfile, "heightCm" | "currentWeightKg" | "prePregnancyWeightKg">;
 
+// 감량 목표 기준값(content.json weight_plan.rule "bmi >= 23 || retainedKg >= 4.5"). 바꾸면 RULES_VERSION을 함께 올린다
+// (src/rules/version.test.ts가 판마다 기록해 둔 값과 비교한다).
+
+/** BMI 이 값 이상이면 감량 목표 */
+export const LOSS_PLAN_BMI = 23;
+/** 임신 전보다 이 값(kg) 이상 남았으면 감량 목표 */
+export const LOSS_PLAN_RETAINED_KG = 4.5;
+
 /** 체질량지수 — 키·현재 체중이 둘 다 있어야(0이면 미입력). */
 export function bmi(p: Pick<UserProfile, "heightCm" | "currentWeightKg">): number | null {
   if (!(p.heightCm > 0) || !(p.currentWeightKg > 0)) return null;
@@ -67,8 +75,8 @@ export function weightPlan(p: WeightFields): WeightPlan | null {
   const b = bmi(p);
   if (b == null) return null;
   const retained = retainedWeightKg(p);
-  const overBMI = b >= 23;
-  const overRetained = (retained ?? 0) >= 4.5;
+  const overBMI = b >= LOSS_PLAN_BMI;
+  const overRetained = (retained ?? 0) >= LOSS_PLAN_RETAINED_KG;
 
   if (overBMI || overRetained) {
     const { title, detail } = content.weight_plan.loss;

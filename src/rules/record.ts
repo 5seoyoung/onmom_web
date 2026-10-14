@@ -5,16 +5,16 @@
 import content from "@/content";
 import { isSameLocalDay, postpartumDayCount } from "@/domain/date";
 import { SYMPTOM_HISTORY_LIMIT, type LocalDateString, type SymptomRecord } from "@/domain/types";
-import { checkRedFlags, metrics, type RedFlagResult, type SymptomInput } from "./redflag";
+import { checkRedFlags, LOCHIA_GATE_DAYS, metrics, type RedFlagResult, type SymptomInput } from "./redflag";
 
 // MARK: 기록 만들기
 
 /** 기록 폼 값 — 산후 경과일은 폼이 아니라 출산일에서 계산한다. */
 export type SymptomForm = Omit<SymptomInput, "postpartumDays">;
 
-/** 오로 질문은 산후 10일부터 묻는다(RecordFlowView.swift:167). 그 전에는 붉은 오로가 정상이라 묻지 않는다. */
+/** 오로 질문은 산후 10일(LOCHIA_GATE_DAYS — 레드플래그 판정과 같은 값)부터 묻는다(RecordFlowView.swift:167). 그 전에는 붉은 오로가 정상이라 묻지 않는다. */
 export function showsLochiaInputs(postpartumDays: number): boolean {
-  return postpartumDays >= 10;
+  return postpartumDays >= LOCHIA_GATE_DAYS;
 }
 
 /**
