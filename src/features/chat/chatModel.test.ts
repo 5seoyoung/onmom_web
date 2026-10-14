@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { LLMRequest, LLMResult } from "@/api/llm";
 import content from "@/content";
@@ -12,6 +14,7 @@ import {
   chatDefaultReplyText,
   chatFallbackReasonFor,
   chatLlmContext,
+  chatReplyOnError,
   chatScreenState,
   chatSendAction,
   isCrisisMessage,
@@ -396,5 +399,32 @@ describe("말풍선 표시(origin) — LAUNCH_CHECKLIST 5-3 \"AI 답변\" 표시
     expect(CHAT_ORIGIN_CAPTION.greeting).toBeNull();
     expect(CHAT_ORIGIN_CAPTION.rules).toBe("앱 안내");
     expect(CHAT_ORIGIN_CAPTION.ai).toBe("AI 답변 · 진단·처방이 아닙니다");
+  });
+});
+
+describe("예상하지 못한 오류 — '생각 중'이 남지 않고 앱 안내로 마무리(L6)", () => {
+  const user = (text: string) => [...initialChatMessages(), { id: 1, role: "user" as const, text }];
+
+  it("새 문구 없이 기본 답(원문) — 거절 직후면 거절 첫머리", () => {
+    expect(chatReplyOnError(user("오로 색이 궁금해요"))).toEqual({
+      text: content.chat_fallback.replies.default,
+      fromFallback: true,
+      crisis: false,
+      origin: "rules",
+      fallbackReason: "notConnected",
+    });
+    expect(chatReplyOnError(user("오로 색이 궁금해요"), true)).toMatchObject({ text: CHAT_DECLINED_DEFAULT_REPLY, fallbackReason: "declined" });
+  });
+
+  it("위기 표현이면 오류여도 위기 안내", () => {
+    expect(chatReplyOnError(user("죽고 싶어요"))).toMatchObject({ text: content.chat_fallback.replies.self_harm, crisis: true, fallbackReason: null });
+  });
+
+  it("화면의 요청 사슬에 catch·finally가 있다 — 요청 준비부터 약속 안에서", () => {
+    const src = readFileSync(fileURLToPath(new URL("./ChatScreen.tsx", import.meta.url)), "utf8");
+    const chain = src.slice(src.indexOf("void Promise.resolve()"), src.indexOf("function onAcceptAi"));
+    expect(chain).toContain("requestChatReply(history");
+    expect(chain).toContain(".catch(() => chatReplyOnError(history, declinedNow))");
+    expect(chain).toMatch(/\.finally\(\(\) => \{[\s\S]*setThinking\(false\);/);
   });
 });

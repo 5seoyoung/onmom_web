@@ -30,6 +30,7 @@ import {
   chatBackHref,
   chatBannerText,
   chatLlmContext,
+  chatReplyOnError,
   chatSendAction,
   chatScreenState,
   initialChatMessages,
@@ -134,24 +135,38 @@ export function ChatScreen() {
     const controller = new AbortController();
     inflight.current = controller;
 
-    void requestChatReply(history, {
-      llmConfigured: useAi,
-      complete: llmComplete,
-      // 서버에 함께 보내는 산모 정보 — 산후 주차·분만 방식·수유 여부만(서버에 물을 때만 쓰인다)
-      context: useAi ? chatLlmContext(state.profile, new Date()) : null,
-      signal: controller.signal,
-      declined: declinedNow,
-    }).then((reply) => {
-      if (controller.signal.aborted) return;
-      inflight.current = null;
-      setThinking(false);
-      // 위기 안내는 AI 연결 여부와 무관한 고정 답이다 — 배너("AI 서버에 연결되지 않아")를 새로 띄우거나 내리지 않는다
-      if (!reply.crisis) {
-        setLastReplyFromFallback(reply.fromFallback);
-        setFallbackReason(reply.fallbackReason);
-      }
-      setMessages((prev) => [...prev, { id: nextId.current++, role: "assistant", text: reply.text, origin: reply.origin }]);
-    });
+    // 요청 준비(산모 정보 계산)까지 약속 안에서 — 어디서 던져도 catch가 받고, finally가 "생각 중"을 반드시 내린다.
+    void Promise.resolve()
+      .then(() =>
+        requestChatReply(history, {
+          llmConfigured: useAi,
+          complete: llmComplete,
+          // 서버에 함께 보내는 산모 정보 — 산후 주차·분만 방식·수유 여부만(서버에 물을 때만 쓰인다)
+          context: useAi ? chatLlmContext(state.profile, new Date()) : null,
+          signal: controller.signal,
+          declined: declinedNow,
+        }),
+      )
+      // 예상하지 못한 오류 — 답 없이 멈추지 않게 앱 안내(위기 표현이면 위기 안내)로 답한다
+      .catch(() => chatReplyOnError(history, declinedNow))
+      .then((reply) => {
+        if (controller.signal.aborted) return;
+        inflight.current = null;
+        setThinking(false);
+        // 위기 안내는 AI 연결 여부와 무관한 고정 답이다 — 배너("AI 서버에 연결되지 않아")를 새로 띄우거나 내리지 않는다
+        if (!reply.crisis) {
+          setLastReplyFromFallback(reply.fromFallback);
+          setFallbackReason(reply.fallbackReason);
+        }
+        setMessages((prev) => [...prev, { id: nextId.current++, role: "assistant", text: reply.text, origin: reply.origin }]);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        // 화면을 떠나 끊긴 요청(aborted)은 상태를 건드리지 않는다. 위에서 이미 내렸으면 같은 값이라 다시 그리지 않는다.
+        if (controller.signal.aborted) return;
+        if (inflight.current === controller) inflight.current = null;
+        setThinking(false);
+      });
   }
 
   function onAcceptAi() {

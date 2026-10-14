@@ -82,21 +82,35 @@ export function SubstanceCheckScreen() {
     const token = latest.current.begin();
     setLoading(true);
 
-    const now = new Date();
-    const deps = substanceDeps({
-      llmConfigured: useAi,
-      complete: llmComplete,
-      isBreastfeeding: state.profile.isBreastfeeding,
-      dayCount: postpartumDayCount(state.profile.deliveryDate, now),
-      context: useAi ? substanceLlmContext(state.profile, now) : null,
-      signal: controller.signal,
-    });
-    void checkSubstance(text, deps).then((r) => {
-      if (!latest.current.isCurrent(token)) return;
-      inflight.current = null;
-      setResult(r);
-      setLoading(false);
-    });
+    // 요청 준비(산모 정보 계산)까지 약속 안에서 — 어디서 던져도 catch가 받고, finally가 "조회 중"을 반드시 내린다.
+    void Promise.resolve()
+      .then(() => {
+        const now = new Date();
+        const deps = substanceDeps({
+          llmConfigured: useAi,
+          complete: llmComplete,
+          isBreastfeeding: state.profile.isBreastfeeding,
+          dayCount: postpartumDayCount(state.profile.deliveryDate, now),
+          context: useAi ? substanceLlmContext(state.profile, now) : null,
+          signal: controller.signal,
+        });
+        return checkSubstance(text, deps);
+      })
+      // 예상하지 못한 오류 — 표만 본 결과(표에 없으면 "정보 부족")로 마무리한다. LLM이 실패했을 때와 같다.
+      .catch(() => checkSubstance(text, {}))
+      .then((r) => {
+        if (!latest.current.isCurrent(token)) return;
+        inflight.current = null;
+        setResult(r);
+        setLoading(false);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        // 더 새 조회가 시작됐거나 화면을 떠났으면(cancel) 그 조회의 상태를 건드리지 않는다
+        if (!latest.current.isCurrent(token)) return;
+        if (inflight.current === controller) inflight.current = null;
+        setLoading(false);
+      });
   }
 
   // 동의 카드는 고르는 순간 사라진다 — 누른 버튼과 함께 초점이 <body>로 떨어지지 않게 결과 자리로 옮긴다

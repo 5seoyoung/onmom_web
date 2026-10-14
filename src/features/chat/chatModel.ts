@@ -297,6 +297,19 @@ export async function requestChatReply(
   return { text, fromFallback: true, crisis: false, origin: "rules", fallbackReason: reason };
 }
 
+/**
+ * 답을 구하다 예상하지 못한 오류가 났을 때의 답 — requestChatReply는 서버 실패를 규칙 폴백으로 돌려주므로 보통 오지 않는다.
+ * 화면이 대기 표시("생각 중")를 남겨 두지 않고 이 답으로 마무리한다. 새 문구는 없다: 위기 표현이면 고정 위기 안내, 아니면
+ * 기본 답(원문 "지금은 AI 서버에 연결되지 않아…" — 이번에 AI를 거절했으면 그 첫머리).
+ */
+export function chatReplyOnError(history: readonly ChatMessage[], declined = false): ChatScreenReply {
+  if (isCrisisMessage(lastUserText(history))) {
+    return { text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null };
+  }
+  const reason: ChatFallbackReason = declined ? "declined" : "notConnected";
+  return { text: chatDefaultReplyText(reason), fromFallback: true, crisis: false, origin: "rules", fallbackReason: reason };
+}
+
 function lastUserText(history: readonly ChatMessage[]): string {
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].role === "user") return history[i].text;

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { LLMRequest, LLMResult } from "@/api/llm";
 import content from "@/content";
@@ -204,5 +206,20 @@ describe("substanceResultChips — AI가 제시한 출처는 확인된 출처 �
     const deps = substanceDeps({ llmConfigured: true, complete, isBreastfeeding: true, dayCount: 3, context: null });
     const r = await checkSubstance("모르는약", deps);
     expect(substanceResultChips(r).map((c) => c.kind)).toEqual(["aiSource", "aiSource", "evidence"]);
+  });
+});
+
+describe("예상하지 못한 오류 — '조회 중'이 남지 않고 표의 결과로 마무리(L6)", () => {
+  it("의존성 없이(표만) 조회하면 표에 없는 항목은 '정보 부족' — 오류 때 화면이 쓰는 결과", async () => {
+    const r = await checkSubstance("없는약", {});
+    expect(r).toMatchObject({ verdict: "unknown", source: "table", detail: content.substance_unknown.detail });
+  });
+
+  it("화면의 조회 사슬에 catch·finally가 있다 — 요청 준비부터 약속 안에서", () => {
+    const src = readFileSync(fileURLToPath(new URL("./SubstanceCheckScreen.tsx", import.meta.url)), "utf8");
+    const chain = src.slice(src.indexOf("void Promise.resolve()"), src.indexOf("function focusResult"));
+    expect(chain).toContain("return checkSubstance(text, deps);");
+    expect(chain).toContain(".catch(() => checkSubstance(text, {}))");
+    expect(chain).toMatch(/\.finally\(\(\) => \{[\s\S]*setLoading\(false\);/);
   });
 });
