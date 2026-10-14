@@ -5,12 +5,23 @@ import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import { config, isReminderConfigured, isVapidPublicKeyShape, robotsFor } from "@/config";
 import { ReminderSection, reminderHint } from "@/features/settings/ReminderSection";
 import { ROUTES } from "@/routes";
-import { MANIFEST_PATH, PRODUCTION_BASE_PATH, PWA_APP_TITLE, PWA_ICONS, pwaAssetUrl, serviceWorkerScope, serviceWorkerUrl, SW_PATH } from "./pwaAssets";
+import {
+  MANIFEST_PATH,
+  PRODUCTION_BASE_PATH,
+  PWA_APP_TITLE,
+  PWA_ICONS,
+  pwaAssetUrl,
+  serviceWorkerScope,
+  serviceWorkerUrl,
+  SW_PATH,
+  webManifest,
+  type WebManifest,
+} from "./pwaAssets";
 import * as serverRules from "../../../supabase/functions/_shared/reminders";
 import {
   accountTransition,
@@ -54,28 +65,59 @@ const SAMPLE_PUBLIC_KEY = "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCY
 // FCM 끝점 모양(실제 구독이 아니다)
 const FCM = "https://fcm.googleapis.com/fcm/send/test-endpoint";
 
-describe("manifest.webmanifest — 정적 파일이라 basePath가 적혀 있다", () => {
-  const manifest = JSON.parse(readFileSync(join(PUBLIC, MANIFEST_PATH), "utf8")) as Record<string, unknown>;
+describe("웹 앱 매니페스트 — 빌드 때 이 빌드의 basePath로 만든다(src/app/manifest.ts → out/manifest.webmanifest)", () => {
+  /** 빌드가 쓰는 값 그대로 — Next가 src/app/manifest.ts의 기본 내보내기를 불러 manifest.webmanifest로 쓴다 */
+  async function builtManifest(basePath: string) {
+    vi.resetModules();
+    vi.stubEnv("NEXT_PUBLIC_BASE_PATH", basePath);
+    try {
+      const route = (await import("@/app/manifest")).default;
+      return route() as unknown as WebManifest;
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  }
 
-  it("이름·언어·표시 방식·색", () => {
+  it("이름·언어·표시 방식·색", async () => {
+    const manifest = await builtManifest(PRODUCTION_BASE_PATH);
     expect(manifest.name).toBe(PWA_APP_TITLE);
     expect(manifest.short_name).toBe(PWA_APP_TITLE);
     expect(manifest.lang).toBe("ko");
+    expect(manifest.dir).toBe("ltr");
     expect(manifest.display).toBe("standalone");
     expect(manifest.background_color).toBe("#F9FAFB");
     expect(manifest.theme_color).toBe("#F9FAFB");
-    expect(manifest.orientation ?? "any").toBe("any"); // PC 가로 화면(사이드바)이 있으므로 방향을 잠그지 않는다
+    expect((manifest as { orientation?: string }).orientation ?? "any").toBe("any"); // PC 가로 화면(사이드바)이 있으므로 방향을 잠그지 않는다
   });
 
-  it("start_url = basePath + ROUTES.home, scope·id = basePath/ — 커스텀 도메인으로 옮기면 세 값을 고친다(docs/PWA_AND_REMINDERS.md)", () => {
-    expect(manifest.start_url).toBe(`${PRODUCTION_BASE_PATH}${ROUTES.home}`);
-    expect(manifest.scope).toBe(serviceWorkerScope(PRODUCTION_BASE_PATH));
-    expect(manifest.id).toBe(serviceWorkerScope(PRODUCTION_BASE_PATH));
+  it("id·scope = basePath + /, start_url = basePath + ROUTES.home — 빌드의 BASE_PATH(config.basePath)를 따른다", async () => {
+    for (const basePath of [PRODUCTION_BASE_PATH, ""]) {
+      const manifest = await builtManifest(basePath);
+      expect(manifest).toEqual(webManifest(basePath));
+      expect(manifest.start_url).toBe(`${basePath}${ROUTES.home}`);
+      expect(manifest.scope).toBe(serviceWorkerScope(basePath));
+      expect(manifest.id).toBe(serviceWorkerScope(basePath));
+    }
     expect(PRODUCTION_BASE_PATH).toBe("/onmom_web");
   });
 
-  it("아이콘 파일이 있고 실제 크기가 sizes와 같다 — 192·512 any + maskable", () => {
-    const icons = manifest.icons as Array<{ src: string; sizes: string; type: string; purpose: string }>;
+  it("운영 주소(GitHub Pages)의 값은 예전 정적 파일과 같다 — 설치된 앱의 id가 바뀌지 않는다", async () => {
+    expect(await builtManifest(PRODUCTION_BASE_PATH)).toMatchObject({ id: "/onmom_web/", start_url: "/onmom_web/home/", scope: "/onmom_web/" });
+    expect(await builtManifest("")).toMatchObject({ id: "/", start_url: "/home/", scope: "/" });
+  });
+
+  it("정적 내보내기로 manifest.webmanifest를 쓴다 — public/에 같은 이름의 파일을 두지 않는다(빌드 충돌·basePath 하드코딩)", () => {
+    expect(MANIFEST_PATH).toBe("/manifest.webmanifest");
+    expect(existsSync(join(PUBLIC, MANIFEST_PATH))).toBe(false);
+    const route = read("src/app/manifest.ts");
+    expect(route).toContain('export const dynamic = "force-static"');
+    expect(route).toContain("webManifest(config.basePath)");
+    expect(route).not.toMatch(/onmom_web/);
+  });
+
+  it("아이콘 파일이 있고 실제 크기가 sizes와 같다 — 192·512 any + maskable", async () => {
+    const icons = (await builtManifest(PRODUCTION_BASE_PATH)).icons;
     expect(icons.map((i) => `${i.sizes} ${i.purpose}`).sort()).toEqual(["192x192 any", "192x192 maskable", "512x512 any", "512x512 maskable"]);
     for (const icon of icons) {
       expect(icon.src.startsWith("/")).toBe(false); // 매니페스트 주소 기준 상대 경로 — 도메인을 바꿔도 그대로

@@ -18,6 +18,10 @@ export const SHARE_TEXT = {
     "산후 회복은 사람마다 다릅니다. 온맘은 출산일과 분만 방식에 맞춰 지금 할 수 있는 운동과 피해야 할 동작을 정리하고, 오로·발열·통증을 1분 만에 기록해 병원에 가야 할 신호를 알려드려요.", // 원문: APP_STORE.md §2
 } as const;
 
+/** 앱 기본 설명 — 루트 레이아웃의 description(시작 주소 밖 모든 화면)과 웹 앱 매니페스트(pwaAssets.webManifest)가 같은 값을 쓴다. */
+// 웹 신규 문구 — CPO 확인 필요 (OnboardingFlowView.swift:114 "엄마의 산후 회복 케어앱"과 web/README 첫 문장을 줄여 이은 것)
+export const APP_DESCRIPTION = "엄마의 산후 회복 케어 - 퇴원부터 산후 6주 검진까지";
+
 /** 시작 주소("/")의 문서 제목·설명 — src/app/page.tsx가 metadata로 내보낸다. */
 export const ROOT_META = {
   // 웹 신규 문구 — CPO 확인 필요 (브라우저 탭 제목 = 이름 + APP_STORE.md §1 부제)

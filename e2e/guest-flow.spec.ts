@@ -74,12 +74,20 @@ async function isBrowserOnlyBuild(page: Page): Promise<boolean> {
   return (await kakao.isDisabled()) && /준비 중/.test((await kakao.textContent()) ?? "");
 }
 
-test("처음 온 사람이 시작 주소(/)를 열면 로그인(/login/)으로 간다", async ({ page }) => {
+test("처음 온 사람이 시작 주소(/)를 열면 로그인(/login/)으로 간다", async ({ page, baseURL }) => {
   await page.goto("./");
   await expect(page).toHaveURL(/\/login\/$/);
   await expect(page.getByRole("button", { name: "게스트로 시작" })).toBeVisible();
   // 운영 빌드에는 CSP 메타가 실린다(src/app/layout.tsx) — 위반 0개는 guard가 확인한다.
   await expect(page.locator('meta[http-equiv="Content-Security-Policy"]')).toHaveCount(1);
+  // 웹 앱 매니페스트는 빌드 때 이 빌드의 basePath로 만든다(src/app/manifest.ts) — 링크와 id·scope·start_url이 BASE_PATH를 따른다
+  // (시작 주소에서 로그인으로 클라이언트 이동하면 Next가 앞 화면의 머리 링크(아이콘·매니페스트)를 남겨 두 벌이 될 수 있다 — 모두 같은 주소인지 본다)
+  const base = new URL(baseURL!).pathname.replace(/\/$/, "");
+  await expect(page.locator('link[rel="manifest"]').first()).toBeAttached();
+  const manifestHrefs = await page.locator('link[rel="manifest"]').evaluateAll((links) => links.map((l) => l.getAttribute("href")));
+  expect(new Set(manifestHrefs)).toEqual(new Set([`${base}/manifest.webmanifest`]));
+  const manifest = await (await page.request.get(new URL("manifest.webmanifest", baseURL).href)).json();
+  expect(manifest).toMatchObject({ id: `${base}/`, scope: `${base}/`, start_url: `${base}/home/` });
   // 예전 서비스 소개 바닥글의 개인정보처리방침·이용약관·문의는 로그인 화면 아래에 있다
   await expect(page.getByRole("button", { name: "개인정보처리방침 보기" })).toBeVisible();
   await expect(page.getByRole("button", { name: "이용약관 보기" })).toBeVisible();

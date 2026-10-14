@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import content from "@/content";
+import { webManifest } from "@/features/pwa/pwaAssets";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const SRC = join(ROOT, "src");
@@ -76,8 +77,7 @@ describe("화면의 em dash(—)는 하이픈(-)으로(2026-10-14 CPO 결정)", 
     expect(jsonStrings(content, "content")).toEqual([]);
   });
 
-  it("웹 앱 매니페스트(이름·설명)에 em dash가 없다", () => {
-    const manifest: unknown = JSON.parse(readFileSync(join(ROOT, "public/manifest.webmanifest"), "utf8"));
-    expect(jsonStrings(manifest, "manifest")).toEqual([]);
+  it("웹 앱 매니페스트(이름·설명)에 em dash가 없다 — 빌드 때 만드는 값(src/app/manifest.ts → pwaAssets.webManifest)", () => {
+    for (const basePath of ["", "/onmom_web"]) expect(jsonStrings(webManifest(basePath), "manifest")).toEqual([]);
   });
 });

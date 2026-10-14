@@ -6,9 +6,9 @@ import { resolveAbsoluteUrlWithPathname, resolveUrl } from "next/dist/lib/metada
 import { describe, expect, it } from "vitest";
 import { config, DEFAULT_SITE_URL, siteUrlFrom } from "@/config";
 import { ADMIN_TEXT } from "@/features/admin/adminModel";
-import { PRODUCTION_BASE_PATH } from "@/features/pwa/pwaAssets";
+import { PRODUCTION_BASE_PATH, webManifest } from "@/features/pwa/pwaAssets";
 import { TERMS_TEXT } from "@/features/terms/termsText";
-import { BASE_OPEN_GRAPH, BASE_TWITTER, ROOT_META, ROOT_OPEN_GRAPH, SHARE_IMAGE, SHARE_TEXT, TITLE_TEMPLATE } from "./shareMeta";
+import { APP_DESCRIPTION, BASE_OPEN_GRAPH, BASE_TWITTER, ROOT_META, ROOT_OPEN_GRAPH, SHARE_IMAGE, SHARE_TEXT, TITLE_TEMPLATE } from "./shareMeta";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
@@ -60,12 +60,19 @@ describe("사이트 주소(NEXT_PUBLIC_SITE_URL → metadataBase)", () => {
     expect(layout).toContain("openGraph: BASE_OPEN_GRAPH");
     expect(layout).toContain("twitter: BASE_TWITTER");
   });
+
+  it("앱 기본 설명은 한 곳(APP_DESCRIPTION) — 루트 레이아웃 description과 웹 앱 매니페스트가 같은 값", () => {
+    expect(APP_DESCRIPTION).toBe("엄마의 산후 회복 케어 - 퇴원부터 산후 6주 검진까지");
+    expect(read("src/app/layout.tsx")).toContain("description: APP_DESCRIPTION,");
+    expect(webManifest("").description).toBe(APP_DESCRIPTION);
+  });
 });
 
 describe("문서 제목 틀", () => {
   it('"%s · 온맘" — 제목이 없는 화면은 "온맘"', () => {
     expect(TITLE_TEMPLATE).toBe("%s · 온맘");
-    expect(read("src/app/layout.tsx")).toContain('title: { default: "온맘", template: TITLE_TEMPLATE }');
+    expect(SHARE_TEXT.brand).toBe("온맘");
+    expect(read("src/app/layout.tsx")).toContain("title: { default: SHARE_TEXT.brand, template: TITLE_TEMPLATE }");
   });
 
   it("이름이 이미 든 제목(시작 주소·이용약관·관리자)은 틀을 건너뛴다 — \"온맘 이용약관 · 온맘\"이 되지 않게", () => {
