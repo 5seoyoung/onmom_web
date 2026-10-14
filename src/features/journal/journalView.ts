@@ -42,6 +42,17 @@ export function localOnlyNoticeFor(serverStorage: boolean): string {
   return serverStorage ? JOURNAL_SERVER_TEXT.localOnlyNotice : JOURNAL_TEXT.localOnlyNotice;
 }
 
+/**
+ * 글·댓글 입력 칸의 길이 상한(maxLength, 글자 수) — iOS에는 없다(웹 보강). 브라우저 저장소와 서버의 상태 한 줄(user_states.state)이
+ * 한 번의 붙여넣기로 끝없이 커지지 않게 입력 칸에서 막는다. 보이는 문구는 더하지 않는다 — 칸이 더 받지 않을 뿐이다.
+ * 저장 규칙(제목 필수·trim)은 store/state.ts 그대로다.
+ */
+export const JOURNAL_LIMITS = {
+  title: 100,
+  body: 5000,
+  comment: 1000,
+} as const;
+
 export const JOURNAL_HREF = ROUTES.journal;
 export const JOURNAL_WRITE_HREF = ROUTES.journalWrite;
 

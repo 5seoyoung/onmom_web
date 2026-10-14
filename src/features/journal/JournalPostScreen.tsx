@@ -14,7 +14,7 @@ import { StorageWarning } from "@/features/home/StorageWarning";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitComment } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
-import { JOURNAL_HREF, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime } from "./journalView";
+import { JOURNAL_HREF, JOURNAL_LIMITS, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime } from "./journalView";
 
 export function JournalPostScreen() {
   // iOS 내비게이션 pop처럼 — 목록에서 들어왔으면 뒤로(목록이 방문 기록에 두 번 쌓이지 않게)
@@ -115,6 +115,7 @@ function CommentBar({ onSubmit }: { onSubmit: (text: string) => boolean }) {
         onChange={(e) => setComment(e.target.value)}
         placeholder={JOURNAL_TEXT.commentPlaceholder}
         aria-label={JOURNAL_TEXT.commentPlaceholder}
+        maxLength={JOURNAL_LIMITS.comment}
         autoComplete="off"
         enterKeyHint="send"
         className="min-h-11 min-w-0 flex-1 rounded-full bg-surface px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle-aa"

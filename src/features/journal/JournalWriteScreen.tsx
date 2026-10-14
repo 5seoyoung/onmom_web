@@ -13,7 +13,7 @@ import { StorageWarning } from "@/features/home/StorageWarning";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitPost } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
-import { JOURNAL_HREF, JOURNAL_TEXT } from "./journalView";
+import { JOURNAL_HREF, JOURNAL_LIMITS, JOURNAL_TEXT } from "./journalView";
 
 export function JournalWriteScreen() {
   const { actions } = useAppStore();
@@ -80,6 +80,7 @@ export function JournalWriteScreen() {
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleTitleKeyDown}
             placeholder={JOURNAL_TEXT.titlePlaceholder}
+            maxLength={JOURNAL_LIMITS.title}
             autoComplete="off"
             enterKeyHint="next"
             required
@@ -96,6 +97,7 @@ export function JournalWriteScreen() {
             id={bodyId}
             value={body}
             onChange={(e) => setBody(e.target.value)}
+            maxLength={JOURNAL_LIMITS.body}
             className="min-h-40 w-full resize-y rounded-button bg-background p-1 text-base text-text-primary @xl:min-h-72"
           />
         </Card>

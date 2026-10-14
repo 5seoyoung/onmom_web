@@ -1,8 +1,10 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { CommunityPost } from "@/domain/types";
 import { initialState } from "@/store/defaults";
 import { addComment, addPost, canSubmitComment, canSubmitPost } from "@/store/state";
-import { JOURNAL_SERVER_TEXT, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
+import { JOURNAL_LIMITS, JOURNAL_SERVER_TEXT, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
 
 describe("맨 위 배너 — 저장 위치에 맞게(01 §3-6 웹 수정)", () => {
   it("설정 없는 빌드(브라우저 전용)는 iOS 원문 그대로", () => {
@@ -97,5 +99,20 @@ describe("기록장 입력 규칙", () => {
     s = addComment(s, "p1", "둘째", { id: "c2", authorName: "게스트", now });
     expect(s.communityPosts[0].comments.map((c) => c.text)).toEqual(["첫 댓글", "둘째"]);
     expect(addComment(s, "p1", "  ", { id: "c3", authorName: "게스트", now })).toBe(s);
+  });
+});
+
+describe("입력 길이 상한(maxLength) — 웹 보강, 보이는 문구 없음", () => {
+  const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+
+  it("제목 100 · 내용 5000 · 댓글 1000자", () => {
+    expect(JOURNAL_LIMITS).toEqual({ title: 100, body: 5000, comment: 1000 });
+  });
+
+  it("글쓰기의 제목·내용 칸과 상세의 댓글 칸이 상한을 건다", () => {
+    const write = read("./JournalWriteScreen.tsx");
+    expect(write).toContain("maxLength={JOURNAL_LIMITS.title}");
+    expect(write).toContain("maxLength={JOURNAL_LIMITS.body}");
+    expect(read("./JournalPostScreen.tsx")).toContain("maxLength={JOURNAL_LIMITS.comment}");
   });
 });
