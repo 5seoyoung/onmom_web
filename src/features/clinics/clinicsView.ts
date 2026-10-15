@@ -2,7 +2,8 @@
 // 원본: onmom(iOS) 저장소 Onmom/Features/Region/NearbyClinicsView.swift — web/reference/swift에는 빠져 있다(검수 #34).
 // 검색 흐름·문구·거리 표기는 api/clinics.ts가 가진다. 여기엔 "어느 상태에서 무엇을 보여주나"만 둔다.
 
-import { distanceText, telHref, type Clinic, type ClinicFailureKind, type ClinicSearchResult, type LatLng } from "@/api/clinics";
+import { distanceText, type Clinic, type ClinicFailureKind, type ClinicSearchResult, type LatLng } from "@/api/clinics";
+import { telHref } from "@/domain/phone";
 import { OFFLINE_TEXT } from "@/features/home/useOnline";
 
 export const CLINICS_TEXT = {

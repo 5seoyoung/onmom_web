@@ -9,9 +9,7 @@ import {
   MAX_CLINICS,
   SEARCH_RADIUS_M,
   searchNearbyClinics,
-  telHref,
   toClinics,
-  toDomesticPhone,
   type ClinicSearchServices,
   type KakaoPlace,
   type LatLng,
@@ -68,26 +66,6 @@ describe("distanceMeters", () => {
 
   it("같은 점은 0", () => {
     expect(distanceMeters(center, center)).toBe(0);
-  });
-});
-
-describe("전화번호", () => {
-  it("국제 형식 → 국내 표기", () => {
-    expect(toDomesticPhone("+82 2-933-8828")).toBe("02-933-8828");
-    expect(toDomesticPhone("+82 10-1234-5678")).toBe("010-1234-5678");
-  });
-
-  it("국내 표기는 그대로, 비면 null", () => {
-    expect(toDomesticPhone("02-933-8828")).toBe("02-933-8828");
-    expect(toDomesticPhone("")).toBeNull();
-    expect(toDomesticPhone(undefined)).toBeNull();
-  });
-
-  it("tel: 링크는 숫자만", () => {
-    expect(telHref("02-933-8828")).toBe("tel:029338828");
-    expect(telHref("+82 2-933-8828")).toBe("tel:029338828");
-    expect(telHref("")).toBeNull();
-    expect(telHref(null)).toBeNull();
   });
 });
 

@@ -8,7 +8,7 @@
 // AI 답(신뢰할 수 없는 값)에는 쓰지 않는다 — 지어낸 번호가 눌리는 링크가 되지 않게(ChatScreen은 앱 안내 말풍선에만 쓴다).
 
 import { cx } from "@/components/ui";
-import { telHref } from "@/features/home/homeViewModel";
+import { telHref } from "@/domain/phone";
 import { phoneCallLabel, splitPhoneNumbers } from "./guideContent";
 
 export interface PhoneLinksProps {
@@ -25,13 +25,14 @@ export interface PhoneLinksProps {
 export function PhoneLinks({ text, linkClassName = "text-primary-text", link = true }: PhoneLinksProps) {
   return (
     <span>
-      {splitPhoneNumbers(text).map((seg, i) =>
-        !seg.phone ? (
-          seg.text
-        ) : link ? (
+      {splitPhoneNumbers(text).map((seg, i) => {
+        if (!seg.phone) return seg.text;
+        // 걸 수 없는 번호(숫자 없음 — telHref null)면 링크 없이 글자만
+        const href = link ? telHref(seg.text) : null;
+        return href !== null ? (
           <a
             key={i}
-            href={telHref(seg.text)}
+            href={href}
             aria-label={phoneCallLabel(seg.text)}
             className={cx("whitespace-nowrap rounded-xs underline underline-offset-2", linkClassName)}
           >
@@ -41,8 +42,8 @@ export function PhoneLinks({ text, linkClassName = "text-primary-text", link = t
           <span key={i} className="whitespace-nowrap">
             {seg.text}
           </span>
-        ),
-      )}
+        );
+      })}
     </span>
   );
 }

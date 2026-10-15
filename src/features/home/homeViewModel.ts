@@ -194,8 +194,3 @@ export function recoveryStateCard(state: Pick<PersistedState, "symptomHistory">,
     descriptor: RECOVERY_DESCRIPTOR[label],
   };
 }
-
-/** 전화 링크 — 숫자만 남긴다(HomeView.swift:308 `number.filter(\.isNumber)`). */
-export function telHref(number: string): string {
-  return `tel:${number.replace(/\D/g, "")}`;
-}

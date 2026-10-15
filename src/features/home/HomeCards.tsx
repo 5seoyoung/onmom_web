@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Card, EvidenceChipList, StatusBadge, cx } from "@/components/ui";
+import { telHref } from "@/domain/phone";
 import type { HomeStageCard } from "@/rules/exercise";
 import type { RecoveryMetric } from "@/rules/redflag";
 import type { WeightPlan } from "@/rules/weight";
@@ -26,7 +27,6 @@ import {
   HOME_TEXT,
   MOOD_CALLS,
   RECOVERY_STEPS,
-  telHref,
   type RecoveryStateCard as RecoveryStateCardModel,
   type StateTone,
 } from "./homeViewModel";
@@ -200,15 +200,19 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
       </div>
       <p className="text-[0.9375rem] text-text-secondary">{HOME_TEXT.moodBody}</p>
       <ul className="flex flex-col gap-2">
-        {MOOD_CALLS.map((call) => (
-          <li key={call.number}>
-            <a href={telHref(call.number)} className="flex min-h-11 items-center gap-2 rounded-chip bg-coral-tint px-4 py-2">
-              <Phone aria-hidden className="size-3.5 shrink-0 fill-primary text-primary" />
-              <span className="min-w-0 flex-1 text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
-              <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
-            </a>
-          </li>
-        ))}
+        {MOOD_CALLS.map((call) => {
+          // 걸 수 없는 번호(숫자 없음)면 행을 그리지 않는다 — "tel:"만 있는 링크를 만들지 않는다
+          const href = telHref(call.number);
+          return href === null ? null : (
+            <li key={call.number}>
+              <a href={href} className="flex min-h-11 items-center gap-2 rounded-chip bg-coral-tint px-4 py-2">
+                <Phone aria-hidden className="size-3.5 shrink-0 fill-primary text-primary" />
+                <span className="min-w-0 flex-1 text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
+                <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
+              </a>
+            </li>
+          );
+        })}
       </ul>
       <div className="flex gap-2">
         <Link

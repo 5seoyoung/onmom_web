@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MoodCheckRecord, PersistedState, SymptomRecord } from "@/domain/types";
+import { telHref } from "@/domain/phone";
 import { initialState } from "@/store/defaults";
 import { chatBackHref } from "@/features/chat/chatModel";
 import {
@@ -12,7 +13,6 @@ import {
   recordReferenceTime,
   recoveryStateCard,
   returnToWorkChip,
-  telHref,
 } from "./homeViewModel";
 
 // vitest.config.ts가 TZ=Asia/Seoul로 고정한다. 2026-09-27(일) 14:00 KST.

@@ -6,6 +6,7 @@
 // 카카오 SDK 호출은 kakaoMaps.ts가 하고, 테스트는 services를 주입해 SDK 없이 돈다.
 
 import { config } from "@/config";
+import { toDomesticPhone } from "@/domain/phone";
 import { createKakaoClinicServices } from "./kakaoMaps";
 import { safeExternalUrl } from "./safeUrl";
 
@@ -98,20 +99,6 @@ export function distanceMeters(a: LatLng, b: LatLng): number {
 export function distanceText(meters: number): string {
   // 원문: NearbyClinics.swift:34-36
   return meters >= 1000 ? `직선거리 ${(meters / 1000).toFixed(1)}km` : `직선거리 ${Math.trunc(meters)}m`;
-}
-
-/** 국제 형식(+82 2-933-8828)을 국내 표기(02-933-8828)로. 비었으면 null. (NearbyClinics.swift:19-24) */
-export function toDomesticPhone(phone: string | null | undefined): string | null {
-  if (!phone || phone.trim() === "") return null;
-  const compact = phone.replace(/ /g, "");
-  if (!compact.startsWith("+82")) return phone;
-  return "0" + compact.slice(3);
-}
-
-/** 눌러서 걸 수 있는 tel: 링크(숫자만). (NearbyClinics.swift:27-30) */
-export function telHref(phone: string | null | undefined): string | null {
-  const digits = toDomesticPhone(phone)?.replace(/\D/g, "") ?? "";
-  return digits === "" ? null : `tel:${digits}`;
 }
 
 /** 카카오 place_url은 http로 오므로 https로 올린 뒤 허용 호스트 검사를 거친다 */
