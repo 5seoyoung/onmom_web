@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchVideos } from "@/api/video";
+import { useLocalDay } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { ScreenHeader, cx } from "@/components/ui";
 import type { DeliveryMethod, MaternityRecord, PersistedState } from "@/domain/types";
@@ -36,10 +37,12 @@ export function ExerciseScreen() {
 }
 
 function ExerciseContent({ state }: { state: PersistedState }) {
-  // 산후 주차는 브라우저에서 계산한다(빌드 시각이 박히지 않게). 이 컴포넌트는 hydrated 뒤에만 마운트된다.
-  const [now] = useState(() => new Date());
+  // 산후 주차는 브라우저의 오늘(로컬 달력)로 계산한다 — 빌드 시각이 박히지 않고, 탭을 열어 둔 채 자정이 지나면 주차·잠금이 따라 바뀐다.
+  // 서버 렌더·하이드레이션 중에는 null이라 제목만 그린다(이 컴포넌트는 hydrated 뒤에만 마운트된다).
+  const today = useLocalDay();
+  if (today === null) return <ScreenHeader title={EXERCISE_TEXT.headerTitle} />;
   const { deliveryMethod: delivery, deliveryDate } = state.profile;
-  const week = exerciseWeek(deliveryDate, now);
+  const week = exerciseWeek(deliveryDate, today);
   const gate = exerciseGate(delivery, deliveryDate, isRedFlagActive(state.symptomHistory));
   const subtitle = exerciseSubtitle(delivery, week);
 
