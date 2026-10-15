@@ -45,9 +45,14 @@ export interface WebPolicyOptions {
    * 켜면 알림 정보(구독 주소·암호화 키·시간대 — 2·3·5절)와 알림을 전달하는 브라우저 푸시 서비스(6절)를 적는다.
    */
   reminders: boolean;
+  /**
+   * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(features/youtube/catalog.ts YOUTUBE_ACTIVE — 승인된 영상이 하나라도 실렸을 때).
+   * 켜면 미리보기 이미지를 불러오는 Google LLC(YouTube)를 6·7·11절에 적는다. 생략하면 false.
+   */
+  youtube?: boolean;
 }
 
-export const DEFAULT_WEB_POLICY_OPTIONS: WebPolicyOptions = { turnstile: false, reminders: false };
+export const DEFAULT_WEB_POLICY_OPTIONS: WebPolicyOptions = { turnstile: false, reminders: false, youtube: false };
 
 /** 국외 이전 블록 번호 — 선택 블록(푸시·Turnstile)이 빠지면 번호가 당겨진다 */
 const CIRCLED = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧"] as const;
@@ -63,6 +68,8 @@ function processorLines(o: WebPolicyOptions): string[] {
     "• Anthropic, PBC: AI 상담, 약물·음식 체크(안전표에 없는 항목)의 답변 생성(이용자가 동의한 경우에만)",
     "• Render: 운동 영상 목록 서버 운영",
     ...(o.turnstile ? ["• Cloudflare, Inc.: 자동 가입 방지 확인(Turnstile)"] : []),
+    // 웹 신규 문구 — CPO 확인 필요. 유튜브 추천 영상 — 브라우저가 미리보기(i.ytimg.com)를 불러온다(src/features/youtube)
+    ...(o.youtube === true ? ["• Google LLC: 운동 탭 유튜브 추천 영상의 미리보기 이미지 제공(YouTube)"] : []),
   ];
 }
 
@@ -124,6 +131,18 @@ function transferBlocks(o: WebPolicyOptions): string[] {
       "– 목적: 자동 가입 방지",
       "– 보유 기간: Cloudflare의 정책에 따른 기간",
       "– 거부 방법과 효과: 게스트 시작에 필요해 거부하면 게스트로 이용할 수 없습니다. 카카오 로그인에는 쓰지 않습니다.",
+    ]);
+  }
+  if (o.youtube === true) {
+    // 웹 신규 문구 — CPO 확인 필요. 유튜브 추천 영상 — 목록은 빌드 때 정해지고(브라우저는 YouTube API를 부르지 않는다), 화면이 미리보기 이미지를
+    // i.ytimg.com에서 Referer 없이 불러온다(YouTubeSection.tsx referrerPolicy). 영상은 youtube.com 새 탭으로 열린다(opener·Referer 없음).
+    blocks.push([
+      "Google LLC (미국)",
+      `– 이전 항목: ${ACCESS_LOG_ITEMS}`,
+      "– 이전 시기·방법: 운동 탭에 유튜브 추천 영상 목록이 보일 때 미리보기 이미지를 YouTube 서버에서 불러오며 자동으로 전송",
+      "– 목적: 유튜브 추천 영상의 미리보기 이미지 표시",
+      "– 보유 기간: Google의 정책에 따른 기간",
+      "– 거부 방법과 효과: 운동 탭을 쓰지 않으면 전송되지 않습니다. 영상을 누르면 YouTube가 새 탭에서 열리며, 그때부터는 YouTube(Google)의 개인정보처리방침이 적용됩니다.",
     ]);
   }
   return blocks.map(([head, ...rest], i) => [`${CIRCLED[i]} ${head}`, ...rest].join("\n"));
@@ -232,6 +251,10 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
         "• 로그인 상태 유지와 기록의 임시 보관을 위해 브라우저 저장소(localStorage)에 로그인 정보와 기록 사본을 저장합니다.",
         "• 브라우저 설정에서 사이트 데이터를 지워 거부할 수 있습니다. 이 경우 로그인이 풀리고, 서버에 저장되지 않은 기록은 사라질 수 있습니다.",
         "• 가까운 산부인과 찾기의 지도는 카카오 서비스를 불러오므로, 이때 카카오의 정책이 함께 적용됩니다.",
+        // 웹 신규 문구 — CPO 확인 필요. 유튜브 추천 영상이 있는 빌드에서만
+        ...(o.youtube === true
+          ? ["• 운동 탭의 유튜브 추천 영상은 미리보기 이미지를 YouTube(Google) 서버에서 불러오므로, 이때 Google의 정책이 함께 적용됩니다."]
+          : []),
       ].join("\n"),
     },
     {

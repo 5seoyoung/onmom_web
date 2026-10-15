@@ -40,13 +40,14 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
     }
   });
 
-  it("웹 처리방침 초안 — 모든 절의 모든 줄(Turnstile·매일 리마인더를 쓰는 빌드 — 하나만·둘 다 — 포함)", () => {
+  it("웹 처리방침 초안 — 모든 절의 모든 줄(Turnstile·매일 리마인더를 쓰는 빌드 — 하나만·둘 다 — 와 유튜브 추천 영상이 있는 빌드 포함)", () => {
     const web = policyFor({ serverStorage: true });
     for (const t of [web.draftLabel!, web.effective, web.note]) expect(DOC, t).toContain(t);
     const variants = [
       { turnstile: true, reminders: false },
       { turnstile: false, reminders: true },
       { turnstile: true, reminders: true },
+      { turnstile: true, reminders: true, youtube: true },
     ].flatMap((o) => webPolicySections(o));
     for (const s of [...web.sections, ...variants]) {
       expect(DOC, s.title).toContain(s.title);

@@ -6,6 +6,7 @@
 //   iOS 방침은 서버 저장을 부정하므로("별도의 회원 데이터베이스를 운영하지 않습니다") 이 빌드에서는 보이지 않는다.
 
 import { config, isReminderConfigured, isSupabaseConfigured } from "@/config";
+import { YOUTUBE_ACTIVE } from "@/features/youtube/catalog";
 import {
   PRIVACY_POLICY_EFFECTIVE,
   PRIVACY_POLICY_SECTIONS,
@@ -64,10 +65,11 @@ export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIO
 
 /**
  * 이 빌드의 방침 옵션 — Turnstile 사이트 키(NEXT_PUBLIC_TURNSTILE_SITE_KEY)가 있으면 Cloudflare를 적고(src/auth/turnstile.ts),
- * 매일 리마인더를 켤 수 있으면(Supabase + NEXT_PUBLIC_VAPID_PUBLIC_KEY — config.isReminderConfigured) 알림 정보·푸시 서비스를 적는다.
+ * 매일 리마인더를 켤 수 있으면(Supabase + NEXT_PUBLIC_VAPID_PUBLIC_KEY — config.isReminderConfigured) 알림 정보·푸시 서비스를 적고,
+ * 유튜브 추천 영상이 실린 빌드면(features/youtube/catalog.ts YOUTUBE_ACTIVE) 미리보기 이미지를 주는 Google을 적는다.
  */
 export function activeWebPolicyOptions(): WebPolicyOptions {
-  return { turnstile: config.turnstileSiteKey !== null, reminders: isReminderConfigured() };
+  return { turnstile: config.turnstileSiteKey !== null, reminders: isReminderConfigured(), youtube: YOUTUBE_ACTIVE };
 }
 
 /** 이 빌드의 방침 — 빌드 때 정해지는 값(NEXT_PUBLIC_*)이라 서버 HTML과 브라우저가 같다 */
