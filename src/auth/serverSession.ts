@@ -7,17 +7,45 @@
 // 판단 근거는 이 브라우저에 저장된 세션과 그 세션 사용자의 앱 계정(kakaoAccount.accountFromSessionUser — session.ts sessionIs와 같은 규칙).
 // 네트워크 요청은 하지 않는다(세션 읽기는 저장소에서 — 만료됐으면 supabase-js가 갱신을 시도한다).
 
-/** checking = 아직 읽는 중이거나 읽지 못함, server = 이 계정의 세션이 있다, none = 없다 */
+/** checking = 아직 읽는 중(읽지 못해 다시 읽는 중 포함), server = 이 계정의 세션이 있다, none = 없다(또는 끝내 읽지 못했다) */
 export type ServerSessionStatus = "checking" | "server" | "none";
 
 /**
  * 세션을 읽은 결과.
  * - undefined: 아직 읽지 않았다
- * - "error": 읽지 못했다(번들을 못 받음·갱신 실패 등) — 모른다
+ * - "error": 읽지 못했다(번들을 못 받음·갱신 실패 등) — 모른다. 잠시 뒤 다시 읽는다(readSessionWithRetry)
+ * - "unavailable": 다시 읽어도(SESSION_READ_RETRY_DELAYS_MS) 끝내 읽지 못했다 — 서버 세션이 없는 것으로 본다(토글을 영영 잠가 두지 않는다)
  * - null: 세션이 없다
  * - { accountId }: 세션 사용자의 앱 계정 id(카카오·익명 게스트가 아니면 null)
  */
-export type SessionRead = undefined | "error" | null | { accountId: string | null };
+export type SessionRead = undefined | "error" | "unavailable" | null | { accountId: string | null };
+
+/** 한 번 읽은 값 — 아직 읽지 않음·끝내 읽지 못함은 읽는 쪽(readSessionWithRetry)이 정한다 */
+export type SessionReadAttempt = Exclude<SessionRead, undefined | "unavailable">;
+
+/** 세션을 읽지 못했을 때 다시 읽는 간격 — 이만큼 다시 해도 못 읽으면 "unavailable"(none) */
+export const SESSION_READ_RETRY_DELAYS_MS: readonly number[] = [1_000, 3_000, 10_000];
+
+/**
+ * 세션을 읽는다 — 읽지 못하면("error") 간격을 두고 몇 번 더(delaysMs), 그래도 못 읽으면 "unavailable".
+ * wait(ms)가 false를 돌려주면(화면을 떠남·계정이 바뀜) 그만 읽고 "unavailable"을 돌려준다(부르는 쪽은 그 값을 쓰지 않는다). 던지지 않는다.
+ */
+export async function readSessionWithRetry(
+  read: () => Promise<SessionReadAttempt>,
+  wait: (ms: number) => Promise<boolean>,
+  delaysMs: readonly number[] = SESSION_READ_RETRY_DELAYS_MS,
+): Promise<Exclude<SessionRead, undefined | "error">> {
+  for (let attempt = 0; ; attempt++) {
+    let result: SessionReadAttempt;
+    try {
+      result = await read();
+    } catch {
+      result = "error";
+    }
+    if (result !== "error") return result;
+    if (attempt >= delaysMs.length || !(await wait(delaysMs[attempt]))) return "unavailable";
+  }
+}
 
 export interface ServerSessionInput {
   /** Supabase 설정이 있는 빌드(config.isSupabaseConfigured) */
@@ -35,7 +63,7 @@ export function serverSessionStatus(input: ServerSessionInput): ServerSessionSta
   if (!input.storedSession) return "none";
   const s = input.session;
   if (s === undefined || s === "error") return "checking";
-  if (s === null) return "none";
+  if (s === null || s === "unavailable") return "none";
   // 다른 사용자의 세션(계정 전환 중 등)이면 이 계정의 서버 행을 쓸 수 없다
   return s.accountId === input.accountId ? "server" : "none";
 }

@@ -23,6 +23,7 @@ import {
   reminderView,
   sameApplicationServerKey,
   subscribedState,
+  type PushSubscriptionLike,
   type ReminderPermission,
   type ReminderView,
 } from "./reminderModel";
@@ -69,6 +70,38 @@ function currentPermission(): ReminderPermission | null {
   return normalizePermission(Notification.permission);
 }
 
+/** 토글의 켜짐을 읽는 데 쓰는 것(useReminder가 실제 브라우저·서버 것을 넣는다) */
+export interface ReminderProbeDeps {
+  accountId: string | null;
+  applicationServerKey: Uint8Array;
+  /** 앱을 열 때 맞추기가 끝나기를 기다린다(reminderActions.settleReminderReconcile) */
+  settle(accountId: string): Promise<void>;
+  currentSubscription(): Promise<Pick<PushSubscriptionLike, "endpoint" | "options"> | null>;
+  rowExists(endpoint: string): Promise<boolean | null>;
+  remember(accountId: string, endpoint: string): void;
+}
+
+/**
+ * 토글이 켜져 있는가 — 지금 빌드의 키로 만든 구독이 있고 그 끝점의 서버 행도 있을 때(reminderModel.subscribedState).
+ * 실제로 켜져 있으면 켜 둔 표시도 그 끝점으로 맞춘다(그만 읽게 됐으면 — isCancelled — 남기지 않는다).
+ * 던지지 않는다: 어디서든 실패하면(워커·서버·저장소 오류) 꺼짐으로 본다 — 읽기가 끝나지 않아 토글이 잠긴 채 남지 않게.
+ */
+export async function probeReminderSubscribed(deps: ReminderProbeDeps, isCancelled: () => boolean): Promise<boolean> {
+  try {
+    // 맞추기 전의 "꺼짐"(브라우저가 갈아 끼운 새 끝점의 행이 아직 없음)을 보이지 않게
+    if (deps.accountId !== null) await deps.settle(deps.accountId);
+    const subscription = await deps.currentSubscription();
+    const withCurrentKey = subscription !== null && sameApplicationServerKey(subscription.options.applicationServerKey, deps.applicationServerKey);
+    const rowExists = withCurrentKey ? await deps.rowExists(subscription.endpoint) : false;
+    if (!isCancelled() && deps.accountId !== null && subscription !== null && withCurrentKey && rowExists === true) {
+      deps.remember(deps.accountId, subscription.endpoint);
+    }
+    return subscribedState(withCurrentKey, rowExists);
+  } catch {
+    return false;
+  }
+}
+
 export function useReminder(): ReminderControl {
   const configured = isReminderConfigured();
   const { account } = useAppStore();
@@ -92,18 +125,31 @@ export function useReminder(): ReminderControl {
     const key = currentApplicationServerKey();
     if (!needsProbe || key === null) return;
     let cancelled = false;
-    (async () => {
-      // 맞추기 전의 "꺼짐"(브라우저가 갈아 끼운 새 끝점의 행이 아직 없음)을 보이지 않게
-      if (accountId !== null) await settleReminderReconcile(accountId);
-      const subscription = await currentPushSubscription(config.basePath);
-      const withCurrentKey = subscription !== null && sameApplicationServerKey(subscription.options.applicationServerKey, key);
-      const rowExists = withCurrentKey ? await hasPushSubscriptionRow(subscription.endpoint) : false;
-      if (cancelled) return;
-      if (accountId !== null && subscription !== null && withCurrentKey && rowExists === true) rememberReminder(accountId, subscription.endpoint);
-      setPermission(currentPermission());
-      setSubscribed(subscribedState(withCurrentKey, rowExists));
-      setProbed(true);
-    })();
+    let subscribedNow = false;
+    void probeReminderSubscribed(
+      {
+        accountId,
+        applicationServerKey: key,
+        settle: settleReminderReconcile,
+        currentSubscription: () => currentPushSubscription(config.basePath),
+        rowExists: hasPushSubscriptionRow,
+        remember: rememberReminder,
+      },
+      () => cancelled,
+    )
+      .then((on) => {
+        subscribedNow = on;
+      })
+      .catch(() => {
+        subscribedNow = false; // 읽지 못했다 — 꺼짐으로 보인다
+      })
+      .finally(() => {
+        // 어떻게 끝나든 읽기를 끝낸다 — probed가 false로 남으면 토글이 영영 잠긴다
+        if (cancelled) return;
+        setPermission(currentPermission());
+        setSubscribed(subscribedNow);
+        setProbed(true);
+      });
     return () => {
       cancelled = true;
     };

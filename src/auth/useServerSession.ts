@@ -3,17 +3,19 @@
 // 화면에서 쓰는 "이 계정의 서버 세션이 있는가"(serverSession.ts). 설정 > 알림이 토글을 보일지 정할 때 쓴다.
 // 설정 없는 빌드·로그아웃·저장된 세션 없음이면 요청 없이 "none". 저장된 세션이 있으면 supabase-js에서 한 번 읽는다(네트워크 없음 —
 // 만료된 토큰이면 supabase-js가 갱신을 시도한다). 계정이 바뀌거나 동기화가 켜지고 꺼질 때(세션 복원·익명 계정으로 옮김·로그아웃) 다시 읽는다.
+// 읽지 못하면(번들을 못 받음·갱신 실패) 잠시 뒤 몇 번 더 읽고(serverSession.readSessionWithRetry), 끝내 못 읽으면 "none" —
+// "checking"(잠긴 토글)으로 영영 남지 않는다. 그 뒤 동기화가 켜지면(온라인이 되어 세션 복원) 다시 읽는다.
 
 import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "@/config";
 import { useAppStore } from "@/store/useAppStore";
 import { getSupabaseClient, hasStoredAuthSession } from "./client";
 import { accountFromSessionUser } from "./kakaoAccount";
-import { serverSessionStatus, type ServerSessionStatus, type SessionRead } from "./serverSession";
+import { readSessionWithRetry, serverSessionStatus, type ServerSessionStatus, type SessionRead, type SessionReadAttempt } from "./serverSession";
 import { useSyncStatus } from "./useAuth";
 
-/** 저장된 세션의 사용자 → 앱 계정 id. 읽지 못하면 "error"(모른다 — 토글을 잠근 채 둔다). */
-async function readSessionAccount(): Promise<Exclude<SessionRead, undefined>> {
+/** 저장된 세션의 사용자 → 앱 계정 id. 읽지 못하면 "error"(모른다 — 잠시 뒤 다시 읽는다). */
+async function readSessionAccount(): Promise<SessionReadAttempt> {
   try {
     const client = await getSupabaseClient();
     if (!client) return "error";
@@ -38,11 +40,25 @@ export function useServerSession(): ServerSessionStatus {
   useEffect(() => {
     if (!storedSession) return;
     let cancelled = false;
-    void readSessionAccount().then((session) => {
+    /** 다시 읽기를 기다리는 중이면 그 기다림을 끝내는 함수(화면을 떠나거나 계정·동기화 상태가 바뀌면 그만 읽는다) */
+    let stopWaiting: (() => void) | null = null;
+    const wait = (ms: number) =>
+      new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => {
+          stopWaiting = null;
+          resolve(!cancelled);
+        }, ms);
+        stopWaiting = () => {
+          clearTimeout(timer);
+          resolve(false);
+        };
+      });
+    void readSessionWithRetry(readSessionAccount, wait).then((session) => {
       if (!cancelled) setRead({ key, session });
     });
     return () => {
       cancelled = true;
+      stopWaiting?.();
     };
   }, [storedSession, key]);
 
