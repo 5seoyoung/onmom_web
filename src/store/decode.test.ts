@@ -189,6 +189,18 @@ describe("decodePersisted — 없는 키는 기본값", () => {
     const s = decodePersisted({ symptomHistory: [{ id: "x", date: 780000000 }] }, deps());
     expect(s.symptomHistory[0].postpartumDays).toBeNull();
   });
+
+  it("통증 NRS는 0~10으로 맞춘다 — 범위 밖 정수는 끝값, 정수가 아니면 지금처럼 0(손상·다른 기기의 값)", () => {
+    const pains = [0, 10, 7, 11, 99, -1, -50, 3.5, Number.MAX_SAFE_INTEGER, "8", null];
+    const s = decodePersisted({ symptomHistory: pains.map((painNrs, i) => ({ id: `p${i}`, painNrs })) }, deps());
+    expect(s.symptomHistory.map((r) => r.painNrs)).toEqual([0, 10, 7, 10, 10, 0, 0, 0, 10, 0, 0]);
+  });
+
+  it("산후 일수는 0 이상의 정수만 — 음수·소수·숫자가 아닌 값은 null(오로 판정 보류)", () => {
+    const days = [0, 1, 400, -1, -30, 2.5, Number.NaN, Number.POSITIVE_INFINITY, "12", null];
+    const s = decodePersisted({ symptomHistory: days.map((postpartumDays, i) => ({ id: `d${i}`, postpartumDays })) }, deps());
+    expect(s.symptomHistory.map((r) => r.postpartumDays)).toEqual([0, 1, 400, null, null, null, null, null, null, null]);
+  });
 });
 
 describe("decodePersisted — 모르는 값·틀린 타입", () => {

@@ -14,6 +14,7 @@
 
 import { parseLocalDate, toLocalDateString } from "@/domain/date";
 import { normalizeMoodAnswer } from "@/rules/mood";
+import { clampNrs } from "@/rules/record";
 import type {
   CommunityComment,
   CommunityPost,
@@ -53,6 +54,8 @@ const num = (v: unknown, fallback: number): number => (typeof v === "number" && 
 const int = (v: unknown, fallback: number): number => (typeof v === "number" && Number.isInteger(v) ? v : fallback);
 const str = (v: unknown, fallback: string): string => (typeof v === "string" ? v : fallback);
 const nonEmptyString = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
+/** 0 이상의 정수(일수) */
+const isDayCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
 /** 비울 수 있는 필드(iOS Optional) — null은 "비움", 못 읽는 값은 fallback. */
 function nullable<T>(v: unknown, decode: (v: unknown) => T | null, fallback: T | null): T | null {
@@ -156,10 +159,12 @@ function decodeSymptomRecord(raw: Json, deps: DecodeDeps): SymptomRecord {
     lochiaIncreased: bool(raw.lochiaIncreased, false),
     lochiaRed: bool(raw.lochiaRed, false),
     feverEvent: bool(raw.feverEvent, false),
-    painNrs: int(raw.painNrs, 0),
+    // 통증 NRS는 0~10 — 손상·다른 기기가 남긴 범위 밖 값은 끝값으로(rules/record clampNrs — 슬라이더·판정과 같은 규칙). 정수가 아니면 지금처럼 0.
+    painNrs: clampNrs(int(raw.painNrs, 0)),
     redFlagCode: typeof raw.redFlagCode === "string" ? raw.redFlagCode : null,
     // 구버전 기록에는 없다 — null이면 오로 판정을 보류한다(AppStore.swift:243-246).
-    postpartumDays: typeof raw.postpartumDays === "number" && Number.isInteger(raw.postpartumDays) ? raw.postpartumDays : null,
+    // 산후 일수는 0 이상의 정수다(domain/date postpartumDayCount) — 음수·소수(손상)도 null(판정 보류).
+    postpartumDays: isDayCount(raw.postpartumDays) ? raw.postpartumDays : null,
   };
 }
 
