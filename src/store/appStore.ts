@@ -48,7 +48,8 @@ export interface AppActions {
   /** 로그아웃 — 계정만 지운다. 데이터는 남고, 다음에 다른 실제 계정·게스트가 들어오면 그때 지운다(iOS와 같음). */
   signOut(): void;
   /**
-   * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id·로그인 세션 등 "onmom.web." 키 전부 삭제.
+   * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id·로그인 세션 등 "onmom.web." 키 전부 삭제,
+   * 서비스 워커 캐시(연 화면의 주소)도 지운다(AppStoreDeps.clearSiteCaches — 기다리지 않음).
    * 서버 탈퇴는 src/auth deleteAccountEverywhere가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
    */
   deleteAccount(): void;
@@ -106,6 +107,11 @@ export interface AppStoreDeps {
    * 멈춰 있던 동안 놓친 다른 탭의 변경을 보이게. 반환값은 해제 함수.
    */
   watchResume?: (onResume: () => void) => () => void;
+  /**
+   * 계정 삭제 때 이 사이트의 서비스 워커 캐시(연 화면의 주소 등)를 지운다(브라우저: siteCaches.clearServiceWorkerCaches).
+   * 기다리지 않고, 던지거나 실패해도 계정 삭제는 그대로 끝난다. 없으면(테스트·서버) 하지 않는다.
+   */
+  clearSiteCaches?: () => unknown;
 }
 
 /** 저장소를 읽기 전 스냅샷 — 서버와 하이드레이션 첫 렌더가 같은 값을 보도록 모듈 상수로 둔다. */
@@ -174,6 +180,15 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
   function eraseStorage(options?: EraseOptions) {
     persistence.eraseAll(options);
     guestIDCache = null;
+  }
+
+  /** 계정 삭제 — 서비스 워커 캐시도 지운다(deps.clearSiteCaches). 기다리지 않고, 실패해도 삭제를 막지 않는다. */
+  function clearSiteCaches() {
+    try {
+      void Promise.resolve(deps.clearSiteCaches?.()).catch(() => undefined);
+    } catch {
+      // 캐시를 지우지 못해도 계정 삭제는 그대로
+    }
   }
 
   /**
@@ -282,6 +297,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     deleteAccount() {
       ensureLoaded();
       eraseStorage();
+      clearSiteCaches();
       // 키를 전부 지웠으니 저장소 = 초기 상태 — 쓸 수 있으면 저장된 것으로 본다.
       storageOk = persistence.isAvailable();
       const erased = S.eraseAll();

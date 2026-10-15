@@ -4,6 +4,7 @@
 import { createAppStore, type AppStore } from "./appStore";
 import { randomId } from "./ids";
 import { browserLocalStorage, createStoragePersistence, watchBrowserStorage, watchPageResume } from "./persistence";
+import { clearServiceWorkerCaches } from "./siteCaches";
 
 let browserStore: AppStore | null = null;
 
@@ -14,6 +15,8 @@ export function getBrowserStore(): AppStore {
     newId: randomId,
     watchExternalChanges: watchBrowserStorage,
     watchResume: watchPageResume,
+    // 계정 삭제 때 서비스 워커 캐시(연 화면의 주소 — /journal/post/?id=… 등)도 지운다
+    clearSiteCaches: () => clearServiceWorkerCaches(),
   });
   return browserStore;
 }
