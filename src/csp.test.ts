@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildCsp, cspDirectives, cspMetaContent, httpsOrigin, SCRIPT_HASHES_PLACEHOLDER, type CspInput } from "./csp";
+import { YOUTUBE_ACTIVE } from "@/features/youtube/catalog";
+import { THUMBNAIL_HOST } from "@/features/youtube/youtubeCore.mjs";
+import { buildCsp, cspDirectives, cspMetaContent, httpsOrigin, SCRIPT_HASHES_PLACEHOLDER, YOUTUBE_THUMBNAIL_ORIGIN, type CspInput } from "./csp";
 
 const NONE: CspInput = { supabaseUrl: null, kakaoJsKey: null, turnstileSiteKey: null, legacyBackends: [] };
 const ALL: CspInput = {
@@ -7,6 +9,7 @@ const ALL: CspInput = {
   kakaoJsKey: "kakao-js-key",
   turnstileSiteKey: "turnstile-site-key",
   legacyBackends: [null, "https://llm.onmom.test/v1/", null],
+  youtubeThumbnails: true,
 };
 
 const directive = (input: CspInput, name: string) => cspDirectives(input).find(([k]) => k === name)?.[1];
@@ -54,6 +57,23 @@ describe("CSP — 설정된 기능의 출처만 넣는다", () => {
     expect(directive(k, "connect-src")).toEqual(["'self'", "dapi.kakao.com"]);
     expect(directive(k, "img-src")).toEqual(["'self'", "data:", "blob:", "*.daumcdn.net"]);
     expect(buildCsp({ ...NONE, kakaoJsKey: "  " })).not.toContain("kakao");
+  });
+
+  it("유튜브 추천 영상 — 목록이 있는 빌드(youtubeThumbnails)에만 img-src에 미리보기 호스트(https만), 다른 지시어는 그대로", () => {
+    const y = { ...NONE, youtubeThumbnails: true };
+    expect(directive(y, "img-src")).toEqual(["'self'", "data:", "blob:", "https://i.ytimg.com"]);
+    expect(new URL(YOUTUBE_THUMBNAIL_ORIGIN).hostname).toBe(THUMBNAIL_HOST); // 생성 목록이 쓰는 호스트와 같다(youtubeCore.mjs)
+    for (const name of ["script-src", "connect-src", "frame-src", "media-src"]) expect(directive(y, name), name).toEqual(directive(NONE, name));
+    expect(buildCsp(y)).not.toMatch(/youtube\.com|googleapis|google\.com/);
+    // 꺼져 있거나(false) 값이 없으면 유튜브·Google 출처가 없다
+    expect(buildCsp({ ...NONE, youtubeThumbnails: false })).not.toContain("ytimg");
+    expect(buildCsp(NONE)).not.toContain("ytimg");
+    expect(directive({ ...ALL, kakaoJsKey: "k" }, "img-src")).toEqual(["'self'", "data:", "blob:", "*.daumcdn.net", "https://i.ytimg.com"]);
+  });
+
+  it("이 빌드(저장소의 빈 허용 목록)는 유튜브 플래그가 꺼져 있다 — CSP 메타에 i.ytimg.com이 없다", () => {
+    expect(YOUTUBE_ACTIVE).toBe(false);
+    expect(cspMetaContent({ ...NONE, youtubeThumbnails: YOUTUBE_ACTIVE }, "production")).not.toContain("ytimg");
   });
 
   it("Turnstile — 사이트 키가 있을 때만 스크립트·iframe", () => {

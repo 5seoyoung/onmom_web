@@ -31,6 +31,12 @@ export interface CspInput {
   turnstileSiteKey: string | null;
   /** Supabase가 없을 때 직접 부르는 예전 백엔드(NEXT_PUBLIC_VIDEO_URL·LLM_URL·ACCOUNT_URL) — connect-src에만 */
   legacyBackends: readonly (string | null)[];
+  /**
+   * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(빌드 플래그 features/youtube/catalog.ts YOUTUBE_ACTIVE — 허용 목록과 맞춘 생성 목록이
+   * 비지 않았을 때만 true). true면 img-src에 미리보기 호스트(i.ytimg.com)만 연다. 영상은 youtube.com 새 탭으로 열어 frame-src는 그대로다.
+   * 없으면 false(목록이 빈 빌드 — 지금 배포 — 는 유튜브·Google 출처가 없다).
+   */
+  youtubeThumbnails?: boolean;
 }
 
 // 카카오 지도 JS SDK — sdk.js(dapi.kakao.com)가 본체(t1.daumcdn.net/mapjsapi/…/kakao.js)를 페이지와 같은 scheme으로 부르고,
@@ -41,6 +47,8 @@ export const KAKAO_SCRIPT_ORIGINS = ["dapi.kakao.com", "t1.daumcdn.net"] as cons
 export const KAKAO_CONNECT_ORIGINS = ["dapi.kakao.com"] as const;
 export const KAKAO_IMG_ORIGINS = ["*.daumcdn.net"] as const;
 export const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+/** 유튜브 미리보기 이미지 — https만(youtubeCore.mjs THUMBNAIL_HOST와 같은 호스트, csp.test.ts가 확인) */
+export const YOUTUBE_THUMBNAIL_ORIGIN = "https://i.ytimg.com";
 
 /**
  * script-src의 인라인 스크립트 해시 자리 — 빌드 뒤 scripts/csp-hash.mjs가 그 페이지의 'sha256-…' 목록으로 바꾼다.
@@ -80,7 +88,7 @@ export function cspDirectives(input: CspInput): [string, string[]][] {
     ],
     // 스타일은 인라인 허용 그대로 — Next·React의 style 속성과 카카오 지도 SDK가 인라인 스타일을 쓴다
     ["style-src", ["'self'", "'unsafe-inline'"]],
-    ["img-src", uniq(["'self'", "data:", "blob:", ...(kakao ? KAKAO_IMG_ORIGINS : [])])],
+    ["img-src", uniq(["'self'", "data:", "blob:", ...(kakao ? KAKAO_IMG_ORIGINS : []), input.youtubeThumbnails === true ? YOUTUBE_THUMBNAIL_ORIGIN : null])],
     ["font-src", ["'self'"]],
     [
       "connect-src",

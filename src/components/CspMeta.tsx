@@ -2,6 +2,7 @@
 
 import { config } from "@/config";
 import { cspMetaContent } from "@/csp";
+import { YOUTUBE_ACTIVE } from "@/features/youtube/catalog";
 
 // CSP 메타(src/csp.ts) — 빌드 때 만드는 정적 HTML에만 싣고, 브라우저에서는 그리지 않는다(null). 운영 빌드에서만(개발 서버는 eval·HMR 필요).
 //
@@ -19,6 +20,7 @@ export function CspMeta() {
     kakaoJsKey: config.kakaoJsKey,
     turnstileSiteKey: config.turnstileSiteKey,
     legacyBackends: [config.videoURL, config.llmURL, config.accountURL],
+    youtubeThumbnails: YOUTUBE_ACTIVE,
   });
   return policy === null ? null : <meta httpEquiv="Content-Security-Policy" content={policy} />;
 }
