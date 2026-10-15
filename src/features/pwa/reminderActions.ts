@@ -128,41 +128,51 @@ export async function releaseReminderNow(): Promise<boolean> {
   return unsubscribeLocalPush(config.basePath);
 }
 
-/** 앱을 연 뒤 처음 시작한 맞추기 — 한 번만 돈다(PwaClient·설정 화면이 같은 것을 기다린다) */
-let reconciling: Promise<void> | null = null;
+/**
+ * 계정마다 한 번만 도는 작업 — 같은 계정이면 처음 시작한 약속을 돌려준다(PwaClient·설정 화면이 같은 것을 기다린다).
+ * 이 페이지에서 계정이 바뀌면(로그아웃 뒤 다른 계정·게스트 → 카카오) 새 계정은 따로 한 번 돈다 — 앞 계정의 약속을 돌려주지 않는다.
+ */
+export function oncePerAccount(run: (accountId: string) => Promise<void>): (accountId: string) => Promise<void> {
+  const started = new Map<string, Promise<void>>();
+  return (accountId) => {
+    let job = started.get(accountId);
+    if (job === undefined) {
+      job = run(accountId);
+      started.set(accountId, job);
+    }
+    return job;
+  };
+}
 
 /**
- * 앱을 열 때 한 번 — 이 브라우저에서 켜 둔 알림의 구독을 브라우저가 갈아 끼웠거나 잃었으면 서버 행을 맞춘다(reminderModel.reconcileReminder).
+ * 앱을 열 때 계정마다 한 번 — 이 브라우저에서 켜 둔 알림의 구독을 브라우저가 갈아 끼웠거나 잃었으면 서버 행을 맞춘다(reminderModel.reconcileReminder).
  * 켜 둔 표시가 없거나 권한이 허용이 아니면 워커·서버에 묻지 않는다(요청 없음). 권한은 묻지 않는다. 던지지 않는다.
  * 부르는 쪽이 Supabase + VAPID 설정(config.isReminderConfigured)과 푸시 지원(serviceWorker.pushSupported)을 확인한 뒤에 부른다.
  */
-export function reconcileReminderOnce(accountId: string): Promise<void> {
-  reconciling ??= (async () => {
-    const key = currentApplicationServerKey();
-    if (key === null) return;
-    try {
-      await reconcileReminder({
-        applicationServerKey: key,
-        setting: () => readReminderSetting(accountId),
-        permission: currentPermission,
-        // 이미 있는 워커만 — 앱을 열 때 새로 등록하거나 활성화를 기다리지 않는다(켤 때 등록한 워커가 있다)
-        pushManager: async () => {
-          const registration = await getServiceWorkerRegistration(config.basePath);
-          return registration?.active ? registration.pushManager : null;
-        },
-        listRows: () => listPushSubscriptionRows(accountId),
-        timeZone: browserTimeZone,
-        save: savePushSubscription,
-        deleteRow: deletePushSubscription,
-        remember: (endpoint) => rememberReminder(accountId, endpoint),
-        forget: forgetReminder,
-      });
-    } catch {
-      // 다음에 앱을 열 때 다시 — 설정 화면은 실제 상태를 보인다
-    }
-  })();
-  return reconciling;
-}
+export const reconcileReminderOnce: (accountId: string) => Promise<void> = oncePerAccount(async (accountId) => {
+  const key = currentApplicationServerKey();
+  if (key === null) return;
+  try {
+    await reconcileReminder({
+      applicationServerKey: key,
+      setting: () => readReminderSetting(accountId),
+      permission: currentPermission,
+      // 이미 있는 워커만 — 앱을 열 때 새로 등록하거나 활성화를 기다리지 않는다(켤 때 등록한 워커가 있다)
+      pushManager: async () => {
+        const registration = await getServiceWorkerRegistration(config.basePath);
+        return registration?.active ? registration.pushManager : null;
+      },
+      listRows: () => listPushSubscriptionRows(accountId),
+      timeZone: browserTimeZone,
+      save: savePushSubscription,
+      deleteRow: deletePushSubscription,
+      remember: (endpoint) => rememberReminder(accountId, endpoint),
+      forget: forgetReminder,
+    });
+  } catch {
+    // 다음에 앱을 열 때 다시 — 설정 화면은 실제 상태를 보인다
+  }
+});
 
 /** 설정 화면이 상태를 읽기 전에 맞추기가 끝나기를 기다린다 — 오래 걸리면(느린 연결) 기다리지 않는다(토글을 오래 잠그지 않게) */
 export async function settleReminderReconcile(accountId: string, timeoutMs = 4000): Promise<void> {
