@@ -20,6 +20,11 @@ import {
   type SubstanceVerdict,
 } from "@/rules/substance";
 
+/** 화면 문구 중 페이지(src/app/(app)/substance/page.tsx — 문서 제목)와 화면이 함께 쓰는 것 */
+export const SUBSTANCE_TEXT = {
+  title: "약물·음식 체크", // 원문: SubstanceCheckView.swift:56
+} as const;
+
 /** src/api/llm.ts `llmComplete`와 같은 모양 — 테스트에서 가짜로 바꿔 넣는다. */
 export type LlmCompleteFn = (req: LLMRequest, opts?: LLMOptions) => Promise<LLMResult>;
 

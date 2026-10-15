@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { ChatScreen } from "@/features/chat/ChatScreen";
+import { CHAT_TEXT } from "@/features/chat/chatModel";
 
-export const metadata: Metadata = {
-  title: "AI 상담", // 원문: ChatView.swift:51
-};
+export const metadata: Metadata = { title: CHAT_TEXT.title };
 
 export default function Page() {
   return <ChatScreen />;

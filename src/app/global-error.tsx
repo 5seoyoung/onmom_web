@@ -3,6 +3,7 @@
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
 import { ErrorScreen } from "@/components/shell/ErrorScreen";
+import { SHARE_TEXT } from "@/features/meta/shareMeta";
 
 // 루트 레이아웃(src/app/layout.tsx — StoreProvider·AppGate)을 그리다 예외가 나면 레이아웃을 통째로 대신한다.
 // 그래서 <html>·<body>와 전역 스타일·글꼴을 스스로 갖춘다(error.md "Global Error"). metadata는 클라이언트 경계라 내보낼 수 없어 <title>로 둔다.
@@ -11,7 +12,7 @@ export default function GlobalError({ retry }: { error: Error & { digest?: strin
   return (
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full">
-        <title>온맘</title>
+        <title>{SHARE_TEXT.brand}</title>
         <ErrorScreen onRetry={retry} />
       </body>
     </html>

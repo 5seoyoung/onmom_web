@@ -19,6 +19,7 @@ import { aiMode, useAiConsent } from "@/features/chat/aiConsent";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
 import { useAppStore } from "@/store/useAppStore";
 import {
+  SUBSTANCE_TEXT,
   canCheckSubstance,
   checkSubstance,
   createLatestOnly,
@@ -34,8 +35,6 @@ import { ROUTES } from "@/routes";
 const PLACEHOLDER = "예: 타이레놀, 카페인, 이부프로펜";
 // 원문: SubstanceCheckView.swift:41
 const SUBMIT_LABEL = "확인하기";
-// 원문: SubstanceCheckView.swift:56
-const TITLE = "약물·음식 체크";
 // 웹 신규 문구 — CPO 확인 필요 (조회 중 스피너의 화면 낭독용 이름. 화면에는 보이지 않는다)
 const LOADING_SR_LABEL = "확인하고 있어요";
 // 웹 신규 문구 — CPO 확인 필요 (AI가 답에 제시한 출처 칩 앞에 화면 낭독용으로만 붙는다 — 공용 출처 칩의 "출처: "와 구분. 화면에는 보이지 않는다)
@@ -136,7 +135,7 @@ export function SubstanceCheckScreen() {
   return (
     // PC 틀은 pageFrame(읽기 화면 — 최대 48rem, 왼쪽 정렬): 입력과 결과가 한눈에, 머리 위치는 다른 화면과 같다. 폰 기둥(30rem)에서는 그대로.
     <main className={cx("flex flex-1 flex-col px-6 pt-2 pb-6", PAGE_FRAME.reading)}>
-      <SubPageHeader title={TITLE} backHref={ROUTES.profile} hideBackWithSidebar />
+      <SubPageHeader title={SUBSTANCE_TEXT.title} backHref={ROUTES.profile} hideBackWithSidebar />
 
       {/* 저장소를 읽기 전에는 수유 여부를 모른다 — 기본값 문구를 번쩍이지 않게 그리지 않는다 */}
       {hydrated ? (

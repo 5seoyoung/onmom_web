@@ -2,6 +2,7 @@ import { Children, isValidElement, type ReactNode } from "react";
 import { FileSearch } from "lucide-react";
 import { cx } from "./cx";
 import { parseEvidenceToken } from "./evidence";
+import { UI_TEXT } from "./uiText";
 
 /**
  * default = 밝은 표면 위(AnalyzeComponents.swift:42-66)
@@ -24,7 +25,7 @@ export interface EvidenceChipProps {
 export function EvidenceChip({ token, tone = "default" }: EvidenceChipProps) {
   const { text, isSource } = parseEvidenceToken(token);
   // 스크린리더에는 아이콘 대신 "출처"를 읽어 준다(아이콘·색만으로 구분하지 않기).
-  const sourceHint = isSource ? <span className="sr-only">출처: </span> : null;
+  const sourceHint = isSource ? <span className="sr-only">{UI_TEXT.sourceHint}</span> : null;
 
   if (tone === "inverse") {
     return (

@@ -26,6 +26,7 @@ import { AiConsentCard } from "./AiConsentCard";
 import { aiMode, useAiConsent } from "./aiConsent";
 import {
   CHAT_ORIGIN_CAPTION,
+  CHAT_TEXT,
   canSendChat,
   chatBackHref,
   chatBannerText,
@@ -41,8 +42,6 @@ import {
   type ChatFallbackReason,
 } from "./chatModel";
 
-// 원문: ChatView.swift:51
-const TITLE = "AI 상담";
 // 원문: ChatView.swift:90
 const INPUT_PLACEHOLDER = "메시지를 입력하세요";
 // 원문: ChatView.swift:102
@@ -210,7 +209,7 @@ export function ChatScreen() {
   return (
     <main className="@container flex h-dvh flex-col">
       <div className={cx(CHAT_COLUMN, "px-6 pt-2", PAGE_EDGE_TOP)}>
-        <SubPageHeader title={TITLE} backHref={backHref} hideBackWithSidebar />
+        <SubPageHeader title={CHAT_TEXT.title} backHref={backHref} hideBackWithSidebar />
       </div>
 
       {/* 첫머리는 이유에 맞게 — 미설정이면 원문("연결되지 않아"), 이번에 AI 동의를 거절했으면 "동의하지 않아", 한도·혼잡·거절은 서버 답에 따라 */}

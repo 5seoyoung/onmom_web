@@ -8,6 +8,7 @@ import { cx } from "./cx";
 import { readHistorySnapshot } from "./historySnapshot";
 import { ScreenHeader } from "./ScreenHeader";
 import { canLeaveWithHistoryBack } from "./subPageExit";
+import { UI_TEXT } from "./uiText";
 
 export interface SubPageHeaderProps {
   title: ReactNode;
@@ -34,7 +35,7 @@ export function SubPageHeader({
   title,
   subtitle,
   backHref = ROUTES.home,
-  backLabel = "뒤로",
+  backLabel = UI_TEXT.back,
   action,
   hideBackWithSidebar = false,
 }: SubPageHeaderProps) {
