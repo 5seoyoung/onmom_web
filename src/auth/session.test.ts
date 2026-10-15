@@ -8,7 +8,7 @@ import { createMemoryStorage, createStoragePersistence, STORAGE_PREFIX, type Sto
 import { createStorageSyncMarks, type SyncMarks } from "@/store/sync/marks";
 import { FakeRemote } from "@/store/sync/testUtils";
 import { AUTH_FLOW_KEY, createAuthFlowStore, type AuthFlowStore } from "./authFlow";
-import { adoptsLocalRecords, createAuthSessionManager, type AuthSessionManager } from "./session";
+import { adoptsLocalRecords, consentPredatesUser, createAuthSessionManager, type AuthSessionManager } from "./session";
 import type { CaptchaResult } from "./turnstile";
 
 const START = new Date("2026-09-28T12:00:00+09:00");
@@ -27,6 +27,8 @@ const REDIRECT = "https://5seoyoung.github.io/auth/callback/"; // 테스트는 b
 // Supabase Auth가 돌려주는 사용자 모양 — 테스트 입력용
 interface FakeUser {
   id: string;
+  /** Supabase가 사용자를 만든 시각 — 없으면(대부분의 시험) 다시 가입 판단(consentPredatesUser)을 하지 않는다 */
+  created_at?: string;
   is_anonymous: boolean;
   app_metadata: Record<string, unknown>;
   user_metadata: Record<string, unknown>;
@@ -43,19 +45,27 @@ interface FakeSession {
 function session(user: FakeUser): FakeSession {
   return { access_token: `t-${user.id}`, refresh_token: "r", expires_in: 3600, token_type: "bearer", user };
 }
-/** 카카오 사용자 — userId는 Supabase 사용자 id(연결된 게스트면 게스트의 id 그대로) */
-function kakaoSession(memberId = MEMBER, nickname = "해님", userId = KAKAO_USER_ID): FakeSession {
+/** 카카오 사용자 — userId는 Supabase 사용자 id(연결된 게스트면 게스트의 id 그대로), createdAt은 그 사용자를 만든 시각 */
+function kakaoSession(memberId = MEMBER, nickname = "해님", userId = KAKAO_USER_ID, createdAt?: string): FakeSession {
   const data = { provider_id: memberId, sub: memberId, name: nickname };
   return session({
     id: userId,
+    ...(createdAt === undefined ? {} : { created_at: createdAt }),
     is_anonymous: false,
     app_metadata: { provider: "kakao" },
     user_metadata: data,
     identities: [{ provider: "kakao", id: memberId, identity_data: data }],
   });
 }
-function anonSession(userId: string): FakeSession {
-  return session({ id: userId, is_anonymous: true, app_metadata: { provider: "anonymous" }, user_metadata: {}, identities: [] });
+function anonSession(userId: string, createdAt?: string): FakeSession {
+  return session({
+    id: userId,
+    ...(createdAt === undefined ? {} : { created_at: createdAt }),
+    is_anonymous: true,
+    app_metadata: { provider: "anonymous" },
+    user_metadata: {},
+    identities: [],
+  });
 }
 
 type AnonError = { code?: string; status?: number; message: string };
@@ -120,7 +130,7 @@ function fakeClient(
         calls.push(`anon:${creds?.options?.captchaToken ?? "-"}`);
         if (init.anonError) return { data: { session: null, user: null }, error: init.anonError };
         anonCount += 1;
-        current = anonSession(`a0000000-0000-4000-8000-00000000000${anonCount}`);
+        current = anonSession(`a0000000-0000-4000-8000-00000000000${anonCount}`, clock.toISOString()); // 지금 만든 익명 사용자
         emit("SIGNED_IN");
         return { data: { session: current, user: current.user }, error: null };
       },
@@ -948,6 +958,126 @@ describe("이 브라우저에 남아 있던 기록을 가져온 카카오 로그
     expect(adoptsLocalRecords({ ...onboardedState(), ownerAccountID: null }, KAKAO_ACCOUNT)).toBe(true);
     // 다른 실제 계정의 기록은 로그인 때 지워진다 — 가져오지 않는다
     expect(adoptsLocalRecords({ ...onboardedState(), ownerAccountID: "kakao-999" }, KAKAO_ACCOUNT)).toBe(false);
+  });
+});
+
+describe("다른 기기에서 탈퇴한 뒤 같은 카카오 계정으로 다시 가입 — 이 브라우저에 남은 탈퇴 전 사본은 여기서 다시 동의받기 전에는 올리지 않는다", () => {
+  /** 다시 가입한 카카오 사용자 — 회원번호(앱 계정 id)는 같고 Supabase 사용자는 새로 만들어졌다 */
+  const REJOINED_USER_ID = "3f0f9b2e-0000-4000-8000-0000000000aa";
+  const rejoined = () => kakaoSession(MEMBER, "해님", REJOINED_USER_ID, clock.toISOString());
+
+  /**
+   * 이 브라우저(기기 B)의 탈퇴 전 사본 — 같은 카카오 계정으로 지금 판에 동의하고 기록했다. 다른 기기(A)에서 탈퇴해 세션이 끝났다
+   * (SIGNED_OUT → 로그아웃, 기록은 남는다). 하루 뒤 같은 카카오 계정으로 다시 가입한다.
+   */
+  function staleCopy(): AppStore {
+    const store = setupStore();
+    store.actions.signIn({ id: KAKAO_ACCOUNT, name: "해님", provider: "kakao" });
+    onboardWithConsent(store);
+    store.actions.addSymptomRecord(symptomInput(5));
+    store.actions.signOut();
+    tick(24 * 60);
+    return store;
+  }
+
+  it("서버에 행이 없는 새 사용자 — 예전 동의로 행을 만들지 않는다. 다시 동의 화면, 동의하면 그때 만든다", async () => {
+    const store = staleCopy();
+    const { manager, remoteOf, marks } = setup({ client: fakeClient({ codes: { abc: rejoined() } }) });
+    expect(await manager.completeCallback(store, `${CALLBACK}?code=abc`)).toEqual({ kind: "signedIn", sync: "ok", linked: false });
+    const snap = store.getSnapshot();
+    expect(snap.account?.id).toBe(KAKAO_ACCOUNT);
+    expect(snap.state.symptomHistory).toHaveLength(1); // 이 브라우저의 사본은 지우지 않는다 — 다시 동의하면 올린다
+    expect(snap.state.profile.consentAcceptedAt).toBeNull(); // 예전 동의 도장을 지웠다 → 관문이 다시 동의 화면으로
+    expect(rootScreenFor(snap, true)).toBe("consent");
+    const remote = remoteOf(REJOINED_USER_ID);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(remote.calls).toEqual(["fetch"]);
+    expect(manager.syncStatus()).toBe("waitingConsent");
+
+    tick(1);
+    store.actions.acceptConsent();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(remote.writes()).toEqual(["insert"]);
+    expect(remote.serverState().symptomHistory).toHaveLength(1);
+    expect(marks.adoptedAt(KAKAO_ACCOUNT)).toBeNull();
+  });
+
+  it("세션 복원으로 로그인해도 같고, 다시 열거나 다른 탭이 이어받아도 동의 전에는 올리지 않는다(표시는 저장소에 남는다)", async () => {
+    const store = staleCopy();
+    const browser = fakeClient({ session: rejoined() }); // 다른 탭에서 다시 가입했다
+    const first = setup({ client: browser });
+    expect(await first.manager.restore(store)).toBe("done");
+    expect(store.getSnapshot().account?.id).toBe(KAKAO_ACCOUNT);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent"); // 첫 읽기가 예전 동의 도장을 지웠다
+    expect(first.remoteOf(REJOINED_USER_ID).writes()).toEqual([]);
+    first.manager.stopSync();
+
+    const again = setup({ client: browser, remotes: new Map([[REJOINED_USER_ID, first.remoteOf(REJOINED_USER_ID)]]) });
+    const reopened = setupStore();
+    expect(await again.manager.restore(reopened)).toBe("done");
+    reopened.actions.addMoodCheck({ questionID: 2, answer: "yes" });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(again.remoteOf(REJOINED_USER_ID).writes()).toEqual([]);
+    expect(again.manager.syncStatus()).toBe("waitingConsent");
+    expect(rootScreenFor(reopened.getSnapshot(), true)).toBe("consent");
+  });
+
+  it("다른 기기에서 다시 가입하고 동의해 행이 있어도, 탈퇴 전 사본은 이 브라우저에서 다시 동의받은 뒤에 합친다(그 전의 합치기 기준도 버린다)", async () => {
+    const remotes = new Map([[REJOINED_USER_ID, new FakeRemote()]]);
+    const row = remotes.get(REJOINED_USER_ID)!;
+    const store = staleCopy();
+    const ctx = setup({ remotes, client: fakeClient({ codes: { abc: rejoined() } }) });
+    row.setServer(onboardedState({ ownerAccountID: KAKAO_ACCOUNT, profile: { ...onboardedState().profile, consentAcceptedAt: clock.toISOString() } }));
+    await ctx.manager.completeCallback(store, `${CALLBACK}?code=abc`);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("consent");
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(row.writes()).toEqual([]);
+    expect(row.serverState().symptomHistory).toHaveLength(0);
+
+    tick(1);
+    store.actions.acceptConsent();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(row.writes()).toEqual(["update"]);
+    expect(row.serverState().symptomHistory).toHaveLength(1);
+  });
+
+  it("같은 사용자로 다시 로그인(사용자가 동의보다 먼저 만들어졌다)은 지금까지와 같다 — 다시 묻지 않고 올린다", async () => {
+    const sameUser = kakaoSession(MEMBER, "해님", KAKAO_USER_ID, "2026-01-01T00:00:00.000Z");
+    const store = staleCopy();
+    const { manager, remoteOf, marks } = setup({ client: fakeClient({ codes: { abc: sameUser } }) });
+    await manager.completeCallback(store, `${CALLBACK}?code=abc`);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("main");
+    expect(marks.adoptedAt(KAKAO_ACCOUNT)).toBeNull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remoteOf(KAKAO_USER_ID).writes()).toEqual(["insert"]);
+  });
+
+  it("동의한 뒤 만든 새 계정으로 옮긴 게스트(이 브라우저 전용 게스트 → 익명 계정)는 해당하지 않는다 — 다시 묻지 않는다", async () => {
+    const local = setupStore();
+    local.actions.signInGuest(); // 익명 가입을 못 한 게스트 — 지금 판에 동의했다
+    onboardWithConsent(local);
+    tick(60);
+    const { manager, fc, remoteOf, marks } = setup();
+    const store = setupStore();
+    expect(await manager.restore(store)).toBe("done"); // 익명 계정(지금 만든 사용자)으로 옮긴다
+    const anonId = fc.currentUserId()!;
+    expect(store.getSnapshot().account?.id).toBe(`guest-${anonId}`);
+    expect(rootScreenFor(store.getSnapshot(), true)).toBe("main");
+    expect(marks.adoptedAt(`guest-${anonId}`)).toBeNull();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remoteOf(anonId).writes()).toEqual(["insert"]);
+  });
+
+  it("consentPredatesUser — 이 계정 id의 기록이고, 동의가 사용자를 만든 시각보다 앞설 때만", () => {
+    const own = { ...onboardedState(), ownerAccountID: KAKAO_ACCOUNT }; // 동의 2026-09-01
+    expect(consentPredatesUser(own, KAKAO_ACCOUNT, "2026-09-02T00:00:00.000Z")).toBe(true);
+    expect(consentPredatesUser(own, KAKAO_ACCOUNT, "2026-08-31T00:00:00.000Z")).toBe(false);
+    expect(consentPredatesUser(own, KAKAO_ACCOUNT, "2026-09-01T00:00:00.000Z")).toBe(false); // 같은 시각은 앞서지 않는다
+    // 다른 주인(게스트가 고른 새 계정·가져온 기록 — 따로 판단한다)·동의 없음·시각을 모르면 판단하지 않는다
+    expect(consentPredatesUser({ ...own, ownerAccountID: "guest-x" }, KAKAO_ACCOUNT, "2026-09-02T00:00:00.000Z")).toBe(false);
+    expect(consentPredatesUser({ ...own, profile: { ...own.profile, consentAcceptedAt: null } }, KAKAO_ACCOUNT, "2026-09-02T00:00:00.000Z")).toBe(false);
+    for (const unknown of [undefined, null, "", "어제"]) expect(consentPredatesUser(own, KAKAO_ACCOUNT, unknown)).toBe(false);
   });
 });
 

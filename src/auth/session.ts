@@ -28,12 +28,14 @@
 // - 이 브라우저에 남아 있던 다른 사람일 수 있는 기록(로그아웃한 게스트·주인 없는 기록)을 카카오 로그인·[게스트로 시작]이 가져오면
 //   가져온 시각을 남긴다(marks.ts) — 이 브라우저에서 다시 동의하기 전에는 서버로 보내지 않는다(관문이 다시 동의 화면으로 보낸다).
 //   게스트 본인이 연결·전환한 경우, 로그인 중인 게스트를 익명 계정으로 옮기는 경우는 남기지 않는다(signInAs).
+//   같은 계정 id의 기록이라도 그 동의가 지금 Supabase 사용자를 만든 시각보다 앞서면(다른 기기에서 탈퇴한 뒤 같은 카카오 계정으로 다시 가입 —
+//   이 브라우저에 탈퇴 전 사본이 남았다) 같은 표시를 남긴다(consentPredatesUser) — 다시 동의받기 전에는 새 계정으로 올리지 않는다.
 // - watch(): 스토어의 계정이 바뀌면 동기화를 멈추거나 시작한다. 카카오에서 벗어나면 Supabase 세션도 끝낸다.
 // - 로그아웃·계정 삭제(설정 화면): signOut·deleteAccount.
 //
 // 설정이 없으면 모든 함수가 네트워크 없이 지금까지와 같게 끝난다(게스트 = 이 브라우저 전용).
 
-import type { Session, SupabaseClient } from "@supabase/supabase-js";
+import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { isSupabaseConfigured } from "@/config";
 import type { PersistedState } from "@/domain/types";
 import { isGuestID, makeGuestID, type Account } from "@/store/account";
@@ -120,6 +122,21 @@ export function adoptsLocalRecords(state: PersistedState, accountId: string): bo
     state.moodChecks.length > 0 ||
     state.communityPosts.length > 0
   );
+}
+
+/**
+ * 이 브라우저의 기록이 이미 이 계정 id의 것인데, 그 동의가 지금 서버 사용자(Supabase)가 만들어지기 전의 것인가 —
+ * 같은 카카오 계정이 다른 기기에서 탈퇴(서버 행·로그인 계정 삭제)한 뒤 다시 가입했다. 이 브라우저에는 탈퇴 전 사본이 남아 있을 수 있고
+ * (세션이 끝나 로그아웃만 됐다 — 기록은 남는다), 앱 계정 id("kakao-<회원번호>")가 같아 가져온 기록(adoptsLocalRecords)으로도 보이지 않는다.
+ * 그 동의는 지금 서버 사용자에게 한 것이 아니므로, 가져온 기록처럼 이 브라우저에서 다시 동의받기 전에는 올리지 않는다(signInAs → markAdopted).
+ * 게스트가 고른 새 계정(전환·연결·익명 계정으로 옮김)은 로그인 전 기록의 주인이 게스트 id라 해당하지 않는다(동의가 계정보다 먼저여도 같은 사람).
+ * 시각을 모르면(created_at 없음·못 읽음) 판단하지 않는다(지금까지와 같다).
+ */
+export function consentPredatesUser(state: PersistedState, accountId: string, userCreatedAt: string | null | undefined): boolean {
+  if (state.ownerAccountID !== accountId || state.profile.consentAcceptedAt === null) return false;
+  const consentAt = Date.parse(state.profile.consentAcceptedAt);
+  const createdAt = typeof userCreatedAt === "string" ? Date.parse(userCreatedAt) : Number.NaN;
+  return !Number.isNaN(consentAt) && !Number.isNaN(createdAt) && consentAt < createdAt;
 }
 
 // MARK: 의존성
@@ -406,8 +423,10 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
    * 표시를 먼저 쓰는 까닭: 다른 탭이 계정 변경을 보고 동기화를 시작할 때 이미 표시가 있게.
    * 다른 계정의 기록을 묶으면 이 계정의 예전 합치기 기준은 버린다 — 가져온 프로필과 맞지 않아, 첫 합치기 규칙(서버가 온보딩을 마쳤으면
    * 서버 프로필)을 쓰게.
+   * user = 이 계정의 Supabase 사용자 — 기록이 이미 이 계정 id의 것인데 동의가 그 사용자보다 먼저면(탈퇴 뒤 다시 가입 — consentPredatesUser)
+   * 가져온 기록과 같이 다시 동의받기 전에는 올리지 않는다. 그 사용자의 예전 합치기 기준도 버린다(지운 계정의 것이다).
    */
-  function signInAs(store: AppStore, account: Account, relation: "sameRow" | "samePerson" | "unknown") {
+  function signInAs(store: AppStore, account: Account, relation: "sameRow" | "samePerson" | "unknown", user: Pick<User, "created_at">) {
     const state = store.getSnapshot().state;
     const owner = state.ownerAccountID;
     if (owner !== account.id) {
@@ -415,6 +434,10 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
       else deps.marks.saveBase(account.id, null);
     }
     if (relation === "unknown" && adoptsLocalRecords(state, account.id)) deps.marks.markAdopted(account.id, now().toISOString());
+    if (consentPredatesUser(state, account.id, user.created_at)) {
+      deps.marks.saveBase(account.id, null);
+      deps.marks.markAdopted(account.id, now().toISOString());
+    }
     store.actions.signIn(account);
   }
 
@@ -455,7 +478,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
     upgradeTried.add(store);
     const account = guestAccountFromUser(r.session.user);
     if (account === null || store.getSnapshot().account?.id !== guest.id) return "done"; // 그사이 계정이 바뀌었다
-    signInAs(store, account, "samePerson");
+    signInAs(store, account, "samePerson", r.session.user);
     startSync(store, client, r.session.user.id, account.id);
     return "done";
   }
@@ -612,7 +635,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
       const guestChose =
         switchedFrom !== null || (pending !== null && state.ownerAccountID === pending.guestAccountId && isGuestID(pending.guestAccountId));
       // 이 브라우저의 기록 귀속은 기존 규칙 그대로(게스트로 쓰던 기록은 이 계정으로, 다른 실제 계정의 기록은 지움 — state.ts).
-      signInAs(store, account, sameRow ? "sameRow" : guestChose ? "samePerson" : "unknown");
+      signInAs(store, account, sameRow ? "sameRow" : guestChose ? "samePerson" : "unknown", session.user);
       deps.flow.clear();
       if (store.getSnapshot().account?.id !== account.id) return { kind: "error", reason: "failed" };
       const linked = sameRow || guestChose;
@@ -662,7 +685,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
         if (account === null) return local();
         if (store.getSnapshot().account !== null) return { ok: true, mode: "local" }; // 그사이 다른 탭에서 로그인했다
         // 이 브라우저에 남아 있던 기록(예전 빌드에서 로그아웃한 게스트 등)은 주인을 모른다 — 가져오면 다시 동의받기 전에는 올리지 않는다.
-        signInAs(store, account, "unknown");
+        signInAs(store, account, "unknown", anon.user);
         startSync(store, client, anon.user.id, account.id);
         return { ok: true, mode: "anonymous" };
       } finally {
@@ -759,7 +782,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
       if (now === null) {
         // 다시 방문 — 계정 기록이 없어도 카카오 세션이 있으면 같은 사람. 남은 익명 세션은 [게스트로 시작]이 판단한다.
         if (mapped.provider === KAKAO) {
-          signInAs(store, mapped, "unknown");
+          signInAs(store, mapped, "unknown", session.user);
           startSync(store, client, session.user.id, mapped.id);
         }
         return "done";
@@ -771,7 +794,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
       if (now.provider === GUEST) {
         // 이 게스트의 익명 사용자가 (다른 탭에서) 카카오와 연결됐다 — 같은 사람, 같은 서버 행
         if (guestUserId(now.id) === session.user.id) {
-          signInAs(store, mapped, "sameRow");
+          signInAs(store, mapped, "sameRow", session.user);
           startSync(store, client, session.user.id, mapped.id);
           return "done";
         }
