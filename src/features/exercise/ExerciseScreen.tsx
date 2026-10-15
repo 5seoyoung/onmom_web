@@ -2,6 +2,7 @@
 
 // 운동 탭 — iOS ExerciseView.swift. 무엇을 보여줄지는 exerciseModel.ts가 정하고, 여기서는 그리기만 한다.
 // 저장소를 읽기 전(hydrated=false)에는 제목만 그린다 — 기본값(분만 방식 없음 등)이 번쩍이지 않게.
+// 큐레이션 목록(영상 서버) 아래에 "유튜브 추천 영상"(빌드 때 정해진 허용 목록 — features/youtube)을 같은 게이팅으로 붙인다.
 
 import { useEffect, useState } from "react";
 import { fetchVideos } from "@/api/video";
@@ -11,10 +12,13 @@ import { ScreenHeader, cx } from "@/components/ui";
 import type { DeliveryMethod, MaternityRecord, PersistedState } from "@/domain/types";
 import { StorageWarning } from "@/features/home/StorageWarning";
 import { useOnline } from "@/features/home/useOnline";
+import { YOUTUBE_VIDEOS } from "@/features/youtube/catalog";
+import { youtubeSection } from "@/features/youtube/youtubePlan";
 import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
 import { ExerciseBodyView, NeedsProfileBlock, RedFlagBlock } from "./ExerciseBlocks";
 import { COLD_START_NOTICE_MS, fetchVideosWithRetry } from "./videoLoad";
+import { YouTubeSection } from "./YouTubeSection";
 import {
   NEEDS_DELIVERY_DATE_TEXT,
   VIDEO_LOAD_THROWN,
@@ -45,6 +49,8 @@ function ExerciseContent({ state }: { state: PersistedState }) {
   const week = exerciseWeek(deliveryDate, today);
   const gate = exerciseGate(delivery, deliveryDate, isRedFlagActive(state.symptomHistory));
   const subtitle = exerciseSubtitle(delivery, week);
+  // 유튜브 추천 영상 — 플랜일 때만, 큐레이션 목록과 같은 주차 게이팅·산모수첩 차단(레드플래그면 null). 허용 목록이 비면 늘 null.
+  const youtube = youtubeSection(YOUTUBE_VIDEOS, gate, delivery, week, state.maternity);
 
   return (
     <>
@@ -59,6 +65,7 @@ function ExerciseContent({ state }: { state: PersistedState }) {
       ) : delivery !== null && week !== null ? (
         <PlanBody delivery={delivery} week={week} maternity={state.maternity} />
       ) : null}
+      {youtube !== null ? <YouTubeSection section={youtube} /> : null}
     </>
   );
 }
