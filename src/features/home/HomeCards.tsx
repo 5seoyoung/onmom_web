@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { Card, EvidenceChipList, StatusBadge, cx } from "@/components/ui";
 import { telHref } from "@/domain/phone";
+// exclamationmark.octagon.fill — 운동·분석 화면과 같은 아이콘(한 곳에서 그린다)
+import { FilledOctagonAlert } from "@/features/exercise/FilledOctagonAlert";
 import type { HomeStageCard } from "@/rules/exercise";
 import type { RecoveryMetric } from "@/rules/redflag";
 import type { WeightPlan } from "@/rules/weight";
@@ -57,22 +59,6 @@ const STATE_ICON: Record<StateTone, LucideIcon> = {
 
 /** 카드 전체가 링크인 경우(기록 유도·회복 단계 분석) — 포커스 링이 카드 모양을 따르게 라운드를 맞춘다. */
 const cardLinkClass = "block rounded-card";
-
-/**
- * exclamationmark.octagon.fill — lucide OctagonAlert는 팔각형을 느낌표 뒤에 그려서, 면을 채우면 느낌표가 가려진다.
- * 같은 팔각형 경로를 채우고 그 위에 흰 느낌표를 그린다.
- */
-function FilledOctagonAlert({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden focusable="false" className={className}>
-      <path
-        className="fill-state-alert"
-        d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"
-      />
-      <path d="M12 7.5v5M12 16.5h.01" fill="none" stroke="white" strokeWidth={2.5} strokeLinecap="round" />
-    </svg>
-  );
-}
 
 function Chevron() {
   return <ChevronRight aria-hidden className="size-4 shrink-0 text-text-subtle" strokeWidth={2.5} />;
@@ -291,7 +277,7 @@ export function StageCard({ card }: { card: HomeStageCard }) {
   if (card.kind === "redFlag") {
     return (
       <Card as="section" aria-labelledby="home-stage-title" className="flex items-start gap-4">
-        <FilledOctagonAlert className="mt-0.5 size-5 shrink-0" />
+        <FilledOctagonAlert className="mt-0.5 size-5" shapeClassName="fill-state-alert" markClassName="stroke-white" />
         <div className="flex min-w-0 flex-col gap-0.75">
           <h2 id="home-stage-title" className="text-base font-semibold text-text-primary">
             {card.title}
