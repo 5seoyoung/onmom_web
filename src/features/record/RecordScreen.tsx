@@ -14,6 +14,8 @@
 // 결과가 뜨면 맨 위로 올리고 결과로 초점을 옮긴다 — PC에서도 결과가 오른쪽 열 맨 위라 스크롤 없이 보인다.
 // 저장 실패(storageAvailable=false) 안내는 머리 아래(features/home/StorageWarning) — [확인하기]는 막지 않는다(iOS처럼 메모리에서 동작).
 // 오늘의 질문 각주는 저장 위치에 맞게(서버 저장 빌드면 "동의를 받은 뒤 온맘 서버에" — recordView moodNoteFor).
+// 내 동네 입력은 글자마다 저장하지 않는다(store/useDraftField) — 입력이 멈추면 한 번, 칸을 떠나거나 검색하거나 [확인하기]를 누르거나
+// 화면을 떠나면 바로 저장한다(글자마다 상태 전체를 localStorage에 쓰고 서버 동기화를 예약하지 않게). 보이는 것은 그대로다.
 
 import { useRef, useState } from "react";
 import { useLocalDay } from "@/components/clock";
@@ -25,6 +27,7 @@ import { StorageWarning } from "@/features/home/StorageWarning";
 import type { SymptomForm } from "@/rules/record";
 import type { RedFlagResult } from "@/rules/redflag";
 import { useAppStore } from "@/store/useAppStore";
+import { useDraftField } from "@/store/useDraftField";
 import { MoodQuestionCard } from "./MoodQuestionCard";
 import { RecentRecordsCard } from "./RecentRecordsCard";
 import { RecordResult } from "./RecordResult";
@@ -49,6 +52,8 @@ export function RecordScreen() {
   const [result, setResult] = useState<RedFlagResult | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  // 폼 카드와 결과의 가까운 산부인과가 같은 값을 보인다(프로필의 내 동네)
+  const neighborhood = useDraftField(state.profile.neighborhood, (value) => actions.updateProfile({ neighborhood: value }));
 
   const ready = hydrated && today !== null;
 
@@ -65,6 +70,7 @@ export function RecordScreen() {
   }
 
   function runCheck() {
+    neighborhood.flush();
     const { newRecord, result: checked } = submitSymptomCheck(form, state.profile.deliveryDate, new Date());
     actions.addSymptomRecord(newRecord);
     setResult(checked);
@@ -76,7 +82,6 @@ export function RecordScreen() {
     moveToTop("body");
   }
 
-  const setNeighborhood = (value: string) => actions.updateProfile({ neighborhood: value });
   const answerMood = (questionID: number, answer: MoodAnswer) => actions.addMoodCheck({ questionID, answer });
 
   if (!ready) {
@@ -91,7 +96,8 @@ export function RecordScreen() {
   const columns = recordColumns(layout.phase);
 
   return (
-    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
+    // 칸을 떠남(blur)·검색(submit)은 안쪽 입력에서 올라온다 — 기다리던 동네 입력을 바로 저장한다
+    <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)} onBlur={neighborhood.flush} onSubmit={neighborhood.flush}>
       <ScreenHeader title={RECORD_TEXT.title} subtitle={recordSubtitle(state.profile, today) ?? undefined} />
       <StorageWarning />
       <div ref={bodyRef} tabIndex={-1} className={columns.body}>
@@ -103,8 +109,8 @@ export function RecordScreen() {
               form={form}
               onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
               showsLochia={recordShowsLochia(state.profile.deliveryDate, today)}
-              neighborhood={state.profile.neighborhood}
-              onNeighborhoodChange={setNeighborhood}
+              neighborhood={neighborhood.value}
+              onNeighborhoodChange={neighborhood.change}
               disabled={columns.formLocked}
             />
           </fieldset>
@@ -116,8 +122,8 @@ export function RecordScreen() {
             <div ref={resultRef} tabIndex={-1} className="flex flex-col gap-4 focus:outline-none">
               <RecordResult
                 redFlag={layout.redFlag}
-                neighborhood={state.profile.neighborhood}
-                onNeighborhoodChange={setNeighborhood}
+                neighborhood={neighborhood.value}
+                onNeighborhoodChange={neighborhood.change}
               />
               <SecondaryButton onClick={retry}>{RECORD_TEXT.retry}</SecondaryButton>
             </div>
