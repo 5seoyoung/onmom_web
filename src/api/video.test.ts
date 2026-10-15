@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { sanitizeVideoPayload } from "../../supabase/functions/_shared/videos";
 import { fetchVideos, parseVideoResponse, VIDEO_MESSAGES } from "./video";
 import { hangingFetch, jsonResponse, lastCall, stubFetch, supabaseTestConfig, testConfig } from "./testUtils";
 
@@ -144,6 +145,19 @@ describe("parseVideoResponse", () => {
 
   it("알 수 없는 필드는 무시한다", () => {
     expect(parseVideoResponse({ count: 1, videos: [{ ...serverVideo, extra: true }], next: null })).toHaveLength(1);
+  });
+
+  it("count는 0 이상의 정수 — 서버(Edge Function sanitizeVideoPayload)와 같은 규칙으로 음수·소수·문자를 거부한다", () => {
+    for (const count of [-1, 1.5, "1", Number.NaN, Number.POSITIVE_INFINITY]) {
+      const body = { count, videos: [serverVideo] };
+      expect(parseVideoResponse(body), String(count)).toBeNull();
+      expect(sanitizeVideoPayload(body), String(count)).toBeNull();
+    }
+    for (const count of [0, 1, 7]) {
+      const body = { count, videos: [serverVideo] };
+      expect(parseVideoResponse(body)).toHaveLength(1);
+      expect(sanitizeVideoPayload(body)?.videos).toHaveLength(1);
+    }
   });
 });
 

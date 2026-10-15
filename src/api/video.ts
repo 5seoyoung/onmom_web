@@ -47,11 +47,14 @@ export type FetchVideosOptions = {
 
 const isString = (v: unknown): v is string => typeof v === "string";
 
-/** 응답 본문 검증. iOS JSONDecoder처럼 한 항목이라도 형식이 틀리면 전체를 거부한다(null). */
+/**
+ * 응답 본문 검증. iOS JSONDecoder처럼 한 항목이라도 형식이 틀리면 전체를 거부한다(null).
+ * count는 0 이상의 정수 — Edge Function의 같은 검사(supabase/functions/_shared/videos.ts)와 같은 규칙이다(음수는 거부).
+ */
 export function parseVideoResponse(data: unknown): VideoDBVideo[] | null {
   if (typeof data !== "object" || data === null) return null;
   const { count, videos } = data as { count?: unknown; videos?: unknown };
-  if (typeof count !== "number" || !Number.isInteger(count) || !Array.isArray(videos)) return null;
+  if (typeof count !== "number" || !Number.isInteger(count) || count < 0 || !Array.isArray(videos)) return null;
   const out: VideoDBVideo[] = [];
   for (const v of videos) {
     if (typeof v !== "object" || v === null) return null;
