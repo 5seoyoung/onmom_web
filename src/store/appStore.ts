@@ -50,7 +50,7 @@ export interface AppActions {
   /**
    * 계정 삭제(브라우저 쪽) — 건강 데이터·기분·메모·계정·게스트 id·로그인 세션 등 "onmom.web." 키 전부 삭제,
    * 서비스 워커 캐시(연 화면의 주소)도 지운다(AppStoreDeps.clearSiteCaches — 기다리지 않음).
-   * 서버 탈퇴는 src/auth deleteAccountEverywhere가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
+   * 서버 탈퇴는 src/auth의 계정 삭제(useAccountSession().deleteAccount → authSession.deleteAccount)가 서버를 먼저 지운 뒤 이것을 부른다(설정 화면이 그쪽을 쓴다).
    */
   deleteAccount(): void;
   /**

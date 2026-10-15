@@ -1,5 +1,5 @@
 // 서비스 워커(public/sw.js)가 만든 Cache Storage 항목 지우기 — 계정 삭제 때(appStore deleteAccount → 브라우저 스토어의 clearSiteCaches).
-// sw.js는 한 번 연 화면의 HTML을 주소째(…/journal/post/?id=… 등) "onmom-<판>:pages"에, 정적 파일을 "onmom-<판>:static"에 둔다.
+// sw.js는 한 번 연 화면의 HTML을 경로만으로(쿼리 없이, 로그인 콜백은 빼고) "onmom-<판>:pages"에, 정적 파일을 "onmom-<판>:static"에 둔다.
 // 계정을 지우면 이 브라우저에 그 주소들이 남지 않게 함께 지운다(localStorage의 "onmom.web." 키는 persistence.eraseAll이 지운다).
 // 같은 origin의 다른 앱(GitHub Pages의 다른 저장소 등) 캐시는 건드리지 않는다 — 이름 접두(sw.js CACHE_PREFIX)로 거른다.
 // 기능 감지: Cache Storage가 없거나(서버 렌더링·안전하지 않은 주소·오래된 브라우저) 막혀 있으면 아무것도 하지 않는다. 던지지 않는다.
