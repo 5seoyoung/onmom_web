@@ -17,7 +17,8 @@ import { isSupabaseConfigured } from "@/config";
 import type { CommunityPost } from "@/domain/types";
 import { StorageWarning } from "@/features/home/StorageWarning";
 import { useAppStore } from "@/store/useAppStore";
-import { JOURNAL_TEXT, JOURNAL_WRITE_HREF, commentCountLabel, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
+import { formatMonthDayTime } from "@/domain/date";
+import { JOURNAL_TEXT, JOURNAL_WRITE_HREF, commentCountLabel, localOnlyNoticeFor, postHref } from "./journalView";
 
 const LIST_HEADING_ID = "journal-list-heading";
 
@@ -91,7 +92,7 @@ function PostList({ posts }: { posts: readonly CommunityPost[] }) {
 
 // 글 행 — 제목 16 semibold 한 줄 · 본문 13 두 줄 · 작성자/시각/댓글 수 11 (CommunityView.swift:91-108)
 function PostRow({ post }: { post: CommunityPost }) {
-  const when = formatPostDateTime(post.date);
+  const when = formatMonthDayTime(post.date);
   const count = post.comments.length;
   // 링크 안에 <article>이 있으면 브라우저가 내용으로 링크 이름을 만들지 않는다(Chrome 접근성 트리에서 이름 "") —
   // 제목을 링크 이름으로 잇는다. 본문·작성자·댓글 수는 읽기 모드에서 그대로 읽힌다.

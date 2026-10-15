@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { calendarDaysBetween, parseLocalDate, postpartumDayCount, toLocalDateString, weekFromDayCount } from "./date";
+import { calendarDaysBetween, formatMonthDayTime, parseLocalDate, postpartumDayCount, toLocalDateString, weekFromDayCount } from "./date";
 
 // vitest.config.ts가 TZ=Asia/Seoul로 고정한다.
 describe("로컬 달력 날짜", () => {
@@ -37,5 +39,39 @@ describe("산후 경과일·주차 (02 §0)", () => {
   });
   it("주차: 0~6일 = 0, 7~13일 = 1, 14일 = 2", () => {
     expect([0, 6, 7, 13, 14].map(weekFromDayCount)).toEqual([0, 0, 1, 1, 2]);
+  });
+});
+
+describe("formatMonthDayTime — 기록 탭·기록장·PDF 리포트가 함께 쓰는 시각 표기", () => {
+  it("iOS .dateTime.month().day().hour().minute() (ko_KR)와 같은 모양 — journal.png", () => {
+    // TZ Asia/Seoul: 12:15Z = 21:15
+    expect(formatMonthDayTime("2026-09-16T12:15:00.000Z")).toBe("9월 16일 오후 9:15");
+  });
+
+  it("오전·정오·자정 표기", () => {
+    expect(formatMonthDayTime("2026-09-16T00:05:00.000Z")).toBe("9월 16일 오전 9:05");
+    expect(formatMonthDayTime("2026-09-16T03:05:00.000Z")).toBe("9월 16일 오후 12:05");
+    expect(formatMonthDayTime("2026-09-16T15:00:00.000Z")).toBe("9월 17일 오전 12:00");
+  });
+
+  it("못 읽는 날짜는 빈 문자열(지어내지 않음)", () => {
+    expect(formatMonthDayTime("")).toBe("");
+    expect(formatMonthDayTime("not-a-date")).toBe("");
+  });
+});
+
+describe("formatMonthDayTime — 한 곳에서만 만든다", () => {
+  it("기록(9월 23일 오후 3:05 — RecordFlowView.swift:116)과 글(CommunityView.swift)이 같은 모양, 좁은 공백 없이", () => {
+    expect(formatMonthDayTime(new Date(2026, 8, 23, 15, 5).toISOString())).toBe("9월 23일 오후 3:05");
+    expect(formatMonthDayTime(new Date(2026, 8, 22, 0, 5).toISOString())).toBe("9월 22일 오전 12:05");
+    expect(formatMonthDayTime(new Date(2026, 8, 23, 15, 5).toISOString())).not.toMatch(/[\u202F\u00A0]/);
+  });
+
+  it("기록 탭·기록장·리포트에 따로 만든 Intl 날짜 형식이 없다", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    for (const file of ["../features/record/recordView.ts", "../features/journal/journalView.ts", "../features/report/reportModel.ts"]) {
+      expect(read(file), file).not.toContain("Intl.DateTimeFormat");
+      expect(read(file), file).toContain("formatMonthDayTime");
+    }
   });
 });

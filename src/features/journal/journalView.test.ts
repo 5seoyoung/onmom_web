@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { CommunityPost } from "@/domain/types";
 import { initialState } from "@/store/defaults";
 import { addComment, addPost, canSubmitComment, canSubmitPost } from "@/store/state";
-import { JOURNAL_LIMITS, JOURNAL_SERVER_TEXT, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime, localOnlyNoticeFor, postHref } from "./journalView";
+import { JOURNAL_LIMITS, JOURNAL_SERVER_TEXT, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, localOnlyNoticeFor, postHref } from "./journalView";
 
 describe("맨 위 배너 — 저장 위치에 맞게(01 §3-6 웹 수정)", () => {
   it("설정 없는 빌드(브라우저 전용)는 iOS 원문 그대로", () => {
@@ -30,24 +30,6 @@ const post = (id: string, patch: Partial<CommunityPost> = {}): CommunityPost => 
   date: "2026-09-16T12:15:00.000Z",
   comments: [],
   ...patch,
-});
-
-describe("formatPostDateTime", () => {
-  it("iOS .dateTime.month().day().hour().minute() (ko_KR)와 같은 모양 — journal.png", () => {
-    // TZ Asia/Seoul: 12:15Z = 21:15
-    expect(formatPostDateTime("2026-09-16T12:15:00.000Z")).toBe("9월 16일 오후 9:15");
-  });
-
-  it("오전·정오·자정 표기", () => {
-    expect(formatPostDateTime("2026-09-16T00:05:00.000Z")).toBe("9월 16일 오전 9:05");
-    expect(formatPostDateTime("2026-09-16T03:05:00.000Z")).toBe("9월 16일 오후 12:05");
-    expect(formatPostDateTime("2026-09-16T15:00:00.000Z")).toBe("9월 17일 오전 12:00");
-  });
-
-  it("못 읽는 날짜는 빈 문자열(지어내지 않음)", () => {
-    expect(formatPostDateTime("")).toBe("");
-    expect(formatPostDateTime("not-a-date")).toBe("");
-  });
 });
 
 describe("commentMetaLine / commentCountLabel", () => {

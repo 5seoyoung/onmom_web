@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { formatMonthDayTime } from "@/domain/date";
 import type { MoodCheckRecord, SymptomRecord } from "@/domain/types";
 import { questionForDay } from "@/rules/mood";
 import { RECORD_NORMAL_RESULT } from "@/rules/record";
@@ -12,7 +13,6 @@ import {
   RISK_TOGGLES,
   answeredMoodText,
   firedRiskLabels,
-  formatRecordDateTime,
   moodCardModel,
   moodNoteFor,
   recentRecordRows,
@@ -302,7 +302,7 @@ describe("최근 기록 — 최신 5건 · 날짜 · 위험신호 없음/병원 
   });
 
   it("읽을 수 없는 날짜는 빈 글자(지어내지 않음)", () => {
-    expect(formatRecordDateTime("not-a-date")).toBe("");
+    expect(formatMonthDayTime("not-a-date")).toBe("");
   });
 });
 

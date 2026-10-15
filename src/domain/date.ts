@@ -52,3 +52,22 @@ export function weekFromDayCount(dayCount: number): number {
 export function isSameLocalDay(a: Date, b: Date): boolean {
   return calendarDaysBetween(a, b) === 0;
 }
+
+const KO_MONTH_DAY_TIME = new Intl.DateTimeFormat("ko-KR", {
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/**
+ * 기록·글·댓글의 시각(사용자 로컬 시간) — iOS `.dateTime.month().day().hour().minute()`(ko_KR) = "9월 23일 오후 3:05"
+ * (RecordFlowView.swift:116, CommunityView.swift). 연도는 붙이지 않는다(iOS와 같음). 못 읽는 날짜는 빈 문자열.
+ * 기록 탭·기록장·PDF 리포트가 모두 이것을 쓴다. 로케일 데이터에 따라 끼는 좁은 공백(U+202F)·줄바꿈 없는 공백(U+00A0)은
+ * 보통 공백으로 맞춘다 — 화면·인쇄·테스트가 같은 글자를 본다.
+ */
+export function formatMonthDayTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return KO_MONTH_DAY_TIME.format(d).replace(/[\u202F\u00A0]/g, " ");
+}

@@ -1,7 +1,7 @@
 // 기록 탭(이상 증상 빠른 기록)의 화면 규칙 — iOS RecordFlowView.swift를 옮긴 것.
 // "무엇을 어떤 조건에서 보여주나"만 순수 함수로 둔다. 판정은 rules/record·rules/redflag, 기분 문항은 rules/mood가 한다.
 
-import { postpartumDayCount } from "@/domain/date";
+import { formatMonthDayTime, postpartumDayCount } from "@/domain/date";
 import type { MoodAnswer, MoodCheckRecord, SymptomRecord, UserProfile } from "@/domain/types";
 import { STORAGE_REGION } from "@/features/privacy/dataItems";
 import { DELIVERY_TITLE } from "@/rules/exercise";
@@ -224,19 +224,6 @@ export interface RecentRecordRow {
   signals: string[];
 }
 
-const RECORD_DATE_FORMAT = new Intl.DateTimeFormat("ko-KR", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-/** iOS `.dateTime.month().day().hour().minute()`(ko_KR) = "9월 23일 오후 3:05" (RecordFlowView.swift:116) */
-export function formatRecordDateTime(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : RECORD_DATE_FORMAT.format(d);
-}
-
 /** 최신순 기록에서 앞 5건 — 점 색과 함께 글자로도 "위험신호 없음"/"병원 신호"를 보여준다(색만으로 구분하지 않음). */
 export function recentRecordRows(history: readonly SymptomRecordWithRisk[]): RecentRecordRow[] {
   return history.slice(0, RECENT_RECORDS_LIMIT).map((r) => {
@@ -244,7 +231,7 @@ export function recentRecordRows(history: readonly SymptomRecordWithRisk[]): Rec
     return {
       id: r.id,
       iso: r.date,
-      dateText: formatRecordDateTime(r.date),
+      dateText: formatMonthDayTime(r.date),
       flagged,
       label: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
       signals: firedRiskLabels(r),

@@ -1,6 +1,7 @@
 // 기록장(개인 메모 — 공유 게시판 아님) 표시 규칙 — iOS CommunityView.swift.
 // 글·댓글 저장 규칙(제목 필수·trim·최신순)은 store/state.ts(canSubmitPost·canSubmitComment·addPost·addComment)가 단일 출처다.
 
+import { formatMonthDayTime } from "@/domain/date";
 import type { CommunityComment, CommunityPost } from "@/domain/types";
 import { STORAGE_REGION } from "@/features/privacy/dataItems";
 import { ROUTES } from "@/routes";
@@ -70,27 +71,9 @@ export function findPost(posts: readonly CommunityPost[], id: string | null | un
   return posts.find((p) => p.id === id) ?? null;
 }
 
-const KO_DATE_TIME = new Intl.DateTimeFormat("ko-KR", {
-  month: "long",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
-
-/**
- * 글·댓글 시각 — iOS `.dateTime.month().day().hour().minute()`(ko_KR) = "9월 16일 오후 9:15".
- * 연도는 붙이지 않는다(iOS와 같음). 못 읽는 날짜는 빈 문자열.
- */
-export function formatPostDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  // 로케일 데이터에 따라 끼는 좁은 공백(U+202F)은 보통 공백으로 맞춘다
-  return KO_DATE_TIME.format(d).replace(/ /g, " ");
-}
-
 /** 댓글 아래 줄 — "{작성자} · {시각}"(CommunityView.swift:196) */
 export function commentMetaLine(c: Pick<CommunityComment, "authorName" | "date">): string {
-  const when = formatPostDateTime(c.date);
+  const when = formatMonthDayTime(c.date);
   return when ? `${c.authorName} · ${when}` : c.authorName;
 }
 

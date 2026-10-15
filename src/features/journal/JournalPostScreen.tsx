@@ -7,6 +7,7 @@
 import { Suspense, useId, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CircleArrowUp, CircleUserRound, Clock } from "lucide-react";
+import { formatMonthDayTime } from "@/domain/date";
 import type { CommunityPost } from "@/domain/types";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { cx } from "@/components/ui";
@@ -14,7 +15,7 @@ import { StorageWarning } from "@/features/home/StorageWarning";
 import { LeaveSubPageHeader, useLeaveSubPage } from "@/features/profile/LeaveSubPage";
 import { canSubmitComment } from "@/store/state";
 import { useAppStore } from "@/store/useAppStore";
-import { JOURNAL_HREF, JOURNAL_LIMITS, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost, formatPostDateTime } from "./journalView";
+import { JOURNAL_HREF, JOURNAL_LIMITS, JOURNAL_TEXT, commentCountLabel, commentMetaLine, findPost } from "./journalView";
 
 export function JournalPostScreen() {
   // iOS 내비게이션 pop처럼 — 목록에서 들어왔으면 뒤로(목록이 방문 기록에 두 번 쌓이지 않게)
@@ -47,7 +48,7 @@ function PostFromQuery() {
 }
 
 function PostDetail({ post, onComment }: { post: CommunityPost; onComment: (text: string) => boolean }) {
-  const when = formatPostDateTime(post.date);
+  const when = formatMonthDayTime(post.date);
   const commentsHeadingId = useId();
 
   return (

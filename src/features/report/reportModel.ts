@@ -17,11 +17,11 @@
 import content from "@/content";
 import { formatNrs, formatMeasurement } from "@/components/ui/numbers";
 import { splitFirstSentence } from "@/components/ui/labels";
-import { parseLocalDate, toLocalDateString } from "@/domain/date";
+import { formatMonthDayTime, parseLocalDate, toLocalDateString } from "@/domain/date";
 import { SYMPTOM_HISTORY_LIMIT, type CommunityPost, type MoodCheckRecord, type PersistedState } from "@/domain/types";
-import { JOURNAL_TEXT, commentCountLabel, formatPostDateTime } from "@/features/journal/journalView";
+import { JOURNAL_TEXT, commentCountLabel } from "@/features/journal/journalView";
 import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, maternityFlags, postpartumLine } from "@/features/profile/profileView";
-import { RECORD_TEXT, firedRiskLabels, formatRecordDateTime, type SymptomRecordWithRisk } from "@/features/record/recordView";
+import { RECORD_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/features/record/recordView";
 import { PROFILE_EDIT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { MOOD_QUESTIONS, moodAnswerLabel, normalizeMoodAnswer } from "@/rules/mood";
 import { showsLochiaInputs } from "@/rules/record";
@@ -203,7 +203,7 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
       return {
         id: r.id,
         iso: r.date,
-        dateText: formatRecordDateTime(r.date),
+        dateText: formatMonthDayTime(r.date),
         dayText: days === null ? null : `${days}일차`, // 설정 "산후 일수" 값과 같은 형식 — 원문: MoreView.swift:49
         lochiaIncreased: lochiaCell(r.lochiaIncreased, days),
         lochiaRed: lochiaCell(r.lochiaRed, days),
@@ -234,11 +234,11 @@ function journalPosts(posts: readonly CommunityPost[]): ReportJournalPost[] {
     id: p.id,
     iso: p.date,
     title: p.title,
-    dateText: formatPostDateTime(p.date),
+    dateText: formatMonthDayTime(p.date),
     body: p.body,
     commentsLabel: p.comments.length > 0 ? commentCountLabel(p.comments.length) : null,
     // 작성 이름(authorName)은 넣지 않는다 — 머리 주석
-    comments: oldestFirst(p.comments).map((c) => ({ id: c.id, iso: c.date, dateText: formatPostDateTime(c.date), text: c.text })),
+    comments: oldestFirst(p.comments).map((c) => ({ id: c.id, iso: c.date, dateText: formatMonthDayTime(c.date), text: c.text })),
   }));
 }
 
