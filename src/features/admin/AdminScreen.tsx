@@ -16,6 +16,9 @@
 //
 // 0005가 아직 실행되지 않은 서버(0002만): 집계·목록은 그대로 보이고, 동의 버전 분포 카드는 그리지 않으며(응답에 칸이 없음),
 //   관리자 목록·계정 찾기·계정 삭제는 "0005_admin_tools.sql을 실행했는지 확인" 안내를 보인다.
+// 접근 기록(0009_admin_access_log.sql): 이 화면이 부르는 조회·찾기는 서버가 admin_audit에 남긴다(화면이 할 일 없음). CSV 내려받기는
+//   화면이 파일을 만들기 전에 admin_log_users_export로 남기고, 남기지 못하면 파일을 만들지 않는다 — 0009가 아직 없는 서버에서는
+//   "0009_admin_access_log.sql을 실행했는지 확인" 안내만 보인다(조회·찾기·삭제는 0009 없이도 그대로 된다).
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -32,8 +35,8 @@ import {
   adminClientFrom,
   checkAdminAccess,
   deleteUser,
+  exportUsersCsv,
   fetchAdmins,
-  fetchAllUsers,
   fetchOverview,
   fetchUsersPage,
   findUser,
@@ -205,8 +208,8 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
   const pendingFocusRef = useRef<"trigger" | "notice" | null>(null);
-  // CSV 내려받기(메타데이터만)
-  const [csv, setCsv] = useState<"idle" | "busy" | "failed">("idle");
+  // CSV 내려받기(메타데이터만) — logSetupMissing: 접근 기록 함수(0009)가 서버에 없어 파일을 만들지 않았다
+  const [csv, setCsv] = useState<"idle" | "busy" | "failed" | "logSetupMissing">("idle");
   const usersTitleId = useId();
   const consentTitleId = useId();
   const adminsTitleId = useId();
@@ -338,17 +341,18 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     reload();
   }
 
-  /** CSV — 전체 목록을 서버 최대(100명)씩 모아 파일로. 부분 파일은 만들지 않는다(adminApi fetchAllUsers). */
+  /**
+   * CSV — 전체 목록을 서버 최대(100명)씩 모으고, 내려받기를 접근 기록(admin_audit)에 남긴 뒤 파일로(adminApi exportUsersCsv).
+   * 부분 파일은 만들지 않고, 기록을 남기지 못해도 만들지 않는다.
+   */
   async function exportCsv() {
     setCsv("busy");
-    const r = await fetchAllUsers(client);
-    if (!r.ok) {
-      if (r.failure === "forbidden") onForbidden();
-      else setCsv("failed");
-      return;
-    }
-    const ok = downloadTextFile(csvFileName(new Date()), usersCsv(r.value, CURRENT_CONSENT_VERSION), "text/csv;charset=utf-8");
-    setCsv(ok ? "idle" : "failed");
+    const r = await exportUsersCsv(client, (rows) =>
+      downloadTextFile(csvFileName(new Date()), usersCsv(rows, CURRENT_CONSENT_VERSION), "text/csv;charset=utf-8"),
+    );
+    if (r.ok) setCsv("idle");
+    else if (r.failure === "forbidden") onForbidden();
+    else setCsv(r.step === "log" && r.failure === "setupMissing" ? "logSetupMissing" : "failed");
   }
 
   const shownOverview = lastOf(overview);
@@ -407,7 +411,9 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
 
         <p className="flex items-start gap-2 rounded-chip bg-surface px-4 py-3 text-[0.8125rem] text-text-secondary ring-1 ring-divider">
           <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-state-normal" />
-          <span>{ADMIN_TEXT.privacyNote}</span>
+          <span>
+            {ADMIN_TEXT.privacyNote} {ADMIN_TEXT.accessLogNote}
+          </span>
         </p>
 
         {/* 방금 한 일(계정 삭제 완료) — 화면 낭독기에도 읽히고, 삭제 뒤 포커스가 여기로 온다(tabIndex -1: 탭 순서에는 없다). 비어 있으면 자리도 없다. */}
@@ -495,7 +501,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           }
         >
           <div role="alert" className="empty:hidden text-[0.8125rem] font-semibold text-state-alert-text">
-            {csv === "failed" ? ADMIN_TEXT.csvFailed : null}
+            {csv === "failed" ? ADMIN_TEXT.csvFailed : csv === "logSetupMissing" ? ADMIN_TEXT.auditSetupHint : null}
           </div>
           {users.status === "failed" ? (
             <LoadFailed failure={users.failure} onRetry={reload} bare />

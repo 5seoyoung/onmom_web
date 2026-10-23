@@ -4,12 +4,14 @@ import {
   checkAdminAccess,
   deleteFailureOf,
   deleteUser,
+  exportUsersCsv,
   failureOf,
   fetchAdmins,
   fetchAllUsers,
   fetchOverview,
   fetchUsersPage,
   findUser,
+  logUsersExport,
   type AdminClient,
   type AdminRpcError,
   type AdminSessionUser,
@@ -221,6 +223,92 @@ describe("fetchAllUsers — CSV용 전체 목록", () => {
     expect(await fetchAllUsers(forbidden.client)).toEqual({ ok: false, failure: "forbidden" });
     const odd = fakeClient({ replies: { admin_list_users: { data: [{ id: "" }], error: null } } });
     expect(await fetchAllUsers(odd.client)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+// ── 0009_admin_access_log.sql ────────────────────────────────────────────────
+
+/** 목록(admin_list_users)은 total명, 접근 기록(admin_log_users_export)은 logReply대로 답하는 가짜 — 부른 순서를 남긴다 */
+function exportClient(total: number, logReply: RpcReply = { data: null, error: null }) {
+  const paged = pagedClient(total);
+  const order: { fn: string; args?: Record<string, unknown> }[] = [];
+  const client: AdminClient = {
+    ...paged.client,
+    async rpc(fn, args) {
+      order.push({ fn, args });
+      if (fn !== "admin_log_users_export") return paged.client.rpc(fn, args);
+      if (logReply instanceof Error) throw logReply;
+      return logReply;
+    },
+  };
+  return { client, order };
+}
+
+describe("logUsersExport — CSV 내려받기를 접근 기록에", () => {
+  it("파일에 담을 행 수만 보낸다(계정 ID·파일 내용 없음)", async () => {
+    const { client, calls } = fakeClient({ replies: { admin_log_users_export: { data: null, error: null } } });
+    expect(await logUsersExport(client, 250)).toEqual({ ok: true, value: null });
+    expect(calls).toEqual([{ fn: "admin_log_users_export", args: { p_rows: 250 } }]);
+  });
+
+  it("0009가 없으면 설치 안내, 권한 없음, 그 밖(22023 등)·예외는 실패", async () => {
+    const missing = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "PGRST202" } } } });
+    expect(await logUsersExport(missing.client, 1)).toEqual({ ok: false, failure: "setupMissing" });
+    const forbidden = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "42501" } } } });
+    expect(await logUsersExport(forbidden.client, 1)).toEqual({ ok: false, failure: "forbidden" });
+    const invalid = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "22023" } } } });
+    expect(await logUsersExport(invalid.client, -1)).toEqual({ ok: false, failure: "failed" });
+    const thrown = fakeClient({ replies: { admin_log_users_export: new Error("offline") } });
+    expect(await logUsersExport(thrown.client, 1)).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+describe("exportUsersCsv — 목록 모으기 → 접근 기록 → 파일", () => {
+  it("전체 목록을 모은 뒤 행 수를 기록하고, 그다음에 파일을 만든다", async () => {
+    const { client, order } = exportClient(150);
+    const saved: number[] = [];
+    const r = await exportUsersCsv(client, (rows) => {
+      saved.push(rows.length);
+      // 파일을 만들 때는 이미 기록이 남아 있다
+      expect(order.at(-1)?.fn).toBe("admin_log_users_export");
+      return true;
+    });
+    expect(r).toEqual({ ok: true, rows: 150 });
+    expect(saved).toEqual([150]);
+    expect(order.map((c) => c.fn)).toEqual(["admin_list_users", "admin_list_users", "admin_log_users_export"]);
+    expect(order.at(-1)?.args).toEqual({ p_rows: 150 });
+  });
+
+  it("기록을 남기지 못하면 파일을 만들지 않는다 — 0009가 없는 서버·권한 없음·네트워크 예외 모두", async () => {
+    for (const [reply, failure] of [
+      [{ data: null, error: { code: "PGRST202" } }, "setupMissing"],
+      [{ data: null, error: { code: "42501" } }, "forbidden"],
+      [new Error("offline"), "failed"],
+    ] as const) {
+      const { client } = exportClient(30, reply);
+      let saved = 0;
+      const r = await exportUsersCsv(client, () => {
+        saved += 1;
+        return true;
+      });
+      expect(r).toEqual({ ok: false, step: "log", failure });
+      expect(saved).toBe(0);
+    }
+  });
+
+  it("목록을 다 모으지 못하면 기록도 파일도 없다, 파일 만들기가 실패하면(던져도) save 단계 실패 — 기록은 시도로 남는다", async () => {
+    const forbidden = fakeClient({ replies: { admin_list_users: { data: null, error: { code: "42501" } } } });
+    const saveNever = () => {
+      throw new Error("불리면 안 된다");
+    };
+    expect(await exportUsersCsv(forbidden.client, saveNever)).toEqual({ ok: false, step: "list", failure: "forbidden" });
+    expect(forbidden.calls.map((c) => c.fn)).toEqual(["admin_list_users"]);
+
+    const blocked = exportClient(5);
+    expect(await exportUsersCsv(blocked.client, () => false)).toEqual({ ok: false, step: "save", failure: "failed" });
+    const throws = exportClient(5);
+    expect(await exportUsersCsv(throws.client, saveNever)).toEqual({ ok: false, step: "save", failure: "failed" });
+    expect(throws.order.map((c) => c.fn)).toEqual(["admin_list_users", "admin_log_users_export"]);
   });
 });
 

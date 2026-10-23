@@ -1,4 +1,4 @@
-// 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql).
+// 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql · 0009_admin_access_log.sql).
 //
 //   is_admin()                          — 지금 로그인한 카카오 계정이 관리자 목록(public.admins)에 있는가
 //   admin_overview(p_consent_version)   — 집계(전체·게스트·카카오·서버 기록·현재 판 동의·최근 7일·30일 가입 — 0005 뒤에는 동의 판 분포·게스트/카카오 나누기)
@@ -6,7 +6,10 @@
 //   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005)
 //   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
 //   admin_list_admins()                 — 관리자 목록(0005)
+//   admin_log_users_export(p_rows)      — CSV 내려받기를 admin_audit에 남긴다(0009). 파일을 만들기 전에 부르고, 실패하면 파일을 만들지 않는다
 //
+// 접근 기록(0009): 위 읽기 함수도 서버가 부를 때마다 admin_audit에 한 줄씩 남긴다(누가·언제·무엇을·몇 명) — 화면은 따로 할 일이 없다.
+// CSV는 브라우저가 만들어 서버가 모르므로 화면이 admin_log_users_export를 부른다(exportUsersCsv).
 // 권한은 서버가 지킨다: 모든 함수가 is_admin()이 아니면 오류(42501)를 낸다. 여기서 세션을 보는 것은 화면 안내용일 뿐이다.
 // 응답·오류를 콘솔에 남기지 않는다(계정 메타데이터도 개인정보).
 
@@ -170,6 +173,42 @@ export async function fetchAllUsers(client: AdminClient, max: number = CSV_MAX_R
   } catch {
     return { ok: false, failure: "failed" };
   }
+}
+
+/** CSV 내려받기를 접근 기록에 남긴다(0009 admin_log_users_export) — 보내는 것은 파일에 담을 행 수뿐(계정 ID·파일 내용 없음). */
+export async function logUsersExport(client: AdminClient, rows: number): Promise<AdminResult<null>> {
+  try {
+    const { error } = await client.rpc("admin_log_users_export", { p_rows: rows });
+    return error === null ? { ok: true, value: null } : { ok: false, failure: failureOf(error) };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/** CSV 내려받기가 멈춘 곳 — list: 목록 모으기, log: 접근 기록 남기기(0009), save: 파일 만들기(브라우저) */
+export type CsvExportResult = { ok: true; rows: number } | { ok: false; step: "list" | "log" | "save"; failure: AdminFailure };
+
+/**
+ * CSV 내려받기 — 전체 목록을 모으고(fetchAllUsers, 서버가 쪽마다 list_users로 남긴다) → 접근 기록을 남긴 뒤(logUsersExport) →
+ * 파일을 만든다(save, 브라우저 Blob). 기록을 남기지 못하면 파일을 만들지 않는다 — 접근 기록 없이 계정 목록이 기기 밖으로 나가지 않게
+ * (0009가 아직 없는 서버도 마찬가지 — 화면이 설치 안내를 보인다). 파일 만들기가 실패해도 기록은 남는다(시도한 내려받기).
+ */
+export async function exportUsersCsv(
+  client: AdminClient,
+  save: (rows: readonly AdminUserRow[]) => boolean,
+  max: number = CSV_MAX_ROWS,
+): Promise<CsvExportResult> {
+  const all = await fetchAllUsers(client, max);
+  if (!all.ok) return { ok: false, step: "list", failure: all.failure };
+  const logged = await logUsersExport(client, all.value.length);
+  if (!logged.ok) return { ok: false, step: "log", failure: logged.failure };
+  let saved = false;
+  try {
+    saved = save(all.value);
+  } catch {
+    saved = false;
+  }
+  return saved ? { ok: true, rows: all.value.length } : { ok: false, step: "save", failure: "failed" };
 }
 
 // ── 0005_admin_tools.sql ─────────────────────────────────────────────────────

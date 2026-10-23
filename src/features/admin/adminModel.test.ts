@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ADMIN_AUDIT_RETENTION_YEARS,
   ADMIN_LIST_MAX,
   ADMIN_TEXT,
   ADMIN_PAGE_SIZE,
@@ -642,6 +643,15 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(lines[2]).toBe(`${guest.id},2026.09.28 00:30,-,게스트,,아니요,없음,`);
     expect(text).not.toMatch(/email|이메일|닉네임|state\b/);
     expect(usersCsv([], VERSION).slice(1).split("\r\n")).toEqual([lines[0], ""]);
+  });
+
+  it("접근 기록 안내 — 조회·내려받기가 admin_audit에 보존 기간(0009 정리와 같은 2년) 동안 남는다, 기록 함수가 없으면 파일을 만들지 않았다고 말한다", () => {
+    expect(ADMIN_AUDIT_RETENTION_YEARS).toBe(2);
+    expect(ADMIN_TEXT.accessLogNote).toBe("이 화면에서 조회하거나 내려받으면 누가 언제 했는지 admin_audit 표에 2년 동안 남아요.");
+    expect(ADMIN_TEXT.auditSetupHint).toContain("CSV를 만들지 않았어요");
+    expect(ADMIN_TEXT.auditSetupHint).toContain("supabase/migrations/0009_admin_access_log.sql");
+    // 화면 문구 규칙 — 하이픈만(em dash 없음, emDash.test.ts), 진단·판정 같은 말 없음
+    for (const t of [ADMIN_TEXT.accessLogNote, ADMIN_TEXT.auditSetupHint]) expect(t).not.toMatch(/—|판정/);
   });
 
   it("최대 5,000명 — 안내 문구와 같은 수. 파일 이름은 이 기기의 날짜", () => {
