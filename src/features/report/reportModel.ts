@@ -3,7 +3,9 @@
 // 엔진이 서버와 합친 스토어 상태 그대로다(요청 없음). 화면(ReportScreen)은 여기서 고른 글자만 그리고, 인쇄는 브라우저(window.print)가 한다.
 //
 // 순서: 머리(만든 날짜·계정 종류) → 프로필 → 재활 고려사항(산모수첩 확인 항목) → 증상 기록(표) → 오늘의 한 가지 질문(표)
-//       → 기록장(고를 때만) → 바닥글(면책·안내 규칙 버전·만든 곳).
+//       → 기록장(고를 때만) → 바닥글(면책·현재 앱의 안내 규칙 버전·만든 곳).
+// 버전(감사 추적): 증상 기록·기분 답 줄마다 그 기록을 남길 때의 규칙·질문 버전(SymptomRecord.rulesVersion·MoodCheckRecord.moodVersion)을
+//   보인다 — 버전이 없는 옛 기록·iOS 기록(null)에는 그리지 않는다. 바닥글의 버전은 리포트를 만든 이 앱의 지금 버전이다.
 // 원칙
 // - 앱 화면과 같은 말: 표시명·행 이름은 그 화면의 문구·함수를 가져다 쓴다(profileView·settingsView·recordView·journalView·rules/mood).
 //   새 문구는 reportText.ts(REPORT_TEXT)에만 둔다.
@@ -11,7 +13,8 @@
 // - 닉네임·이메일 없음: 계정은 종류만("게스트"/"카카오 사용자" — 닉네임을 뺀 displayName). 기록장 댓글의 작성 이름(authorName —
 //   작성 당시 닉네임일 수 있다)도 넣지 않는다 — 기록장은 본인 메모라 이름 없이 시각·내용만.
 // - 지어내지 않음: 산후 10일 전에는 오로를 묻지 않으므로(rules/record showsLochiaInputs) "아니요" 대신 값 없음(null — 화면은 "-").
-//   산후 일수가 없는 옛 기록·모르는 기분 문항도 null.
+//   산후 일수가 없는 옛 기록·모르는 기분 문항도 null. 지금과 다른 질문 버전으로 답한 기록의 문항도 null — 같은 번호라도 그 버전의
+//   질문이 지금 질문과 같다고 할 수 없다(답과 그 버전은 그대로 보인다). 버전이 없는 옛 기록은 지금처럼 지금 질문으로 보인다.
 // - 기록이 없는 섹션도 제목은 남긴다(화면이 "기록이 없어요." 한 줄을 그린다). 기록장은 고르지 않으면 섹션 자체가 없다.
 
 import content from "@/content";
@@ -25,7 +28,7 @@ import { RECORD_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/feat
 import { PROFILE_EDIT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { MOOD_QUESTIONS, moodAnswerLabel, normalizeMoodAnswer } from "@/rules/mood";
 import { showsLochiaInputs } from "@/rules/record";
-import { RULES_VERSION } from "@/rules/version";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { displayName, type Account } from "@/store/account";
 import { REPORT_TEXT } from "./reportText";
 
@@ -60,6 +63,8 @@ export interface ReportSymptomRow {
   result: string;
   /** 그 기록에서 켜져 있던 위험 증상 라벨(firedRiskLabels — 필드가 없는 기록은 빈 배열) */
   signals: string[];
+  /** "규칙 버전 rules-1.1" — 그 기록을 남길 때의 안내 규칙 버전. 버전이 없는 옛 기록·iOS 기록이면 null(그리지 않는다) */
+  rulesVersionText: string | null;
 }
 
 /** 기분 답 표의 한 줄 */
@@ -68,10 +73,12 @@ export interface ReportMoodRow {
   iso: string;
   /** "2026-10-14"(로컬 날짜). 못 읽는 시각이면 빈 문자열 */
   dateText: string;
-  /** 문항 — 모르는 questionID(다음 버전 문항 등)면 null */
+  /** 문항 — 모르는 questionID(다음 버전 문항 등)·지금과 다른 질문 버전으로 답한 기록이면 null */
   question: string | null;
   /** "네" / "글쎄요" / "아니요" */
   answer: string;
+  /** "질문 버전 mood-draft-0.1" — 답할 때의 질문 버전. 버전이 없는 옛 기록·iOS 기록이면 null(그리지 않는다) */
+  moodVersionText: string | null;
 }
 
 export interface ReportJournalComment {
@@ -110,6 +117,7 @@ export interface Report {
   /** 머리 — 만든 날짜 · 계정 종류 */
   meta: ReportRow[];
   sections: ReportSection[];
+  /** rulesVersion = "현재 앱의 안내 규칙 버전 rules-1.1"(리포트를 만든 이 앱의 지금 버전 — 기록마다의 버전은 각 줄에) */
   footer: { disclaimer: string; rulesVersion: string; origin: string };
 }
 
@@ -130,6 +138,10 @@ export const MOOD_COLUMNS: readonly string[] = [REPORT_TEXT.colDate, REPORT_TEXT
 const RETURN_TO_WORK_LABEL = PROFILE_EDIT_TEXT.returnToWork.replace(/\s*\(선택\)\s*$/, "");
 
 const yesNo = (value: boolean): string => (value ? REPORT_TEXT.yes : REPORT_TEXT.no);
+
+/** "규칙 버전 rules-1.1" — 버전이 없으면(옛 기록·iOS 기록) null. 칸 자체가 없는 객체(undefined)도 없음으로 본다. */
+const versionText = (label: string, version: string | null | undefined): string | null =>
+  typeof version === "string" && version.length > 0 ? `${label} ${version}` : null;
 
 /** 시각 문자열 → ms. 못 읽으면 null(맨 뒤로 보낸다). */
 function timeOf(iso: string): number | null {
@@ -212,8 +224,14 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
         flagged,
         result: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
         signals: firedRiskLabels(r),
+        rulesVersionText: versionText(REPORT_TEXT.recordRulesVersion, r.rulesVersion),
       };
     });
+}
+
+/** 지금 질문표(MOOD_QUESTIONS)로 그 답의 질문을 찾아도 되는가 — 버전이 같거나, 버전이 없는 옛 기록(지금까지와 같게) */
+function asksCurrentQuestions(check: MoodCheckRecord): boolean {
+  return typeof check.moodVersion !== "string" || check.moodVersion === MOOD_VERSION;
 }
 
 function moodRows(checks: readonly MoodCheckRecord[]): ReportMoodRow[] {
@@ -223,8 +241,9 @@ function moodRows(checks: readonly MoodCheckRecord[]): ReportMoodRow[] {
       id: c.id,
       iso: c.date,
       dateText: t === null ? "" : toLocalDateString(new Date(t)),
-      question: MOOD_QUESTIONS.find((q) => q.id === c.questionID)?.text ?? null,
+      question: asksCurrentQuestions(c) ? (MOOD_QUESTIONS.find((q) => q.id === c.questionID)?.text ?? null) : null,
       answer: moodAnswerLabel(normalizeMoodAnswer(c.answer)),
+      moodVersionText: versionText(REPORT_TEXT.recordMoodVersion, c.moodVersion),
     };
   });
 }
@@ -275,7 +294,7 @@ export function buildReport(state: PersistedState, account: Account | null, now:
     sections,
     footer: {
       disclaimer: content.disclaimers.home_footer, // 원문 — 앱 바닥 면책(HomeView.swift:27, DisclaimerBanner·사이드바와 같은 문장)
-      rulesVersion: `${REPORT_TEXT.rulesVersion} ${RULES_VERSION}`,
+      rulesVersion: `${REPORT_TEXT.appRulesVersion} ${RULES_VERSION}`, // 이 앱의 지금 버전 — 기록마다의 버전은 각 줄(rulesVersionText·moodVersionText)
       origin: REPORT_TEXT.origin,
     },
   };

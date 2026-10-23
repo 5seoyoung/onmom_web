@@ -12,6 +12,8 @@ import { REPORT_TEXT } from "./reportText";
 // 한 덩어리(시각·결과 + 이름/값 목록) — 좁은 폭에서 표를 가로로 밀면 가장 중요한 "결과" 열이 화면 밖에 숨는다. 컨테이너 쿼리라
 // 글자를 키우면(rem) 기준도 함께 커진다. 둘 중 하나는 display:none이라 낭독·초점에 두 번 나오지 않는다.
 // 표 줄의 구분선은 칸마다(border-separate) — 겹치는 반투명 선(border-collapse)이 열 경계에 진한 점을 남기지 않게.
+// 기록마다의 버전(감사 추적)은 열을 늘리지 않고 칸 안의 작은 글씨 한 줄(RecordVersion) — 증상 기록은 결과 아래 "규칙 버전",
+// 기분 답은 질문 아래 "질문 버전". 버전이 없는 옛 기록·iOS 기록에는 그리지 않는다. 바닥글의 버전은 이 앱의 지금 버전이다.
 
 /** 인쇄에서 카드 모양을 걷는다 — 흰 종이 위 제목·내용만 */
 const SECTION_CLASS = "flex flex-col gap-3 print:rounded-none print:p-0 print:shadow-none";
@@ -59,12 +61,21 @@ function InfoRows({ rows }: { rows: readonly ReportRow[] }) {
   );
 }
 
-/** 결과 — 색과 함께 글자가 상태를 말한다(색만으로 구분하지 않음). 켜져 있던 위험 증상이 기록에 있으면 그 라벨도. */
+/** 기록마다의 버전(규칙 버전·질문 버전) — 작은 글씨 한 줄. 버전이 없는 옛 기록·iOS 기록(null)은 그리지 않는다. */
+function RecordVersion({ text }: { text: string | null }) {
+  return text !== null ? <span className="mt-0.5 block text-xs text-text-secondary">{text}</span> : null;
+}
+
+/**
+ * 결과 — 색과 함께 글자가 상태를 말한다(색만으로 구분하지 않음). 켜져 있던 위험 증상이 기록에 있으면 그 라벨도,
+ * 그 결과를 낸 규칙의 버전이 기록에 있으면 그 버전도(표·좁은 폭 덩어리 모두 결과 바로 아래).
+ */
 function SymptomResult({ row }: { row: ReportSymptomRow }) {
   return (
     <>
       <span className={cx("font-semibold", row.flagged ? "text-state-alert-text" : "text-state-normal-text")}>{row.result}</span>
       {row.signals.length > 0 ? <span className="mt-0.5 block text-xs text-text-secondary">{row.signals.join(", ")}</span> : null}
+      <RecordVersion text={row.rulesVersionText} />
     </>
   );
 }
@@ -158,8 +169,11 @@ function MoodTable({ labelledBy, columns, rows }: { labelledBy: string; columns:
             <th scope="row" className={cx(TD, "text-left font-normal whitespace-nowrap tabular-nums")}>
               <time dateTime={r.iso}>{r.dateText}</time>
             </th>
-            {/* 모르는 문항(다음 버전 문항 등)은 빈 칸 — 답은 이용자의 기록이라 그대로 둔다 */}
-            <td className={TD}>{r.question ?? ""}</td>
+            {/* 모르는 문항(다음 버전 문항 등)은 빈 칸 — 답은 이용자의 기록이라 그대로 둔다. 질문 버전이 있으면 질문 아래 작은 글씨 */}
+            <td className={TD}>
+              {r.question ?? ""}
+              <RecordVersion text={r.moodVersionText} />
+            </td>
             <td className={cx(TD, "whitespace-nowrap font-semibold")}>{r.answer}</td>
           </tr>
         ))}
@@ -182,6 +196,7 @@ function MoodBlocks({ rows }: { rows: readonly ReportMoodRow[] }) {
           </div>
           {/* 모르는 문항(다음 버전 문항 등)은 질문 줄을 그리지 않는다 — 답은 이용자의 기록이라 그대로 둔다 */}
           {r.question !== null ? <p className="text-[0.9375rem] text-text-primary">{r.question}</p> : null}
+          <RecordVersion text={r.moodVersionText} />
         </li>
       ))}
     </ul>

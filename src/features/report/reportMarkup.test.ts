@@ -27,6 +27,8 @@ const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.met
 const stripComments = (source: string) =>
   source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "").replace(/\s\/\/.*$/gm, "");
 const noop = () => {};
+/** 정규식에 넣을 글자 — 특수 문자를 그대로 찾게 */
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 function symptom(id: string, date: string, patch: Partial<SymptomRecord> = {}): SymptomRecord {
   return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 2, redFlagCode: null, postpartumDays: 40, rulesVersion: RULES_VERSION, ...patch };
@@ -43,7 +45,8 @@ function fullState(): PersistedState {
     prePregnancyWeightKg: 55,
   });
   s = updateMaternity(s, { gdm: true });
-  s = addSymptomRecord(s, symptom("early", "2026-09-07T01:00:00.000Z", { postpartumDays: 3 }));
+  // 버전 칸이 생기기 전의 기록(rulesVersion null) 하나 + 지금 기록 하나
+  s = addSymptomRecord(s, symptom("early", "2026-09-07T01:00:00.000Z", { postpartumDays: 3, rulesVersion: null }));
   s = addSymptomRecord(s, symptom("flag", "2026-10-14T01:00:00.000Z", { feverEvent: true, redFlagCode: "fever_infection" }));
   s = addMoodCheck(s, { id: "m1", date: "2026-10-14T00:30:00.000Z", questionID: 2, answer: "yes", moodVersion: MOOD_VERSION });
   s = addMoodCheck(s, { id: "m2", date: "2026-10-13T00:30:00.000Z", questionID: 999, answer: "no", moodVersion: null });
@@ -129,17 +132,44 @@ describe("리포트 본문", () => {
     expect(html).toMatch(/<time dateTime="2026-10-13T00:30:00.000Z">2026-10-13<\/time><\/th><td [^>]*><\/td><td [^>]*>아니요<\/td>/);
   });
 
+  it("기록마다의 버전 — 증상 기록은 결과 아래 '규칙 버전', 기분 답은 질문 아래 '질문 버전'(작은 글씨), 버전이 없는 옛 기록에는 없다", () => {
+    const rulesNote = `<span class="mt-0.5 block text-xs text-text-secondary">${REPORT_TEXT.recordRulesVersion} ${RULES_VERSION}</span>`;
+    const moodNote = `<span class="mt-0.5 block text-xs text-text-secondary">${REPORT_TEXT.recordMoodVersion} ${MOOD_VERSION}</span>`;
+    // 표(넓은 폭·인쇄): 버전이 있는 기록(flag) 한 줄의 결과 칸에만 — 옛 기록(early)의 결과 칸에는 없다
+    const table = /<table aria-labelledby="report-symptoms"[\s\S]*?<\/table>/.exec(html)?.[0] ?? "";
+    const tableRows = table.split("<tr ").slice(1); // 머리 줄은 <tr>(속성 없음), 본문 줄만
+    expect(tableRows).toHaveLength(2);
+    expect(tableRows[0]).toContain("2026-10-14T01:00:00.000Z");
+    expect(tableRows[0]).toMatch(new RegExp(`병원 신호</span>${escape(rulesNote)}</td>`));
+    expect(tableRows[1]).toContain("2026-09-07T01:00:00.000Z");
+    expect(tableRows[1]).not.toContain(REPORT_TEXT.recordRulesVersion);
+    // 좁은 폭 덩어리에도 같은 한 줄(결과 아래)
+    const blocks = /<div class="@xl:hidden print:hidden"><ul [^>]*>([\s\S]*?)<\/ul><\/div>/.exec(html)?.[1] ?? "";
+    expect(count(blocks, rulesNote)).toBe(1);
+    expect(count(html, rulesNote)).toBe(2); // 표 한 번 + 덩어리 한 번(바닥글의 "현재 앱의 안내 규칙 버전"은 따로)
+    // 기분 답: 버전이 있는 답(m1)의 질문 아래 — 표·덩어리 각 한 번, 옛 답(m2)에는 없다
+    const moodTable = /<table aria-labelledby="report-moods"[\s\S]*?<\/table>/.exec(html)?.[0] ?? "";
+    expect(moodTable).toMatch(new RegExp(`2026-10-14</time></th><td [^>]*>[^<]+${escape(moodNote)}</td><td [^>]*>네</td>`));
+    expect(count(html, moodNote)).toBe(2);
+    expect(count(html, `${REPORT_TEXT.recordMoodVersion} `)).toBe(2);
+  });
+
+  it("\"판정\"이라는 말이 리포트 어디에도 없다(07 §1) — 새 버전 문구 포함", () => {
+    expect(html).not.toContain("판정");
+    for (const text of Object.values(REPORT_TEXT)) expect(text).not.toContain("판정");
+  });
+
   it("BMI 등 계산값 없음 — 키·체중은 입력값 그대로", () => {
     expect(html).not.toMatch(/BMI/i);
     expect(html).not.toContain("25.0");
     expect(html).toMatch(/<dt[^>]*>키 \(cm\)<\/dt><dd[^>]*>160<\/dd>/);
   });
 
-  it("바닥글: 면책 원문 · 만든 곳 · 안내 규칙 버전(작은 글씨)", () => {
+  it("바닥글: 면책 원문 · 만든 곳 · 현재 앱의 안내 규칙 버전(작은 글씨)", () => {
     expect(html).toMatch(/<footer /);
     expect(html).toContain("온맘은 의료기기가 아니며");
     expect(html).toContain(REPORT_TEXT.origin);
-    expect(html).toMatch(/<p class="text-xs[^"]*">리포트를 만든 때의 안내 규칙 버전 rules-/);
+    expect(html).toMatch(new RegExp(`<p class="text-xs[^"]*">현재 앱의 안내 규칙 버전 ${escape(RULES_VERSION)}</p></footer>`));
   });
 
   it("기록장 꺼짐: 기록장 제목도 글도 없다", () => {

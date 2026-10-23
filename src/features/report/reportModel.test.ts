@@ -75,11 +75,18 @@ describe("buildReport — 머리·순서", () => {
     expect(on.sections.map((s) => s.key)).toEqual(["profile", "maternity", "symptoms", "moods", "journal"]);
   });
 
-  it("바닥글: content.json 면책 원문 · 안내 규칙 버전 · 만든 곳", () => {
+  it("바닥글: content.json 면책 원문 · 현재 앱의 안내 규칙 버전 · 만든 곳", () => {
     const r = buildReport(onboarded(), GUEST, NOW, { includeJournal: false });
     expect(r.footer.disclaimer).toBe(content.disclaimers.home_footer);
-    expect(r.footer.rulesVersion).toBe(`리포트를 만든 때의 안내 규칙 버전 ${RULES_VERSION}`);
+    expect(r.footer.rulesVersion).toBe(`현재 앱의 안내 규칙 버전 ${RULES_VERSION}`);
     expect(r.footer.origin).toBe(REPORT_TEXT.origin);
+  });
+
+  it("버전 문구에 \"판정\"이 없다(07 §1) — 기록마다의 버전·바닥글 모두", () => {
+    for (const text of [REPORT_TEXT.recordRulesVersion, REPORT_TEXT.recordMoodVersion, REPORT_TEXT.appRulesVersion]) expect(text).not.toContain("판정");
+    let s = addSymptomRecord(onboarded(), symptom("x", "2026-10-14T06:05:00.000Z"));
+    s = addMoodCheck(s, mood("m", "2026-10-14T00:30:00.000Z", 2, "yes"));
+    expect(JSON.stringify(buildReport(s, GUEST, NOW, { includeJournal: true }))).not.toContain("판정");
   });
 });
 
@@ -190,7 +197,23 @@ describe("증상 기록", () => {
       flagged: true,
       result: RECORD_TEXT.recentFlagged,
       signals: [],
+      rulesVersionText: `규칙 버전 ${RULES_VERSION}`,
     });
+  });
+
+  it("줄마다 그 기록을 남길 때의 규칙 버전 — 지금 버전과 달라도 기록의 값 그대로, 버전이 없는 옛 기록·iOS 기록은 null(그리지 않음)", () => {
+    let s = addSymptomRecord(onboarded(), symptom("legacy", "2026-09-20T01:00:00.000Z", { rulesVersion: null }));
+    s = addSymptomRecord(s, symptom("older", "2026-10-01T01:00:00.000Z", { rulesVersion: "rules-1.0" }));
+    s = addSymptomRecord(s, symptom("now", "2026-10-14T01:00:00.000Z"));
+    // 칸 자체가 없는 객체(디코딩을 거치지 않은 값)도 없음으로 본다 — "undefined"를 찍지 않는다
+    s = { ...s, symptomHistory: [...s.symptomHistory, { ...symptom("raw", "2026-09-01T01:00:00.000Z"), rulesVersion: undefined } as unknown as SymptomRecord] };
+    const rows = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "symptoms").rows;
+    expect(rows.map((r) => [r.id, r.rulesVersionText])).toEqual([
+      ["now", `규칙 버전 ${RULES_VERSION}`],
+      ["older", "규칙 버전 rules-1.0"],
+      ["legacy", null],
+      ["raw", null],
+    ]);
   });
 
   it("결과: 신호 없음 = '위험신호 없음', 위험 증상 토글이 실린 기록은 그 라벨까지", () => {
@@ -234,6 +257,19 @@ describe("오늘의 한 가지 질문(기분) 답", () => {
       ["m2", "2026-10-13", MOOD_QUESTIONS.find((q) => q.id === 3)?.text, "글쎄요"],
       ["m1", "2026-10-12", MOOD_QUESTIONS.find((q) => q.id === 2)?.text, "네"],
     ]);
+    expect(t.rows.map((r) => r.moodVersionText)).toEqual([0, 1, 2].map(() => `질문 버전 ${MOOD_VERSION}`));
+  });
+
+  it("답마다 답할 때의 질문 버전 — 버전이 없는 옛 기록은 null(그리지 않음)이고 질문은 지금처럼 지금 질문", () => {
+    const s = addMoodCheck(onboarded(), mood("legacy", "2026-10-14T00:30:00.000Z", 2, "yes", null));
+    const [row] = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "moods").rows;
+    expect(row).toMatchObject({ id: "legacy", question: MOOD_QUESTIONS.find((q) => q.id === 2)?.text, answer: "네", moodVersionText: null });
+  });
+
+  it("지금과 다른 질문 버전으로 답한 기록은 질문을 지어내지 않는다(같은 번호라도 그 버전의 질문을 모른다) — 답과 버전은 그대로", () => {
+    const s = addMoodCheck(onboarded(), mood("other", "2026-10-14T00:30:00.000Z", 2, "no", "mood-1.0"));
+    const [row] = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "moods").rows;
+    expect(row).toMatchObject({ id: "other", question: null, answer: "아니요", moodVersionText: "질문 버전 mood-1.0" });
   });
 
   it("모르는 문항(다음 버전 문항 등)은 문항만 비우고 답은 남긴다 — 예외 없음", () => {
