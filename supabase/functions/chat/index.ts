@@ -5,6 +5,8 @@
 // - 키: ANTHROPIC_API_KEY는 Supabase 함수 비밀(secrets)에만 둔다. 웹·저장소에는 없다.
 // - 로그인 확인은 함수 안에서 한다(Supabase Auth getUser — 익명 게스트 계정 포함). 게이트웨이 JWT 확인은 끈다
 //   (supabase/config.toml [functions.chat] verify_jwt = false).
+// - AI 국외 이전 동의: 로그인 확인 뒤 0008_ai_consents.sql의 public.ai_consents에서 그 사용자 id의 행만 서버 키로 읽는다 —
+//   판이 지금 판(_shared/aiConsent.ts)이 아니면 한도·LLM 없이 403 ai_consent_required.
 // - 한도: 0003_llm_usage.sql의 llm_consume_quota()를 서버 키로 부른다. 서버 키는 Supabase가 넣어 주는 SUPABASE_SECRET_KEYS의 "default"가
 //   먼저, 없으면 예전 SUPABASE_SERVICE_ROLE_KEY(_shared/auth.ts pickServerKey). SUPABASE_URL도 Supabase가 넣어 준다.
 // - 모델 claude-opus-5 + 서버 쪽 거절 대체(fallbacks: "default"). stop_reason을 content보다 먼저 확인한다. 어시스턴트 선채움 없음.
@@ -22,6 +24,8 @@ import Anthropic from "npm:@anthropic-ai/sdk@0.128.0";
 // @ts-ignore: Next tsc는 npm: 지정자를 모른다(Deno 전용)
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
+import { AI_CONSENTS_TABLE } from "../_shared/aiConsent.ts";
+// @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { pickServerKey } from "../_shared/auth.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseAllowedOrigins } from "../_shared/cors.ts";
@@ -30,7 +34,7 @@ import { CHAT_GLOBAL_DAILY_LIMIT_DEFAULT, CHAT_HOURLY_LIMIT_DEFAULT, CHAT_LIMIT_
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { LLM_DEADLINE_MS } from "../_shared/prompts.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { createComplete, createConsumeQuota, createVerifyUser } from "./adapters.ts";
+import { createComplete, createConsumeQuota, createReadAiConsentVersion, createVerifyUser } from "./adapters.ts";
 import type { LlmMessageParams } from "./adapters.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { createChatHandler } from "./handler.ts";
@@ -69,7 +73,7 @@ if (missing.length > 0) console.error(JSON.stringify({ fn: "chat", startup: "mis
 // 어느 서버 키를 쓰는지(종류만) — 예전 키가 없어질 때 확인용
 else console.log(JSON.stringify({ fn: "chat", startup: "ok", server_key: serverKey?.source, ai }));
 
-/** 서버 키(service_role 권한) 클라이언트 — 이 함수 안에서만(로그인 확인·한도). 사용자 기록(user_states)은 읽지 않는다. */
+/** 서버 키(service_role 권한) 클라이언트 — 이 함수 안에서만(로그인 확인·동의 확인·한도). 사용자 기록(user_states)은 읽지 않는다. */
 const admin =
   supabaseUrl && serverKey
     ? createClient(supabaseUrl, serverKey.key, {
@@ -95,6 +99,10 @@ const handler = createChatHandler({
   allowedOrigins: parseAllowedOrigins(Deno.env.get("ALLOWED_ORIGINS")),
   aiEnabled,
   verifyUser: createVerifyUser(admin ? { getUser: (token: string) => admin.auth.getUser(token) } : null),
+  // 서버 키는 RLS를 건너뛴다 — 방금 확인한 사용자 id(userId)의 행만 읽는다
+  readAiConsentVersion: createReadAiConsentVersion(
+    admin ? (userId: string) => admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle() : null,
+  ),
   consumeQuota: createConsumeQuota(admin ? (fn, args) => admin.rpc(fn, args) : null, {
     hourlyLimit,
     windowSeconds: CHAT_LIMIT_WINDOW_SECONDS,

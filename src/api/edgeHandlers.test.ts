@@ -2,6 +2,7 @@
 // handler는 웹 표준 Request/Response만 써서 Node(vitest)에서도 Deno와 같게 돈다. Deno 연결(index.ts)은 `deno check`로 본다.
 
 import { describe, expect, it } from "vitest";
+import { AI_CONSENT_REQUIRED_CODE, AI_CONSENT_VERSION } from "../../supabase/functions/_shared/aiConsent";
 import { CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, CHAT_MAX_MESSAGE_CHARS, type QuotaResult } from "../../supabase/functions/_shared/chat";
 import { SUBSTANCE_OUTPUT_SCHEMA } from "../../supabase/functions/_shared/prompts";
 import { CRISIS_REPLY } from "../../supabase/functions/_shared/safety";
@@ -23,28 +24,39 @@ describe("Edge Function chat", () => {
     /** 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 켬 */
     aiEnabled?: boolean;
     user?: { id: string } | null | "throw";
+    /** 서버의 동의 기록 판 — 생략하면 지금 판, null이면 행 없음 */
+    consent?: string | null | "throw";
     quota?: QuotaResult | null | "throw";
     llm?: LlmCallResult;
   }
 
   function setup(opts: Options = {}) {
-    const calls = { verify: [] as string[], quota: [] as string[], llm: [] as LlmCallInput[] };
+    const calls = { verify: [] as string[], consent: [] as string[], quota: [] as string[], llm: [] as LlmCallInput[], order: [] as string[] };
     const logs: ChatLogEntry[] = [];
     const handler = createChatHandler({
       allowedOrigins: [SITE],
       aiEnabled: opts.aiEnabled ?? true,
       verifyUser: (token) => {
         calls.verify.push(token);
+        calls.order.push("verify");
         if (opts.user === "throw") return Promise.reject(new Error("down"));
         return Promise.resolve(opts.user === undefined ? { id: "user-1" } : opts.user);
       },
+      readAiConsentVersion: (id) => {
+        calls.consent.push(id);
+        calls.order.push("consent");
+        if (opts.consent === "throw") return Promise.reject(new Error("db down"));
+        return Promise.resolve(opts.consent === undefined ? AI_CONSENT_VERSION : opts.consent);
+      },
       consumeQuota: (id) => {
+        calls.order.push("quota");
         calls.quota.push(id);
         if (opts.quota === "throw") return Promise.reject(new Error("db down"));
         return Promise.resolve(opts.quota === undefined ? "ok" : opts.quota);
       },
       complete: (input) => {
         calls.llm.push(input);
+        calls.order.push("llm");
         return Promise.resolve(opts.llm ?? { kind: "text", text: "  보통 4~6주 정도 나와요.  ", usage });
       },
       log: (e) => logs.push(e),
@@ -109,13 +121,65 @@ describe("Edge Function chat", () => {
     expect(await res.json()).toEqual({ ok: false, code: "bad_output" });
   });
 
-  it("자해 표현 — 로그인·한도·LLM 없이 고정 위기 안내", async () => {
-    const { handler, calls, logs } = setup({ user: null });
+  it("자해 표현 — 로그인·동의·한도·LLM 없이 고정 위기 안내", async () => {
+    const { handler, calls, logs } = setup({ user: null, consent: null });
     const res = await handler(post(ask("요즘 죽고 싶어요"), { Authorization: "" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, text: CRISIS_REPLY, flagged: true });
-    expect(calls.verify.length + calls.quota.length + calls.llm.length).toBe(0);
+    expect(calls.verify.length + calls.consent.length + calls.quota.length + calls.llm.length).toBe(0);
     expect(JSON.stringify(logs)).not.toContain("죽고");
+  });
+
+  describe("AI 국외 이전 동의 — 로그인 확인 뒤, 한도·LLM 전에(0008_ai_consents.sql)", () => {
+    it("지금 판의 동의 기록이 있으면 진행 — 순서: 로그인 → 동의 → 한도 → LLM, 동의는 확인된 사용자 id로만 읽는다", async () => {
+      const { handler, calls } = setup({ user: { id: "verified-user-9" } });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, text: "보통 4~6주 정도 나와요." });
+      expect(calls.consent).toEqual(["verified-user-9"]);
+      expect(calls.quota).toEqual(["verified-user-9"]);
+      expect(calls.order).toEqual(["verify", "consent", "quota", "llm"]);
+    });
+
+    it.each([
+      ["행 없음", null],
+      ["예전 판", "web-2026-09-28"],
+      ["다음 판(웹이 먼저 올림)", "web-2099-01-01"],
+      ["빈 판", ""],
+    ])("%s → 403 ai_consent_required — 한도를 쓰지 않고 LLM을 부르지 않는다", async (_label, consent) => {
+      const { handler, calls, logs } = setup({ consent });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(403);
+      expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+      expect(await res.json()).toEqual({ ok: false, code: AI_CONSENT_REQUIRED_CODE });
+      expect(AI_CONSENT_REQUIRED_CODE).toBe("ai_consent_required");
+      expect(calls.quota).toHaveLength(0);
+      expect(calls.llm).toHaveLength(0);
+      expect(logs).toEqual([{ fn: "chat", status: 403, ms: logs[0].ms, preset: "patient_edu", code: "ai_consent_required" }]);
+      expect(JSON.stringify(logs)).not.toContain("user-1");
+    });
+
+    it("약물 체크(substance)도 같은 동의가 있어야 한다", async () => {
+      const { handler, calls } = setup({ consent: null });
+      const res = await handler(post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }] }));
+      expect(res.status).toBe(403);
+      expect(await res.json()).toEqual({ ok: false, code: "ai_consent_required" });
+      expect(calls.quota.length + calls.llm.length).toBe(0);
+    });
+
+    it("동의 기록을 읽지 못하면 503 consent_unavailable — 한도·LLM 없이(열린 쪽으로 틀리지 않게)", async () => {
+      const { handler, calls } = setup({ consent: "throw" });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ ok: false, code: "consent_unavailable" });
+      expect(calls.quota.length + calls.llm.length).toBe(0);
+    });
+
+    it("로그인이 안 되면 동의 기록을 읽지 않는다(401)", async () => {
+      const { handler, calls } = setup({ user: null });
+      expect((await handler(post(ask()))).status).toBe(401);
+      expect(calls.consent).toHaveLength(0);
+    });
   });
 
   it("자해 표현 — 약물 프리셋은 422 flagged(표 결과를 그대로 두게)", async () => {
@@ -198,6 +262,7 @@ describe("Edge Function chat", () => {
       allowedOrigins: [SITE],
       aiEnabled: true,
       verifyUser: async () => ({ id: "u" }),
+      readAiConsentVersion: async () => AI_CONSENT_VERSION,
       consumeQuota: async () => "ok",
       complete: async () => {
         throw new Error("secret internals at stack");
@@ -211,7 +276,12 @@ describe("Edge Function chat", () => {
     expect(text + JSON.stringify(logs)).not.toContain("secret");
   });
 
-  it("서버 쪽 AI 스위치가 꺼져 있으면 503 ai_disabled — 본문도 읽지 않고 로그인·한도·LLM 없음, 기록은 코드만", async () => {
+  /** 의존성을 하나도 부르지 않았다(로그인·동의·한도·LLM … — setup이 기록하는 모든 호출) */
+  const nothingCalled = (calls: Record<string, readonly unknown[]>) => {
+    for (const [name, list] of Object.entries(calls)) expect(list, name).toEqual([]);
+  };
+
+  it("서버 쪽 AI 스위치가 꺼져 있으면 503 ai_disabled — 본문도 읽지 않고 로그인·동의·한도·LLM 없음, 기록은 코드만", async () => {
     const { handler, calls, logs } = setup({ aiEnabled: false });
     // 정상 질문·위기 표현·틀린 본문 모두 같은 답 — 본문을 보기 전에 끝난다(위기 표현은 웹이 먼저 거른다)
     for (const req of [
@@ -226,7 +296,7 @@ describe("Edge Function chat", () => {
       expect(res.headers.get("cache-control")).toBe("no-store");
       expect(await res.json()).toEqual({ ok: false, code: CHAT_AI_DISABLED_CODE });
     }
-    expect(calls).toEqual({ verify: [], quota: [], llm: [] });
+    nothingCalled(calls);
     expect(logs).toHaveLength(4);
     for (const entry of logs) {
       expect(Object.keys(entry).sort()).toEqual(["code", "fn", "ms", "status"]);
@@ -241,15 +311,24 @@ describe("Edge Function chat", () => {
     expect(pre.status).toBe(204);
     expect(pre.headers.get("access-control-allow-methods")).toBe("POST, OPTIONS");
     expect((await handler(new Request("https://proj.supabase.co/functions/v1/chat", { headers: { Origin: SITE } }))).status).toBe(405);
-    expect(calls).toEqual({ verify: [], quota: [], llm: [] });
+    nothingCalled(calls);
   });
 
-  it("서버 쪽 AI 스위치가 켜져 있으면 그대로 — 로그인 확인 → 한도 → LLM", async () => {
+  it("서버 쪽 AI 스위치가 켜져 있으면 그대로 — 로그인 확인 → 동의 확인 → 한도 → LLM", async () => {
     const { handler, calls } = setup({ aiEnabled: true });
     const res = await handler(post(ask()));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, text: "보통 4~6주 정도 나와요." });
     expect([calls.verify.length, calls.quota.length, calls.llm.length]).toEqual([1, 1, 1]);
+    expect(calls.order).toEqual(["verify", "consent", "quota", "llm"]);
+  });
+
+  it("서버 쪽 AI 스위치가 꺼져 있으면 동의 기록이 없어도 403이 아니라 503 ai_disabled — 스위치가 먼저", async () => {
+    const { handler, calls } = setup({ aiEnabled: false, consent: null });
+    const res = await handler(post(ask()));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ ok: false, code: CHAT_AI_DISABLED_CODE });
+    nothingCalled(calls);
   });
 
   it("CORS — 허용 밖 origin 403, preflight 204, 너무 큰 본문 413, GET 405", async () => {

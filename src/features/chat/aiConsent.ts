@@ -13,14 +13,17 @@
 // 동의하지 않기는 저장하지 않는다 — 그 화면을 떠나면 다음에 다시 묻는다(설정에서 바꿀 곳이 없으므로 영구 거절로 두지 않는다).
 
 import { useCallback, useState, useSyncExternalStore } from "react";
+// 판은 Edge Function chat과 한 곳에서 — 함수가 서버 기록(ai_consents)의 판을 이 값과 비교한다(가져오는 것이 없는 순수 모듈)
+import { AI_CONSENT_VERSION } from "../../../supabase/functions/_shared/aiConsent";
 
-export const AI_CONSENT_STORAGE_KEY = "onmom.web.aiConsent.v1";
 /**
  * 동의 글자의 판 — 동의 카드(AiConsentCard의 제목·첫 문장)나 전문(consentText.ts AI_TRANSFER_NOTICE.details)을 바꾸면 올린다.
- * aiConsent.test.ts가 글자의 지문을 판에 묶어 두어, 판을 올리지 않고 글자만 바꾸면 테스트가 실패한다.
- * .2: 동의 카드를 "안내"에서 "동의 요청"으로(제목·첫 문장) 바꾸고 전문을 펼쳐 보이게 함(AI 기능을 켜기 전 — 이 판에 동의한 이용자 없음).
+ * 값은 supabase/functions/_shared/aiConsent.ts에 있다(웹과 함수가 같은 값). aiConsent.test.ts가 글자의 지문을 판에 묶어 두어,
+ * 판을 올리지 않고 글자만 바꾸면 테스트가 실패한다.
  */
-export const AI_CONSENT_VERSION = "web-2026-09-28.2";
+export { AI_CONSENT_VERSION };
+
+export const AI_CONSENT_STORAGE_KEY = "onmom.web.aiConsent.v1";
 
 /**
  * AI를 쓰는 방식 — off: 서버에 묻지 않는다(스위치 꺼짐·이번에 동의하지 않음), ask: 쓰기 전에 동의를 묻는다, on: 서버에 묻는다.

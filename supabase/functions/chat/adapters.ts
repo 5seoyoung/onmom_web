@@ -43,6 +43,31 @@ export function createVerifyUser(auth: AuthClientLike | null): (token: string) =
   };
 }
 
+// MARK: AI 국외 이전 동의(0008_ai_consents.sql)
+
+/**
+ * 이 사용자의 동의 행을 읽는 함수 — index.ts는 서버 키 클라이언트로
+ * `admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle()`을 넣는다.
+ * 서버 키는 RLS를 건너뛰므로 사용자 id로 거르는 것이 유일한 경계다.
+ */
+export type AiConsentQuery = (userId: string) => PromiseLike<{ data: unknown; error: unknown }>;
+
+/**
+ * 동의 판 읽기. 행이 없으면 null(→ 403 ai_consent_required), 읽지 못하면(연결 안 됨·오류) throw(→ 503, LLM을 부르지 않는다).
+ * 돌아온 행의 user_id가 물은 id와 다르면 동의가 없는 것으로 본다(다른 사람의 동의로 통과하지 않게 — 닫힌 쪽으로).
+ */
+export function createReadAiConsentVersion(query: AiConsentQuery | null): (userId: string) => Promise<string | null> {
+  return async (userId) => {
+    if (!query) throw new Error("consent_not_configured");
+    const { data, error } = await query(userId);
+    if (error) throw new Error("consent_check_failed");
+    if (data === null || typeof data !== "object") return null;
+    const row = data as { user_id?: unknown; version?: unknown };
+    if (row.user_id !== userId) return null;
+    return typeof row.version === "string" ? row.version : null;
+  };
+}
+
 // MARK: 요청 한도
 
 export interface QuotaArgs {

@@ -2,13 +2,17 @@
 // Deno에서만 도는 index.ts는 이것들에 진짜 클라이언트(Anthropic SDK·supabase-js)를 넣기만 한다 — 여기서는 가짜 클라이언트로 동작을 확인한다.
 // SDK 오류 클래스는 SDK와 같은 상속 구조의 가짜로 넣는다(APIConnectionTimeoutError ⊂ APIConnectionError ⊂ APIError).
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
+import { AI_CONSENTS_TABLE } from "../../supabase/functions/_shared/aiConsent";
 import { isTokenRejection, pickServerKey, TOKEN_REJECTION_CODES } from "../../supabase/functions/_shared/auth";
 import { SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../../supabase/functions/_shared/prompts";
 import {
   buildMessageParams,
   createComplete,
   createConsumeQuota,
+  createReadAiConsentVersion,
   createVerifyUser,
   interpretLlmResponse,
   mapLlmError,
@@ -91,6 +95,34 @@ describe("createVerifyUser", () => {
   });
   it("서버 키가 없으면(클라이언트 없음) throw", async () => {
     await expect(createVerifyUser(null)("tok")).rejects.toThrow();
+  });
+});
+
+describe("createReadAiConsentVersion — 서버 키로 읽으므로 확인된 사용자 id의 행만", () => {
+  it("물은 사용자 id로 한 번 읽고, 그 행의 판을 돌려준다", async () => {
+    const query = vi.fn(async (userId: string) => ({ data: { user_id: userId, version: "web-2026-09-28.2" }, error: null }));
+    await expect(createReadAiConsentVersion(query)("u-1")).resolves.toBe("web-2026-09-28.2");
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledWith("u-1");
+  });
+  it("행 없음·판이 글자가 아님·다른 사용자의 행 → null(동의 없음 → 403)", async () => {
+    await expect(createReadAiConsentVersion(async () => ({ data: null, error: null }))("u-1")).resolves.toBeNull();
+    await expect(createReadAiConsentVersion(async () => ({ data: { user_id: "u-1", version: 2 }, error: null }))("u-1")).resolves.toBeNull();
+    await expect(
+      createReadAiConsentVersion(async () => ({ data: { user_id: "someone-else", version: "web-2026-09-28.2" }, error: null }))("u-1"),
+    ).resolves.toBeNull();
+  });
+  it("읽기 오류·서버 키 없음 → throw(503 — LLM을 부르지 않는다)", async () => {
+    await expect(createReadAiConsentVersion(async () => ({ data: null, error: { message: "x" } }))("u-1")).rejects.toThrow();
+    await expect(createReadAiConsentVersion(null)("u-1")).rejects.toThrow();
+  });
+  it("index.ts(Deno)의 연결 — ai_consents에서 user_id = 확인된 사용자 id인 행 하나만(maybeSingle) 읽는다", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../supabase/functions/chat/index.ts", import.meta.url)), "utf8");
+    expect(AI_CONSENTS_TABLE).toBe("ai_consents");
+    expect(src).toContain(
+      '(userId: string) => admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle()',
+    );
+    expect(src.match(/AI_CONSENTS_TABLE/g)).toHaveLength(2); // 가져오기 한 번 + 읽기 한 번(쓰기 없음)
   });
 });
 
