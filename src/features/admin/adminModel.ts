@@ -4,6 +4,14 @@
 // (계정 ID, 가입·접속 시각, 게스트/카카오, 동의 판, 서버 기록 유무와 마지막 저장 시각)만 돌려준다. 이메일·닉네임도 받지 않는다.
 // 화면 아래 안내(ADMIN_TEXT.privacyNote)는 이 목록과 같아야 한다 — 칸을 늘리거나 줄이면 함께 고친다.
 // 날짜·시각은 한국 시간(Asia/Seoul)으로 보인다 — 서버가 "하루"를 한국 자정 기준으로 나누는 것과 맞춘다.
+// 관리자가 이 화면에서 보고 하는 일(집계·목록·계정 찾기·관리자 목록·계정 삭제·CSV 내려받기)은 모두 admin_audit에 한 줄씩 남는다
+// (삭제는 0005, 나머지는 0009 — 접근 기록). 권한 확인(is_admin)만은 남지 않는다.
+
+/**
+ * 관리자 행동·접근 기록(admin_audit)의 보존 기간(년) — supabase/migrations/0009_admin_access_log.sql 정리 함수의
+ * `interval '2 years'`와 같아야 한다(adminAccessLogSql.test.ts). 안전성 확보조치 기준 제8조(민감정보 처리 시스템은 2년 이상) — 법률 확인 전.
+ */
+export const ADMIN_AUDIT_RETENTION_YEARS = 2;
 
 export const ADMIN_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (관리자 화면 전체 — 메뉴에 링크하지 않는 운영자용 화면)
@@ -104,6 +112,12 @@ export const ADMIN_TEXT = {
   adminsEmpty: "관리자가 없어요",
   colAddedAt: "등록일",
   me: "나",
+
+  // ── 접근 기록(supabase/migrations/0009_admin_access_log.sql) ──
+  // 웹 신규 문구 — CPO 확인 필요 (화면 위 개인정보 안내 뒤에 이어지는 문장 — 이 화면의 조회·내려받기가 감사 기록에 남는다는 것과 보존 기간)
+  accessLogNote: `이 화면에서 조회하거나 내려받으면 누가 언제 했는지 admin_audit 표에 ${ADMIN_AUDIT_RETENTION_YEARS}년 동안 남아요.`,
+  // 웹 신규 문구 — CPO 확인 필요 (CSV 내려받기 기록 함수가 서버에 없을 때 — 기록 없이 파일을 만들지 않는다)
+  auditSetupHint: "CSV를 만들지 않았어요. Supabase SQL Editor에서 supabase/migrations/0009_admin_access_log.sql을 실행했는지 확인해 주세요.",
 } as const;
 
 /** 한 쪽에 보이는 사용자 수. 서버에는 하나 더 달라고 해 다음 쪽이 있는지 안다. */

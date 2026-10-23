@@ -49,7 +49,8 @@ describe("0007 — 먼저 있어야 하는 것 · 예약 이름", () => {
     expect(CODE.match(/select cron\.schedule\(/g)).toHaveLength(2);
     expect(CODE).not.toContain("onmom-anon-cleanup");
     const jobs = new Set(ALL.flatMap((f) => [...sqlCode(f).matchAll(/select cron\.schedule\( '([a-z-]+)',/g)].map((m) => m[1])));
-    expect([...jobs].sort()).toEqual(["onmom-anon-cleanup", "onmom-llm-usage-cleanup", "onmom-send-reminders"]);
+    // 0009가 관리자 기록 정리(onmom-admin-audit-cleanup)를 더한다 — 예약 이름은 파일마다 달라야 한다
+    expect([...jobs].sort()).toEqual(["onmom-admin-audit-cleanup", "onmom-anon-cleanup", "onmom-llm-usage-cleanup", "onmom-send-reminders"]);
   });
 });
 
