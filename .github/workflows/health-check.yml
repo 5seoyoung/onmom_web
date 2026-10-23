@@ -1,0 +1,62 @@
+# 매일 운영 점검 — 하나라도 실패하면 이 작업이 빨간 ✗로 끝나고 GitHub이 메일을 보낸다(예약 실행의 알림은 이 워크플로를 만든 사람,
+# 또는 cron 줄을 마지막으로 바꾼 사람에게 간다 — 저장소 주인이 push하면 주인. 개인 Settings → Notifications → Actions에서 메일 알림이
+# 켜져 있어야 한다).
+# 실행 화면 아래 Summary에 항목별 통과·실패 표가 한국어로 나온다. 대응: docs/RUNBOOK.md(로컬 운영 안내서), docs/SUPABASE_SETUP.md G·I.
+#
+# 점검(모두 읽기만 — 운영 DB·함수·설정을 바꾸지 않고, 사용자 데이터를 읽지 않는다. 내용: scripts/ops/health-check.mjs 머리말):
+#   사이트   /onmom_web/ · /onmom_web/login/ · robots.txt가 200, 로그인 화면의 CSP 메타가 정확히 1개이고 script-src에 'unsafe-inline' 없음
+#   Supabase 프로젝트 상태(Management API)가 ACTIVE_HEALTHY — 무료 요금제 일시 중지면 "Free plan paused — restore in dashboard"
+#   함수     videos·chat에 사이트 주소로 사전 요청(OPTIONS)만 → 2xx(로그인·AI 호출 없음)
+#   DB       Supabase CLI(supabase.yml과 같은 고정 버전·link 방식)로 SELECT 한 문장 — pg_cron 실패 0·예약 3개가 기대 주기 안에 실행,
+#            pg_net 응답 5xx 0(최근 26시간, 개수만)
+#   의존성   npm audit --omit=dev — 높음·치명 0
+# 모든 항목을 다 돌린 뒤 표를 쓰고, 하나라도 실패면 마지막에 실패로 끝낸다.
+#
+# 필요한 값 — Supabase 워크플로(supabase.yml)가 이미 쓰는 이름 그대로, 새로 넣을 값은 없다:
+#   Secrets:   SUPABASE_ACCESS_TOKEN (없으면 Supabase·DB 항목이 실패로 표시된다)
+#   Variables: SUPABASE_PROJECT_REF (비면 운영 프로젝트 movrwmoniopgetdmagon) · NEXT_PUBLIC_SITE_URL (선택 — 비면 GitHub Pages 주소)
+#   DB 비밀번호(SUPABASE_DB_PASSWORD)는 쓰지 않는다 — CLI 2.117의 link는 DB에 접속하지 않고, db query --linked는 Management API로 돈다.
+# 비밀값은 로그에 찍지 않는다: set -x 없음, 토큰은 환경 변수로만 넘기고 스크립트가 출력 전에 가린다(GitHub도 Secret 값을 가린다).
+name: Health check
+
+on:
+  schedule:
+    # 매일 00:15 UTC = 한국 시간 09:15. GitHub가 몇 분~수십 분 늦게 시작할 수 있다(점검 기준에 여유가 있다).
+    # 공개 저장소는 60일 동안 활동(커밋 등)이 없으면 예약 실행이 꺼진다 — GitHub이 미리 메일로 알린다(Actions에서 다시 켬).
+    - cron: "15 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: health-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # 이 작업은 저장소에 쓰지 않는다 — 뒤 단계(Supabase CLI)가 GITHUB_TOKEN을 .git/config에서 읽을 수 없게 한다
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # supabase.yml과 같은 커밋·CLI 버전(올릴 때는 두 파일을 함께). 설치에 실패해도 다음 단계는 돌아 다른 항목을 점검하고,
+      # DB 항목은 "Supabase CLI가 없음"으로 실패한다.
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        continue-on-error: true
+        with:
+          version: 2.117.0
+
+      - name: 점검 (사이트 · Supabase · 함수 · DB · 의존성)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
+        run: node scripts/ops/health-check.mjs
