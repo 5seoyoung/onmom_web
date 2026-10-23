@@ -4,7 +4,8 @@
 # 필요한 값 — 저장소 Settings → Secrets and variables → Actions
 #   Secrets:   SUPABASE_ACCESS_TOKEN(필수) · SUPABASE_DB_PASSWORD(필수) · ANTHROPIC_API_KEY(AI 상담을 켤 때)
 #              VAPID_PRIVATE_KEY · VAPID_SUBJECT · REMINDER_CRON_SECRET(매일 리마인더를 켤 때 — docs/PWA_AND_REMINDERS.md §5)
-#   Variables: SUPABASE_PROJECT_REF(필수) · VIDEO_API_URL · ALLOWED_ORIGINS · CHAT_HOURLY_LIMIT · CHAT_GLOBAL_DAILY_LIMIT
+#   Variables: SUPABASE_PROJECT_REF(필수) · VIDEO_API_URL · ALLOWED_ORIGINS
+#              CHAT_HOURLY_LIMIT · CHAT_GUEST_HOURLY_LIMIT · CHAT_GLOBAL_HOURLY_LIMIT · CHAT_GLOBAL_DAILY_LIMIT(AI 상담 한도 — 공개값)
 #              ANTHROPIC_WORKSPACE_ID(조직 전체용 Anthropic 키일 때 — wrkspc_…, Secrets에 넣어도 읽는다)
 #              NEXT_PUBLIC_VAPID_PUBLIC_KEY(사이트 빌드와 같은 값 — 함수 비밀값 VAPID_PUBLIC_KEY로 넣어 비밀 키와 짝이 맞는지 함수가 확인)
 #              AI_CHAT_SERVER_ENABLED(서버 쪽 AI 상담 스위치 — "true"·"false"·비움만. 함수 비밀값 AI_CHAT_SERVER_ENABLED로 넣는다)
@@ -56,6 +57,8 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
+          CHAT_GUEST_HOURLY_LIMIT: ${{ vars.CHAT_GUEST_HOURLY_LIMIT }}
+          CHAT_GLOBAL_HOURLY_LIMIT: ${{ vars.CHAT_GLOBAL_HOURLY_LIMIT }}
           CHAT_GLOBAL_DAILY_LIMIT: ${{ vars.CHAT_GLOBAL_DAILY_LIMIT }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
@@ -105,8 +108,9 @@ jobs:
             done
           fi
 
-          # AI 상담 요청 한도(선택) — 한 사람의 1시간 요청 수(1~1000), 전체 하루 요청 수. 비우면 함수 기본값(supabase/functions/_shared/chat.ts).
-          for name in CHAT_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT; do
+          # AI 상담 요청 한도(선택) — 한 사람의 1시간 요청 수(1~1000), 익명 게스트의 1시간 요청 수(1~1000, 한 사람 한도까지),
+          # 전체 1시간 요청 수, 전체 하루 요청 수. 비우면 함수 기본값(supabase/functions/_shared/chat.ts chatLimitsFromEnv — 30·5·60·500).
+          for name in CHAT_HOURLY_LIMIT CHAT_GUEST_HOURLY_LIMIT CHAT_GLOBAL_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT; do
             v="${!name:-}"
             v="${v//[[:space:]]/}"
             if [ -n "${v}" ] && ! [[ "${v}" =~ ^[1-9][0-9]{0,6}$ ]]; then
@@ -114,6 +118,12 @@ jobs:
               exit 1
             fi
           done
+          # 게스트 한도가 한 사람 한도보다 크면 함수는 한 사람 한도까지만 쓴다(게스트에게 더 주지 않는다) — 실수일 수 있어 알린다.
+          guest_limit="${CHAT_GUEST_HOURLY_LIMIT//[[:space:]]/}"
+          user_limit="${CHAT_HOURLY_LIMIT//[[:space:]]/}"
+          if [ -n "${guest_limit}" ] && [ -n "${user_limit}" ] && [ "${guest_limit}" -gt "${user_limit}" ]; then
+            echo "::warning title=CHAT_GUEST_HOURLY_LIMIT::게스트 한도(${guest_limit})가 한 사람 한도(${user_limit})보다 큽니다. 함수는 ${user_limit}까지만 씁니다."
+          fi
 
           # Anthropic 워크스페이스(선택) — 조직 전체용 키는 요청마다 워크스페이스를 지정해야 한다(chat/index.ts anthropic-workspace-id).
           wsid="${ANTHROPIC_WORKSPACE_ID//[[:space:]]/}"
@@ -213,6 +223,8 @@ jobs:
           VIDEO_API_URL: ${{ vars.VIDEO_API_URL }}
           ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
+          CHAT_GUEST_HOURLY_LIMIT: ${{ vars.CHAT_GUEST_HOURLY_LIMIT }}
+          CHAT_GLOBAL_HOURLY_LIMIT: ${{ vars.CHAT_GLOBAL_HOURLY_LIMIT }}
           CHAT_GLOBAL_DAILY_LIMIT: ${{ vars.CHAT_GLOBAL_DAILY_LIMIT }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
@@ -227,7 +239,7 @@ jobs:
           envfile="$(mktemp)"
           trap 'rm -f "${envfile}"' EXIT
           names=()
-          for name in ANTHROPIC_API_KEY ANTHROPIC_WORKSPACE_ID VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET VAPID_PUBLIC_KEY AI_CHAT_SERVER_ENABLED; do
+          for name in ANTHROPIC_API_KEY ANTHROPIC_WORKSPACE_ID VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GUEST_HOURLY_LIMIT CHAT_GLOBAL_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET VAPID_PUBLIC_KEY AI_CHAT_SERVER_ENABLED; do
             value="${!name:-}"
             value="${value//[[:space:]]/}"   # 붙여 넣을 때 딸려 온 공백·줄바꿈 제거(모든 값이 공백을 담지 않는다)
             if [ -z "${value}" ]; then
@@ -339,6 +351,11 @@ jobs:
         env:
           JOB_STATUS: ${{ job.status }}
           CHAT_CHECK: ${{ steps.smoke.outputs.chat }}
+          # AI 상담 한도 — 공개값(Variables)이라 요약에 값을 적는다. 비밀값은 여기 넘기지 않는다.
+          CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
+          CHAT_GUEST_HOURLY_LIMIT: ${{ vars.CHAT_GUEST_HOURLY_LIMIT }}
+          CHAT_GLOBAL_HOURLY_LIMIT: ${{ vars.CHAT_GLOBAL_HOURLY_LIMIT }}
+          CHAT_GLOBAL_DAILY_LIMIT: ${{ vars.CHAT_GLOBAL_DAILY_LIMIT }}
         run: |
           {
             echo "## Supabase 배포"
@@ -353,6 +370,19 @@ jobs:
                 no_key) echo "- ⚠️ AI 상담 함수가 로그인을 확인할 서버 키를 찾지 못했습니다 — AI 상담을 켜기 전에 개발자에게(설정 안내 B-4)." ;;
                 *) echo "- ⚠️ AI 상담 함수의 로그인 확인을 하지 못했습니다 — Edge Functions → chat → Logs 확인." ;;
               esac
+              # 이름:함수 기본값(supabase/functions/_shared/chat.ts) — 비어 있으면 서버에 이미 있던 값이 남고, 처음이면 기본값. 숫자만 적는다.
+              limits=""
+              for pair in CHAT_HOURLY_LIMIT:30 CHAT_GUEST_HOURLY_LIMIT:5 CHAT_GLOBAL_HOURLY_LIMIT:60 CHAT_GLOBAL_DAILY_LIMIT:500; do
+                name="${pair%%:*}"
+                v="${!name:-}"
+                v="${v//[^0-9]/}"
+                if [ -n "${v}" ]; then
+                  limits="${limits} \`${name}=${v}\`"
+                else
+                  limits="${limits} \`${name}\`(비어 있음 - 서버 값 유지, 처음이면 기본 ${pair##*:})"
+                fi
+              done
+              echo "- AI 상담 한도(Variables):${limits}. 게스트 한도는 한 사람 한도까지만 쓰고, 함수 Logs의 시작 줄 \`limits\`에서 실제 값을 봅니다."
               echo "- 웹 사이트는 이 워크플로가 바꾸지 않습니다. 사이트 설정(NEXT_PUBLIC_*)을 바꿨다면 Actions → Deploy to GitHub Pages → Run workflow."
             else
               echo "- 중간에 실패했습니다. 빨간 ✗ 단계의 메시지와 docs/SUPABASE_SETUP.md \"I. 문제 해결\"을 확인하세요."

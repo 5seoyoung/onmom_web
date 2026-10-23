@@ -6,13 +6,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { AI_CONSENTS_TABLE } from "../../supabase/functions/_shared/aiConsent";
-import { isTokenRejection, pickServerKey, TOKEN_REJECTION_CODES } from "../../supabase/functions/_shared/auth";
+import { isGuestUser, isTokenRejection, pickServerKey, TOKEN_REJECTION_CODES } from "../../supabase/functions/_shared/auth";
 import { SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../../supabase/functions/_shared/prompts";
 import {
   buildMessageParams,
   createComplete,
   createConsumeQuota,
   createReadAiConsentVersion,
+  createRefundQuota,
   createVerifyUser,
   interpretLlmResponse,
   mapLlmError,
@@ -70,10 +71,25 @@ describe("createVerifyUser", () => {
     getUser: vi.fn(async () => result),
   });
 
-  it("유효한 토큰 → 사용자 id(익명 게스트 포함)", async () => {
+  it("유효한 토큰 → 사용자 id(익명 게스트 포함)와 게스트 여부", async () => {
     const a = auth({ data: { user: { id: "u-1" } }, error: null });
-    await expect(createVerifyUser(a)("tok")).resolves.toEqual({ id: "u-1" });
+    await expect(createVerifyUser(a)("tok")).resolves.toEqual({ id: "u-1", guest: false });
     expect(a.getUser).toHaveBeenCalledWith("tok");
+  });
+  it("게스트 = Auth가 돌려준 사용자가 익명이고 익명 말고 다른 로그인 수단이 없을 때(카카오를 연결했으면 게스트가 아니다)", async () => {
+    const verify = (user: Parameters<typeof isGuestUser>[0]) =>
+      createVerifyUser(auth({ data: { user: { id: "u-1", ...user } }, error: null }))("tok");
+    await expect(verify({ is_anonymous: true, identities: [] })).resolves.toEqual({ id: "u-1", guest: true });
+    await expect(verify({ is_anonymous: true, identities: [{ provider: "anonymous" }] })).resolves.toEqual({ id: "u-1", guest: true });
+    await expect(verify({ is_anonymous: true })).resolves.toEqual({ id: "u-1", guest: true });
+    // 카카오 이메일이 확인되지 않아 is_anonymous가 남은 연결 계정(src/auth/kakaoAccount.ts) — 카카오 계정 한도
+    await expect(verify({ is_anonymous: true, identities: [{ provider: "anonymous" }, { provider: "kakao" }] })).resolves.toEqual({
+      id: "u-1",
+      guest: false,
+    });
+    await expect(verify({ is_anonymous: false, identities: [{ provider: "kakao" }] })).resolves.toEqual({ id: "u-1", guest: false });
+    expect(isGuestUser({ is_anonymous: true, identities: null })).toBe(true);
+    expect(isGuestUser({})).toBe(false);
   });
   it("403 bad_jwt·계정 없음·로그아웃 → null(401)", async () => {
     for (const error of [
@@ -127,22 +143,67 @@ describe("createReadAiConsentVersion — 서버 키로 읽으므로 확인된 �
 });
 
 describe("createConsumeQuota", () => {
-  const limits = { hourlyLimit: 30, windowSeconds: 3600, globalDailyLimit: 500 };
+  const limits = { hourlyLimit: 30, guestHourlyLimit: 5, globalHourlyLimit: 60, globalDailyLimit: 500, windowSeconds: 3600 };
+  const kakao = { id: "u-1", guest: false };
+  const guest = { id: "g-1", guest: true };
 
-  it("llm_consume_quota를 사용자 id·한도로 부르고 결과를 읽는다", async () => {
+  it("llm_consume_quota(다섯 인자)를 사용자 id·한도로 부르고 결과를 읽는다 — 전체 1시간 상한도 함께", async () => {
     const rpc = vi.fn(async () => ({ data: "user_limit", error: null }));
-    await expect(createConsumeQuota(rpc, limits)("u-1")).resolves.toBe("user_limit");
+    await expect(createConsumeQuota(rpc, limits)(kakao)).resolves.toBe("user_limit");
     expect(rpc).toHaveBeenCalledWith("llm_consume_quota", {
       p_user_id: "u-1",
       p_user_limit: 30,
       p_window_seconds: 3600,
       p_global_daily_limit: 500,
+      p_global_hourly_limit: 60,
     });
   });
+  it("익명 게스트는 게스트 1시간 한도(기본 5)로 센다 — 전체 상한은 같다", async () => {
+    const rpc = vi.fn(async () => ({ data: "ok", error: null }));
+    await expect(createConsumeQuota(rpc, limits)(guest)).resolves.toBe("ok");
+    expect(rpc).toHaveBeenCalledWith("llm_consume_quota", {
+      p_user_id: "g-1",
+      p_user_limit: 5,
+      p_window_seconds: 3600,
+      p_global_daily_limit: 500,
+      p_global_hourly_limit: 60,
+    });
+  });
+  it("전체 상한(1시간·하루) → global_limit을 그대로 읽는다", async () => {
+    await expect(createConsumeQuota(async () => ({ data: "global_limit", error: null }), limits)(guest)).resolves.toBe("global_limit");
+  });
   it("오류·모르는 값·클라이언트 없음 → null(LLM을 부르지 않는다)", async () => {
-    await expect(createConsumeQuota(async () => ({ data: "ok", error: { message: "x" } }), limits)("u")).resolves.toBeNull();
-    await expect(createConsumeQuota(async () => ({ data: "maybe", error: null }), limits)("u")).resolves.toBeNull();
-    await expect(createConsumeQuota(null, limits)("u")).resolves.toBeNull();
+    await expect(createConsumeQuota(async () => ({ data: "ok", error: { message: "x" } }), limits)(kakao)).resolves.toBeNull();
+    await expect(createConsumeQuota(async () => ({ data: "maybe", error: null }), limits)(kakao)).resolves.toBeNull();
+    await expect(createConsumeQuota(null, limits)(kakao)).resolves.toBeNull();
+  });
+});
+
+describe("createRefundQuota — 한도 한 번 돌려주기(llm_refund_quota)", () => {
+  it("사용자 id로 한 번 부르고, 지웠으면(true) true", async () => {
+    const rpc = vi.fn(async () => ({ data: true, error: null }));
+    await expect(createRefundQuota(rpc)("u-1")).resolves.toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith("llm_refund_quota", { p_user_id: "u-1" });
+  });
+  it("지울 줄이 없음·오류·던짐·클라이언트 없음 → false(던지지 않는다)", async () => {
+    await expect(createRefundQuota(async () => ({ data: false, error: null }))("u")).resolves.toBe(false);
+    await expect(createRefundQuota(async () => ({ data: true, error: { message: "x" } }))("u")).resolves.toBe(false);
+    await expect(createRefundQuota(async () => ({ data: "true", error: null }))("u")).resolves.toBe(false);
+    await expect(
+      createRefundQuota(async () => {
+        throw new Error("network");
+      })("u"),
+    ).resolves.toBe(false);
+    await expect(createRefundQuota(null)("u")).resolves.toBe(false);
+  });
+  it("index.ts(Deno)가 한도·돌려주기를 서버 키 rpc로 연결하고, 한도는 chatLimitsFromEnv로 읽는다", () => {
+    const src = readFileSync(fileURLToPath(new URL("../../supabase/functions/chat/index.ts", import.meta.url)), "utf8");
+    expect(src).toContain("const limits = chatLimitsFromEnv(env);");
+    expect(src).toContain("refundQuota: createRefundQuota(admin ? (fn, args) => admin.rpc(fn, args) : null),");
+    expect(src).toMatch(/consumeQuota: createConsumeQuota\(admin \? \(fn, args\) => admin\.rpc\(fn, args\) : null, \{\s*\.\.\.limits,\s*windowSeconds: CHAT_LIMIT_WINDOW_SECONDS,\s*\}\)/);
+    // 예전 한도 두 값을 따로 읽던 줄은 없다(게스트·전체 1시간이 빠지지 않게)
+    expect(src).not.toContain("parsePositiveInt(");
   });
 });
 

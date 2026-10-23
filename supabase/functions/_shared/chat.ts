@@ -157,10 +157,20 @@ export function isAiChatServerEnabled(env: string | null | undefined): boolean {
   return env != null && env.trim() === "true";
 }
 
-// MARK: 요청 한도(0003_llm_usage.sql llm_consume_quota)
+// MARK: 요청 한도(0003_llm_usage.sql·0008_ai_consents.sql llm_consume_quota)
 
-/** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) */
+/** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) — 카카오 계정·카카오를 연결한 게스트 */
 export const CHAT_HOURLY_LIMIT_DEFAULT = 30;
+/**
+ * 익명 게스트(카카오를 연결하지 않은 Supabase 익명 계정)가 1시간에 보낼 수 있는 LLM 요청 수(CHAT_GUEST_HOURLY_LIMIT).
+ * 게스트 계정은 버튼 한 번으로 새로 만들 수 있어 더 낮게 둔다. CHAT_HOURLY_LIMIT보다 크게 넣어도 그 값까지만 쓴다(chatLimitsFromEnv).
+ */
+export const CHAT_GUEST_HOURLY_LIMIT_DEFAULT = 5;
+/**
+ * 서비스 전체가 1시간에 보낼 수 있는 LLM 요청 수(CHAT_GLOBAL_HOURLY_LIMIT) — 하루 상한을 한두 시간 만에 다 써 버리지 않게(비용·남용).
+ * 넘으면 그 시간 동안 모두 앱 규칙 안내로 답한다(503 busy).
+ */
+export const CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT = 60;
 /**
  * 서비스 전체가 24시간에 보낼 수 있는 LLM 요청 수 — 익명 계정을 여럿 만들어 비용을 키우는 것을 막는 상한(CHAT_GLOBAL_DAILY_LIMIT).
  * 넘으면 모두 앱 규칙 안내로 답한다. 이용자가 늘면 함수 비밀값으로 올린다(docs/SUPABASE_FUNCTIONS.md).
@@ -168,11 +178,66 @@ export const CHAT_HOURLY_LIMIT_DEFAULT = 30;
 export const CHAT_GLOBAL_DAILY_LIMIT_DEFAULT = 500;
 /** 사용자 한도의 창(초) */
 export const CHAT_LIMIT_WINDOW_SECONDS = 3600;
+/** 한 사람·게스트 1시간 한도의 최댓값(환경 변수가 이보다 크면 여기까지) */
+export const CHAT_HOURLY_LIMIT_MAX = 1000;
 
 /** 환경 변수의 양의 정수. 비었거나 틀리면 기본값, 너무 크면 max로 자른다. */
 export function parsePositiveInt(env: string | null | undefined, fallback: number, max = 1_000_000): number {
   if (env == null || !/^\s*[1-9][0-9]*\s*$/.test(env)) return fallback;
   return Math.min(Number(env.trim()), max);
+}
+
+/** 한도 환경 변수의 이름 — 함수 비밀값·GitHub Variables(.github/workflows/supabase.yml이 형식을 확인하고 옮겨 넣는다) */
+export const CHAT_LIMIT_ENV = {
+  hourlyLimit: "CHAT_HOURLY_LIMIT",
+  guestHourlyLimit: "CHAT_GUEST_HOURLY_LIMIT",
+  globalHourlyLimit: "CHAT_GLOBAL_HOURLY_LIMIT",
+  globalDailyLimit: "CHAT_GLOBAL_DAILY_LIMIT",
+} as const;
+
+export interface ChatLimits {
+  hourlyLimit: number;
+  guestHourlyLimit: number;
+  globalHourlyLimit: number;
+  globalDailyLimit: number;
+}
+
+/** 이름 → 기본값(워크플로 요약·테스트가 같은 값을 쓴다) */
+export const CHAT_LIMIT_DEFAULTS: Readonly<ChatLimits> = {
+  hourlyLimit: CHAT_HOURLY_LIMIT_DEFAULT,
+  guestHourlyLimit: CHAT_GUEST_HOURLY_LIMIT_DEFAULT,
+  globalHourlyLimit: CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT,
+  globalDailyLimit: CHAT_GLOBAL_DAILY_LIMIT_DEFAULT,
+};
+
+/**
+ * 환경 변수 → 한도. 비었거나 틀린 값은 기본값(parsePositiveInt — 기존 두 값과 같은 규칙), 한 사람·게스트 한도는 1000까지.
+ * 게스트 한도는 한 사람 한도보다 클 수 없다(잘못 넣어도 낮은 쪽 — 게스트에게 더 많이 주지 않는다).
+ */
+export function chatLimitsFromEnv(get: (name: string) => string | null | undefined): ChatLimits {
+  const hourlyLimit = parsePositiveInt(get(CHAT_LIMIT_ENV.hourlyLimit), CHAT_HOURLY_LIMIT_DEFAULT, CHAT_HOURLY_LIMIT_MAX);
+  const guest = parsePositiveInt(get(CHAT_LIMIT_ENV.guestHourlyLimit), CHAT_GUEST_HOURLY_LIMIT_DEFAULT, CHAT_HOURLY_LIMIT_MAX);
+  return {
+    hourlyLimit,
+    guestHourlyLimit: Math.min(guest, hourlyLimit),
+    globalHourlyLimit: parsePositiveInt(get(CHAT_LIMIT_ENV.globalHourlyLimit), CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT),
+    globalDailyLimit: parsePositiveInt(get(CHAT_LIMIT_ENV.globalDailyLimit), CHAT_GLOBAL_DAILY_LIMIT_DEFAULT),
+  };
+}
+
+/**
+ * LLM 호출이 이 코드로 실패하면 방금 쓴 한도 한 번을 돌려준다(llm_refund_quota) — Anthropic이 답을 만들지 않았고(비용이 들지 않았고)
+ * 이용자가 일부러 일으킬 수 없는 실패: 연결 실패(llm_unreachable)·혼잡/서버 오류(llm_busy — 429·500·529)·키/권한(not_configured)·
+ * 모델 없음(llm_model_unavailable). chat/adapters.ts mapLlmError·createComplete가 만드는 코드다.
+ * 돌려주지 않는 것:
+ * - 시간 초과(timeout) — Anthropic이 답을 만들고 있었을 수 있어 비용이 든다. 일부러 오래 걸리는 질문으로 한도 없이 쓰는 것을 막는다.
+ * - 요청 거절(llm_rejected — 400) — 같은 요청을 다시 보내도 같다. 돌려주면 거절될 요청을 한도 없이 되풀이해 Anthropic 요청 한도를 채울 수 있다.
+ * - 알 수 없는 오류(llm_error)·거절(refused)·잘림(truncated)·형식 오류(bad_output)·빈 답(empty) — 답을 만든(비용이 든) 뒤일 수 있다.
+ */
+export const CHAT_REFUNDABLE_LLM_ERRORS: readonly string[] = ["llm_unreachable", "llm_busy", "not_configured", "llm_model_unavailable"];
+
+export function isRefundableLlmError(code: string): boolean {
+  return CHAT_REFUNDABLE_LLM_ERRORS.includes(code);
 }
 
 export type QuotaResult = "ok" | "user_limit" | "global_limit";

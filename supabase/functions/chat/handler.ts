@@ -10,8 +10,9 @@
 //   1) 본문 크기(Content-Length가 없어도 상한까지만 읽는다) → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
 //   3) 안전 선필터: 사용자 메시지 중 하나라도 자해·자살 표현 → LLM을 부르지 않고 고정 위기 안내(로그인·동의·한도와 무관하게 늘 답한다)
 //   4) 로그인 확인 → 5) AI 국외 이전 동의 확인(public.ai_consents — 방금 확인한 사용자 id의 행만, 판이 지금 판이 아니면 403 ai_consent_required)
-//   6) 사용자별 한도(1시간 30회)·서비스 전체 하루 상한 → 7) LLM(claude-opus-5, 거절 시 서버 쪽 대체 모델)
+//   6) 사용자별 한도(1시간 30회, 익명 게스트 5회)·서비스 전체 1시간·하루 상한 → 7) LLM(claude-opus-5, 거절 시 서버 쪽 대체 모델)
 //   동의가 없으면 한도를 쓰지도 LLM을 부르지도 않는다(_shared/aiConsent.ts).
+//   LLM이 답을 만들지 않은 실패(연결·혼잡·키·모델 — _shared/chat.ts CHAT_REFUNDABLE_LLM_ERRORS)면 방금 쓴 한도 한 번을 돌려준다.
 // 응답: 성공 { ok: true, text } | { ok: true, json } (약물), 실패 { ok: false, code } + 4xx/5xx. 스택·내부 메시지는 내보내지 않는다.
 // 로그: 상태·코드·preset·소요 시간·토큰 수·대체 모델 사용 여부만. 질문·답·컨텍스트·사용자 id는 기록하지 않는다(민감정보).
 
@@ -20,7 +21,7 @@ import { AI_CONSENT_REQUIRED_CODE, AI_CONSENT_VERSION } from "../_shared/aiConse
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { checkOrigin, corsHeaders, failure, jsonResponse, preflightHeaders } from "../_shared/cors.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { bearerToken, CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
+import { bearerToken, CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, isRefundableLlmError, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
 import type { ChatMessageInput, ChatPreset, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseSubstanceOutput, SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../_shared/prompts.ts";
@@ -60,6 +61,14 @@ export interface ChatLogEntry {
   input_tokens?: number;
   output_tokens?: number;
   fallback?: boolean;
+  /** LLM이 답을 만들지 않은 실패에서 한도 한 번을 돌려줬는가(돌려줄 실패일 때만 남긴다) */
+  refunded?: boolean;
+}
+
+/** Auth가 확인한 사용자 — guest: 익명 게스트(카카오 미연결)라 1시간 한도가 더 낮다(_shared/auth.ts isGuestUser) */
+export interface VerifiedUser {
+  id: string;
+  guest: boolean;
 }
 
 export interface ChatHandlerDeps {
@@ -70,14 +79,19 @@ export interface ChatHandlerDeps {
    */
   aiEnabled: boolean;
   /** Supabase 로그인 토큰 확인 — 유효하지 않으면 null, 확인 자체를 못 하면 throw */
-  verifyUser: (token: string) => Promise<{ id: string } | null>;
+  verifyUser: (token: string) => Promise<VerifiedUser | null>;
   /**
    * 이 사용자의 AI 국외 이전 동의 판(public.ai_consents.version) — 행이 없으면 null, 확인하지 못하면 throw(→ 503, LLM을 부르지 않는다).
    * 서버 키로 읽으므로 RLS가 거르지 않는다 — 반드시 인자로 받은(방금 확인한) 사용자 id의 행만 읽는다(adapters.ts createReadAiConsentVersion).
    */
   readAiConsentVersion: (userId: string) => Promise<string | null>;
-  /** 한도 확인 + 한 번 기록(llm_consume_quota). 확인하지 못하면 null 또는 throw — 그때는 LLM을 부르지 않는다. */
-  consumeQuota: (userId: string) => Promise<QuotaResult | null>;
+  /**
+   * 한도 확인 + 한 번 기록(llm_consume_quota — 사용자 1시간 한도는 게스트면 더 낮다, 전체 1시간·하루 상한).
+   * 확인하지 못하면 null 또는 throw — 그때는 LLM을 부르지 않는다.
+   */
+  consumeQuota: (user: VerifiedUser) => Promise<QuotaResult | null>;
+  /** 방금 쓴 한도 한 번을 돌려준다(llm_refund_quota) — 돌려줬으면 true. 실패해도 응답은 원래 실패 그대로다. */
+  refundQuota: (userId: string) => Promise<boolean>;
   complete: (input: LlmCallInput) => Promise<LlmCallResult>;
   log: (entry: ChatLogEntry) => void;
   now?: () => number;
@@ -138,7 +152,7 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
 
       const token = bearerToken(req.headers.get("authorization"));
       if (!token) return fail(401, "unauthorized");
-      let user: { id: string } | null;
+      let user: VerifiedUser | null;
       try {
         user = await deps.verifyUser(token);
       } catch {
@@ -157,7 +171,7 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
 
       let quota: QuotaResult | null;
       try {
-        quota = await deps.consumeQuota(user.id);
+        quota = await deps.consumeQuota(user);
       } catch {
         quota = null;
       }
@@ -171,7 +185,17 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
         messages: request.messages,
         jsonSchema: request.preset === "substance" ? SUBSTANCE_OUTPUT_SCHEMA : null,
       });
-      if (result.kind === "error") return fail(result.status, result.code);
+      if (result.kind === "error") {
+        // Anthropic이 답을 만들지 않은 실패(연결·혼잡·키·모델)면 방금 쓴 한 번을 돌려준다. 시간 초과·요청 거절·알 수 없는 오류는 돌려주지 않는다.
+        if (!isRefundableLlmError(result.code)) return fail(result.status, result.code);
+        let refunded = false;
+        try {
+          refunded = await deps.refundQuota(user.id);
+        } catch {
+          refunded = false;
+        }
+        return fail(result.status, result.code, { refunded });
+      }
       const usage = {
         input_tokens: result.usage.inputTokens,
         output_tokens: result.usage.outputTokens,

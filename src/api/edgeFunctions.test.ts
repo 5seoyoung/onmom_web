@@ -12,12 +12,19 @@ import {
   CHAT_AI_DISABLED_CODE,
   CHAT_CONTEXT_FIELDS,
   CHAT_GLOBAL_DAILY_LIMIT_DEFAULT,
+  CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT,
+  CHAT_GUEST_HOURLY_LIMIT_DEFAULT,
   CHAT_HOURLY_LIMIT_DEFAULT,
+  CHAT_LIMIT_DEFAULTS,
+  CHAT_LIMIT_ENV,
   CHAT_MAX_MESSAGE_CHARS,
   CHAT_MAX_MESSAGES,
   CHAT_MAX_WEEK,
+  CHAT_REFUNDABLE_LLM_ERRORS,
   charCount,
+  chatLimitsFromEnv,
   isAiChatServerEnabled,
+  isRefundableLlmError,
   latestUserMessage,
   parseChatContext,
   parsePositiveInt,
@@ -86,9 +93,61 @@ describe("웹과 함수가 같은 값을 쓴다", () => {
     expect(LLM_MODEL).toBe("claude-opus-5");
     expect(LLM_FALLBACK_BETA).toBe("server-side-fallback-2026-07-01");
   });
-  it("한도 기본값 — 1시간 30회, 하루 전체 500회", () => {
+  it("한도 기본값 — 한 사람 1시간 30회 · 익명 게스트 1시간 5회 · 전체 1시간 60회 · 전체 하루 500회", () => {
     expect(CHAT_HOURLY_LIMIT_DEFAULT).toBe(30);
+    expect(CHAT_GUEST_HOURLY_LIMIT_DEFAULT).toBe(5);
+    expect(CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT).toBe(60);
     expect(CHAT_GLOBAL_DAILY_LIMIT_DEFAULT).toBe(500);
+    expect(CHAT_LIMIT_DEFAULTS).toEqual({ hourlyLimit: 30, guestHourlyLimit: 5, globalHourlyLimit: 60, globalDailyLimit: 500 });
+  });
+});
+
+describe("chatLimitsFromEnv — 한도 환경 변수(기존 두 값과 같은 규칙: 양의 정수, 아니면 기본값)", () => {
+  const from = (env: Record<string, string>) => chatLimitsFromEnv((name) => env[name]);
+
+  it("비었으면 기본값", () => {
+    expect(from({})).toEqual(CHAT_LIMIT_DEFAULTS);
+    expect(from({ CHAT_HOURLY_LIMIT: "", CHAT_GUEST_HOURLY_LIMIT: "  ", CHAT_GLOBAL_HOURLY_LIMIT: "", CHAT_GLOBAL_DAILY_LIMIT: "" })).toEqual(
+      CHAT_LIMIT_DEFAULTS,
+    );
+  });
+
+  it("넣은 값을 읽는다(앞뒤 공백 무시)", () => {
+    expect(from({ CHAT_HOURLY_LIMIT: "10", CHAT_GUEST_HOURLY_LIMIT: " 3 ", CHAT_GLOBAL_HOURLY_LIMIT: "40", CHAT_GLOBAL_DAILY_LIMIT: "300" })).toEqual({
+      hourlyLimit: 10,
+      guestHourlyLimit: 3,
+      globalHourlyLimit: 40,
+      globalDailyLimit: 300,
+    });
+  });
+
+  it.each(["0", "-3", "1.5", "abc", "5회"])("틀린 값(%s)은 기본값", (bad) => {
+    expect(from({ CHAT_GUEST_HOURLY_LIMIT: bad }).guestHourlyLimit).toBe(CHAT_GUEST_HOURLY_LIMIT_DEFAULT);
+    expect(from({ CHAT_GLOBAL_HOURLY_LIMIT: bad }).globalHourlyLimit).toBe(CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT);
+  });
+
+  it("게스트 한도는 한 사람 한도보다 클 수 없다 — 크게 넣어도 한 사람 한도까지, 한 사람·게스트는 1000까지", () => {
+    expect(from({ CHAT_HOURLY_LIMIT: "10", CHAT_GUEST_HOURLY_LIMIT: "50" }).guestHourlyLimit).toBe(10);
+    expect(from({ CHAT_HOURLY_LIMIT: "3" }).guestHourlyLimit).toBe(3); // 기본 5보다 한 사람 한도가 낮으면 그 값
+    expect(from({ CHAT_HOURLY_LIMIT: "5000", CHAT_GUEST_HOURLY_LIMIT: "5000" })).toMatchObject({ hourlyLimit: 1000, guestHourlyLimit: 1000 });
+    expect(from({ CHAT_GLOBAL_HOURLY_LIMIT: "5000" }).globalHourlyLimit).toBe(5000);
+  });
+
+  it("이름은 함수 비밀값·GitHub Variables와 같다", () => {
+    expect(Object.values(CHAT_LIMIT_ENV)).toEqual(["CHAT_HOURLY_LIMIT", "CHAT_GUEST_HOURLY_LIMIT", "CHAT_GLOBAL_HOURLY_LIMIT", "CHAT_GLOBAL_DAILY_LIMIT"]);
+  });
+});
+
+describe("한도 돌려주기 — LLM이 답을 만들지 않았고 이용자가 일으킬 수 없는 실패만", () => {
+  it("연결 실패·혼잡·키·모델 없음만 돌려준다", () => {
+    expect([...CHAT_REFUNDABLE_LLM_ERRORS]).toEqual(["llm_unreachable", "llm_busy", "not_configured", "llm_model_unavailable"]);
+    for (const code of CHAT_REFUNDABLE_LLM_ERRORS) expect(isRefundableLlmError(code)).toBe(true);
+  });
+
+  it("시간 초과(비용이 들었을 수 있음)·요청 거절(되풀이 가능)·알 수 없는 오류·답이 온 실패는 돌려주지 않는다", () => {
+    for (const code of ["timeout", "llm_rejected", "llm_error", "refused", "truncated", "bad_output", "empty", "internal"]) {
+      expect(isRefundableLlmError(code), code).toBe(false);
+    }
   });
 });
 

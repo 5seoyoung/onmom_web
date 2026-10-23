@@ -11,6 +11,7 @@ import {
   type ChatLogEntry,
   type LlmCallInput,
   type LlmCallResult,
+  type VerifiedUser,
 } from "../../supabase/functions/chat/handler";
 import { createVideosHandler, type VideosLogEntry } from "../../supabase/functions/videos/handler";
 
@@ -23,15 +24,25 @@ describe("Edge Function chat", () => {
   interface Options {
     /** 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 켬 */
     aiEnabled?: boolean;
-    user?: { id: string } | null | "throw";
+    user?: VerifiedUser | null | "throw";
     /** 서버의 동의 기록 판 — 생략하면 지금 판, null이면 행 없음 */
     consent?: string | null | "throw";
     quota?: QuotaResult | null | "throw";
     llm?: LlmCallResult;
+    /** 돌려주기 결과 — 생략하면 true */
+    refund?: boolean | "throw";
   }
 
   function setup(opts: Options = {}) {
-    const calls = { verify: [] as string[], consent: [] as string[], quota: [] as string[], llm: [] as LlmCallInput[], order: [] as string[] };
+    const calls = {
+      verify: [] as string[],
+      consent: [] as string[],
+      quota: [] as string[],
+      quotaUsers: [] as VerifiedUser[],
+      refund: [] as string[],
+      llm: [] as LlmCallInput[],
+      order: [] as string[],
+    };
     const logs: ChatLogEntry[] = [];
     const handler = createChatHandler({
       allowedOrigins: [SITE],
@@ -40,7 +51,7 @@ describe("Edge Function chat", () => {
         calls.verify.push(token);
         calls.order.push("verify");
         if (opts.user === "throw") return Promise.reject(new Error("down"));
-        return Promise.resolve(opts.user === undefined ? { id: "user-1" } : opts.user);
+        return Promise.resolve(opts.user === undefined ? { id: "user-1", guest: false } : opts.user);
       },
       readAiConsentVersion: (id) => {
         calls.consent.push(id);
@@ -48,11 +59,18 @@ describe("Edge Function chat", () => {
         if (opts.consent === "throw") return Promise.reject(new Error("db down"));
         return Promise.resolve(opts.consent === undefined ? AI_CONSENT_VERSION : opts.consent);
       },
-      consumeQuota: (id) => {
+      consumeQuota: (user) => {
         calls.order.push("quota");
-        calls.quota.push(id);
+        calls.quota.push(user.id);
+        calls.quotaUsers.push(user);
         if (opts.quota === "throw") return Promise.reject(new Error("db down"));
         return Promise.resolve(opts.quota === undefined ? "ok" : opts.quota);
+      },
+      refundQuota: (id) => {
+        calls.order.push("refund");
+        calls.refund.push(id);
+        if (opts.refund === "throw") return Promise.reject(new Error("db down"));
+        return Promise.resolve(opts.refund ?? true);
       },
       complete: (input) => {
         calls.llm.push(input);
@@ -132,7 +150,7 @@ describe("Edge Function chat", () => {
 
   describe("AI 국외 이전 동의 — 로그인 확인 뒤, 한도·LLM 전에(0008_ai_consents.sql)", () => {
     it("지금 판의 동의 기록이 있으면 진행 — 순서: 로그인 → 동의 → 한도 → LLM, 동의는 확인된 사용자 id로만 읽는다", async () => {
-      const { handler, calls } = setup({ user: { id: "verified-user-9" } });
+      const { handler, calls } = setup({ user: { id: "verified-user-9", guest: false } });
       const res = await handler(post(ask()));
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true, text: "보통 4~6주 정도 나와요." });
@@ -256,14 +274,94 @@ describe("Edge Function chat", () => {
     expect(await res.json()).toEqual({ ok: false, code });
   });
 
+  describe("한도 — 익명 게스트는 더 낮은 1시간 한도(확인된 사용자 객체로 판단)", () => {
+    it("게스트·카카오 여부를 그대로 한도에 넘긴다 — 한도 함수가 게스트 한도를 고른다(adapters.ts createConsumeQuota)", async () => {
+      for (const guest of [true, false]) {
+        const { handler, calls } = setup({ user: { id: "u-7", guest } });
+        expect((await handler(post(ask()))).status).toBe(200);
+        expect(calls.quotaUsers).toEqual([{ id: "u-7", guest }]);
+      }
+    });
+
+    it("게스트가 한도에 닿으면 429 rate_limited — LLM을 부르지 않고 돌려주지도 않는다", async () => {
+      const { handler, calls } = setup({ user: { id: "g-1", guest: true }, quota: "user_limit" });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(429);
+      expect(await res.json()).toEqual({ ok: false, code: "rate_limited" });
+      expect(calls.llm.length + calls.refund.length).toBe(0);
+    });
+
+    it("전체 1시간·하루 상한(global_limit) → 503 busy, LLM 없이", async () => {
+      const { handler, calls } = setup({ quota: "global_limit" });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(503);
+      expect(await res.json()).toEqual({ ok: false, code: "busy" });
+      expect(calls.llm.length + calls.refund.length).toBe(0);
+    });
+  });
+
+  describe("한도 돌려주기 — LLM이 답을 만들지 않은 실패에만(_shared/chat.ts CHAT_REFUNDABLE_LLM_ERRORS)", () => {
+    it.each([
+      [502, "llm_unreachable"],
+      [503, "llm_busy"],
+      [503, "not_configured"],
+      [503, "llm_model_unavailable"],
+    ] as const)("%i %s → 같은 사용자 id로 한 번 돌려주고, 응답은 원래 실패 그대로", async (status, code) => {
+      const { handler, calls, logs } = setup({ user: { id: "u-3", guest: true }, llm: { kind: "error", status, code } });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(status);
+      expect(await res.json()).toEqual({ ok: false, code });
+      expect(calls.refund).toEqual(["u-3"]);
+      expect(calls.order).toEqual(["verify", "consent", "quota", "llm", "refund"]);
+      expect(logs).toEqual([{ fn: "chat", status, ms: logs[0].ms, preset: "patient_edu", code, refunded: true }]);
+    });
+
+    it.each([
+      ["시간 초과 — 답을 만들고 있었을 수 있다", { kind: "error", status: 504, code: "timeout" }],
+      ["요청 거절(400) — 되풀이해도 같다", { kind: "error", status: 502, code: "llm_rejected" }],
+      ["알 수 없는 오류", { kind: "error", status: 502, code: "llm_error" }],
+      ["거절 답", { kind: "refusal", usage }],
+      ["잘린 답", { kind: "truncated", usage }],
+      ["빈 답", { kind: "text", text: " ", usage }],
+      ["약물 답 형식 오류", { kind: "text", text: "not json", usage }],
+      ["정상 답", { kind: "text", text: "답", usage }],
+    ] as [string, LlmCallResult][])("%s → 돌려주지 않는다", async (_label, llm) => {
+      const { handler, calls, logs } = setup({ llm });
+      await handler(post(ask()));
+      await handler(post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }] }));
+      expect(calls.refund).toHaveLength(0);
+      expect(logs.some((l) => "refunded" in l)).toBe(false);
+    });
+
+    it("돌려주기가 실패해도(false·throw) 응답은 원래 실패 그대로 — 로그에 refunded: false", async () => {
+      for (const refund of [false, "throw"] as const) {
+        const { handler, calls, logs } = setup({ llm: { kind: "error", status: 503, code: "llm_busy" }, refund });
+        const res = await handler(post(ask()));
+        expect(res.status).toBe(503);
+        expect(await res.json()).toEqual({ ok: false, code: "llm_busy" });
+        expect(calls.refund).toHaveLength(1);
+        expect(logs.at(-1)).toMatchObject({ code: "llm_busy", refunded: false });
+      }
+    });
+
+    it("한도 확인 전에 끝난 요청(동의 없음·로그인 실패·한도 초과)은 돌려줄 것이 없다", async () => {
+      for (const opts of [{ consent: null }, { user: null }, { quota: "user_limit" as const }]) {
+        const { handler, calls } = setup({ ...opts, llm: { kind: "error", status: 503, code: "llm_busy" } });
+        await handler(post(ask()));
+        expect(calls.refund).toHaveLength(0);
+      }
+    });
+  });
+
   it("예상 밖 오류는 500 internal — 메시지·스택을 내보내지도 기록하지도 않는다", async () => {
     const logs: ChatLogEntry[] = [];
     const handler = createChatHandler({
       allowedOrigins: [SITE],
       aiEnabled: true,
-      verifyUser: async () => ({ id: "u" }),
+      verifyUser: async () => ({ id: "u", guest: false }),
       readAiConsentVersion: async () => AI_CONSENT_VERSION,
       consumeQuota: async () => "ok",
+      refundQuota: async () => true,
       complete: async () => {
         throw new Error("secret internals at stack");
       },

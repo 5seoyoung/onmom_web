@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno는 ".ts" 확장자가 있어야 가져온다. Next tsc(TS5097)만 그 줄을 넘기게 한다. */
-// Edge Function "chat"의 바깥 연결 — 로그인 확인(Supabase Auth)·요청 한도(llm_consume_quota)·LLM 호출(Anthropic)을
+// Edge Function "chat"의 바깥 연결 — 로그인 확인(Supabase Auth)·동의 확인(ai_consents)·요청 한도(llm_consume_quota·llm_refund_quota)·LLM 호출(Anthropic)을
 // 클라이언트를 받아 만드는 함수로 둔다. index.ts(Deno)는 진짜 클라이언트를 넣고, vitest(src/api/edgeAdapters.test.ts)는 가짜를 넣는다.
 // 여기서는 SDK를 가져오지 않는다(타입도) — 필요한 모양만 적고, 진짜 SDK와 맞는지는 index.ts를 `deno check`가 확인한다.
 //
@@ -11,27 +11,28 @@
 // - SDK 오류는 종류(클래스)로만 나눈다. 오류 메시지는 기록하지도 내보내지도 않는다.
 
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { isTokenRejection } from "../_shared/auth.ts";
-import type { AuthErrorLike } from "../_shared/auth.ts";
+import { isGuestUser, isTokenRejection } from "../_shared/auth.ts";
+import type { AuthErrorLike, VerifiedUserLike } from "../_shared/auth.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseQuotaResult } from "../_shared/chat.ts";
-import type { QuotaResult } from "../_shared/chat.ts";
+import type { ChatLimits, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { LLM_DEADLINE_MS, LLM_EFFORT, LLM_FALLBACK_BETA, LLM_MAX_TOKENS, LLM_MODEL } from "../_shared/prompts.ts";
-import type { LlmCallInput, LlmCallResult, LlmUsage } from "./handler.ts";
+import type { LlmCallInput, LlmCallResult, LlmUsage, VerifiedUser } from "./handler.ts";
 
 // MARK: 로그인 확인
 
 /** supabase-js `auth`에서 쓰는 것만 — getUser(token)는 Auth 서버에 토큰·세션·계정이 아직 유효한지 묻는다 */
 export interface AuthClientLike {
-  getUser(token: string): Promise<{ data: { user: { id: string } | null }; error: AuthErrorLike | null }>;
+  getUser(token: string): Promise<{ data: { user: ({ id: string } & VerifiedUserLike) | null }; error: AuthErrorLike | null }>;
 }
 
 /**
  * 로그인 확인. 토큰이 틀림·만료·로그아웃·계정 없음이면 null(→ 401),
  * 확인 자체를 못 하면 throw(→ 503 auth_unavailable) — 서버 키가 없거나 틀린 경우 포함(_shared/auth.ts isTokenRejection).
+ * 게스트 여부는 Auth가 돌려준 사용자 객체로 정한다(_shared/auth.ts isGuestUser — 게스트는 1시간 한도가 더 낮다).
  */
-export function createVerifyUser(auth: AuthClientLike | null): (token: string) => Promise<{ id: string } | null> {
+export function createVerifyUser(auth: AuthClientLike | null): (token: string) => Promise<VerifiedUser | null> {
   return async (token) => {
     if (!auth) throw new Error("auth_not_configured");
     const { data, error } = await auth.getUser(token);
@@ -39,7 +40,7 @@ export function createVerifyUser(auth: AuthClientLike | null): (token: string) =
       if (isTokenRejection(error)) return null;
       throw new Error("auth_check_failed");
     }
-    return data.user ? { id: data.user.id } : null;
+    return data.user ? { id: data.user.id, guest: isGuestUser(data.user) } : null;
   };
 }
 
@@ -68,35 +69,55 @@ export function createReadAiConsentVersion(query: AiConsentQuery | null): (userI
   };
 }
 
-// MARK: 요청 한도
+// MARK: 요청 한도(0008_ai_consents.sql llm_consume_quota 5인자 · llm_refund_quota)
 
 export interface QuotaArgs {
   p_user_id: string;
   p_user_limit: number;
   p_window_seconds: number;
   p_global_daily_limit: number;
+  p_global_hourly_limit: number;
 }
 
-/** supabase-js `rpc`를 부르는 함수 — service_role 권한 클라이언트(0003_llm_usage.sql: 함수 실행은 service_role만) */
+/** supabase-js `rpc`를 부르는 함수 — service_role 권한 클라이언트(함수 실행은 service_role만) */
 export type QuotaRpc = (fn: "llm_consume_quota", args: QuotaArgs) => PromiseLike<{ data: unknown; error: unknown }>;
+export type RefundRpc = (fn: "llm_refund_quota", args: { p_user_id: string }) => PromiseLike<{ data: unknown; error: unknown }>;
 
-export interface QuotaLimits {
-  hourlyLimit: number;
+export interface QuotaLimits extends ChatLimits {
   windowSeconds: number;
-  globalDailyLimit: number;
 }
 
-/** 한도 확인 + 한 번 기록. 확인하지 못하면(연결 안 됨·오류·모르는 값) null → 함수는 LLM을 부르지 않는다(503). */
-export function createConsumeQuota(rpc: QuotaRpc | null, limits: QuotaLimits): (userId: string) => Promise<QuotaResult | null> {
-  return async (userId) => {
+/**
+ * 한도 확인 + 한 번 기록. 사용자 1시간 한도는 게스트면 guestHourlyLimit, 아니면 hourlyLimit. 전체 1시간·하루 상한도 함께 본다.
+ * 확인하지 못하면(연결 안 됨·오류·모르는 값) null → 함수는 LLM을 부르지 않는다(503).
+ */
+export function createConsumeQuota(rpc: QuotaRpc | null, limits: QuotaLimits): (user: VerifiedUser) => Promise<QuotaResult | null> {
+  return async (user) => {
     if (!rpc) return null;
     const { data, error } = await rpc("llm_consume_quota", {
-      p_user_id: userId,
-      p_user_limit: limits.hourlyLimit,
+      p_user_id: user.id,
+      p_user_limit: user.guest ? limits.guestHourlyLimit : limits.hourlyLimit,
       p_window_seconds: limits.windowSeconds,
       p_global_daily_limit: limits.globalDailyLimit,
+      p_global_hourly_limit: limits.globalHourlyLimit,
     });
     return error ? null : parseQuotaResult(data);
+  };
+}
+
+/**
+ * 방금 쓴 한도 한 번을 돌려준다(그 사용자의 가장 최근 기록 한 줄을 지움) — LLM이 답을 만들지 않은 실패에만(_shared/chat.ts
+ * CHAT_REFUNDABLE_LLM_ERRORS). 돌려줬으면 true. 클라이언트가 없거나 실패하면 false(던지지 않는다 — 응답은 원래 실패 그대로).
+ */
+export function createRefundQuota(rpc: RefundRpc | null): (userId: string) => Promise<boolean> {
+  return async (userId) => {
+    if (!rpc) return false;
+    try {
+      const { data, error } = await rpc("llm_refund_quota", { p_user_id: userId });
+      return !error && data === true;
+    } catch {
+      return false;
+    }
   };
 }
 

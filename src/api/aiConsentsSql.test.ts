@@ -5,10 +5,10 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { AI_CONSENT_VERSION as WEB_AI_CONSENT_VERSION } from "@/features/chat/aiConsent";
 import { REQUIRED_CONSENTS } from "@/features/onboarding/consentText";
-import { ACCOUNT_ITEMS, RETENTION_TEXT, SETTING_ITEMS } from "@/features/privacy/dataItems";
+import { ACCOUNT_ITEMS, AI_USAGE_RETENTION_DAYS, RETENTION_TEXT, SETTING_ITEMS } from "@/features/privacy/dataItems";
 import { webPolicySections } from "@/features/privacy/webPolicyText";
 import {
   AI_CONSENT_REQUIRED_CODE,
@@ -16,12 +16,18 @@ import {
   AI_CONSENT_VERSION_MAX_CHARS,
   AI_CONSENTS_TABLE,
 } from "../../supabase/functions/_shared/aiConsent";
+import { parseQuotaResult } from "../../supabase/functions/_shared/chat";
+import { createConsumeQuota, createRefundQuota } from "../../supabase/functions/chat/adapters";
 
 const MIGRATIONS = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
 const FILE = "0008_ai_consents.sql";
-const RAW = readFileSync(`${MIGRATIONS}${FILE}`, "utf8");
 /** 주석(-- …)을 뺀 실행문(소문자, 공백 한 칸) — 설명 글의 낱말이 검사에 걸리지 않게 */
-const CODE = RAW.replace(/--[^\n]*/g, "").toLowerCase().replace(/\s+/g, " ");
+const sqlOf = (file: string) =>
+  readFileSync(`${MIGRATIONS}${file}`, "utf8")
+    .replace(/--[^\n]*/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+const CODE = sqlOf(FILE);
 const TABLE = `public.${AI_CONSENTS_TABLE}`;
 
 function policy(name: string): string {
@@ -93,6 +99,120 @@ describe("0008 — public.ai_consents 표", () => {
     expect(CODE.match(/create policy "ai_consents: /g)).toHaveLength(3);
     expect(CODE).not.toMatch(/for (delete|all) /);
     expect(CODE).not.toMatch(/ to anon/);
+  });
+});
+
+/** 함수 하나의 머리(이름~as $$)와 몸통($$ … $$) */
+function fn(signature: string) {
+  const start = CODE.indexOf(`create or replace function ${signature}`);
+  expect(start, signature).toBeGreaterThanOrEqual(0);
+  const open = CODE.indexOf("as $$", start);
+  return { start, header: CODE.slice(start, open), body: CODE.slice(open, CODE.indexOf("$$;", open + 5)) };
+}
+
+const USER_LOCK = "perform pg_advisory_xact_lock(hashtextextended('onmom.llm_usage:' || p_user_id::text, 0));";
+const GLOBAL_LOCK = "perform pg_advisory_xact_lock(hashtextextended('onmom.llm_usage:global', 0));";
+
+describe("0008 — llm_consume_quota 다섯 인자판(게스트 한도는 p_user_limit로, 전체 1시간 상한 추가)", () => {
+  const consume = fn("public.llm_consume_quota( p_user_id uuid, p_user_limit integer, p_window_seconds integer, p_global_daily_limit integer, p_global_hourly_limit integer )");
+
+  it("SECURITY DEFINER + 빈 search_path, 글자(text)를 돌려준다 — 돌려주는 값은 함수가 읽는 셋뿐(parseQuotaResult)", () => {
+    expect(consume.header).toContain("returns text");
+    expect(consume.header).toContain("language plpgsql");
+    expect(consume.header).toContain("security definer");
+    expect(consume.header).toContain("set search_path = ''");
+    const returned = [...consume.body.matchAll(/return '([a-z_]+)'/g)].map((m) => m[1]);
+    expect(returned).toEqual(["user_limit", "global_limit", "global_limit", "ok"]);
+    for (const v of returned) expect(parseQuotaResult(v)).not.toBeNull();
+  });
+
+  it("인자 검사 — 다섯 값 모두 1 이상(창은 1초~하루)", () => {
+    expect(consume.body).toContain("or p_global_hourly_limit is null or p_global_hourly_limit < 1 then raise exception 'invalid arguments'");
+    expect(consume.body).toContain("or p_global_daily_limit is null or p_global_daily_limit < 1");
+    expect(consume.body).toContain("p_window_seconds > 86400");
+  });
+
+  it("잠금은 사용자(0003·돌려주기와 같은 키) → 전체 순서 — 전체 상한도 동시 요청이 함께 넘지 않는다", () => {
+    expect(sqlOf("0003_llm_usage.sql")).toContain(USER_LOCK);
+    const user = consume.body.indexOf(USER_LOCK);
+    const global = consume.body.indexOf(GLOBAL_LOCK);
+    expect(user).toBeGreaterThan(0);
+    expect(global).toBeGreaterThan(user);
+    expect(global).toBeLessThan(consume.body.indexOf("select count(*)"));
+  });
+
+  it(`확인 순서: 오래된 기록 정리(${AI_USAGE_RETENTION_DAYS}일 — 처리방침·0003과 같다) → 사용자 창 → 전체 1시간 → 전체 하루 → 한 줄 기록`, () => {
+    const order = [
+      `delete from public.llm_usage where created_at < now() - interval '${AI_USAGE_RETENTION_DAYS} days';`,
+      "where user_id = p_user_id and created_at > now() - make_interval(secs => p_window_seconds); if used >= p_user_limit then return 'user_limit';",
+      "where created_at > now() - interval '1 hour'; if total >= p_global_hourly_limit then return 'global_limit';",
+      "where created_at > now() - interval '1 day'; if total >= p_global_daily_limit then return 'global_limit';",
+      "insert into public.llm_usage (user_id) values (p_user_id); return 'ok';",
+    ].map((s) => {
+      const at = consume.body.indexOf(s);
+      expect(at, s).toBeGreaterThan(0);
+      return at;
+    });
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // 정리 기준은 0003이 부를 때 지우는 기준과 같다
+    expect(sqlOf("0003_llm_usage.sql")).toContain(`delete from public.llm_usage where created_at < now() - interval '${AI_USAGE_RETENTION_DAYS} days';`);
+  });
+
+  it("함수 chat이 넘기는 인자 이름 = 이 함수의 인자 이름(adapters.ts createConsumeQuota)", async () => {
+    const rpc = vi.fn(async () => ({ data: "ok", error: null }));
+    await createConsumeQuota(rpc, { hourlyLimit: 30, guestHourlyLimit: 5, globalHourlyLimit: 60, globalDailyLimit: 500, windowSeconds: 3600 })({
+      id: "u",
+      guest: false,
+    });
+    const [name, args] = rpc.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(name).toBe("llm_consume_quota");
+    const params = CODE.slice(consume.start, CODE.indexOf(")", consume.start)).match(/p_[a-z_]+/g);
+    expect(Object.keys(args)).toEqual(params);
+  });
+
+  it("service_role만 부른다 — 브라우저(anon·authenticated)는 못 부른다. 0003의 넷 인자판은 지우지 않는다(배포 사이 예전 함수 코드용)", () => {
+    const sig = "public.llm_consume_quota(uuid, integer, integer, integer, integer)";
+    expect(CODE).toContain(`revoke execute on function ${sig} from public, anon, authenticated;`);
+    expect(CODE).toContain(`grant execute on function ${sig} to service_role;`);
+    expect(CODE).not.toMatch(/drop function/);
+    expect(CODE).not.toMatch(/grant execute on function [^;]* to (anon|authenticated|public)/);
+  });
+});
+
+describe("0008 — llm_refund_quota(LLM이 답을 만들지 않은 실패에서 한 번 돌려주기)", () => {
+  const refund = fn("public.llm_refund_quota(p_user_id uuid)");
+
+  it("SECURITY DEFINER + 빈 search_path, 참·거짓을 돌려준다", () => {
+    expect(refund.header).toContain("returns boolean");
+    expect(refund.header).toContain("security definer");
+    expect(refund.header).toContain("set search_path = ''");
+    expect(refund.body).toContain("if p_user_id is null then raise exception 'invalid arguments'");
+  });
+
+  it("그 사용자의 10분 안 가장 최근 한 줄만 지운다 — 같은 사용자 잠금으로 한도 확인과 줄 세운다", () => {
+    expect(refund.body).toContain(USER_LOCK);
+    expect(refund.body).not.toContain(GLOBAL_LOCK); // 사용자 잠금만 — 잠금 순서가 엇갈리지 않는다
+    expect(refund.body).toContain(
+      "select u.id into refund_id from public.llm_usage u where u.user_id = p_user_id and u.created_at > now() - interval '10 minutes' order by u.created_at desc, u.id desc limit 1;",
+    );
+    expect(refund.body).toContain("delete from public.llm_usage where id = refund_id; return true;");
+    expect(refund.body.match(/delete from/g)).toHaveLength(1);
+    expect(refund.body).not.toMatch(/\b(update|insert into|truncate)\b/);
+  });
+
+  it("service_role만 부른다 — 이용자가 직접 돌려받을 수 없다", () => {
+    expect(CODE).toContain("revoke execute on function public.llm_refund_quota(uuid) from public, anon, authenticated;");
+    expect(CODE).toContain("grant execute on function public.llm_refund_quota(uuid) to service_role;");
+  });
+
+  it("함수 chat이 넘기는 인자 이름 = 이 함수의 인자 이름(adapters.ts createRefundQuota)", async () => {
+    const rpc = vi.fn(async () => ({ data: true, error: null }));
+    await expect(createRefundQuota(rpc)("u-1")).resolves.toBe(true);
+    expect(rpc).toHaveBeenCalledWith("llm_refund_quota", { p_user_id: "u-1" });
+  });
+
+  it("알림·로그로 사용자 id를 내지 않는다", () => {
+    expect(CODE).not.toMatch(/raise (notice|log|info|warning)/);
   });
 });
 
