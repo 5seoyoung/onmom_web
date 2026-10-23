@@ -6,7 +6,8 @@
 // 한 번에 하나씩·다시 시도 없이 돈다.
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = Number(process.env.E2E_PORT ?? 4173);
+// 4173은 Vite preview의 기본 포트라 다른 프로젝트와 겹치기 쉽다 — 비교적 드문 4317을 쓴다(E2E_PORT로 바꿀 수 있음).
+const PORT = Number(process.env.E2E_PORT ?? 4317);
 // 빌드의 basePath와 같게 — 로컬 기본 "/onmom_web", CI는 configure-pages 값(커스텀 도메인이면 "")
 const BASE_PATH = (process.env.BASE_PATH ?? "/onmom_web").replace(/\/+$/, "");
 const CI = !!process.env.CI;

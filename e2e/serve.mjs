@@ -1,5 +1,5 @@
 // 브라우저 자동 시험용 정적 서버 — GitHub Pages처럼 out/을 BASE_PATH 아래에 내보낸다(의존성 없음).
-//   node e2e/serve.mjs            → http://localhost:4173{BASE_PATH}/
+//   node e2e/serve.mjs            → http://localhost:4317{BASE_PATH}/
 // BASE_PATH는 빌드 때와 같아야 한다(기본 "/onmom_web"). "/"로 시작하고 끝 슬래시는 없다. 빈 값이면 루트.
 // GitHub Pages 흉내: 디렉터리 → index.html, 끝 슬래시 없는 디렉터리 → 301, 없는 파일 → 404.html(상태 404).
 import { createReadStream } from "node:fs";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(fileURLToPath(new URL("../out", import.meta.url)));
 const BASE = (process.env.BASE_PATH ?? "/onmom_web").replace(/\/+$/, "");
-const PORT = Number(process.env.E2E_PORT ?? 4173);
+const PORT = Number(process.env.E2E_PORT ?? 4317);
 
 const TYPES = {
   ".html": "text/html; charset=utf-8",
