@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "BASE_PATH=/onmom_web NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= npm run build && BASE_PATH=/onmom_web playwright test",
-    "e2e:run": "playwright test"
+    "e2e:run": "playwright test",
+    "e2e:server": "E2E_SERVER=1 playwright test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",
