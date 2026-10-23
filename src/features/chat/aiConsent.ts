@@ -10,9 +10,13 @@
 // - 판(AI_CONSENT_VERSION)이 바뀌면 다시 묻는다. 동의 카드의 글자(AiConsentCard·AI_TRANSFER_NOTICE)를 바꾸면 판을 올린다.
 // - 키 접두 "onmom.web." — 계정 삭제(store deleteAccount)가 함께 지운다.
 // - 프로필(서버 저장 상태)에 새 필드를 두지 않는다(consentText.ts 머리말). 그래서 다른 기기에서는 처음 쓸 때 한 번 더 묻는다.
+// 서버 기록: 동의하면 이 계정의 서버 세션이 있을 때 public.ai_consents에도 판·시각을 남긴다(aiConsentRecord.ts — 화면은 기다리지 않는다,
+//   실패하면 한 번 더). Edge Function chat은 그 행이 지금 판일 때만 답한다 — 아니면 403 ai_consent_required이고, 화면은 이 계정의
+//   동의를 지우고(revoke) 동의 카드를 다시 띄운다. Supabase가 없는 빌드는 서버에 아무것도 보내지 않는다(지금과 같다).
 // 동의하지 않기는 저장하지 않는다 — 그 화면을 떠나면 다음에 다시 묻는다(설정에서 바꿀 곳이 없으므로 영구 거절로 두지 않는다).
 
 import { useCallback, useState, useSyncExternalStore } from "react";
+import { startAiConsentRecord } from "./aiConsentRecord";
 // 판은 Edge Function chat과 한 곳에서 — 함수가 서버 기록(ai_consents)의 판을 이 값과 비교한다(가져오는 것이 없는 순수 모듈)
 import { AI_CONSENT_VERSION } from "../../../supabase/functions/_shared/aiConsent";
 
@@ -59,7 +63,7 @@ export function serializeAiConsent(accountId: string, now: Date): string {
 
 type StorageLike = Pick<Storage, "getItem" | "setItem">;
 
-function browserStorage(): StorageLike | null {
+function browserStorage(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
@@ -88,6 +92,22 @@ export function saveAiConsent(accountId: string, now: Date = new Date(), storage
   for (const listener of listeners) listener();
 }
 
+/**
+ * 이 계정의 동의를 지운다 — 서버가 동의 기록을 찾지 못했다(403 ai_consent_required)는 뜻이라 다시 묻는다.
+ * 남아 있는 값이 다른 계정의 것이면 건드리지 않는다. 지우지 못해도(저장소 막힘) 던지지 않는다.
+ */
+export function clearAiConsent(accountId: string, storage: Pick<Storage, "getItem" | "removeItem"> | null = browserStorage()): void {
+  try {
+    const raw = storage?.getItem(AI_CONSENT_STORAGE_KEY) ?? null;
+    if (raw !== null && (JSON.parse(raw) as Partial<StoredAiConsent> | null)?.accountId === accountId) {
+      storage?.removeItem(AI_CONSENT_STORAGE_KEY);
+    }
+  } catch {
+    // 깨진 값·저장소 막힘 — 읽어도 동의가 아니다(parseAiConsent)
+  }
+  for (const listener of listeners) listener();
+}
+
 function subscribeAiConsent(listener: () => void): () => void {
   listeners.add(listener);
   // 다른 탭에서 동의했거나 계정 삭제로 지워졌을 때
@@ -101,8 +121,12 @@ function subscribeAiConsent(listener: () => void): () => void {
   };
 }
 
-/** 지금 계정의 AI 국외 이전 동의 — 정적 HTML·첫 렌더에서는 false(동의 안 함으로 본다). */
-export function useAiConsent(accountId: string | null): { consented: boolean; accept: () => void } {
+/**
+ * 지금 계정의 AI 국외 이전 동의 — 정적 HTML·첫 렌더에서는 false(동의 안 함으로 본다).
+ * accept: 이 브라우저에 남기고, 서버 세션이 있으면 서버 기록을 시작한다(기다리지 않는다 — 바로 뒤 AI 요청은 afterAiConsentRecord로 감싼다).
+ * revoke: 서버가 동의 기록을 찾지 못했을 때(403 ai_consent_required) — 이 계정의 동의를 지워 다시 묻게 한다.
+ */
+export function useAiConsent(accountId: string | null): { consented: boolean; accept: () => void; revoke: () => void } {
   const stored = useSyncExternalStore(
     subscribeAiConsent,
     () => readAiConsent(accountId),
@@ -112,8 +136,15 @@ export function useAiConsent(accountId: string | null): { consented: boolean; ac
   const [acceptedNow, setAcceptedNow] = useState<string | null>(null);
   const accept = useCallback(() => {
     if (!accountId) return;
+    const now = new Date();
     setAcceptedNow(accountId);
-    saveAiConsent(accountId);
+    saveAiConsent(accountId, now);
+    void startAiConsentRecord(accountId, now);
   }, [accountId]);
-  return { consented: stored || (accountId !== null && acceptedNow === accountId), accept };
+  const revoke = useCallback(() => {
+    if (!accountId) return;
+    setAcceptedNow(null);
+    clearAiConsent(accountId);
+  }, [accountId]);
+  return { consented: stored || (accountId !== null && acceptedNow === accountId), accept, revoke };
 }

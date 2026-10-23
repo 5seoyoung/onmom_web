@@ -148,6 +148,40 @@ describe("shouldOfferAiConsent — AI 국외 이전 동의 카드", () => {
   });
 });
 
+describe("서버에 AI 동의 기록이 없다(403 ai_consent_required) — 동의를 지우면 '정보 부족' 아래에 동의 카드가 다시", () => {
+  const consentRequired = () =>
+    vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status: 403, code: "ai_consent_required" }));
+
+  it("onConsentRequired를 한 번 부르고, 결과는 표의 '정보 부족' — 동의를 지운 뒤(ask) 카드 조건이 맞는다", async () => {
+    const onConsentRequired = vi.fn();
+    const deps = substanceDeps({ llmConfigured: true, complete: consentRequired(), context: null, onConsentRequired });
+    const r = await checkSubstance("모르는약", deps);
+    expect(onConsentRequired).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ verdict: "unknown", source: "table" });
+    expect(shouldOfferAiConsent(r, "ask")).toBe(true);
+  });
+
+  it("다른 실패·성공에는 부르지 않는다", async () => {
+    for (const complete of [
+      failed(),
+      vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status: 429, code: "rate_limited" })),
+      okText('{"verdict":"safe","detail":"x","sources":[]}'),
+    ]) {
+      const onConsentRequired = vi.fn();
+      await makeSubstanceLlmLookup({ complete, context: null, onConsentRequired })("모르는약");
+      expect(onConsentRequired).not.toHaveBeenCalled();
+    }
+  });
+
+  it("화면 — 요청은 동의 기록 뒤에(afterAiConsentRecord), 403이면 이 계정의 동의를 지운다(revoke)", () => {
+    const src = readFileSync(fileURLToPath(new URL("./SubstanceCheckScreen.tsx", import.meta.url)), "utf8");
+    const chain = src.slice(src.indexOf("void Promise.resolve()"), src.indexOf("function focusResult"));
+    expect(chain).toContain("complete: afterAiConsentRecord(accountId, llmComplete),");
+    expect(chain).toContain("onConsentRequired: revoke,");
+    expect(src).toContain("const { consented, accept, revoke } = useAiConsent(accountId);");
+  });
+});
+
 describe("createLatestOnly — 늦게 온 이전 조회는 버린다(SubstanceCheckView.swift:94-95)", () => {
   it("새 조회가 시작되면 이전 번호는 무효", () => {
     const seq = createLatestOnly();

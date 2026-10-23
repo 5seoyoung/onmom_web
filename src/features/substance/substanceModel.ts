@@ -3,7 +3,7 @@
 // "LLM을 붙일지", "어떤 결과를 화면에 둘지(늦게 온 이전 조회 버리기)", "배지 모양", "AI 동의를 물을지", "칩을 어떤 모양으로 그릴지"만 정한다.
 // 서버에 보내는 산모 정보는 산후 주차·수유 여부뿐이다(substanceLlmContext — 분만 방식은 약물 분류에 쓰지 않아 보내지 않는다).
 
-import type { LLMContext, LLMOptions, LLMRequest, LLMResult } from "@/api/llm";
+import { isAiConsentRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
 import { SOURCE_PREFIX } from "@/components/ui/evidence";
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { UserProfile } from "@/domain/types";
@@ -87,16 +87,20 @@ export function substanceLlmContext(profile: Pick<UserProfile, "deliveryDate" | 
  * LLM 조회 함수(SubstanceCheckView.swift:117-141). 대화·preset·토큰 수는 rules의 buildSubstanceLlmRequest,
  * 산모 정보는 substanceLlmContext의 두 항목(수유 여부·산후 주차 — iOS의 컨텍스트 문자열은 보내지 않는다).
  * 답 해석은 parseSubstanceAnswer — 실패·빈 응답·형식 오류는 전부 null(→ 표의 "정보 부족" 유지).
+ * 서버가 이 계정의 동의 기록이 없다고 답하면(403 ai_consent_required) onConsentRequired를 부른다 — 화면은 이 계정의 동의를 지우고
+ * ("정보 부족" 결과 아래에) 동의 카드를 다시 띄운다(shouldOfferAiConsent).
  */
 export function makeSubstanceLlmLookup(input: {
   complete: LlmCompleteFn;
   context: LLMContext | null;
   signal?: AbortSignal;
+  onConsentRequired?: () => void;
 }): (query: string) => Promise<LlmSubstanceAnswer | null> {
   return async (query) => {
     const { messages, preset, maxTokens } = buildSubstanceLlmRequest({ query });
     const request: LLMRequest = { preset, messages, context: input.context, maxTokens };
     const res = await input.complete(request, { signal: input.signal });
+    if (isAiConsentRequired(res)) input.onConsentRequired?.();
     return res.ok ? parseSubstanceAnswer(res.text) : null;
   };
 }
@@ -109,6 +113,7 @@ export function substanceDeps(input: {
   complete: LlmCompleteFn;
   context: LLMContext | null;
   signal?: AbortSignal;
+  onConsentRequired?: () => void;
 }): SubstanceDeps {
   if (!input.llmConfigured) return {};
   return { llmLookup: makeSubstanceLlmLookup(input) };

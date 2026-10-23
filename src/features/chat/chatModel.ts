@@ -13,7 +13,7 @@
 // 앱 안내로 답한 이유(fallbackReason)도 남긴다 — 서버 함수의 한도(429)·혼잡(503)·거절(422)을 "연결되지 않아"로 뭉개지 않고
 // 배너·기본 답의 첫머리를 이유에 맞게 바꾼다(supabase/functions/chat/handler.ts, docs/SUPABASE_FUNCTIONS.md §5).
 
-import type { LLMContext, LLMOptions, LLMRequest, LLMResult } from "@/api/llm";
+import { isAiConsentRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
 import content from "@/content";
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { UserProfile } from "@/domain/types";
@@ -236,6 +236,11 @@ export interface ChatScreenReply extends ChatReplyResult {
   crisis: boolean;
   origin: Exclude<ChatOrigin, "greeting">;
   fallbackReason: ChatFallbackReason | null;
+  /**
+   * 서버가 이 계정의 AI 국외 이전 동의 기록을 찾지 못했다(403 ai_consent_required — 서버 행 없음·예전 판).
+   * 화면은 이 답을 그리지 않고, 이 계정의 동의를 지운 뒤(aiConsent.ts revoke) 같은 질문으로 동의 카드를 다시 띄운다.
+   */
+  consentRequired?: true;
 }
 
 /**
@@ -262,6 +267,7 @@ export function chatLlmContext(
  * - 서버가 (자기 선필터로) 같은 고정 위기 안내를 돌려주면 AI 답이 아니라 위기 안내(origin rules·crisis)로 다룬다.
  * - 기본 답의 첫머리 "지금은 AI 서버에 연결되지 않아"는 이유에 맞게 바꾼다(chatDefaultReplyText) — declined(이번에 AI 국외 이전에
  *   동의하지 않음)·rateLimited·busy·refused. 다른 폴백 답(출혈·운동·기분)은 이유와 무관하게 원문 그대로다.
+ * - 서버가 동의 기록이 없다고 답하면(403 ai_consent_required) consentRequired를 붙인다 — 화면은 답 대신 동의 카드를 다시 띄운다.
  */
 export async function requestChatReply(
   history: readonly ChatMessage[],
@@ -295,6 +301,10 @@ export async function requestChatReply(
     // 웹 선필터가 먼저 거르므로 보통 오지 않지만, 오면 AI 답이 아니라 앱 안내(위기 안내)로 표시한다("AI 답변" 표시를 붙이지 않는다).
     if (reply.text === CRISIS_REPLY) return { text: reply.text, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null };
     return { ...reply, crisis: false, origin: "ai", fallbackReason: null };
+  }
+
+  if (failure !== null && isAiConsentRequired(failure)) {
+    return { text: reply.text, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "notConnected", consentRequired: true };
   }
 
   const reason: ChatFallbackReason =

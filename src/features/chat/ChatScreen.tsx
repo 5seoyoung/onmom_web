@@ -4,6 +4,8 @@
 // 서버(LLM)가 설정돼 있으면 patient_edu 프리셋으로 묻고, 미설정·실패면 앱 내 규칙 안내(폴백)로 답하며 그 사실을 배너로 알린다.
 // 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(aiConsent.ts) — 첫 질문을 보내면 동의 카드가 뜨고,
 // [동의하고 계속하기]면 그 질문을 AI에, [동의하지 않기]면 앱 내 안내로 답한다. 동의 전에는 서버에 아무것도 보내지 않는다.
+// 동의하면 서버에도 기록을 남기고(aiConsentRecord.ts), 그 기록이 끝난 뒤 질문을 보낸다(afterAiConsentRecord).
+// 서버가 동의 기록을 찾지 못했다고 답하면(403 ai_consent_required) 답 대신 이 계정의 동의를 지우고 같은 질문으로 동의 카드를 다시 띄운다.
 // 음성 입력은 웹에서 만들지 않는다(결정 D3). 대화는 이 화면 메모리에만 둔다(저장하지 않음).
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
 // 온맘 말풍선 아래에 어디서 온 답인지 작은 글씨로 남긴다(앱 안내 / AI 답변 · 진단·처방이 아닙니다 — chatModel CHAT_ORIGIN_CAPTION).
@@ -24,6 +26,7 @@ import { CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
 import { useAppStore } from "@/store/useAppStore";
 import { AiConsentCard } from "./AiConsentCard";
 import { aiMode, useAiConsent } from "./aiConsent";
+import { afterAiConsentRecord } from "./aiConsentRecord";
 import {
   CHAT_ORIGIN_CAPTION,
   CHAT_TEXT,
@@ -58,7 +61,8 @@ const CHAT_COLUMN = cx("w-full", READING_WIDTH);
 
 export function ChatScreen() {
   const { hydrated, state, account } = useAppStore();
-  const { consented, accept } = useAiConsent(account?.id ?? null);
+  const accountId = account?.id ?? null;
+  const { consented, accept, revoke } = useAiConsent(accountId);
   /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
   const [declined, setDeclined] = useState(false);
   const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
@@ -139,7 +143,8 @@ export function ChatScreen() {
       .then(() =>
         requestChatReply(history, {
           llmConfigured: useAi,
-          complete: llmComplete,
+          // 방금 동의했으면 서버 동의 기록이 끝난 뒤 보낸다(함수가 동의를 먼저 보게)
+          complete: afterAiConsentRecord(accountId, llmComplete),
           // 서버에 함께 보내는 산모 정보 — 산후 주차·분만 방식·수유 여부만(서버에 물을 때만 쓰인다)
           context: useAi ? chatLlmContext(state.profile, new Date()) : null,
           signal: controller.signal,
@@ -152,6 +157,12 @@ export function ChatScreen() {
         if (controller.signal.aborted) return;
         inflight.current = null;
         setThinking(false);
+        // 서버에 이 계정의 동의 기록이 없다(403 ai_consent_required) — 답을 그리지 않고, 동의를 지운 뒤 같은 질문으로 동의 카드를 다시 띄운다
+        if (reply.consentRequired === true) {
+          revoke();
+          setAwaitingConsent(history);
+          return;
+        }
         // 위기 안내는 AI 연결 여부와 무관한 고정 답이다 — 배너("AI 서버에 연결되지 않아")를 새로 띄우거나 내리지 않는다
         if (!reply.crisis) {
           setLastReplyFromFallback(reply.fromFallback);

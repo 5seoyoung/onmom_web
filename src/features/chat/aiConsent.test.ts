@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { AI_CONSENT_VERSION as SHARED_AI_CONSENT_VERSION } from "../../../supabase/functions/_shared/aiConsent";
 import { AI_TRANSFER_NOTICE } from "@/features/onboarding/consentText";
 import { DETAIL_EMPHASIS_CLASS } from "@/features/onboarding/ServerConsentStep";
 import { AI_TRANSFER_ITEMS } from "@/features/privacy/dataItems";
@@ -11,6 +14,7 @@ import {
   AI_CONSENT_STORAGE_KEY,
   AI_CONSENT_VERSION,
   aiMode,
+  clearAiConsent,
   parseAiConsent,
   readAiConsent,
   saveAiConsent,
@@ -75,6 +79,44 @@ describe("동의 저장 — 계정별·판별", () => {
     };
     expect(readAiConsent("kakao-1", broken)).toBe(false);
     expect(() => saveAiConsent("kakao-1", new Date(), broken)).not.toThrow();
+  });
+
+  it("clearAiConsent — 서버가 동의 기록을 찾지 못하면(403) 그 계정의 동의만 지운다(다른 계정의 값·깨진 값·막힌 저장소에도 던지지 않는다)", () => {
+    const storage = { ...memoryStorage(), removeItem: (k: string) => void storage.map.delete(k) };
+    saveAiConsent("kakao-1", new Date(), storage);
+    clearAiConsent("guest-2", storage);
+    expect(readAiConsent("kakao-1", storage)).toBe(true);
+    clearAiConsent("kakao-1", storage);
+    expect(readAiConsent("kakao-1", storage)).toBe(false);
+    expect(storage.map.has(AI_CONSENT_STORAGE_KEY)).toBe(false);
+    storage.map.set(AI_CONSENT_STORAGE_KEY, "{");
+    expect(() => clearAiConsent("kakao-1", storage)).not.toThrow();
+    expect(() => clearAiConsent("kakao-1", null)).not.toThrow();
+    const blocked = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      removeItem: () => {
+        throw new Error("SecurityError");
+      },
+    };
+    expect(() => clearAiConsent("kakao-1", blocked)).not.toThrow();
+  });
+});
+
+describe("판 — 웹과 Edge Function chat이 한 곳의 값을 쓴다", () => {
+  it("이 모듈의 판 = supabase/functions/_shared/aiConsent.ts의 판(함수가 서버 기록과 비교하는 값)", () => {
+    expect(AI_CONSENT_VERSION).toBe(SHARED_AI_CONSENT_VERSION);
+  });
+
+  it("[동의하고 계속하기]는 이 브라우저에 남기고 서버 기록을 시작한다 — 화면은 그 기록을 기다리지 않는다", () => {
+    const src = readFileSync(fileURLToPath(new URL("./aiConsent.ts", import.meta.url)), "utf8");
+    const accept = src.slice(src.indexOf("const accept = useCallback"), src.indexOf("const revoke = useCallback"));
+    expect(accept).toContain("saveAiConsent(accountId, now);");
+    expect(accept).toContain("void startAiConsentRecord(accountId, now);");
+    expect(accept).not.toContain("await");
+    const revoke = src.slice(src.indexOf("const revoke = useCallback"), src.indexOf("return { consented"));
+    expect(revoke).toContain("clearAiConsent(accountId);");
   });
 });
 

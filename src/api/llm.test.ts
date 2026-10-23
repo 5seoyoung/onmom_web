@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AI_CONSENT_REQUIRED_CODE } from "../../supabase/functions/_shared/aiConsent";
 import {
+  failureCode,
   functionContext,
   functionMessages,
+  isAiConsentRequired,
   isAiDisabledReply,
   legacyContextText,
   LLM_AI_DISABLED_CODE,
@@ -317,7 +320,40 @@ describe("llmComplete — Supabase Edge Function chat", () => {
   it.each([400, 401, 413, 422, 429, 502, 503, 504])("HTTP %i { ok: false, code } → server", async (status) => {
     stubFetch(async () => jsonResponse(status, { ok: false, code: "x" }));
     const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token });
-    expect(res).toMatchObject({ ok: false, kind: "server", status });
+    expect(res).toMatchObject({ ok: false, kind: "server", status, code: "x" });
+    expect(isAiConsentRequired(res)).toBe(false);
+  });
+
+  it("403 ai_consent_required — 서버에 이 계정의 AI 동의 기록이 없다(화면이 동의 카드를 다시 띄우는 신호)", async () => {
+    stubFetch(async () => jsonResponse(403, { ok: false, code: AI_CONSENT_REQUIRED_CODE }));
+    const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token });
+    expect(res).toMatchObject({ ok: false, kind: "server", status: 403, code: "ai_consent_required" });
+    expect(isAiConsentRequired(res)).toBe(true);
+    // 다른 403(CORS 허용 목록 밖 — origin_not_allowed)·코드 없는 403·다른 상태의 같은 코드는 아니다
+    stubFetch(async () => jsonResponse(403, { ok: false, code: "origin_not_allowed" }));
+    expect(isAiConsentRequired(await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token }))).toBe(false);
+    stubFetch(async () => new Response("forbidden", { status: 403 }));
+    expect(isAiConsentRequired(await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token }))).toBe(false);
+    expect(isAiConsentRequired({ ok: false, kind: "server", message: "", status: 401, code: AI_CONSENT_REQUIRED_CODE })).toBe(false);
+    expect(isAiConsentRequired({ ok: true, text: "x" })).toBe(false);
+  });
+
+  it("failureCode — 실패 본문 { code }가 짧은 영문 소문자 코드일 때만 싣는다(본문은 신뢰할 수 없는 값)", async () => {
+    expect(failureCode({ ok: false, code: "ai_consent_required" })).toBe("ai_consent_required");
+    for (const data of [{ code: "Bad Code!" }, { code: 403 }, { code: "x".repeat(65) }, null, undefined, "ai_consent_required", []]) {
+      expect(failureCode(data), JSON.stringify(data)).toBeUndefined();
+    }
+    // 함수가 HTML 오류 페이지(게이트웨이)로 답하면 코드 없이 server
+    stubFetch(async () => new Response("<html>gateway</html>", { status: 502 }));
+    const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token });
+    expect(res).toEqual({ ok: false, kind: "server", message: LLM_MESSAGES.server, status: 502 });
+  });
+
+  it("예전 NEXT_PUBLIC_LLM_URL 경로는 실패 본문을 읽지 않는다(지금 배포와 같다)", async () => {
+    stubFetch(async () => jsonResponse(403, { ok: false, code: AI_CONSENT_REQUIRED_CODE }));
+    const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: testConfig });
+    expect(res).toEqual({ ok: false, kind: "server", message: LLM_MESSAGES.server, status: 403 });
+    expect(isAiConsentRequired(res)).toBe(false);
   });
 
   it("연결 실패 → network", async () => {

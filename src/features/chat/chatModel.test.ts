@@ -161,6 +161,47 @@ describe("requestChatReply — 서버 우선, 실패면 규칙 폴백(ChatView.s
   });
 });
 
+describe("서버에 AI 동의 기록이 없다(403 ai_consent_required) — 답 대신 동의 카드를 다시", () => {
+  const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "오로가 언제까지 나오나요?" }];
+  const consentRequired = async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status: 403, code: "ai_consent_required" });
+
+  it("consentRequired를 붙인다 — 다른 실패(429·503·코드 없는 403)에는 붙이지 않는다", async () => {
+    const r = await requestChatReply(history, { llmConfigured: true, complete: vi.fn(consentRequired), context: null });
+    expect(r.consentRequired).toBe(true);
+    expect(r).toMatchObject({ fromFallback: true, crisis: false, origin: "rules" });
+    for (const failure of [
+      { ok: false, kind: "server", message: "", status: 429, code: "rate_limited" },
+      { ok: false, kind: "server", message: "", status: 503, code: "busy" },
+      { ok: false, kind: "server", message: "", status: 403 },
+      { ok: false, kind: "network", message: "" },
+    ] as LLMResult[]) {
+      const other = await requestChatReply(history, { llmConfigured: true, complete: async () => failure, context: null });
+      expect(other.consentRequired, JSON.stringify(failure)).toBeUndefined();
+    }
+  });
+
+  it("AI를 쓰지 않으면(꺼짐·거절) 서버를 부르지 않으므로 생길 수 없다", async () => {
+    const complete = vi.fn(consentRequired);
+    const r = await requestChatReply(history, { llmConfigured: false, complete, context: null, declined: true });
+    expect(r.consentRequired).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("화면 — 답 말풍선 대신 이 계정의 동의를 지우고(revoke) 같은 질문으로 동의 카드를 띄운다, 요청은 동의 기록 뒤에", () => {
+    const src = readFileSync(fileURLToPath(new URL("./ChatScreen.tsx", import.meta.url)), "utf8");
+    const chain = src.slice(src.indexOf("void Promise.resolve()"), src.indexOf("function onAcceptAi"));
+    expect(chain).toContain("complete: afterAiConsentRecord(accountId, llmComplete),");
+    const handled = chain.indexOf("if (reply.consentRequired === true) {");
+    expect(handled).toBeGreaterThan(0);
+    const branch = chain.slice(handled, chain.indexOf("return;", handled));
+    expect(branch).toContain("revoke();");
+    expect(branch).toContain("setAwaitingConsent(history);");
+    // 말풍선을 더하기 전에 돌아간다
+    expect(handled).toBeLessThan(chain.indexOf("setMessages((prev)"));
+    expect(src).toContain("const { consented, accept, revoke } = useAiConsent(accountId);");
+  });
+});
+
 describe("chatLlmContext — 서버에 보내는 산모 정보는 세 항목뿐(검수 #14)", () => {
   const now = new Date(2026, 8, 27, 10);
 

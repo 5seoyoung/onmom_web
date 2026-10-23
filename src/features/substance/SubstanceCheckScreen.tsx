@@ -5,7 +5,8 @@
 // AI 답의 출처는 앱이 확인한 것이 아니다 — 확인된 표 출처 칩(돋보기·primary)과 다른 중립 칩으로 그리고, 화면 낭독에는
 // "AI가 제시한 출처"로 읽힌다(substanceModel substanceResultChips — 원칙 4, DEV_NOTES §3 CPO 7 결정 전 기본값).
 // 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(features/chat/aiConsent.ts): 동의 전에는 표만 보고, 표에 없는 항목이면
-// 결과 아래에 동의 카드를 띄운다. [동의하고 계속하기]면 같은 항목을 AI에 다시 묻는다.
+// 결과 아래에 동의 카드를 띄운다. [동의하고 계속하기]면 같은 항목을 AI에 다시 묻는다(서버 동의 기록이 끝난 뒤 — afterAiConsentRecord).
+// 서버가 동의 기록을 찾지 못했다고 답하면(403 ai_consent_required) 이 계정의 동의를 지운다 — "정보 부족" 아래에 동의 카드가 다시 뜬다.
 // 진단·처방이 아니다.
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
@@ -16,6 +17,7 @@ import { Card, ChipFlow, DisclaimerBanner, EvidenceChip, PrimaryButton, SubPageH
 import { isLLMBackendConfigured } from "@/config";
 import { AiConsentCard } from "@/features/chat/AiConsentCard";
 import { aiMode, useAiConsent } from "@/features/chat/aiConsent";
+import { afterAiConsentRecord } from "@/features/chat/aiConsentRecord";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
 import { useAppStore } from "@/store/useAppStore";
 import {
@@ -42,7 +44,8 @@ export const AI_SOURCE_SR_PREFIX = "AI가 제시한 출처: ";
 
 export function SubstanceCheckScreen() {
   const { hydrated, state, account } = useAppStore();
-  const { consented, accept } = useAiConsent(account?.id ?? null);
+  const accountId = account?.id ?? null;
+  const { consented, accept, revoke } = useAiConsent(accountId);
   /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
   const [declined, setDeclined] = useState(false);
   const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
@@ -86,10 +89,13 @@ export function SubstanceCheckScreen() {
         const now = new Date();
         const deps = substanceDeps({
           llmConfigured: useAi,
-          complete: llmComplete,
+          // 방금 동의했으면 서버 동의 기록이 끝난 뒤 보낸다(함수가 동의를 먼저 보게)
+          complete: afterAiConsentRecord(accountId, llmComplete),
           // 서버에 함께 보내는 산모 정보 — 수유 여부·산후 주차만(서버에 물을 때만 쓰인다)
           context: useAi ? substanceLlmContext(state.profile, now) : null,
           signal: controller.signal,
+          // 서버에 동의 기록이 없다(403) — 이 계정의 동의를 지워 "정보 부족" 아래에 동의 카드가 다시 뜨게 한다
+          onConsentRequired: revoke,
         });
         return checkSubstance(text, deps);
       })

@@ -18,6 +18,8 @@ import { getSupabaseClient } from "@/auth/client";
 import type { DeliveryMethod } from "@/domain/types";
 import { DELIVERY_TITLE } from "@/rules/exercise";
 import { SUBSTANCE_LLM_MAX_TOKENS } from "@/rules/substance";
+// 함수가 AI 국외 이전 동의 기록을 찾지 못했을 때의 코드(403) — 함수와 같은 값(가져오는 것이 없는 순수 모듈)
+import { AI_CONSENT_REQUIRED_CODE } from "../../supabase/functions/_shared/aiConsent";
 import { defaultBackendConfig, joinBackendUrl, requestJson, type BackendConfig } from "./http";
 
 /** 서버가 소유한 시스템 프롬프트 프리셋 */
@@ -39,7 +41,8 @@ export type LLMFailureKind = "notConfigured" | "server" | "network" | "empty";
 
 export type LLMResult =
   | { ok: true; text: string }
-  | { ok: false; kind: LLMFailureKind; message: string; status?: number };
+  /** code: Edge Function이 실패 본문에 담은 코드(rate_limited·ai_consent_required …) — 함수 경로의 4xx·5xx에서만 */
+  | { ok: false; kind: LLMFailureKind; message: string; status?: number; code?: string };
 
 export const LLM_MESSAGES: Record<LLMFailureKind, string> = {
   notConfigured: "AI 상담은 준비 중이에요.", // 원문: LLMClient.swift:33
@@ -95,12 +98,21 @@ export type LLMOptions = {
   getAccessToken?: () => Promise<string | null>;
 };
 
-const fail = (kind: LLMFailureKind, status?: number): LLMResult => ({
+const fail = (kind: LLMFailureKind, status?: number, code?: string): LLMResult => ({
   ok: false,
   kind,
   message: LLM_MESSAGES[kind],
   status,
+  ...(code !== undefined ? { code } : {}),
 });
+
+/**
+ * 함수가 "이 계정의 AI 국외 이전 동의 기록이 없다"고 답했는가(403 ai_consent_required — 서버 행 없음·예전 판).
+ * 화면은 이 계정의 동의를 지우고 동의 카드를 다시 띄운다(features/chat/aiConsent.ts revoke). 예전 NEXT_PUBLIC_LLM_URL 경로는 코드를 읽지 않는다.
+ */
+export function isAiConsentRequired(result: LLMResult): boolean {
+  return !result.ok && result.kind === "server" && result.status === 403 && result.code === AI_CONSENT_REQUIRED_CODE;
+}
 
 /**
  * 한 턴 질의. 호출자가 signal로 취소하면 network로 끝나므로, 취소한 쪽은 자기 signal을 보고 결과를 버린다.
@@ -181,7 +193,7 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
     body,
     timeoutMs: opts.timeoutMs ?? LLM_FUNCTION_TIMEOUT_MS,
     signal: opts.signal,
-    // 실패 본문의 code를 본다 — 503 ai_disabled(서버 쪽 AI 꺼짐)만 따로 다룬다
+    // 실패 본문의 code를 본다 — 503 ai_disabled(서버 쪽 AI 꺼짐)·403 ai_consent_required(동의 기록 없음)를 다른 실패와 나눈다
     readErrorBody: true,
     config: cfg,
   });
@@ -190,9 +202,20 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
     serverAiOff.add(url.toString());
     return fail("notConfigured");
   }
-  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401, 혼잡 503 …) → server. 연결 실패·시간 초과 → network.
-  if (!res.ok) return res.kind === "status" ? fail("server", res.status) : fail("network");
+  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401, 동의 없음 403, 혼잡 503 …) → server(+ 실패 코드). 연결 실패·시간 초과 → network.
+  if (!res.ok) return res.kind === "status" ? fail("server", res.status, failureCode(res.data)) : fail("network");
   return parseFunctionReply(res.data);
+}
+
+const FAILURE_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
+/**
+ * 함수 실패 본문 { ok: false, code }의 코드 — 짧은 영문 소문자·숫자·밑줄(최대 64자)일 때만(supabase/functions/_shared/cors.ts failure).
+ * 본문은 신뢰할 수 없는 값이다 — 코드를 나눌 때만 쓰고 화면에 보이지 않는다. 모양이 틀리거나 없으면 undefined.
+ */
+export function failureCode(data: unknown): string | undefined {
+  const code = typeof data === "object" && data !== null ? (data as { code?: unknown }).code : undefined;
+  return typeof code === "string" && FAILURE_CODE_PATTERN.test(code) ? code : undefined;
 }
 
 /**
