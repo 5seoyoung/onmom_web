@@ -5,8 +5,13 @@
 // 웹의 위기 표현 선필터는 화면 쪽 features/chat/chatModel.ts(isCrisisMessage)가 이 모듈을 부르기 전에 건다.
 // 규칙 폴백은 질문을 이해하지 못한다. 키워드 5분기로 안전 연계만 하고, 이해한 척하지 않는다.
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
+// 웹 신규(iOS와 다름): 자해·출혈 키워드를 찾기 전에 그 키워드를 품은 무해한 낱말("커피"·"피곤"의 피, "붓기가 사라지고"의 사라지고)을
+// 지우고, 남은 글자에서 content.json 키워드를 그대로 찾는다(supabase/functions/_shared/safety.ts — 웹 선필터·Edge Function과 같은 목록).
+// 무해한 낱말 밖에 키워드가 하나라도 있으면 예전처럼 걸린다("커피 마셨는데 피가 나요" → 출혈 안내). 키워드·답(content.json)은 바꾸지 않았다.
 
 import content from "@/content";
+// 무해한 낱말 목록 — 가져오는 것이 없는 순수 모듈(웹 번들에도 그대로 들어간다)
+import { withoutBleedingBenign, withoutSelfHarmBenign } from "../../supabase/functions/_shared/safety";
 import { localizedCaseInsensitiveContains } from "./substance";
 
 export interface ChatMessage {
@@ -50,23 +55,24 @@ const fallback = content.chat_fallback;
 /**
  * 규칙 폴백 답(OnmomEngine.swift:120-140). 마지막 사용자 문장에서 순서대로 첫 일치:
  * 자해(최우선 응급 연계) → 기분(상담하지 않고 연계만) → 출혈·피 → 운동 → 기본 안내.
- * "피"는 "커피"에도 걸린다 — 그래서 FAQ 칩은 서버가 있을 때만 보인다(shouldShowFaq).
+ * 자해·출혈은 무해한 낱말을 지운 글자에서 찾는다(머리말) — "커피 마셨어요"는 출혈 안내가 아니라 기본 안내.
+ * 규칙은 그래도 질문을 이해하지 못한다(FAQ 대부분은 기본 안내) — 그래서 FAQ 칩은 AI가 답할 때만 보인다(shouldShowFaq).
  */
 export function chatReply(history: readonly ChatMessage[]): ChatMessage {
   const last = lastUserText(history);
-  const has = (keywords: readonly string[]) => keywords.some((k) => localizedCaseInsensitiveContains(last, k));
+  const has = (text: string, keywords: readonly string[]) => keywords.some((k) => localizedCaseInsensitiveContains(text, k));
 
   let text: string;
-  if (has(fallback.self_harm_keywords)) {
+  if (has(withoutSelfHarmBenign(last), fallback.self_harm_keywords)) {
     // 앱 화면에서는 여기까지 오지 않는다 — features/chat/chatModel.ts requestChatReply가 위기 표현(isCrisisMessage — 이 키워드 포함)을
     // 먼저 위기 안내로 답한다. 이 함수를 다른 곳에서 불러도 위기 표현이 기본 답을 받지 않게 iOS 순서 그대로 남겨 둔다(안전망).
     text = fallback.replies.self_harm;
-  } else if (has(fallback.mood_keywords)) {
+  } else if (has(last, fallback.mood_keywords)) {
     // 우울·기분 상담은 의료행위라 챗봇이 진행하지 않는다 — 알림·연계만 안내
     text = fallback.replies.mood;
-  } else if (has(fallback.bleeding_keywords)) {
+  } else if (has(withoutBleedingBenign(last), fallback.bleeding_keywords)) {
     text = fallback.replies.bleeding;
-  } else if (has(fallback.exercise_keywords)) {
+  } else if (has(last, fallback.exercise_keywords)) {
     text = fallback.replies.exercise;
   } else {
     text = fallback.replies.default;

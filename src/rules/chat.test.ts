@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import {
+  BLEEDING_BENIGN_WORDS,
+  SELF_HARM_BENIGN_PHRASES,
+  withoutBleedingBenign,
+} from "../../supabase/functions/_shared/safety";
+import {
   CHAT_GREETING,
   buildChatLlmRequest,
   chatReply,
@@ -34,9 +39,10 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
     expect(replyTo("출혈이 있어요")).toBe(replies.bleeding);
   });
 
-  it("'피'는 커피·피곤에도 걸린다(iOS 그대로 — 그래서 폴백에서는 FAQ를 숨긴다)", () => {
-    expect(replyTo("수유 중에 커피 마셔도 되나요?")).toBe(replies.bleeding);
-    expect(replyTo("피곤해요")).toBe(replies.bleeding);
+  it("'피'를 품은 무해한 낱말(커피·피곤 …)만으로는 출혈 안내가 아니다(웹 신규 — iOS는 걸렸다)", () => {
+    expect(replyTo("커피 마셨어요")).toBe(replies.default);
+    expect(replyTo("수유 중에 커피 마셔도 되나요?")).toBe(replies.default);
+    expect(replyTo("피곤해요")).toBe(replies.default);
   });
 
   it("운동", () => {
@@ -60,6 +66,126 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
     ];
     expect(chatReply(history)).toEqual({ role: "assistant", text: replies.default });
     expect(chatReply([greeting]).text).toBe(replies.default);
+  });
+});
+
+describe("오탐 줄이기 — 무해한 낱말을 지운 뒤 원래 키워드로 찾는다(진짜 신호는 놓치지 않는다)", () => {
+  /** 예전 규칙(iOS 그대로) — 지우지 않고 키워드만 */
+  const oldHas = (text: string, keywords: readonly string[]) => keywords.some((k) => text.includes(k));
+
+  it("목록은 정한 낱말 그대로 — 출혈 '피' 27개, 위기 '사라지' 10개", () => {
+    expect(BLEEDING_BENIGN_WORDS.map((b) => b.phrase)).toEqual([
+      "피곤", "피로", "커피", "피부", "피임", "피자", "피아노", "피해", "피하", "피드", "피크", "피트니스", "피클", "피망",
+      "피규어", "피어싱", "스피커", "해피", "슬리피", "피칭", "피날레", "피라미드", "피서", "피난", "피동", "피의자", "피어나",
+    ]);
+    expect(SELF_HARM_BENIGN_PHRASES.map((b) => b.phrase)).toEqual([
+      "붓기가 사라지", "부기가 사라지", "통증이 사라지", "증상이 사라지", "열이 사라지",
+      "멍이 사라지", "자국이 사라지", "흉터가 사라지", "오로가 사라지", "젖몸살이 사라지",
+    ]);
+    // 모두 원래 키워드를 품은 낱말이다(그래서 예전에는 걸렸다)
+    for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(phrase).toContain("피");
+    for (const { phrase } of SELF_HARM_BENIGN_PHRASES) expect(phrase).toContain("사라지");
+    expect(content.chat_fallback.bleeding_keywords).toEqual(["출혈", "피"]);
+    expect(content.chat_fallback.self_harm_keywords).toContain("사라지고");
+  });
+
+  it.each([
+    "커피 마셨어요",
+    "아이스커피 한 잔은 괜찮을까요?",
+    "요즘 너무 피곤해요",
+    "피로가 쌓였어요",
+    "만성 피로",
+    "피부가 가려워요",
+    "피임약 먹어도 되나요?",
+    "피자 먹어도 되나요?",
+    "피아노 소리에 아기가 깨요",
+    "무리한 운동은 피해야 하나요?",
+    "카페인은 피하세요",
+    "아기 수유 피드백",
+    "통증이 피크예요",
+    "피트니스 센터 다녀도 될까요",
+    "피클이랑 피망 먹었어요",
+    "스피커로 자장가 틀어요",
+    "해피 엔딩",
+    "슬리피 키즈",
+    "여름 피서 가도 될까요",
+    "피난처",
+    "꽃이 피어나요",
+  ])("무해한 낱말만 있으면 출혈 안내가 아니다: %s", (text) => {
+    expect(oldHas(text, content.chat_fallback.bleeding_keywords)).toBe(true); // 예전에는 걸렸다
+    expect(replyTo(text)).not.toBe(replies.bleeding);
+  });
+
+  it.each([
+    "커피 마셨는데 피가 나요",
+    "피가 나요",
+    "피곤한데 피가 비쳐요",
+    "피부에서 피가 나요",
+    "커피 마시고 나서 출혈이 늘었어요",
+    "코피가 나요",
+    "패드가 피로 젖었어요",
+    "패드가 피로가득해요",
+    "피로 시트가 젖었어요",
+    "아래에서 피난다",
+    "피난 것 같아요",
+    "속옷에 피자국이 있어요",
+    "피자꾸 나와요",
+    "피하고 덩어리가 같이 나와요",
+    "피하루종일 나와요",
+    "피하혈종이 생겼어요",
+    "어떡해피가안멈춰요",
+    "빈혈이라 피부족이래요",
+    "피하출혈이 있어요",
+  ])("진짜 출혈 신호는 그대로 출혈 안내: %s", (text) => {
+    expect(replyTo(text)).toBe(replies.bleeding);
+  });
+
+  it("무해한 낱말이 어떤 꼴로 붙어 있어도 그 밖의 '피'는 그대로 걸린다(지운 자리는 공백 — 앞뒤가 붙지 않는다)", () => {
+    for (const { phrase } of BLEEDING_BENIGN_WORDS) {
+      for (const text of [`${phrase} 피가 나요`, `피가 나요 ${phrase}`, `${phrase}${phrase} 그리고 피`]) {
+        expect(replyTo(text), text).toBe(replies.bleeding);
+      }
+    }
+    expect(withoutBleedingBenign("커피 마셨어요")).toBe("  마셨어요");
+  });
+
+  it("지운 뒤에도 걸리면 예전에도 걸렸다 — 새로 걸리는 문장은 없다(예전 결과의 부분집합)", () => {
+    const corpus = ["커피", "피", "출혈", "운동", "피곤해서 운동", "해피", "피자", "오로", "피난", "피로", "사라지고", "붓기가 사라지고"];
+    for (const a of corpus) {
+      for (const b of corpus) {
+        const text = `${a} ${b}`;
+        if (replyTo(text) === replies.bleeding) expect(oldHas(text, content.chat_fallback.bleeding_keywords), text).toBe(true);
+        if (replyTo(text) === replies.self_harm) expect(oldHas(text, content.chat_fallback.self_harm_keywords), text).toBe(true);
+      }
+    }
+  });
+
+  it.each([
+    "붓기가 사라지고 있어요",
+    "부기가 사라지고 나서 운동해도 되나요?",
+    "통증이 사라지고 나서 운동해도 되나요?",
+    "증상이 사라지고 있어요",
+    "열이 사라지고 몸이 가벼워요",
+    "멍이 사라지고 있어요",
+    "수술 자국이 사라지고 있어요",
+    "흉터가 사라지고 있어요",
+    "오로가 사라지고 나면 운동해도 되나요?",
+    "젖몸살이 사라지고 편해졌어요",
+    "얼굴붓기가사라지고 있어요",
+  ])("몸의 증상이 '사라지고'는 위기 안내가 아니다(규칙 폴백): %s", (text) => {
+    expect(oldHas(text, content.chat_fallback.self_harm_keywords)).toBe(true); // 예전에는 걸렸다
+    expect(replyTo(text)).not.toBe(replies.self_harm);
+  });
+
+  it.each([
+    "다 사라지고 싶어요",
+    "그냥 사라지고 싶어요",
+    "통증이 사라지지 않아서 나도 사라지고 싶어요",
+    "붓기가 사라지고 있는데 그냥 다 사라지고 싶다",
+    "붓기가 사라지고 있어요. 근데 죽고 싶어요",
+    "흉터가 사라지면 좋겠고 자해하고 싶어요",
+  ])("주어가 없거나 자기인 '사라지고'·다른 위기 낱말은 그대로 위기 안내(규칙 폴백): %s", (text) => {
+    expect(replyTo(text)).toBe(replies.self_harm);
   });
 });
 

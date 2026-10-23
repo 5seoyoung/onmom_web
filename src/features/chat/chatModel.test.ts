@@ -70,7 +70,7 @@ describe("chatScreenState — 배너·FAQ(ChatView.swift:20, :31-36, :161)", () 
       showFaq: false,
     });
   });
-  it("FAQ 칩 → [동의하지 않기]가 생길 수 없는 이유: 규칙은 '수유 중에 커피…'에 출혈 안내로 답한다('피')", async () => {
+  it("FAQ 칩 → [동의하지 않기]가 생길 수 없는 이유: 규칙은 FAQ 질문에 맞춘 답을 주지 못한다(기본 안내)", async () => {
     const coffee = "수유 중에 커피 마셔도 되나요?";
     expect(content.chat_faq).toContain(coffee);
     const complete = vi.fn();
@@ -80,8 +80,9 @@ describe("chatScreenState — 배너·FAQ(ChatView.swift:20, :31-36, :161)", () 
       context: null,
       declined: true,
     });
-    // 규칙 폴백(iOS 그대로)은 FAQ 질문에 엉뚱하게 답한다 — 그래서 ask에서는 칩을 보이지 않는다(위 테스트)
-    expect(declined.text).toBe(content.chat_fallback.replies.bleeding);
+    // 규칙 폴백은 FAQ 질문을 이해하지 못한다("커피"의 '피'는 이제 출혈 안내로 가지 않고 기본 안내) — 그래서 ask에서는 칩을 보이지 않는다(위 테스트)
+    expect(declined.text).toBe(CHAT_DECLINED_DEFAULT_REPLY);
+    expect(declined.text).not.toBe(content.chat_fallback.replies.bleeding);
     expect(complete).not.toHaveBeenCalled();
     // 거절하면 off — 칩은 계속 없다. 동의하면 on — 인사말만 있는 다음 방문 첫 화면에만 칩
     expect(chatScreenState({ mode: "off", messageCount: 1, thinking: false, lastReplyFromFallback: null }).showFaq).toBe(false);
@@ -206,6 +207,54 @@ describe("chatSendAction — 보낸 질문을 AI·앱 안내·동의 중 어디�
   it("isCrisisMessage는 앱 규칙 폴백과 같은 키워드(content.json self_harm_keywords)", () => {
     for (const k of content.chat_fallback.self_harm_keywords) expect(isCrisisMessage(`요즘 ${k} 생각`)).toBe(true);
     expect(isCrisisMessage("커피 마셔도 되나요?")).toBe(false);
+  });
+});
+
+describe("위기 선필터 오탐 줄이기 — 몸의 증상이 '사라지고'는 위기 표현이 아니다(무해한 구절을 지운 뒤 찾는다)", () => {
+  it.each([
+    "붓기가 사라지고 있어요",
+    "부기가 사라지고 나서 운동해도 되나요?",
+    "통증이 사라지고 나서 운동해도 되나요?",
+    "증상이 사라지고 있어요",
+    "열이 사라지고 몸이 가벼워요",
+    "멍이 사라지고 있어요",
+    "자국이 사라지고 있어요",
+    "흉터가 사라지고 있어요",
+    "오로가 사라지고 나면 운동해도 되나요?",
+    "젖몸살이 사라지고 편해졌어요",
+    "다리 붓기가  사라지고 있어요",
+    "얼굴붓기가사라지고 있어요",
+  ])("위기 표현 아님 → AI·동의 흐름 그대로: %s", (text) => {
+    expect(text.includes("사라지고")).toBe(true); // 예전에는 content.json "사라지고"로 걸렸다
+    expect(isCrisisMessage(text)).toBe(false);
+    expect(chatSendAction("on", text)).toBe("ai");
+    expect(chatSendAction("ask", text)).toBe("consent");
+  });
+
+  it.each([
+    "다 사라지고 싶어요",
+    "그냥 사라지고 싶어요",
+    "사라지고만 싶어요",
+    "통증이 사라지지 않아서 나도 사라지고 싶어요",
+    "붓기가 사라지고 있는데 그냥 다 사라지고 싶다",
+    "흉터가 사라지면 좋겠고 죽고 싶어요",
+    "붓기가 사라지고 있지만 자살 생각이 들어요",
+  ])("위기 표현은 그대로 → AI에 보내지 않고 위기 안내: %s", async (text) => {
+    expect(isCrisisMessage(text)).toBe(true);
+    for (const mode of ["ask", "off", "on"] as const) expect(chatSendAction(mode, text)).toBe("rules");
+    const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
+    const r = await requestChatReply([...initialChatMessages(), { id: 1, role: "user", text }], { llmConfigured: true, complete, context: null });
+    expect(r).toMatchObject({ text: content.chat_fallback.replies.self_harm, crisis: true });
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("앞선 턴의 '붓기가 사라지고'는 AI 대화에서 빼지 않는다(위기 턴이 아니다)", () => {
+    const turns = [
+      { role: "user" as const, content: "붓기가 사라지고 있어요" },
+      { role: "assistant" as const, content: "좋은 신호예요." },
+      { role: "user" as const, content: "운동해도 되나요?" },
+    ];
+    expect(withoutCrisisTurns(turns)).toEqual(turns);
   });
 });
 

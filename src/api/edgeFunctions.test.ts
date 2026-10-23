@@ -48,7 +48,10 @@ import {
   CRISIS_REPLY,
   isSelfHarmMessage,
   normalizeForSafety,
+  SELF_HARM_BENIGN_PHRASES,
+  withoutSelfHarmBenign,
 } from "../../supabase/functions/_shared/safety";
+import { isCrisisMessage } from "@/features/chat/chatModel";
 import {
   parseVideoQuery,
   sanitizeVideoPayload,
@@ -346,6 +349,35 @@ describe("안전 선필터 — 자해·자살 표현이면 LLM을 부르지 않�
     expect(normalizeForSafety("자‍살﻿")).toBe("자살");
     // 자모가 나뉜 입력(NFD)도 같은 글자로
     expect(isSelfHarmMessage("자살".normalize("NFD"))).toBe(true);
+  });
+
+  it("무해한 구절(몸의 증상이 사라지)은 지운 뒤 찾는다 — 띄어쓰기가 없거나 여러 칸이어도, 자모가 나뉘어도", () => {
+    for (const { phrase } of SELF_HARM_BENIGN_PHRASES) {
+      for (const text of [`${phrase}고 있어요`, `${phrase.replace(/ /g, "")}고 있어요`, `${phrase.replace(/ /g, "   ")}고 있어요`, `${phrase}고 있어요`.normalize("NFD")]) {
+        expect(withoutSelfHarmBenign(text).normalize("NFC"), text).not.toContain("사라지");
+        expect(isSelfHarmMessage(text), text).toBe(false);
+      }
+    }
+  });
+
+  it.each([
+    "붓기가 사라지고 있는데 그냥 사라지고 싶어요",
+    "통증이 사라지지 않아서 세상에서 사라지고 싶다",
+    "흉터가 사라지면 좋겠지만 살기 싫어요",
+    "열이 사라지고 나서도 죽고 싶어요",
+    "멍이 사라지고 있어요. I want to die",
+  ])("무해한 구절 밖의 위기 표현은 그대로 걸린다(서버): %s", (text) => {
+    expect(isSelfHarmMessage(text)).toBe(true);
+  });
+
+  it("웹 선필터와 서버 선필터가 같은 무해한 구절을 쓴다 — 웹이 걸지 않은 구절을 서버도 걸지 않는다", () => {
+    for (const { phrase } of SELF_HARM_BENIGN_PHRASES) {
+      const text = `${phrase}고 있어요`;
+      expect(isCrisisMessage(text), text).toBe(false);
+      expect(isSelfHarmMessage(text), text).toBe(false);
+    }
+    expect(isCrisisMessage("다 사라지고 싶어요")).toBe(true);
+    expect(isSelfHarmMessage("다 사라지고 싶어요")).toBe(true);
   });
 });
 

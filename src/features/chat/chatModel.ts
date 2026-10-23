@@ -18,8 +18,8 @@ import content from "@/content";
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { UserProfile } from "@/domain/types";
 import { localizedCaseInsensitiveContains } from "@/rules/substance";
-// Edge Function chat의 안전 선필터와 같은 목록·고정 위기 안내(가져오는 것이 없는 순수 모듈 — 웹 번들에도 그대로 들어간다)
-import { CRISIS_REPLY, isSelfHarmMessage } from "../../../supabase/functions/_shared/safety";
+// Edge Function chat의 안전 선필터와 같은 목록·무해한 구절·고정 위기 안내(가져오는 것이 없는 순수 모듈 — 웹 번들에도 그대로 들어간다)
+import { CRISIS_REPLY, isSelfHarmMessage, withoutSelfHarmBenign } from "../../../supabase/functions/_shared/safety";
 import type { AiMode } from "./aiConsent";
 import {
   CHAT_FALLBACK_BANNER,
@@ -85,7 +85,7 @@ export function canSendChat(input: { draft: string; thinking: boolean; hydrated:
  * 폴백 배너·FAQ 칩 표시 여부(ChatView.swift:20, :24, :31-36, :161).
  * - 배너: 서버에 물을 수 있으면(동의를 묻는 중 ask 포함) 첫 화면에는 없다 — 동의 전이라도 "연결되지 않아"는 사실이 아니다.
  * - FAQ: AI가 실제로 답할 때(on)만. 동의를 묻는 중(ask)에는 숨긴다 — 칩을 누르고 [동의하지 않기]를 고르면 앱의 질문이
- *   규칙 폴백으로 가는데, 규칙은 FAQ 대부분에 엉뚱하게 답한다("수유 중에 커피…"의 '피' → 출혈 안내, rules/chat.ts chatReply).
+ *   규칙 폴백으로 가는데, 규칙은 FAQ 질문에 맞춘 답을 주지 못한다(대부분 기본 안내 "질문에 맞춘 답을 드리기 어려워요", rules/chat.ts chatReply).
  *   동의는 처음 직접 쓴 질문에서 묻고, 동의한 뒤 다음 방문부터 칩이 보인다.
  */
 export function chatScreenState(input: {
@@ -127,10 +127,13 @@ export function chatBackHref(search: string): typeof ROUTES.home | typeof ROUTES
  * 자해·자살 표현인가 — 앱 규칙 폴백(rules/chat chatReply)의 키워드(content.json self_harm_keywords)
  * 또는 Edge Function chat의 안전 선필터 목록(supabase/functions/_shared/safety.ts — 띄어쓰기·영어 표현 포함).
  * 둘 중 하나라도 걸리면 위기 표현으로 본다(놓치는 것보다 잘못 걸리는 쪽이 낫다).
+ * content.json 키워드도 서버와 같은 무해한 구절(safety.ts SELF_HARM_BENIGN_PHRASES — "붓기가 사라지" 등)을 지운 글자에서 찾는다:
+ * "붓기가 사라지고 있어요"는 위기 표현이 아니고, "다 사라지고 싶어요"는 그대로 위기 표현이다.
  */
 export function isCrisisMessage(text: string): boolean {
+  const rest = withoutSelfHarmBenign(text);
   return (
-    content.chat_fallback.self_harm_keywords.some((k) => localizedCaseInsensitiveContains(text, k)) || isSelfHarmMessage(text)
+    content.chat_fallback.self_harm_keywords.some((k) => localizedCaseInsensitiveContains(rest, k)) || isSelfHarmMessage(text)
   );
 }
 
