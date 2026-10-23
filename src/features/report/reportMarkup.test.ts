@@ -9,6 +9,7 @@ import type { PersistedState, SymptomRecord } from "@/domain/types";
 import { DataRightsCard } from "@/features/settings/DataRightsCard";
 import { DATA_RIGHTS_TEXT } from "@/features/settings/settingsView";
 import { ROUTES } from "@/routes";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import type { Account } from "@/store/account";
 import { initialState } from "@/store/defaults";
 import { addComment, addMoodCheck, addPost, addSymptomRecord, updateMaternity, updateProfile } from "@/store/state";
@@ -28,7 +29,7 @@ const stripComments = (source: string) =>
 const noop = () => {};
 
 function symptom(id: string, date: string, patch: Partial<SymptomRecord> = {}): SymptomRecord {
-  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 2, redFlagCode: null, postpartumDays: 40, ...patch };
+  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 2, redFlagCode: null, postpartumDays: 40, rulesVersion: RULES_VERSION, ...patch };
 }
 
 function fullState(): PersistedState {
@@ -44,8 +45,8 @@ function fullState(): PersistedState {
   s = updateMaternity(s, { gdm: true });
   s = addSymptomRecord(s, symptom("early", "2026-09-07T01:00:00.000Z", { postpartumDays: 3 }));
   s = addSymptomRecord(s, symptom("flag", "2026-10-14T01:00:00.000Z", { feverEvent: true, redFlagCode: "fever_infection" }));
-  s = addMoodCheck(s, { id: "m1", date: "2026-10-14T00:30:00.000Z", questionID: 2, answer: "yes" });
-  s = addMoodCheck(s, { id: "m2", date: "2026-10-13T00:30:00.000Z", questionID: 999, answer: "no" });
+  s = addMoodCheck(s, { id: "m1", date: "2026-10-14T00:30:00.000Z", questionID: 2, answer: "yes", moodVersion: MOOD_VERSION });
+  s = addMoodCheck(s, { id: "m2", date: "2026-10-13T00:30:00.000Z", questionID: 999, answer: "no", moodVersion: null });
   s = addPost(s, { title: "둘째 주", body: "산책 10분" }, { id: "p1", authorName: "게스트", now: new Date("2026-10-10T03:00:00.000Z") });
   s = addComment(s, "p1", "내일도 걷기", { id: "c1", authorName: "게스트", now: new Date("2026-10-11T03:00:00.000Z") });
   return s;

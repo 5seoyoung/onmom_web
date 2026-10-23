@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { MOOD_CHECKS_LIMIT, SYMPTOM_HISTORY_LIMIT, type PersistedState } from "@/domain/types";
 import { AI_USAGE_RETENTION_DAYS } from "@/features/privacy/dataItems";
+import { RECORD_VERSION_MAX_LENGTH } from "@/store/decode";
 import { initialState } from "@/store/defaults";
 
 const MIGRATIONS = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
@@ -130,12 +131,15 @@ describe("0007 — user_states 크기 상한 5MB → 1MB", () => {
         painNrs: 10,
         redFlagCode: "cardioresp_flag",
         postpartumDays: 365,
+        // 기록마다의 규칙 버전 — 디코더가 받는 가장 긴 값으로(실제는 "rules-1.1" 9자)
+        rulesVersion: "r".repeat(RECORD_VERSION_MAX_LENGTH),
       })),
       moodChecks: Array.from({ length: MOOD_CHECKS_LIMIT }, (_, i) => ({
         id: `00000000-0000-4000-9000-${String(i).padStart(12, "0")}`,
         date: "2026-10-14T11:00:00.000Z",
         questionID: 7,
         answer: "unsure" as const,
+        moodVersion: "m".repeat(RECORD_VERSION_MAX_LENGTH),
       })),
       moodCardSnoozedUntil: "2026-10-21T11:00:00.000Z",
     };

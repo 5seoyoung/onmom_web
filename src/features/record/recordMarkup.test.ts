@@ -148,7 +148,7 @@ describe("오늘의 한 가지 질문 카드", () => {
 
   it("답함: 답 문구만, 버튼 없음", () => {
     const model = moodCardModel(
-      [{ id: "m", date: kst("2026-09-23T08:00").toISOString(), questionID: 1, answer: "unsure" }],
+      [{ id: "m", date: kst("2026-09-23T08:00").toISOString(), questionID: 1, answer: "unsure", moodVersion: null }],
       NOW,
     );
     const html = renderToStaticMarkup(h(MoodQuestionCard, { model, onAnswer: noop }));
@@ -168,6 +168,7 @@ describe("최근 기록 카드", () => {
       painNrs: 0,
       redFlagCode: "fever_infection",
       postpartumDays: 30,
+      rulesVersion: null,
     };
     const html = renderToStaticMarkup(h(RecentRecordsCard, { rows: recentRecordRows([rec, { ...rec, id: "r2", redFlagCode: null }]) }));
     expect(count(html, "<li")).toBe(2);
@@ -189,6 +190,7 @@ describe("최근 기록 카드", () => {
       painNrs: 0,
       redFlagCode: "neuro_flag",
       postpartumDays: 30,
+      rulesVersion: null,
     };
     const rows = recentRecordRows([
       { ...rec, woundPainWorsening: false, dizzinessFainting: true, chestPainBreathing: false, calfPainSwelling: false },

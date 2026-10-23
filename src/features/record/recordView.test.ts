@@ -5,6 +5,7 @@ import { formatMonthDayTime } from "@/domain/date";
 import type { MoodCheckRecord, SymptomRecord } from "@/domain/types";
 import { questionForDay } from "@/rules/mood";
 import { RECORD_NORMAL_RESULT } from "@/rules/record";
+import { RULES_VERSION } from "@/rules/version";
 import {
   INITIAL_SYMPTOM_FORM,
   RECENT_RECORDS_LIMIT,
@@ -135,12 +136,23 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
       painNrs: 0,
       redFlagCode: null,
       postpartumDays: 10,
+      rulesVersion: RULES_VERSION,
       woundPainWorsening: false,
       dizzinessFainting: false,
       chestPainBreathing: false,
       calfPainSwelling: false,
     });
     expect("id" in newRecord).toBe(false);
+  });
+
+  it("기록에 결과를 낸 규칙의 버전을 싣는다 — 신호가 있어도 없어도 같은 버전(result.trace와 같은 값, 감사 추적)", () => {
+    const quiet = submitSymptomCheck(INITIAL_SYMPTOM_FORM, "2026-09-13", NOW);
+    const flagged = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, chestPainBreathing: true }, "2026-09-13", NOW);
+    expect(flagged.newRecord.redFlagCode).toBe("cardioresp_flag");
+    for (const { newRecord, result } of [quiet, flagged]) {
+      expect(newRecord.rulesVersion).toBe(RULES_VERSION);
+      expect(newRecord.rulesVersion).toBe(result.trace.configVersion);
+    }
   });
 
   it("10일 전: 화면에 없는 오로 값은 켜져 있어도 저장·판정하지 않는다", () => {
@@ -185,6 +197,7 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
       painNrs: 0,
       redFlagCode: "neuro_flag",
       postpartumDays: 10,
+      rulesVersion: null,
     };
     expect(firedRiskLabels(base)).toEqual([]);
     expect(
@@ -277,6 +290,7 @@ describe("최근 기록 — 최신 5건 · 날짜 · 위험신호 없음/병원 
     painNrs: 0,
     redFlagCode,
     postpartumDays: 10,
+    rulesVersion: null,
   });
 
   it("앞 5건만, 순서 그대로", () => {
@@ -312,6 +326,7 @@ describe("오늘의 한 가지 질문", () => {
     date: kst(local).toISOString(),
     questionID: 1,
     answer,
+    moodVersion: null,
   });
 
   it("오늘 답이 없으면 오늘의 문항 + 답 3개(네/글쎄요/아니요)", () => {

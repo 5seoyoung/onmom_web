@@ -33,11 +33,12 @@ function symptom(i: number): SymptomRecord {
     painNrs: 0,
     redFlagCode: null,
     postpartumDays: 10,
+    rulesVersion: null,
   };
 }
 
 function mood(i: number, date = NOW): MoodCheckRecord {
-  return { id: `m${i}`, date: date.toISOString(), questionID: 1, answer: "no" };
+  return { id: `m${i}`, date: date.toISOString(), questionID: 1, answer: "no", moodVersion: null };
 }
 
 /** 건강 데이터가 조금 들어 있는 상태 */

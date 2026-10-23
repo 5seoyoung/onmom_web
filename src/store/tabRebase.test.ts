@@ -5,6 +5,7 @@ import type { PersistedState } from "@/domain/types";
 import { SCREEN_PATH, gateDecision } from "@/features/flow/gate";
 import { STALE_TAB_TEXT, staleTabNoticeVisible } from "@/features/flow/staleTabNoticeView";
 import { ROUTES } from "@/routes";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { createAppStore, rootScreenFor, type AppStore } from "./appStore";
 import { initialState } from "./defaults";
 import { STATE_KEY, createMemoryStorage, createStoragePersistence, watchPageResume, type StorageLike } from "./persistence";
@@ -19,6 +20,7 @@ const SYMPTOM = {
   painNrs: 2,
   redFlagCode: "pph_suspect",
   postpartumDays: 12,
+  rulesVersion: RULES_VERSION,
 } as const;
 
 function tab(storage: StorageLike, prefix: string, opts: { resume?: (cb: () => void) => void } = {}): AppStore {
@@ -67,6 +69,29 @@ describe("여러 탭 — 늦은 변경 알림에도 다른 탭의 새 기록을 
     // A의 화면도 합친 상태를 본다
     expect(a.getSnapshot().state.symptomHistory).toHaveLength(1);
     expect(a.getSnapshot().state.moodChecks).toHaveLength(1);
+  });
+
+  it("합칠 때 기록의 규칙 버전·기분 답의 문항 버전이 남는다 — 다른 탭(그 칸을 모르는 옛 웹)이 떨어뜨려도 이 탭의 버전으로 채운다", () => {
+    const { storage, a, b } = twoTabs();
+    b.actions.addSymptomRecord(SYMPTOM);
+    a.actions.addMoodCheck({ questionID: 1, answer: "no" }); // A가 B의 기록 위로 합쳐 저장
+    let s = saved(storage)!;
+    expect(s.symptomHistory.map((r) => r.rulesVersion)).toEqual([RULES_VERSION]);
+    expect(s.moodChecks.map((m) => m.moodVersion)).toEqual([MOOD_VERSION]);
+
+    // 옛 웹 탭이 같은 기록을 칸 없이 다시 저장했다
+    storage.setItem(
+      STATE_KEY,
+      JSON.stringify({
+        ...s,
+        symptomHistory: s.symptomHistory.map((r) => ({ ...r, rulesVersion: undefined })),
+        moodChecks: s.moodChecks.map((m) => ({ ...m, moodVersion: undefined })),
+      }),
+    );
+    a.actions.addMoodCheck({ questionID: 2, answer: "yes" }); // A의 다음 쓰기가 저장된 상태 위로 합친다
+    s = saved(storage)!;
+    expect(s.symptomHistory.map((r) => r.rulesVersion)).toEqual([RULES_VERSION]);
+    expect(s.moodChecks.map((m) => m.moodVersion)).toEqual([MOOD_VERSION, MOOD_VERSION]);
   });
 
   it("글·댓글도 합친다 — 같은 글에 두 탭이 단 댓글이 모두 남는다", () => {
@@ -135,7 +160,7 @@ describe("여러 탭 — 늦은 변경 알림에도 다른 탭의 새 기록을 
   it("동기화(replaceState)의 쓰기도 같은 보호를 받는다", () => {
     const { storage, a, b } = twoTabs();
     b.actions.addSymptomRecord(SYMPTOM);
-    const fromServer = { ...a.getSnapshot().state, moodChecks: [{ id: "srv-1", date: NOW.toISOString(), questionID: 2, answer: "no" as const }] };
+    const fromServer = { ...a.getSnapshot().state, moodChecks: [{ id: "srv-1", date: NOW.toISOString(), questionID: 2, answer: "no" as const, moodVersion: MOOD_VERSION }] };
     a.replaceState(fromServer);
     const s = saved(storage)!;
     expect(s.symptomHistory).toHaveLength(1);
@@ -270,7 +295,7 @@ describe("버린 쓰기 알림 — 다른 탭이 로그아웃·삭제·계정 �
   it("동기화(replaceState)의 쓰기를 버린 것은 이용자가 누른 것이 아니라 세지 않는다(관문은 똑같이 로그인으로)", () => {
     const { a, b } = twoTabs();
     b.actions.signOut();
-    a.replaceState({ ...a.getSnapshot().state, moodChecks: [{ id: "srv-1", date: NOW.toISOString(), questionID: 2, answer: "no" as const }] });
+    a.replaceState({ ...a.getSnapshot().state, moodChecks: [{ id: "srv-1", date: NOW.toISOString(), questionID: 2, answer: "no" as const, moodVersion: MOOD_VERSION }] });
     expect(a.discardedWrites()).toBe(0);
     expect(a.getSnapshot().account).toBeNull();
   });

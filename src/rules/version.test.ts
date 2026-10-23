@@ -105,7 +105,7 @@ describe("RULES_VERSION — 판정 기준값과 짝", () => {
     expect(code({ painNrs: SEVERE_PAIN_NRS - 1 })).toBeNull();
     expect(code({ painNrs: SEVERE_PAIN_NRS })).toBe("severe_pain");
 
-    const record = { id: "r", date: "2026-09-23T01:00:00.000Z", lochiaIncreased: false, lochiaRed: false, feverEvent: false, redFlagCode: null };
+    const record = { id: "r", date: "2026-09-23T01:00:00.000Z", lochiaIncreased: false, lochiaRed: false, feverEvent: false, redFlagCode: null, rulesVersion: null };
     const pain = (painNrs: number) => metrics({ ...record, painNrs, postpartumDays: 30 }).find((m) => m.name.startsWith("통증"))?.status;
     expect([PAIN_WATCH_NRS - 1, PAIN_WATCH_NRS, SEVERE_PAIN_NRS - 1, SEVERE_PAIN_NRS].map(pain)).toEqual(["normal", "watch", "watch", "alert"]);
     const lochiaMetric = (days: number) => metrics({ ...record, ...lochia, painNrs: 0, postpartumDays: days }).find((m) => m.name === "오로(분비물)")?.status;

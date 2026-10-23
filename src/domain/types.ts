@@ -59,6 +59,11 @@ export interface SymptomRecord {
   redFlagCode: string | null;
   /** 기록 시점의 산후 경과일. 구버전 기록에는 없어서 null이면 오로 판정 보류. */
   postpartumDays: number | null;
+  /**
+   * 이 기록의 결과(redFlagCode)를 낸 안내 규칙의 버전(src/rules/version.ts RULES_VERSION) — 만들 때 찍고 바꾸지 않는다(감사 추적).
+   * 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없어서 null(지어내지 않는다).
+   */
+  rulesVersion: string | null;
 }
 
 export interface MoodCheckRecord {
@@ -66,6 +71,11 @@ export interface MoodCheckRecord {
   date: IsoDateTimeString;
   questionID: number;
   answer: MoodAnswer;
+  /**
+   * 답할 때의 기분 문항·기준 버전(src/rules/version.ts MOOD_VERSION) — 같은 questionID라도 버전마다 문항이 다를 수 있다.
+   * 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없어서 null.
+   */
+  moodVersion: string | null;
 }
 
 export interface CommunityComment {

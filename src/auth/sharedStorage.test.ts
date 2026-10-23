@@ -7,6 +7,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
+import { RULES_VERSION } from "@/rules/version";
 import { createAppStore, rootScreenFor, type AppStore } from "@/store/appStore";
 import { initialState } from "@/store/defaults";
 import { createMemoryStorage, createStoragePersistence, type StorageLike } from "@/store/persistence";
@@ -188,7 +189,7 @@ function previousPersonLeftRecords(store: AppStore) {
   store.actions.signIn({ id: PREVIOUS_ACCOUNT, name: "앞사람", provider: "kakao" });
   store.actions.updateProfile({ deliveryDate: "2026-07-01", consentAccepted: true, consentVersion: CURRENT_CONSENT_VERSION, consentAcceptedAt: new Date().toISOString() });
   store.actions.completeOnboarding();
-  store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 6, redFlagCode: null, postpartumDays: 70 });
+  store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 6, redFlagCode: null, postpartumDays: 70, rulesVersion: RULES_VERSION });
   store.actions.signOut();
   expect(store.getSnapshot().state.symptomHistory).toHaveLength(1);
 }

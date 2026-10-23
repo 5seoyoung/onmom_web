@@ -3,7 +3,7 @@ import content from "@/content";
 import type { MoodCheckRecord, PersistedState, SymptomRecord } from "@/domain/types";
 import { RECORD_TEXT } from "@/features/record/recordView";
 import { MOOD_QUESTIONS } from "@/rules/mood";
-import { RULES_VERSION } from "@/rules/version";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { bmi, formatOneDecimal, retainedWeightKg } from "@/rules/weight";
 import type { Account } from "@/store/account";
 import { initialState } from "@/store/defaults";
@@ -25,12 +25,13 @@ function symptom(id: string, date: string, patch: Partial<SymptomRecord> = {}): 
     painNrs: 2,
     redFlagCode: null,
     postpartumDays: 40,
+    rulesVersion: RULES_VERSION,
     ...patch,
   };
 }
 
-function mood(id: string, date: string, questionID: number, answer: MoodCheckRecord["answer"]): MoodCheckRecord {
-  return { id, date, questionID, answer };
+function mood(id: string, date: string, questionID: number, answer: MoodCheckRecord["answer"], moodVersion: string | null = MOOD_VERSION): MoodCheckRecord {
+  return { id, date, questionID, answer, moodVersion };
 }
 
 /** 온보딩을 마친 상태 — 출산일 40일 전(2026-09-04), 자연분만, 전업 */

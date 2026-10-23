@@ -3,6 +3,8 @@
 // 원칙
 // - 기록은 지우지 않는다: 증상 기록·기분 답·기록장 글(과 댓글)은 id로 합친다(합집합). 앱에 개별 삭제가 없어서
 //   합집합이 곧 "양쪽에서 쓴 것 전부"다. 같은 id가 양쪽에 있으면 서버 쪽을 쓴다(기록은 쓴 뒤 바뀌지 않는다).
+//   다만 증상 기록의 규칙 버전(rulesVersion)·기분 답의 문항 버전(moodVersion)이 서버 쪽에만 없으면(null) 다른 쪽 값을 남긴다 —
+//   그 칸을 모르는 옛 웹(칸이 생기기 전에 열어 둔 탭)이 기록을 읽고 다시 저장하며 떨어뜨린 것이라, 감사용 버전을 잃지 않게(keepVersion).
 // - 순서는 날짜(최신순, 댓글은 오래된 순), 같은 시각이면 id — 어느 기기에서 합쳐도 같은 순서가 나와
 //   기기끼리 순서만 바꿔 서로 덮어쓰는 일이 없다. 개수 제한은 저장 규칙과 같다(기록 50·기분 60, domain/types).
 // - 프로필·산모수첩·온보딩 완료: 서버가 온보딩을 마친 상태면 서버, 아니면 이 브라우저(첫 합치기 규칙).
@@ -42,14 +44,16 @@ export interface MergeOptions {
 export function mergeStates(server: PersistedState, local: PersistedState, opts: MergeOptions): PersistedState {
   const base = opts.base ?? null;
   const personal = base === null ? firstMergePersonal(server, local) : threeWayPersonal(server, local, base);
+  const symptomHistory = mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst, keepVersion("rulesVersion"));
+  const moodChecks = mergeById<MoodCheckRecord>(server.moodChecks, local.moodChecks, newestFirst, keepVersion("moodVersion"));
   return {
     hasOnboarded: server.hasOnboarded || local.hasOnboarded,
     profile: withCurrentConsent(personal.profile, server.profile, local.profile),
-    symptomHistory: mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst).slice(0, SYMPTOM_HISTORY_LIMIT),
+    symptomHistory: symptomHistory.slice(0, SYMPTOM_HISTORY_LIMIT),
     communityPosts: mergePosts(server.communityPosts, local.communityPosts),
     maternity: personal.maternity,
     ownerAccountID: opts.accountId,
-    moodChecks: mergeById<MoodCheckRecord>(server.moodChecks, local.moodChecks, newestFirst).slice(0, MOOD_CHECKS_LIMIT),
+    moodChecks: moodChecks.slice(0, MOOD_CHECKS_LIMIT),
     moodCardSnoozedUntil: laterInstant(server.moodCardSnoozedUntil, local.moodCardSnoozedUntil),
   };
 }
@@ -124,12 +128,30 @@ function oldestFirst(a: Dated, b: Dated): number {
   return time(a.date) - time(b.date) || byId(a, b);
 }
 
-/** id 합집합 — 같은 id면 서버 쪽. 정렬해서 돌려준다. */
-function mergeById<T extends Dated>(server: readonly T[], local: readonly T[], order: (a: T, b: T) => number): T[] {
-  const map = new Map<string, T>();
-  for (const item of local) map.set(item.id, item);
-  for (const item of server) map.set(item.id, item);
+/** id 합집합 — 같은 id면 서버 쪽(same이 있으면 same(서버 쪽, 이 브라우저 쪽)의 결과). 정렬해서 돌려준다. */
+function mergeById<T extends Dated>(
+  server: readonly T[],
+  local: readonly T[],
+  order: (a: T, b: T) => number,
+  same?: (serverItem: T, localItem: T) => T,
+): T[] {
+  const localById = new Map<string, T>();
+  for (const item of local) localById.set(item.id, item);
+  const map = new Map(localById);
+  for (const item of server) {
+    const mine = localById.get(item.id);
+    map.set(item.id, mine !== undefined && same !== undefined ? same(item, mine) : item);
+  }
   return [...map.values()].sort(order);
+}
+
+/**
+ * 같은 기록이 양쪽에 있을 때 — 서버 쪽을 쓰되, 서버 쪽에 없는(null) 버전 칸은 이 브라우저 쪽 값으로 채운다(머리 주석).
+ * 기록은 쓴 뒤 바뀌지 않으므로 둘 다 있으면 같아야 하고, 그때는 서버 쪽 그대로다(어느 기기에서 합쳐도 같은 결과).
+ */
+function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
+  return <T extends Dated & Record<K, string | null>>(serverItem: T, localItem: T): T =>
+    serverItem[key] === null && localItem[key] !== null ? { ...serverItem, [key]: localItem[key] } : serverItem;
 }
 
 /** 글은 id로 합치고(같은 글이면 서버의 제목·본문), 댓글은 양쪽 댓글을 id로 합친다. */

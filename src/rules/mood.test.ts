@@ -21,7 +21,7 @@ const NOW = kst("2026-09-23T12:00");
 let seq = 0;
 function rec(local: string, answer: MoodAnswer): MoodCheckRecord {
   seq += 1;
-  return { id: `r${seq}`, date: kst(local).toISOString(), questionID: 1, answer };
+  return { id: `r${seq}`, date: kst(local).toISOString(), questionID: 1, answer, moodVersion: null };
 }
 /** 저장 순서(최신순)로 만든다 */
 const newestFirst = (records: MoodCheckRecord[]) => [...records].sort((a, b) => b.date.localeCompare(a.date));

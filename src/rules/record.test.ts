@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { SYMPTOM_HISTORY_LIMIT, type SymptomRecord } from "@/domain/types";
 import { metrics } from "./redflag";
+import { RULES_VERSION } from "./version";
 import {
   RECORD_NORMAL_RESULT,
   addSymptomRecord,
@@ -38,6 +39,7 @@ const record = (over: Partial<SymptomRecord> = {}): SymptomRecord => ({
   painNrs: 0,
   redFlagCode: null,
   postpartumDays: 20,
+  rulesVersion: null,
   ...over,
 });
 
@@ -56,7 +58,17 @@ describe("buildSymptomRecord", () => {
       painNrs: 0,
       redFlagCode: "pph_suspect",
       postpartumDays: 10,
+      rulesVersion: RULES_VERSION,
     });
+  });
+
+  it("결과를 낸 규칙의 버전(trace.configVersion = RULES_VERSION)을 기록에 찍는다 — 신호가 없어도", () => {
+    const now = at("2026-09-30T09:00:00+09:00");
+    for (const f of [form(), form({ feverEvent: true }), form({ painNrs: 9 })]) {
+      const { record: r, result } = buildSymptomRecord(f, DELIVERY, now);
+      expect(r.rulesVersion).toBe(RULES_VERSION);
+      expect(r.rulesVersion).toBe(result.trace.configVersion);
+    }
   });
 
   it("산후 9일(D+9 23:59)에는 오로를 묻지 않는다 — 폼 값이 남아 있어도 저장·판정하지 않음", () => {
@@ -75,7 +87,7 @@ describe("buildSymptomRecord", () => {
   it("위험 증상 토글은 판정에만 쓰고 저장하지 않는다 → 지표는 정상인데 상태는 '확인 필요'(감사 #42)", () => {
     const { record: r } = buildSymptomRecord(form({ dizzinessFainting: true }), DELIVERY, at("2026-09-30T09:00:00+09:00"));
     expect(Object.keys(r).sort()).toEqual(
-      ["date", "feverEvent", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode"].sort(),
+      ["date", "feverEvent", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode", "rulesVersion"].sort(),
     );
     expect(r.redFlagCode).toBe("neuro_flag");
     const stored = { ...r, id: "x" }; // 스토어가 id를 붙여 저장한 기록

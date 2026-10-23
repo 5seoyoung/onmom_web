@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { initialState } from "./defaults";
 import { createAppStore, rootScreenFor } from "./appStore";
 import {
@@ -175,6 +176,7 @@ describe("게스트·로그인·로그아웃", () => {
       painNrs: 3,
       redFlagCode: "fever_infection",
       postpartumDays: 63,
+      rulesVersion: RULES_VERSION,
     });
     store.actions.signOut();
     store.actions.signIn({ id: "kakao-B", name: null, provider: "kakao" });
@@ -293,9 +295,13 @@ describe("action과 저장", () => {
       painNrs: 2,
       redFlagCode: null,
       postpartumDays: 68,
+      rulesVersion: RULES_VERSION,
     });
     expect(rec.date).toBe(NOW.toISOString());
+    expect(rec.rulesVersion).toBe(RULES_VERSION);
     const mood = store.actions.addMoodCheck({ questionID: 2, answer: "yes" });
+    // 기분 답의 문항 버전은 스토어가 찍는다(답한 문항 = 지금 앱의 문항)
+    expect(mood.moodVersion).toBe(MOOD_VERSION);
     store.actions.snoozeMoodCard();
     const postId = store.actions.addPost({ title: " 첫 산책 ", body: "좋았다" });
     expect(postId).not.toBeNull();
@@ -317,6 +323,19 @@ describe("action과 저장", () => {
     reopened.load();
     expect(reopened.getSnapshot().state).toEqual(snap.state);
     expect(reopened.getSnapshot().account).toEqual(snap.account);
+  });
+
+  it("증상 기록의 규칙 버전은 넘긴 값 그대로(결과를 낸 쪽이 찍는다 — 지금 버전으로 바꾸지 않는다), 기분 답에는 지금 문항 버전", () => {
+    const { store, storage } = setup();
+    store.actions.signInGuest();
+    const input = { lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 1, redFlagCode: null, postpartumDays: 30 };
+    const older = store.actions.addSymptomRecord({ ...input, rulesVersion: "rules-1.0" });
+    const unknown = store.actions.addSymptomRecord({ ...input, rulesVersion: null });
+    expect([older.rulesVersion, unknown.rulesVersion]).toEqual(["rules-1.0", null]);
+    store.actions.addMoodCheck({ questionID: 3, answer: "unsure" });
+    // 저장된 JSON에도 그대로 — 다시 읽어도 같다(store/decode)
+    expect(saved(storage).symptomHistory.map((r: { rulesVersion: string | null }) => r.rulesVersion)).toEqual([null, "rules-1.0"]);
+    expect(saved(storage).moodChecks.map((m: { moodVersion: string | null }) => m.moodVersion)).toEqual([MOOD_VERSION]);
   });
 
   it("거부된 글·댓글은 저장하지 않고 null/false", () => {
@@ -476,6 +495,7 @@ describe("다른 탭 변경", () => {
       painNrs: 2,
       redFlagCode: "pph_suspect",
       postpartumDays: 12,
+      rulesVersion: RULES_VERSION,
     });
 
     unsubscribe = tabA.subscribe(() => {}); // 기록 화면으로 돌아옴

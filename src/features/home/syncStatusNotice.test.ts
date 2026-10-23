@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccountSyncStatus } from "@/auth/session";
+import { RULES_VERSION } from "@/rules/version";
 import { createAppStore } from "@/store/appStore";
 import { createMemoryStorage, createStoragePersistence } from "@/store/persistence";
 import { createSyncEngine, SYNC_RETRY_DELAYS_MS, type SyncEngine } from "@/store/sync/engine";
@@ -147,7 +148,7 @@ describe("홈의 서버 저장 안내 — 진짜 엔진의 상태 흐름", () =>
     expect(h.visible()).toBe(false);
 
     // 그 사이 기록을 하나 더 남겨도(pending) 첫 실패 시각은 그대로
-    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57 });
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57, rulesVersion: RULES_VERSION });
     await vi.advanceTimersByTimeAsync(59_000);
     expect(h.seen.filter((s) => s.startsWith("pending@")).length).toBeGreaterThanOrEqual(3);
     expect(h.visible()).toBe(false);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { initialState } from "./defaults";
-import { decodeCalendarDate, decodeInstant, decodeOwner, decodePersisted, type DecodeDeps } from "./decode";
+import { decodeCalendarDate, decodeInstant, decodeOwner, decodePersisted, RECORD_VERSION_MAX_LENGTH, type DecodeDeps } from "./decode";
 import { bindToAccount, shouldEraseOnBind } from "./state";
 
 const NOW = new Date("2026-09-23T10:00:00+09:00");
@@ -103,6 +103,13 @@ describe("decodePersisted — iOS 저장 JSON(Double 날짜)", () => {
     expect(s.communityPosts[0].comments).toHaveLength(1);
   });
 
+  it("iOS 기록에는 규칙·문항 버전 칸이 없다 — null(지금 버전으로 지어내지 않는다)", () => {
+    expect(IOS_JSON.symptomHistory[0]).not.toHaveProperty("rulesVersion");
+    expect(IOS_JSON.moodChecks[0]).not.toHaveProperty("moodVersion");
+    expect(s.symptomHistory[0].rulesVersion).toBeNull();
+    expect(s.moodChecks[0].moodVersion).toBeNull();
+  });
+
   it("디코딩 결과를 저장했다 다시 읽으면 같다", () => {
     const again = decodePersisted(JSON.parse(JSON.stringify(s)), deps());
     expect(again).toEqual(s);
@@ -179,10 +186,51 @@ describe("decodePersisted — 없는 키는 기본값", () => {
       painNrs: 0,
       redFlagCode: null,
       postpartumDays: null,
+      rulesVersion: null,
     });
     expect(s.communityPosts[0]).toMatchObject({ title: "", body: "", authorName: "", date: NOW.toISOString() });
     expect(s.communityPosts[0].comments[0]).toMatchObject({ text: "", authorName: "", date: NOW.toISOString() });
-    expect(s.moodChecks[0]).toMatchObject({ date: NOW.toISOString(), questionID: 0, answer: "unsure" });
+    expect(s.moodChecks[0]).toMatchObject({ date: NOW.toISOString(), questionID: 0, answer: "unsure", moodVersion: null });
+  });
+
+  it("규칙·문항 버전 — 이 칸이 생기기 전의 웹 기록(칸 없음)은 null, 있으면 그대로 · 다시 읽어도 같다", () => {
+    const s = decodePersisted(
+      {
+        symptomHistory: [
+          { id: "new", date: "2026-10-20T01:00:00.000Z", painNrs: 2, rulesVersion: "rules-1.1" },
+          { id: "old", date: "2026-09-20T01:00:00.000Z", painNrs: 2 },
+          { id: "cleared", date: "2026-09-19T01:00:00.000Z", rulesVersion: null },
+        ],
+        moodChecks: [
+          { id: "m-new", date: "2026-10-20T01:00:00.000Z", questionID: 2, answer: "yes", moodVersion: "mood-draft-0.1" },
+          { id: "m-old", date: "2026-09-20T01:00:00.000Z", questionID: 2, answer: "yes" },
+        ],
+      },
+      deps(),
+    );
+    expect(s.symptomHistory.map((r) => [r.id, r.rulesVersion])).toEqual([
+      ["new", "rules-1.1"],
+      ["old", null],
+      ["cleared", null],
+    ]);
+    expect(s.moodChecks.map((m) => [m.id, m.moodVersion])).toEqual([
+      ["m-new", "mood-draft-0.1"],
+      ["m-old", null],
+    ]);
+    expect(decodePersisted(JSON.parse(JSON.stringify(s)), deps())).toEqual(s);
+  });
+
+  it("규칙·문항 버전은 1~64자 문자열만 — 빈 문자열·숫자·객체·너무 긴 값(손상)은 null(지금 버전으로 채우지 않는다)", () => {
+    const bad = ["", 1.1, true, {}, ["rules-1.1"], "r".repeat(RECORD_VERSION_MAX_LENGTH + 1)];
+    const s = decodePersisted(
+      {
+        symptomHistory: [...bad, "r".repeat(RECORD_VERSION_MAX_LENGTH)].map((rulesVersion, i) => ({ id: `s${i}`, rulesVersion })),
+        moodChecks: bad.map((moodVersion, i) => ({ id: `m${i}`, moodVersion })),
+      },
+      deps(),
+    );
+    expect(s.symptomHistory.map((r) => r.rulesVersion)).toEqual([...bad.map(() => null), "r".repeat(RECORD_VERSION_MAX_LENGTH)]);
+    expect(s.moodChecks.map((m) => m.moodVersion)).toEqual(bad.map(() => null));
   });
 
   it("구버전 기록의 postpartumDays 없음은 null(오로 판정 보류)", () => {

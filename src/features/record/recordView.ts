@@ -146,6 +146,8 @@ export function submitSymptomCheck(
     painNrs: record.painNrs,
     redFlagCode: record.redFlagCode,
     postpartumDays: record.postpartumDays,
+    // 결과를 낸 규칙의 버전 — rules/record buildSymptomRecord가 찍은 값 그대로(여기서 다시 정하지 않는다)
+    rulesVersion: record.rulesVersion,
     ...riskFlagsFromForm(form),
   };
   return { newRecord, result };

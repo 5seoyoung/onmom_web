@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { createAppStore, rootScreenFor, type AppStore } from "../appStore";
 import { initialState } from "../defaults";
 import { createMemoryStorage, createStoragePersistence, STORAGE_PREFIX, type StorageLike } from "../persistence";
@@ -57,7 +58,7 @@ function onboardedServerState(over: Partial<PersistedState> = {}): PersistedStat
 }
 
 function symptom(id: string, date: string) {
-  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 2, redFlagCode: null, postpartumDays: 30 };
+  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 2, redFlagCode: null, postpartumDays: 30, rulesVersion: RULES_VERSION };
 }
 
 let engine: SyncEngine | null = null;
@@ -95,7 +96,7 @@ describe("첫 읽기 전에는 쓰지 않는다(감사 #13)", () => {
     remote.holdFetch = new Promise((r) => (release = r));
 
     start(store, remote);
-    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57 });
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57, rulesVersion: RULES_VERSION });
     await vi.advanceTimersByTimeAsync(10_000);
     expect(remote.writes()).toEqual([]); // 서버 기록을 빈 상태로 덮지 않는다
     expect(engine!.status()).toBe("loading");
@@ -167,7 +168,7 @@ describe("지금 판의 동의 전에는 서버로 보내지 않는다(감사 #1
     await vi.advanceTimersByTimeAsync(0);
 
     store.actions.completeOnboarding();
-    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57 });
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 3, redFlagCode: null, postpartumDays: 57, rulesVersion: RULES_VERSION });
     await vi.advanceTimersByTimeAsync(60_000);
     expect(remote.writes()).toEqual([]);
     expect(e.status()).toBe("waitingConsent");
@@ -262,7 +263,7 @@ describe("지금 판의 동의 전에는 서버로 보내지 않는다(감사 #1
     await vi.advanceTimersByTimeAsync(0);
     // 읽기는 한다 — 서버 기록이 이 브라우저에 보인다
     expect(store.getSnapshot().state.symptomHistory.map((r) => r.id)).toEqual(["server-rec"]);
-    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 1, redFlagCode: null, postpartumDays: 57 });
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 1, redFlagCode: null, postpartumDays: 57, rulesVersion: RULES_VERSION });
     await vi.advanceTimersByTimeAsync(60_000);
     expect(remote.writes()).toEqual([]);
     expect(remote.serverState().moodChecks).toHaveLength(0);
@@ -662,5 +663,76 @@ describe("계정·멈춤·flush", () => {
     expect(e2.status()).toBe("waitingConsent");
     expect(await e2.flush(1_000)).toBe(true);
     e2.stop();
+  });
+});
+
+describe("기록의 규칙·문항 버전 — 서버 JSON에 실려 오가고, 옛 웹이 떨어뜨린 버전은 다시 채운다", () => {
+  /** 모아 보내기(1.5초)를 넘겨 기다린다 */
+  const SYNC_WAIT_MS = 5_000;
+
+  it("올린 서버 JSON(객체, 형식 번호 그대로)에 버전이 실리고, 새 브라우저가 읽어도 그대로다", async () => {
+    const store = setupStore();
+    store.actions.signIn(ACCOUNT);
+    const remote = new FakeRemote();
+    remote.setServer(onboardedServerState({ symptomHistory: [symptom("old-rec", "2026-09-20T01:00:00.000Z")] }));
+    // 이 칸이 생기기 전에 올린 기록 — 서버 JSON에 칸 자체가 없다
+    delete (remote.serverState().symptomHistory[0] as { rulesVersion?: unknown }).rulesVersion;
+    const first = start(store, remote);
+    await vi.advanceTimersByTimeAsync(0);
+
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: true, painNrs: 2, redFlagCode: "fever_infection", postpartumDays: 57, rulesVersion: RULES_VERSION });
+    store.actions.addMoodCheck({ questionID: 2, answer: "no" });
+    await vi.advanceTimersByTimeAsync(SYNC_WAIT_MS);
+    expect(remote.writes()).toEqual(["update"]);
+    expect(remote.row!.schemaVersion).toBe(STATE_SCHEMA_VERSION);
+    const sent: unknown = remote.serverState();
+    expect(typeof sent === "object" && sent !== null && !Array.isArray(sent)).toBe(true);
+    expect(remote.serverState().symptomHistory.map((r) => [r.id, r.rulesVersion])).toEqual([
+      ["id-1", RULES_VERSION],
+      ["old-rec", null], // 옛 기록은 null — 지금 버전으로 지어내지 않는다
+    ]);
+    expect(remote.serverState().moodChecks.map((m) => m.moodVersion)).toEqual([MOOD_VERSION]);
+    first.stop();
+
+    const other = setupStore();
+    other.actions.signIn(ACCOUNT);
+    start(other, remote);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(other.getSnapshot().state.symptomHistory.map((r) => r.rulesVersion)).toEqual([RULES_VERSION, null]);
+    expect(other.getSnapshot().state.moodChecks.map((m) => m.moodVersion)).toEqual([MOOD_VERSION]);
+  });
+
+  it("다른 기기의 옛 웹이 버전 없이 다시 쓴 행 — 이 브라우저의 버전을 남겨 합치고 다시 올린다", async () => {
+    const memory = createMemoryStorage();
+    const store = setupStore(memory);
+    store.actions.signIn(ACCOUNT);
+    const remote = new FakeRemote();
+    remote.setServer(onboardedServerState());
+    const first = start(store, remote);
+    await vi.advanceTimersByTimeAsync(0);
+    store.actions.addSymptomRecord({ lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 9, redFlagCode: "severe_pain", postpartumDays: 57, rulesVersion: RULES_VERSION });
+    store.actions.addMoodCheck({ questionID: 1, answer: "yes" });
+    await vi.advanceTimersByTimeAsync(SYNC_WAIT_MS);
+    expect(remote.serverState().symptomHistory[0].rulesVersion).toBe(RULES_VERSION);
+    first.stop();
+
+    // 옛 웹(칸을 모른다)이 같은 기록을 읽고 다시 저장했다 — 두 칸이 빠진 JSON
+    const phone = remote.serverState();
+    remote.setServer({
+      ...phone,
+      symptomHistory: phone.symptomHistory.map((r) => ({ ...r, rulesVersion: undefined as unknown as null })),
+      moodChecks: phone.moodChecks.map((m) => ({ ...m, moodVersion: undefined as unknown as null })),
+    });
+    expect(JSON.stringify(remote.serverState())).not.toMatch(/rulesVersion|moodVersion/);
+    const writesBefore = remote.writes().length;
+
+    // 이 브라우저를 다시 연다 — 서버 쪽에 없는 버전은 이 브라우저 기록에서 채워 다시 올린다
+    const reopened = setupStore(memory);
+    start(reopened, remote);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(remote.writes().slice(writesBefore)).toEqual(["update"]);
+    expect(remote.serverState().symptomHistory[0].rulesVersion).toBe(RULES_VERSION);
+    expect(remote.serverState().moodChecks[0].moodVersion).toBe(MOOD_VERSION);
+    expect(reopened.getSnapshot().state.symptomHistory[0].rulesVersion).toBe(RULES_VERSION);
   });
 });

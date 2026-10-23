@@ -21,6 +21,8 @@ export function showsLochiaInputs(postpartumDays: number): boolean {
  * 폼 → 판정 + 저장할 기록 1건(RecordFlowView.swift:304-327).
  * - 산후 경과일은 기록 시점 값을 기록에 함께 남긴다(나중에 출산일을 고쳐도 판정을 되짚을 수 있게).
  * - 위험 증상 토글 4개는 판정에만 쓰고 저장하지 않는다(iOS SymptomRecord에 필드가 없다 — 감사 #46).
+ * - 결과를 낸 규칙의 버전(checkRedFlags trace.configVersion = RULES_VERSION)을 기록에 찍는다 — 리포트·내려받기 파일이
+ *   기록마다 그때의 규칙 버전을 보인다(감사 추적). 나중에 RULES_VERSION을 올려도 이미 남긴 기록의 버전은 그대로다.
  * - id는 붙이지 않는다 — 저장할 때 스토어가 붙인다(여기엔 무작위가 없다).
  */
 export function buildSymptomRecord(
@@ -47,6 +49,7 @@ export function buildSymptomRecord(
     painNrs: input.painNrs,
     redFlagCode: result.hospitalSignal?.code ?? null,
     postpartumDays,
+    rulesVersion: result.trace.configVersion,
   };
   return { record, result };
 }

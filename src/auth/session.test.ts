@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import type { PersistedState } from "@/domain/types";
+import { RULES_VERSION } from "@/rules/version";
 import { createAppStore, rootScreenFor, type AppStore } from "@/store/appStore";
 import { initialState } from "@/store/defaults";
 import { createMemoryStorage, createStoragePersistence, STORAGE_PREFIX, type StorageLike } from "@/store/persistence";
@@ -199,7 +200,7 @@ function onboardWithConsent(store: AppStore) {
 }
 
 function symptomInput(painNrs = 4) {
-  return { lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs, redFlagCode: null, postpartumDays: 30 };
+  return { lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs, redFlagCode: null, postpartumDays: 30, rulesVersion: RULES_VERSION };
 }
 
 let manager: AuthSessionManager | null = null;

@@ -57,6 +57,15 @@ const nonEmptyString = (v: unknown): string | null => (typeof v === "string" && 
 /** 0 이상의 정수(일수) */
 const isDayCount = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 0;
 
+/** 기록에 찍힌 규칙·문항 버전 이름의 최대 길이 — 서버 동의 판 칸(0001 consent_version)과 같은 64자 */
+export const RECORD_VERSION_MAX_LENGTH = 64;
+/**
+ * 기록의 규칙·문항 버전(rulesVersion·moodVersion) — 1~64자 문자열만. 없거나(이 칸이 생기기 전의 웹 기록·iOS 기록) 못 읽으면 null.
+ * 버전을 지어내지 않는다: 지금 앱의 버전으로 채우면 그때 쓰인 규칙을 잘못 말하게 된다.
+ */
+const recordVersion = (v: unknown): string | null =>
+  typeof v === "string" && v.length > 0 && v.length <= RECORD_VERSION_MAX_LENGTH ? v : null;
+
 /** 비울 수 있는 필드(iOS Optional) — null은 "비움", 못 읽는 값은 fallback. */
 function nullable<T>(v: unknown, decode: (v: unknown) => T | null, fallback: T | null): T | null {
   return v === null ? null : (decode(v) ?? fallback);
@@ -165,6 +174,8 @@ function decodeSymptomRecord(raw: Json, deps: DecodeDeps): SymptomRecord {
     // 구버전 기록에는 없다 — null이면 오로 판정을 보류한다(AppStore.swift:243-246).
     // 산후 일수는 0 이상의 정수다(domain/date postpartumDayCount) — 음수·소수(손상)도 null(판정 보류).
     postpartumDays: isDayCount(raw.postpartumDays) ? raw.postpartumDays : null,
+    // 결과를 낸 안내 규칙의 버전 — 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없다(null)
+    rulesVersion: recordVersion(raw.rulesVersion),
   };
 }
 
@@ -175,6 +186,8 @@ function decodeMoodCheck(raw: Json, deps: DecodeDeps): MoodCheckRecord {
     questionID: int(raw.questionID, 0),
     // 모르는 답 값(미래 버전)은 "글쎄요"로 — 신호로 세지 않는다(AppStore.swift:313-315). 규칙은 rules/mood.ts 한 곳.
     answer: normalizeMoodAnswer(raw.answer),
+    // 답할 때의 기분 문항·기준 버전 — 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없다(null)
+    moodVersion: recordVersion(raw.moodVersion),
   };
 }
 

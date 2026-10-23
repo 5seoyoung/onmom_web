@@ -22,7 +22,10 @@ export interface DataExport {
   format: typeof DATA_EXPORT_FORMAT;
   /** 내려받은 시각(ISO) */
   exportedAt: IsoDateTimeString;
-  /** 기록의 판정에 쓰인 규칙의 판(src/rules/version.ts) — 감사 추적용 */
+  /**
+   * 내려받을 때 이 앱의 지금 안내 규칙·기분 문항 버전(src/rules/version.ts) — 감사 추적용.
+   * 기록마다 그 기록을 남길 때의 버전은 state 안의 각 기록에 있다(SymptomRecord.rulesVersion·MoodCheckRecord.moodVersion, 옛 기록은 null).
+   */
   rulesVersion: string;
   moodVersion: string;
   /**

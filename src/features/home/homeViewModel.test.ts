@@ -27,6 +27,7 @@ const record = (over: Partial<SymptomRecord> = {}): SymptomRecord => ({
   painNrs: 0,
   redFlagCode: null,
   postpartumDays: 63,
+  rulesVersion: null,
   ...over,
 });
 
@@ -56,6 +57,7 @@ function noAnswers(days: number): MoodCheckRecord[] {
     date: new Date(2026, 8, 27 - i, 9, 0, 0).toISOString(),
     questionID: 1,
     answer: "no" as const,
+    moodVersion: null,
   }));
 }
 

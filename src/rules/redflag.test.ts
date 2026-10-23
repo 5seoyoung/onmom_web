@@ -31,6 +31,7 @@ const record = (over: Partial<SymptomRecord> = {}): SymptomRecord => ({
   painNrs: 0,
   redFlagCode: null,
   postpartumDays: 20,
+  rulesVersion: null,
   ...over,
 });
 

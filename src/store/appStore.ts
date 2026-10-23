@@ -15,6 +15,7 @@ import type {
 } from "@/domain/types";
 import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
 import { isSupabaseConfigured } from "@/config";
+import { MOOD_VERSION } from "@/rules/version";
 import { decodeAccount, displayName, isGuestID, makeGuestID, type Account } from "./account";
 import { decodePersisted } from "./decode";
 import { initialState } from "./defaults";
@@ -35,10 +36,13 @@ export interface AppSnapshot {
   readonly account: Account | null;
 }
 
-/** 새 증상 기록 — id는 스토어가 붙이고, date를 비우면 지금 시각. */
+/**
+ * 새 증상 기록 — id는 스토어가 붙이고, date를 비우면 지금 시각.
+ * rulesVersion은 결과(redFlagCode)를 낸 쪽이 넘긴다(rules/record buildSymptomRecord가 찍은 값 — 화면은 submitSymptomCheck로 받는다).
+ */
 export type NewSymptomRecord = Omit<SymptomRecord, "id" | "date"> & { date?: IsoDateTimeString };
-/** 새 기분 답 — id는 스토어가 붙이고, date를 비우면 지금 시각. */
-export type NewMoodCheck = Omit<MoodCheckRecord, "id" | "date"> & { date?: IsoDateTimeString };
+/** 새 기분 답 — id·문항 버전(moodVersion = 지금의 MOOD_VERSION)은 스토어가 붙이고, date를 비우면 지금 시각. */
+export type NewMoodCheck = Omit<MoodCheckRecord, "id" | "date" | "moodVersion"> & { date?: IsoDateTimeString };
 
 export interface AppActions {
   /** [게스트로 시작] — 브라우저당 한 번 발급한 guest id로 로그인하고 데이터를 묶는다. */
@@ -331,6 +335,7 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         painNrs: input.painNrs,
         redFlagCode: input.redFlagCode,
         postpartumDays: input.postpartumDays,
+        rulesVersion: input.rulesVersion,
       };
       commit(S.addSymptomRecord(snapshot.state, record));
       return record;
@@ -342,6 +347,8 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         date: input.date ?? now().toISOString(),
         questionID: input.questionID,
         answer: input.answer,
+        // 답한 문항은 지금 앱의 문항(rules/mood questionForDay — content.json mood_check)이다 — 그 버전을 찍는다(감사 추적)
+        moodVersion: MOOD_VERSION,
       };
       commit(S.addMoodCheck(snapshot.state, record));
       return record;

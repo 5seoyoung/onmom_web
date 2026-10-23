@@ -383,6 +383,7 @@ describe("레드플래그 활성 여부", () => {
     painNrs: 0,
     redFlagCode,
     postpartumDays: 10,
+    rulesVersion: null,
   });
 
   it("최신 기록(첫 건)만 본다", () => {

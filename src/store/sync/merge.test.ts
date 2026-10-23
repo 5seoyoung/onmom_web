@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
+import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import {
   MOOD_CHECKS_LIMIT,
   SYMPTOM_HISTORY_LIMIT,
@@ -9,6 +10,7 @@ import {
   type SymptomRecord,
 } from "@/domain/types";
 import { initialState } from "../defaults";
+import { decodePersisted } from "../decode";
 import { canonicalJSON } from "./canonical";
 import { mergeStates } from "./merge";
 
@@ -16,10 +18,10 @@ const ACCOUNT = "kakao-1001";
 
 // 테스트 입력용 기록 — 화면에 쓰이지 않는다.
 function symptom(id: string, date: string, over: Partial<SymptomRecord> = {}): SymptomRecord {
-  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 0, redFlagCode: null, postpartumDays: 20, ...over };
+  return { id, date, lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 0, redFlagCode: null, postpartumDays: 20, rulesVersion: RULES_VERSION, ...over };
 }
-function mood(id: string, date: string): MoodCheckRecord {
-  return { id, date, questionID: 1, answer: "no" };
+function mood(id: string, date: string, over: Partial<MoodCheckRecord> = {}): MoodCheckRecord {
+  return { id, date, questionID: 1, answer: "no", moodVersion: MOOD_VERSION, ...over };
 }
 function post(id: string, date: string, comments: CommunityPost["comments"] = [], over: Partial<CommunityPost> = {}): CommunityPost {
   return { id, title: `제목 ${id}`, body: "", authorName: "카카오 사용자", date, comments, ...over };
@@ -97,6 +99,70 @@ describe("mergeStates — 기록 목록", () => {
     const merged = mergeStates(server, local, { accountId: ACCOUNT });
     expect(ids(merged.communityPosts)).toEqual(["p2", "p1"]);
     expect(ids(merged.communityPosts[1].comments)).toEqual(["c1", "c2", "c3"]);
+  });
+
+  it("기록의 규칙 버전·기분 답의 문항 버전은 합친 결과에 그대로 남는다(한쪽에만 있는 기록·양쪽에 있는 기록 모두)", () => {
+    const server = state({
+      symptomHistory: [symptom("both", "2026-09-10T10:00:00.000Z"), symptom("srv", "2026-09-09T10:00:00.000Z", { rulesVersion: "rules-1.0" })],
+      moodChecks: [mood("m-both", "2026-09-10T10:00:00.000Z")],
+    });
+    const local = state({
+      symptomHistory: [symptom("loc", "2026-09-11T10:00:00.000Z"), symptom("both", "2026-09-10T10:00:00.000Z")],
+      moodChecks: [mood("m-loc", "2026-09-11T10:00:00.000Z", { moodVersion: "mood-draft-0.0" }), mood("m-both", "2026-09-10T10:00:00.000Z")],
+    });
+    const merged = mergeStates(server, local, { accountId: ACCOUNT });
+    expect(merged.symptomHistory.map((r) => [r.id, r.rulesVersion])).toEqual([
+      ["loc", RULES_VERSION],
+      ["both", RULES_VERSION],
+      ["srv", "rules-1.0"],
+    ]);
+    expect(merged.moodChecks.map((m) => [m.id, m.moodVersion])).toEqual([
+      ["m-loc", "mood-draft-0.0"],
+      ["m-both", MOOD_VERSION],
+    ]);
+  });
+
+  it("같은 기록의 서버 쪽에만 버전이 없으면(그 칸을 모르는 옛 웹이 다시 저장) 다른 쪽 버전을 남긴다 — 둘 다 없으면 null(지어내지 않음)", () => {
+    const t = "2026-09-10T10:00:00.000Z";
+    const lost = state({ symptomHistory: [symptom("a", t, { rulesVersion: null }), symptom("old", t, { rulesVersion: null })], moodChecks: [mood("m", t, { moodVersion: null })] });
+    const kept = state({ symptomHistory: [symptom("a", t), symptom("old", t, { rulesVersion: null })], moodChecks: [mood("m", t)] });
+    for (const [server, local] of [
+      [lost, kept],
+      [kept, lost],
+    ]) {
+      const merged = mergeStates(server, local, { accountId: ACCOUNT });
+      expect(merged.symptomHistory.map((r) => [r.id, r.rulesVersion])).toEqual([
+        ["a", RULES_VERSION],
+        ["old", null],
+      ]);
+      expect(merged.moodChecks[0].moodVersion).toBe(MOOD_VERSION);
+    }
+    // 다른 칸은 여전히 서버 쪽(기록은 쓴 뒤 바뀌지 않는다)
+    const server = state({ symptomHistory: [symptom("a", t, { rulesVersion: null, painNrs: 3 })] });
+    const local = state({ symptomHistory: [symptom("a", t, { painNrs: 5 })] });
+    expect(mergeStates(server, local, { accountId: ACCOUNT }).symptomHistory[0]).toMatchObject({ painNrs: 3, rulesVersion: RULES_VERSION });
+  });
+
+  it("버전이 양쪽에 다 있으면 서버 쪽 — 어느 기기에서 합쳐도 같은 결과, 다시 합쳐도 바뀌지 않는다", () => {
+    const t = "2026-09-10T10:00:00.000Z";
+    const server = state({ symptomHistory: [symptom("a", t, { rulesVersion: "rules-1.0" })] });
+    const local = state({ symptomHistory: [symptom("a", t, { rulesVersion: "rules-1.1" })] });
+    const once = mergeStates(server, local, { accountId: ACCOUNT });
+    expect(once.symptomHistory[0].rulesVersion).toBe("rules-1.0");
+    expect(canonicalJSON(mergeStates(once, local, { accountId: ACCOUNT }))).toBe(canonicalJSON(once));
+  });
+
+  it("합친 결과를 서버 JSON으로 보냈다 다시 읽어도 버전이 그대로다(store/decode)", () => {
+    const t = "2026-09-10T10:00:00.000Z";
+    const merged = mergeStates(
+      onboarded({ symptomHistory: [symptom("a", t)], moodChecks: [mood("m", t)] }),
+      state({ symptomHistory: [symptom("b", "2026-09-11T10:00:00.000Z", { rulesVersion: null })] }),
+      { accountId: ACCOUNT },
+    );
+    const roundTrip = decodePersisted(JSON.parse(JSON.stringify(merged)), { now: new Date(t), newId: () => "unused" });
+    expect(roundTrip).toEqual(merged);
+    expect(roundTrip.symptomHistory.map((r) => r.rulesVersion)).toEqual([null, RULES_VERSION]);
+    expect(roundTrip.moodChecks.map((m) => m.moodVersion)).toEqual([MOOD_VERSION]);
   });
 
   it("합치기를 다시 해도 같다(서버에 올린 결과를 다른 기기가 합쳐도 바뀌지 않음)", () => {
