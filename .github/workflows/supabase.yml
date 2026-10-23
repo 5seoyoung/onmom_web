@@ -39,7 +39,7 @@ jobs:
     timeout-minutes: 25
     steps:
       # 뒤 단계(Supabase CLI)가 GITHUB_TOKEN을 .git/config에서 읽을 수 없게 한다 — 이 작업은 저장소에 쓰지 않는다.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
