@@ -59,16 +59,23 @@ describe("CSP — 설정된 기능의 출처만 넣는다", () => {
     expect(buildCsp({ ...NONE, kakaoJsKey: "  " })).not.toContain("kakao");
   });
 
-  it("유튜브 추천 영상 — 목록이 있는 빌드(youtubeThumbnails)에만 img-src에 미리보기 호스트(https만), 다른 지시어는 그대로", () => {
-    const y = { ...NONE, youtubeThumbnails: true };
+  it("유튜브 추천 영상 — 목록이 있는 Supabase 빌드(youtubeThumbnails + supabaseUrl)에만 img-src에 미리보기 호스트(https만), 다른 지시어는 그대로", () => {
+    const supa = { ...NONE, supabaseUrl: "https://proj.supabase.test" };
+    const y = { ...supa, youtubeThumbnails: true };
     expect(directive(y, "img-src")).toEqual(["'self'", "data:", "blob:", "https://i.ytimg.com"]);
     expect(new URL(YOUTUBE_THUMBNAIL_ORIGIN).hostname).toBe(THUMBNAIL_HOST); // 생성 목록이 쓰는 호스트와 같다(youtubeCore.mjs)
-    for (const name of ["script-src", "connect-src", "frame-src", "media-src"]) expect(directive(y, name), name).toEqual(directive(NONE, name));
+    for (const name of ["script-src", "connect-src", "frame-src", "media-src"]) expect(directive(y, name), name).toEqual(directive(supa, name));
     expect(buildCsp(y)).not.toMatch(/youtube\.com|googleapis|google\.com/);
     // 꺼져 있거나(false) 값이 없으면 유튜브·Google 출처가 없다
-    expect(buildCsp({ ...NONE, youtubeThumbnails: false })).not.toContain("ytimg");
-    expect(buildCsp(NONE)).not.toContain("ytimg");
+    expect(buildCsp({ ...supa, youtubeThumbnails: false })).not.toContain("ytimg");
+    expect(buildCsp(supa)).not.toContain("ytimg");
     expect(directive({ ...ALL, kakaoJsKey: "k" }, "img-src")).toEqual(["'self'", "data:", "blob:", "*.daumcdn.net", "https://i.ytimg.com"]);
+  });
+
+  it("유튜브 플래그가 켜져 와도 Supabase 없는 빌드(iOS 처리방침 원문 — Google 없음)에는 i.ytimg.com을 열지 않는다", () => {
+    expect(directive({ ...NONE, youtubeThumbnails: true }, "img-src")).toEqual(["'self'", "data:", "blob:"]);
+    expect(buildCsp({ ...NONE, youtubeThumbnails: true })).not.toContain("ytimg");
+    expect(buildCsp({ ...NONE, supabaseUrl: "not a url", youtubeThumbnails: true })).not.toContain("ytimg");
   });
 
   it("이 빌드(저장소의 빈 허용 목록)는 유튜브 플래그가 꺼져 있다 — CSP 메타에 i.ytimg.com이 없다", () => {

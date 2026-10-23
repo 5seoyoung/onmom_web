@@ -12,7 +12,7 @@ import { ScreenHeader, cx } from "@/components/ui";
 import type { DeliveryMethod, MaternityRecord, PersistedState } from "@/domain/types";
 import { StorageWarning } from "@/features/home/StorageWarning";
 import { useOnline } from "@/features/home/useOnline";
-import { YOUTUBE_VIDEOS } from "@/features/youtube/catalog";
+import { YOUTUBE_SHOWN_VIDEOS } from "@/features/youtube/catalog";
 import { youtubeSection } from "@/features/youtube/youtubePlan";
 import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
@@ -49,8 +49,9 @@ function ExerciseContent({ state }: { state: PersistedState }) {
   const week = exerciseWeek(deliveryDate, today);
   const gate = exerciseGate(delivery, deliveryDate, isRedFlagActive(state.symptomHistory));
   const subtitle = exerciseSubtitle(delivery, week);
-  // 유튜브 추천 영상 — 플랜일 때만, 큐레이션 목록과 같은 주차 게이팅·산모수첩 차단(레드플래그면 null). 허용 목록이 비면 늘 null.
-  const youtube = youtubeSection(YOUTUBE_VIDEOS, gate, delivery, week, state.maternity);
+  // 유튜브 추천 영상 — 플랜일 때만, 큐레이션 목록과 같은 주차 게이팅·산모수첩 차단(레드플래그면 null). 허용 목록이 비었거나
+  // Supabase가 없는 빌드(iOS 처리방침 — Google 없음)면 목록이 비어 늘 null(features/youtube/catalog.ts YOUTUBE_SHOWN_VIDEOS).
+  const youtube = youtubeSection(YOUTUBE_SHOWN_VIDEOS, gate, delivery, week, state.maternity);
 
   return (
     <>

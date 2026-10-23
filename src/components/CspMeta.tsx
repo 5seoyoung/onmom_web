@@ -20,6 +20,7 @@ export function CspMeta() {
     kakaoJsKey: config.kakaoJsKey,
     turnstileSiteKey: config.turnstileSiteKey,
     legacyBackends: [config.videoURL, config.llmURL, config.accountURL],
+    // 유튜브 미리보기(i.ytimg.com) — 영상이 실렸고 Supabase가 설정된 빌드에서만 true(catalog.ts youtubeActiveFor — 웹 처리방침 초안에만 Google이 있다)
     youtubeThumbnails: YOUTUBE_ACTIVE,
   });
   return policy === null ? null : <meta httpEquiv="Content-Security-Policy" content={policy} />;

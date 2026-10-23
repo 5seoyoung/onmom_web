@@ -46,7 +46,8 @@ export interface WebPolicyOptions {
    */
   reminders: boolean;
   /**
-   * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(features/youtube/catalog.ts YOUTUBE_ACTIVE — 승인된 영상이 하나라도 실렸을 때).
+   * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(features/youtube/catalog.ts YOUTUBE_ACTIVE — 승인된 영상이 하나라도 실렸고 Supabase가 설정된
+   * 빌드일 때. 이 초안을 보이는 빌드에서만 켜진다 — Supabase 없는 빌드의 iOS 방침 원문에는 Google이 없어 그 빌드에서는 목록을 싣지 않는다).
    * 켜면 미리보기 이미지를 불러오는 Google LLC(YouTube)를 6·7·11절에 적는다. 생략하면 false.
    */
   youtube?: boolean;

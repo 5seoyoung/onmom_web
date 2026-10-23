@@ -33,8 +33,9 @@ export interface CspInput {
   legacyBackends: readonly (string | null)[];
   /**
    * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(빌드 플래그 features/youtube/catalog.ts YOUTUBE_ACTIVE — 허용 목록과 맞춘 생성 목록이
-   * 비지 않았을 때만 true). true면 img-src에 미리보기 호스트(i.ytimg.com)만 연다. 영상은 youtube.com 새 탭으로 열어 frame-src는 그대로다.
-   * 없으면 false(목록이 빈 빌드 — 지금 배포 — 는 유튜브·Google 출처가 없다).
+   * 비지 않았고 Supabase가 설정된 빌드일 때만 true). true이고 supabaseUrl이 있을 때만 img-src에 미리보기 호스트(i.ytimg.com)를 연다 —
+   * Google(YouTube)은 Supabase 빌드가 보이는 웹 처리방침 초안에만 적혀 있다(Supabase 없는 빌드는 iOS 방침 원문 — Google 없음).
+   * 영상은 youtube.com 새 탭으로 열어 frame-src는 그대로다. 없으면 false(목록이 빈 빌드 — 지금 배포 — 는 유튜브·Google 출처가 없다).
    */
   youtubeThumbnails?: boolean;
 }
@@ -79,6 +80,8 @@ export function cspDirectives(input: CspInput): [string, string[]][] {
   const supabaseWs = supabase?.startsWith("https://") ? supabase.replace(/^https:/, "wss:") : null;
   const kakao = input.kakaoJsKey !== null && input.kakaoJsKey.trim() !== "";
   const turnstile = input.turnstileSiteKey !== null && input.turnstileSiteKey.trim() !== "";
+  // 유튜브 미리보기 — Supabase 빌드(웹 처리방침 초안에 Google이 있는 빌드)에서만. 플래그가 잘못 켜져 와도 Supabase 없는 빌드에서는 열지 않는다.
+  const youtube = input.youtubeThumbnails === true && supabase !== null;
 
   const d: [string, string[]][] = [
     ["default-src", ["'self'"]],
@@ -88,7 +91,7 @@ export function cspDirectives(input: CspInput): [string, string[]][] {
     ],
     // 스타일은 인라인 허용 그대로 — Next·React의 style 속성과 카카오 지도 SDK가 인라인 스타일을 쓴다
     ["style-src", ["'self'", "'unsafe-inline'"]],
-    ["img-src", uniq(["'self'", "data:", "blob:", ...(kakao ? KAKAO_IMG_ORIGINS : []), input.youtubeThumbnails === true ? YOUTUBE_THUMBNAIL_ORIGIN : null])],
+    ["img-src", uniq(["'self'", "data:", "blob:", ...(kakao ? KAKAO_IMG_ORIGINS : []), youtube ? YOUTUBE_THUMBNAIL_ORIGIN : null])],
     ["font-src", ["'self'"]],
     [
       "connect-src",
