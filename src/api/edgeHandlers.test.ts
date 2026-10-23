@@ -2,7 +2,7 @@
 // handler는 웹 표준 Request/Response만 써서 Node(vitest)에서도 Deno와 같게 돈다. Deno 연결(index.ts)은 `deno check`로 본다.
 
 import { describe, expect, it } from "vitest";
-import { CHAT_MAX_BODY_BYTES, CHAT_MAX_MESSAGE_CHARS, type QuotaResult } from "../../supabase/functions/_shared/chat";
+import { CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, CHAT_MAX_MESSAGE_CHARS, type QuotaResult } from "../../supabase/functions/_shared/chat";
 import { SUBSTANCE_OUTPUT_SCHEMA } from "../../supabase/functions/_shared/prompts";
 import { CRISIS_REPLY } from "../../supabase/functions/_shared/safety";
 import {
@@ -20,6 +20,8 @@ describe("Edge Function chat", () => {
   const usage = { inputTokens: 120, outputTokens: 80, fallback: false };
 
   interface Options {
+    /** 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 켬 */
+    aiEnabled?: boolean;
     user?: { id: string } | null | "throw";
     quota?: QuotaResult | null | "throw";
     llm?: LlmCallResult;
@@ -30,6 +32,7 @@ describe("Edge Function chat", () => {
     const logs: ChatLogEntry[] = [];
     const handler = createChatHandler({
       allowedOrigins: [SITE],
+      aiEnabled: opts.aiEnabled ?? true,
       verifyUser: (token) => {
         calls.verify.push(token);
         if (opts.user === "throw") return Promise.reject(new Error("down"));
@@ -193,6 +196,7 @@ describe("Edge Function chat", () => {
     const logs: ChatLogEntry[] = [];
     const handler = createChatHandler({
       allowedOrigins: [SITE],
+      aiEnabled: true,
       verifyUser: async () => ({ id: "u" }),
       consumeQuota: async () => "ok",
       complete: async () => {
@@ -205,6 +209,47 @@ describe("Edge Function chat", () => {
     const text = await res.text();
     expect(JSON.parse(text)).toEqual({ ok: false, code: "internal" });
     expect(text + JSON.stringify(logs)).not.toContain("secret");
+  });
+
+  it("서버 쪽 AI 스위치가 꺼져 있으면 503 ai_disabled — 본문도 읽지 않고 로그인·한도·LLM 없음, 기록은 코드만", async () => {
+    const { handler, calls, logs } = setup({ aiEnabled: false });
+    // 정상 질문·위기 표현·틀린 본문 모두 같은 답 — 본문을 보기 전에 끝난다(위기 표현은 웹이 먼저 거른다)
+    for (const req of [
+      post(ask(QUESTION, { context: { week: 3, delivery: "cesarean", breastfeeding: true } })),
+      post(ask("죽고 싶어요")),
+      post("{not json"),
+      post({ preset: "substance", messages: [{ role: "user", content: "타이레놀" }] }, { Authorization: "" }),
+    ]) {
+      const res = await handler(req);
+      expect(res.status).toBe(503);
+      expect(res.headers.get("access-control-allow-origin")).toBe(SITE); // 브라우저가 코드를 읽을 수 있게
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(await res.json()).toEqual({ ok: false, code: CHAT_AI_DISABLED_CODE });
+    }
+    expect(calls).toEqual({ verify: [], quota: [], llm: [] });
+    expect(logs).toHaveLength(4);
+    for (const entry of logs) {
+      expect(Object.keys(entry).sort()).toEqual(["code", "fn", "ms", "status"]);
+      expect(entry).toMatchObject({ fn: "chat", status: 503, code: "ai_disabled" });
+    }
+  });
+
+  it("서버 쪽 AI 스위치가 꺼져 있어도 CORS·메서드 확인은 먼저 — 허용 밖 origin 403, preflight 204, GET 405", async () => {
+    const { handler, calls } = setup({ aiEnabled: false });
+    expect((await handler(post(ask(), { Origin: "https://evil.example" }))).status).toBe(403);
+    const pre = await handler(new Request("https://proj.supabase.co/functions/v1/chat", { method: "OPTIONS", headers: { Origin: SITE } }));
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-methods")).toBe("POST, OPTIONS");
+    expect((await handler(new Request("https://proj.supabase.co/functions/v1/chat", { headers: { Origin: SITE } }))).status).toBe(405);
+    expect(calls).toEqual({ verify: [], quota: [], llm: [] });
+  });
+
+  it("서버 쪽 AI 스위치가 켜져 있으면 그대로 — 로그인 확인 → 한도 → LLM", async () => {
+    const { handler, calls } = setup({ aiEnabled: true });
+    const res = await handler(post(ask()));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, text: "보통 4~6주 정도 나와요." });
+    expect([calls.verify.length, calls.quota.length, calls.llm.length]).toEqual([1, 1, 1]);
   });
 
   it("CORS — 허용 밖 origin 403, preflight 204, 너무 큰 본문 413, GET 405", async () => {

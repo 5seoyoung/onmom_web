@@ -90,6 +90,25 @@ describe("requestJson", () => {
     expect(res).toEqual({ ok: false, kind: "status", status: 503 });
   });
 
+  it("readErrorBody면 실패 응답의 JSON 본문을 data로 준다 — JSON이 아니면 undefined, 기본은 읽지 않는다(지금까지와 같다)", async () => {
+    const url = "https://proj.supabase.test/functions/v1/chat";
+    stubFetch(async () => jsonResponse(503, { ok: false, code: "ai_disabled" }));
+    expect(await requestJson(url, { timeoutMs: 1000, config: testConfig, readErrorBody: true })).toEqual({
+      ok: false,
+      kind: "status",
+      status: 503,
+      data: { ok: false, code: "ai_disabled" },
+    });
+    expect(await requestJson(url, { timeoutMs: 1000, config: testConfig })).toEqual({ ok: false, kind: "status", status: 503 });
+    stubFetch(async () => new Response("<html>Service Unavailable</html>", { status: 503 }));
+    expect(await requestJson(url, { timeoutMs: 1000, config: testConfig, readErrorBody: true })).toEqual({
+      ok: false,
+      kind: "status",
+      status: 503,
+      data: undefined,
+    });
+  });
+
   it("acceptStatus로 성공 범위를 좁힐 수 있다", async () => {
     stubFetch(async () => jsonResponse(201, {}));
     const res = await requestJson("https://video.onmom.test/videos", {

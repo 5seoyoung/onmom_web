@@ -139,6 +139,24 @@ export async function readBodyWithLimit(req: Request, maxBytes: number): Promise
   return out;
 }
 
+// MARK: 서버 쪽 AI 스위치(환경 변수 AI_CHAT_SERVER_ENABLED)
+
+/**
+ * 서버 쪽 AI 스위치가 꺼져 있을 때의 실패 코드(503) — 웹(src/api/llm.ts LLM_AI_DISABLED_CODE)은 "AI 미설정"과 똑같이 다룬다
+ * (앱 규칙 안내·약물 표 결과로 답하고, 그 페이지에서는 다시 묻지 않는다). 두 값은 src/api/edgeFunctions.test.ts가 비교한다.
+ */
+export const CHAT_AI_DISABLED_CODE = "ai_disabled";
+
+/**
+ * 서버 쪽 AI 스위치 — AI_CHAT_SERVER_ENABLED가 정확히 "true"일 때만 켠다(앞뒤 공백만 무시, 대소문자 구분).
+ * 없거나 비었거나 다른 값("TRUE"·"1"·"yes"·"false" …)이면 꺼짐 — 닫힌 쪽이 기본이다. 꺼져 있으면 함수는 로그인·한도·LLM 전에
+ * 503 ai_disabled로 답하고 Anthropic 클라이언트도 만들지 않는다 — ANTHROPIC_API_KEY가 남아 있어도 Anthropic을 부를 수 없다.
+ * 웹 빌드의 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)와 따로다 — 둘 다 켜져야 AI가 답한다.
+ */
+export function isAiChatServerEnabled(env: string | null | undefined): boolean {
+  return env != null && env.trim() === "true";
+}
+
 // MARK: 요청 한도(0003_llm_usage.sql llm_consume_quota)
 
 /** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) */

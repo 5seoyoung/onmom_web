@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   functionContext,
   functionMessages,
+  isAiDisabledReply,
   legacyContextText,
+  LLM_AI_DISABLED_CODE,
   LLM_FUNCTION_MAX_MESSAGE_CHARS,
   LLM_MESSAGES,
   llmComplete,
@@ -324,6 +326,58 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     });
     const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token });
     expect(res).toMatchObject({ ok: false, kind: "network" });
+  });
+
+  // 서버 쪽 AI 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED) — 꺼진 함수는 이 페이지에서 다시 부르지 않으므로 시험마다 다른 주소를 쓴다
+  const freshFunction = (name: string) => ({ ...supabaseTestConfig, functionsURL: `https://${name}.supabase.test/functions/v1` });
+
+  it("503 ai_disabled(서버 쪽 AI 꺼짐) → notConfigured — AI 미설정과 같은 결과(문구·상태 코드 없음), 이 페이지에서는 다시 묻지 않는다", async () => {
+    const fetch = stubFetch(async () => jsonResponse(503, { ok: false, code: LLM_AI_DISABLED_CODE }));
+    const config = freshFunction("ai-off");
+    const first = await llmComplete({ preset: "patient_edu", messages: ask }, { config, getAccessToken: token });
+    const notConfigured = await llmComplete({ preset: "patient_edu", messages: ask }, { config: { ...config, aiChatEnabled: false } });
+    expect(first).toEqual(notConfigured);
+    expect(first).toEqual({ ok: false, kind: "notConfigured", message: LLM_MESSAGES.notConfigured, status: undefined });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    // 다음 질문·약물 조회는 요청 없이 같은 결과 — 질문마다 503을 되풀이하지 않는다(토큰도 묻지 않는다)
+    const getAccessToken = vi.fn(token);
+    for (const preset of ["patient_edu", "substance"] as const) {
+      expect(await llmComplete({ preset, messages: ask }, { config, getAccessToken })).toEqual(notConfigured);
+    }
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(getAccessToken).not.toHaveBeenCalled();
+    // 다른 함수 주소(다른 백엔드 설정)는 그대로 묻는다
+    stubFetch(async () => jsonResponse(200, { ok: true, text: "답" }));
+    expect(await llmComplete({ preset: "patient_edu", messages: ask }, { config: freshFunction("ai-on"), getAccessToken: token })).toEqual({
+      ok: true,
+      text: "답",
+    });
+  });
+
+  it("다른 503(혼잡 busy·이용 불가 unavailable·HTML 오류 페이지)은 그대로 server(503) — 다음 질문도 다시 묻는다", async () => {
+    const config = freshFunction("busy");
+    for (const reply of [
+      () => jsonResponse(503, { ok: false, code: "busy" }),
+      () => jsonResponse(503, { ok: false, code: "unavailable" }),
+      () => new Response("<html>Service Unavailable</html>", { status: 503 }),
+      () => jsonResponse(503, { code: "ai_disabled_soon" }),
+    ]) {
+      const fetch = stubFetch(async () => reply());
+      const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config, getAccessToken: token });
+      expect(res).toMatchObject({ ok: false, kind: "server", status: 503 });
+      expect(fetch).toHaveBeenCalledTimes(1);
+    }
+    // ai_disabled는 503일 때만 — 다른 상태 코드에 같은 글자가 와도 꺼짐으로 보지 않는다
+    expect(isAiDisabledReply(503, { ok: false, code: "ai_disabled" })).toBe(true);
+    for (const [status, data] of [
+      [500, { ok: false, code: "ai_disabled" }],
+      [503, { ok: false, code: "busy" }],
+      [503, undefined],
+      [503, "ai_disabled"],
+      [503, null],
+    ] as const) {
+      expect(isAiDisabledReply(status, data)).toBe(false);
+    }
   });
 
   it("함수 경로는 60초까지 기다린다(함수가 Anthropic을 50초 기다리므로)", async () => {

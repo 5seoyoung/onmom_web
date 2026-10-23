@@ -4,7 +4,10 @@
 //
 // POST { preset, messages, context? } (Authorization: Bearer <Supabase 로그인 토큰> — 익명 게스트 계정도 된다)
 // 순서
-//   1) CORS·메서드·본문 크기(Content-Length가 없어도 상한까지만 읽는다) → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
+//   0) CORS·메서드 → 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED, deps.aiEnabled)가 꺼져 있으면 여기서 503 ai_disabled — 본문도 읽지 않고
+//      로그인·한도·위기 선필터·LLM 어느 것도 하지 않는다(ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않는다). 웹은 "AI 미설정"과
+//      똑같이 앱 안내로 답하고, 위기 표현은 웹이 먼저 거른다(features/chat requestChatReply).
+//   1) 본문 크기(Content-Length가 없어도 상한까지만 읽는다) → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
 //   3) 안전 선필터: 사용자 메시지 중 하나라도 자해·자살 표현 → LLM을 부르지 않고 고정 위기 안내(로그인·한도와 무관하게 늘 답한다)
 //   4) 로그인 확인 → 5) 사용자별 한도(1시간 30회)·서비스 전체 하루 상한 → 6) LLM(claude-opus-5, 거절 시 서버 쪽 대체 모델)
 // 응답: 성공 { ok: true, text } | { ok: true, json } (약물), 실패 { ok: false, code } + 4xx/5xx. 스택·내부 메시지는 내보내지 않는다.
@@ -13,7 +16,7 @@
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { checkOrigin, corsHeaders, failure, jsonResponse, preflightHeaders } from "../_shared/cors.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { bearerToken, CHAT_MAX_BODY_BYTES, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
+import { bearerToken, CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
 import type { ChatMessageInput, ChatPreset, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseSubstanceOutput, SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../_shared/prompts.ts";
@@ -57,6 +60,11 @@ export interface ChatLogEntry {
 
 export interface ChatHandlerDeps {
   allowedOrigins: readonly string[];
+  /**
+   * 서버 쪽 AI 스위치(_shared/chat.ts isAiChatServerEnabled — AI_CHAT_SERVER_ENABLED가 정확히 "true"일 때만 true).
+   * false면 CORS·메서드 다음에 바로 503 ai_disabled — 아래 의존성(로그인·한도·LLM)은 하나도 부르지 않는다. 기본값이 없다(꼭 정해서 넘긴다).
+   */
+  aiEnabled: boolean;
   /** Supabase 로그인 토큰 확인 — 유효하지 않으면 null, 확인 자체를 못 하면 throw */
   verifyUser: (token: string) => Promise<{ id: string } | null>;
   /** 한도 확인 + 한 번 기록(llm_consume_quota). 확인하지 못하면 null 또는 throw — 그때는 LLM을 부르지 않는다. */
@@ -91,6 +99,9 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
       if (req.method !== "POST") {
         return done(failure(405, "method_not_allowed", { ...cors, Allow: METHODS }), { code: "method_not_allowed" });
       }
+
+      // 서버 쪽 AI 스위치 — 꺼져 있으면 본문을 읽기 전에 끝낸다. 로그인·한도·LLM 없음, 기록은 코드만(상태·소요 시간과 함께 — preset도 모른다).
+      if (!deps.aiEnabled) return fail(503, CHAT_AI_DISABLED_CODE);
 
       // 본문 — 크기 상한 → JSON → 형식. 적힌 Content-Length가 크면 읽지 않고, 없거나(청크 전송) 틀려도 상한까지만 읽는다.
       const declared = Number(req.headers.get("content-length") ?? "0");

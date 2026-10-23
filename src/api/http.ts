@@ -42,8 +42,11 @@ export type NetworkFailure = "timeout" | "aborted" | "failed" | "badBody";
 export type HttpResult =
   /** 허용된 상태 코드 + JSON 본문 파싱 성공 */
   | { ok: true; status: number; data: unknown }
-  /** 응답은 왔지만 허용되지 않는 상태 코드 */
-  | { ok: false; kind: "status"; status: number }
+  /**
+   * 응답은 왔지만 허용되지 않는 상태 코드. readErrorBody면 그 응답의 JSON 본문(못 읽으면 undefined) — 실패 코드를 나눌 때만 쓴다
+   * (예: Edge Function chat의 503 ai_disabled). 본문은 신뢰할 수 없는 값이다 — 화면에 그대로 보이지 않는다.
+   */
+  | { ok: false; kind: "status"; status: number; data?: unknown }
   /** 응답을 못 받았거나(오프라인·CORS·타임아웃·취소) 본문을 읽지 못함 */
   | { ok: false; kind: "network"; reason: NetworkFailure };
 
@@ -56,6 +59,8 @@ export type JsonRequest = {
   signal?: AbortSignal;
   /** 성공으로 볼 상태 코드. 기본 2xx */
   acceptStatus?: (status: number) => boolean;
+  /** 허용되지 않는 상태 코드의 JSON 본문도 읽어 실패 결과의 data로 준다(기본 false — 읽지 않는다) */
+  readErrorBody?: boolean;
   config?: BackendConfig;
 };
 
@@ -132,7 +137,16 @@ export async function requestJson(url: string, req: JsonRequest): Promise<HttpRe
     } catch {
       return failure("failed");
     }
-    if (!(req.acceptStatus ?? is2xx)(res.status)) return { ok: false, kind: "status", status: res.status };
+    if (!(req.acceptStatus ?? is2xx)(res.status)) {
+      if (!req.readErrorBody) return { ok: false, kind: "status", status: res.status };
+      let data: unknown;
+      try {
+        data = await res.json();
+      } catch {
+        data = undefined; // HTML 오류 페이지·빈 본문 — 상태 코드만으로 판단한다
+      }
+      return { ok: false, kind: "status", status: res.status, data };
+    }
     try {
       return { ok: true, status: res.status, data: await res.json() };
     } catch {

@@ -6,6 +6,9 @@
 //   보내는 것: preset · 대화(최근 20개, 각 2000자) · 컨텍스트 {week, delivery, breastfeeding}뿐(검수 #14 — BMI·목표·위험 신호 여부 없음).
 //   시스템 프롬프트·모델·토큰 수는 함수가 정한다 — max_tokens도 보내지 않는다(함수가 모르는 필드는 거절한다).
 // - 설정이 없는 빌드(지금 배포): 예전처럼 NEXT_PUBLIC_LLM_URL의 POST /chat → { text } (비어 있으면 notConfigured).
+// - 서버 쪽 AI 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)가 꺼져 있으면 함수는 503 { code: "ai_disabled" }로 답한다 — 웹의 스위치가
+//   켜져 있어도 "AI 미설정"(notConfigured)과 똑같이 다루고(상담은 앱 규칙 안내, 약물은 표의 "정보 부족"), 그 함수에는 이 페이지에서
+//   다시 묻지 않는다(serverAiOff — 질문마다 요청·배너가 되풀이되지 않게). 새로 고치면 다시 확인한다.
 //
 // LLM은 판정 경로 밖이다(원칙 2): 이 함수는 텍스트만 돌려주고, 실패 시 무엇을 보여줄지는 호출하는 화면이 정한다.
 // 응답 text는 신뢰할 수 없는 값이다 — 마크다운·HTML로 렌더하지 말고 plain text로만 보여준다(검수 #51, iOS Text()와 동일).
@@ -61,6 +64,19 @@ export const LLM_FUNCTION_MAX_MESSAGES = 20;
 export const LLM_FUNCTION_MAX_MESSAGE_CHARS = 2000;
 /** 함수가 받는 산후 주차 상한(CHAT_MAX_WEEK) — 넘는 값(잘못 고른 출산 연도 등)은 요청 전체가 400이 되므로 빼고 보낸다 */
 export const LLM_FUNCTION_MAX_WEEK = 520;
+/** 서버 쪽 AI 스위치가 꺼졌을 때 함수가 보내는 실패 코드(503) — supabase/functions/_shared/chat.ts CHAT_AI_DISABLED_CODE와 같다 */
+export const LLM_AI_DISABLED_CODE = "ai_disabled";
+
+/**
+ * 서버 쪽 AI 스위치가 꺼져 있다고 답한 함수 주소들 — 이 페이지(탭)에 있는 동안은 그 주소로 다시 묻지 않고 notConfigured로 끝낸다.
+ * 새로 고치면 비어 다시 확인한다(소유자가 스위치를 켠 뒤). 주소별로 두어 다른 백엔드 설정의 결과에 섞이지 않게 한다.
+ */
+const serverAiOff = new Set<string>();
+
+/** 함수 응답이 "서버 쪽 AI 스위치 꺼짐"인가 — 503 + { ok: false, code: "ai_disabled" }만. 다른 503(busy·unavailable 등)은 아니다. */
+export function isAiDisabledReply(status: number, data: unknown): boolean {
+  return status === 503 && typeof data === "object" && data !== null && (data as { code?: unknown }).code === LLM_AI_DISABLED_CODE;
+}
 
 export type LLMRequest = {
   preset: LLMPreset;
@@ -136,6 +152,8 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
   if (!cfg.aiChatEnabled) return fail("notConfigured");
   const url = joinBackendUrl(cfg.functionsURL, "chat");
   if (!url) return fail("notConfigured");
+  // 이 함수가 이미 "서버 쪽 AI 꺼짐"(503 ai_disabled)이라고 답했다 — 미설정과 같게, 요청하지 않는다
+  if (serverAiOff.has(url.toString())) return fail("notConfigured");
 
   const messages = functionMessages(req.messages);
   // 보낼 질문이 없거나 너무 길다 — 함수가 거절할 요청은 보내지 않는다(호출자는 규칙 안내로 답한다)
@@ -163,9 +181,16 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
     body,
     timeoutMs: opts.timeoutMs ?? LLM_FUNCTION_TIMEOUT_MS,
     signal: opts.signal,
+    // 실패 본문의 code를 본다 — 503 ai_disabled(서버 쪽 AI 꺼짐)만 따로 다룬다
+    readErrorBody: true,
     config: cfg,
   });
-  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401 …) → server. 연결 실패·시간 초과 → network.
+  if (!res.ok && res.kind === "status" && isAiDisabledReply(res.status, res.data)) {
+    // 서버 쪽 AI 스위치 꺼짐 — "AI 미설정"과 똑같이(상태 코드도 싣지 않는다). 이 페이지에서는 이 함수에 다시 묻지 않는다.
+    serverAiOff.add(url.toString());
+    return fail("notConfigured");
+  }
+  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401, 혼잡 503 …) → server. 연결 실패·시간 초과 → network.
   if (!res.ok) return res.kind === "status" ? fail("server", res.status) : fail("network");
   return parseFunctionReply(res.data);
 }

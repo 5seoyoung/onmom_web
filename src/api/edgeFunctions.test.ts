@@ -9,6 +9,7 @@ import { routeTag, VIDEO_QUERY_LIMIT } from "@/rules/exercise";
 import { parseSubstanceAnswer, resolveSubstance } from "@/rules/substance";
 import {
   bearerToken,
+  CHAT_AI_DISABLED_CODE,
   CHAT_CONTEXT_FIELDS,
   CHAT_GLOBAL_DAILY_LIMIT_DEFAULT,
   CHAT_HOURLY_LIMIT_DEFAULT,
@@ -16,6 +17,7 @@ import {
   CHAT_MAX_MESSAGES,
   CHAT_MAX_WEEK,
   charCount,
+  isAiChatServerEnabled,
   latestUserMessage,
   parseChatContext,
   parsePositiveInt,
@@ -55,7 +57,7 @@ import {
   VIDEO_ROUTE_TAGS,
   VIDEO_UPSTREAM_TIMEOUT_MS,
 } from "../../supabase/functions/_shared/videos";
-import { LLM_FUNCTION_MAX_MESSAGE_CHARS, LLM_FUNCTION_MAX_MESSAGES, LLM_FUNCTION_MAX_WEEK, LLM_FUNCTION_TIMEOUT_MS } from "./llm";
+import { LLM_AI_DISABLED_CODE, LLM_FUNCTION_MAX_MESSAGE_CHARS, LLM_FUNCTION_MAX_MESSAGES, LLM_FUNCTION_MAX_WEEK, LLM_FUNCTION_TIMEOUT_MS } from "./llm";
 import { VIDEO_PROXY_TIMEOUT_MS } from "./video";
 
 describe("웹과 함수가 같은 값을 쓴다", () => {
@@ -84,6 +86,43 @@ describe("웹과 함수가 같은 값을 쓴다", () => {
   it("한도 기본값 — 1시간 30회, 하루 전체 500회", () => {
     expect(CHAT_HOURLY_LIMIT_DEFAULT).toBe(30);
     expect(CHAT_GLOBAL_DAILY_LIMIT_DEFAULT).toBe(500);
+  });
+});
+
+describe("서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 꺼짐", () => {
+  it("정확히 \"true\"일 때만 켠다(앞뒤 공백만 무시) — 없거나 다른 값은 모두 꺼짐", () => {
+    expect(isAiChatServerEnabled("true")).toBe(true);
+    expect(isAiChatServerEnabled(" true\n")).toBe(true);
+    for (const v of [undefined, null, "", " ", "false", "TRUE", "True", "1", "yes", "on", "enabled", "truee", '"true"', "t r u e"]) {
+      expect(isAiChatServerEnabled(v), String(v)).toBe(false);
+    }
+  });
+
+  it("웹과 함수가 같은 실패 코드(503 ai_disabled)를 쓴다 — 웹은 이 코드를 'AI 미설정'과 같게 다룬다", () => {
+    expect(LLM_AI_DISABLED_CODE).toBe(CHAT_AI_DISABLED_CODE);
+    expect(CHAT_AI_DISABLED_CODE).toBe("ai_disabled");
+  });
+
+  it("chat/index.ts — 환경 변수에서 스위치를 읽어 handler에 넘기고, 꺼져 있으면 Anthropic 클라이언트를 만들지 않는다", () => {
+    const src = readFileSync(new URL("../../supabase/functions/chat/index.ts", import.meta.url), "utf8").replace(/^\s*\/\/.*$/gm, "");
+    expect(src).toContain('const aiEnabled = isAiChatServerEnabled(Deno.env.get("AI_CHAT_SERVER_ENABLED"));');
+    expect(src).toMatch(/const anthropic = aiEnabled && anthropicKey\s*\?/);
+    expect(src).toMatch(/createChatHandler\(\{\s*allowedOrigins: [^\n]*\n\s*aiEnabled,/);
+  });
+
+  it("배포 워크플로 — Variables 값을 \"true\"·\"false\"·비움만 받아 함수 비밀값으로 넣고(비우면 건너뜀), 꺼져 있으면 알린다", () => {
+    const wf = readFileSync(new URL("../../.github/workflows/supabase.yml", import.meta.url), "utf8");
+    // 설정 확인 단계와 비밀값 넣기 단계 둘 다 같은 Variables 값을 읽는다
+    expect(wf.match(/^ {10}AI_CHAT_SERVER_ENABLED: \$\{\{ vars\.AI_CHAT_SERVER_ENABLED \}\}$/gm)).toHaveLength(2);
+    expect(wf).toContain('aion="${AI_CHAT_SERVER_ENABLED//[[:space:]]/}"');
+    expect(wf).toContain('if [ -n "${aion}" ] && [ "${aion}" != "true" ] && [ "${aion}" != "false" ]; then');
+    // 비밀값 넣기 반복에 들어 있다 — 빈 값은 그 반복이 건너뛴다(서버 값 그대로)
+    const loop = /for name in ([A-Z_ ]+); do\n\s*value="\$\{!name:-\}"/.exec(wf)?.[1].split(" ") ?? [];
+    expect(loop).toContain("AI_CHAT_SERVER_ENABLED");
+    expect(loop).toContain("ANTHROPIC_API_KEY");
+    // 배포 확인이 503 ai_disabled를 "꺼짐"으로 알아보고, 요약이 5단계 전까지 꺼져 있다고 밝힌다
+    expect(wf).toContain('elif [ "${status}" = "503" ] && [ "${code}" = "ai_disabled" ]; then');
+    expect(wf).toMatch(/ai_off\) echo "- \*\*서버 쪽 AI 상담: 꺼짐\*\*[^\n]*5단계[^\n]*AI_CHAT_SERVER_ENABLED=true/);
   });
 });
 

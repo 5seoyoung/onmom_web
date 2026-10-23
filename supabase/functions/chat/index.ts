@@ -8,7 +8,10 @@
 // - 한도: 0003_llm_usage.sql의 llm_consume_quota()를 서버 키로 부른다. 서버 키는 Supabase가 넣어 주는 SUPABASE_SECRET_KEYS의 "default"가
 //   먼저, 없으면 예전 SUPABASE_SERVICE_ROLE_KEY(_shared/auth.ts pickServerKey). SUPABASE_URL도 Supabase가 넣어 준다.
 // - 모델 claude-opus-5 + 서버 쪽 거절 대체(fallbacks: "default"). stop_reason을 content보다 먼저 확인한다. 어시스턴트 선채움 없음.
-// 환경 변수(선택): ALLOWED_ORIGINS, CHAT_HOURLY_LIMIT(기본 30), CHAT_GLOBAL_DAILY_LIMIT(기본 500).
+// - 서버 쪽 AI 스위치: AI_CHAT_SERVER_ENABLED가 정확히 "true"일 때만 켠다(_shared/chat.ts isAiChatServerEnabled). 없거나 다른 값이면 꺼짐 —
+//   Anthropic 클라이언트를 만들지 않고, 모든 요청에 CORS·메서드 확인 뒤 503 ai_disabled로 답한다(ANTHROPIC_API_KEY가 있어도).
+//   워크플로(.github/workflows/supabase.yml)는 Variables의 같은 이름 값을 넣는다 — 비우면 넣지 않으므로 한 번도 넣지 않았으면 꺼져 있다.
+// 환경 변수(선택): ALLOWED_ORIGINS, CHAT_HOURLY_LIMIT(기본 30), CHAT_GLOBAL_DAILY_LIMIT(기본 500), AI_CHAT_SERVER_ENABLED(기본 꺼짐).
 //
 // 이 파일은 연결만 한다 — 로그인 확인·한도·LLM 호출의 동작은 adapters.ts(vitest가 가짜 클라이언트로 확인), 요청 처리는 handler.ts.
 // 이 파일은 Deno에서만 돈다. Next 프로젝트의 tsc도 저장소의 모든 .ts를 읽으므로(tsconfig include),
@@ -23,7 +26,7 @@ import { pickServerKey } from "../_shared/auth.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { parseAllowedOrigins } from "../_shared/cors.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { CHAT_GLOBAL_DAILY_LIMIT_DEFAULT, CHAT_HOURLY_LIMIT_DEFAULT, CHAT_LIMIT_WINDOW_SECONDS, parsePositiveInt } from "../_shared/chat.ts";
+import { CHAT_GLOBAL_DAILY_LIMIT_DEFAULT, CHAT_HOURLY_LIMIT_DEFAULT, CHAT_LIMIT_WINDOW_SECONDS, isAiChatServerEnabled, parsePositiveInt } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { LLM_DEADLINE_MS } from "../_shared/prompts.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
@@ -49,18 +52,22 @@ const anthropicWorkspaceId = env("ANTHROPIC_WORKSPACE_ID");
 
 const hourlyLimit = parsePositiveInt(env("CHAT_HOURLY_LIMIT"), CHAT_HOURLY_LIMIT_DEFAULT, 1000);
 const globalDailyLimit = parsePositiveInt(env("CHAT_GLOBAL_DAILY_LIMIT"), CHAT_GLOBAL_DAILY_LIMIT_DEFAULT);
+/** 서버 쪽 AI 스위치 — 정확히 "true"일 때만 켜짐. 꺼져 있으면 Anthropic 클라이언트도 만들지 않는다(아래 anthropic = null). */
+const aiEnabled = isAiChatServerEnabled(Deno.env.get("AI_CHAT_SERVER_ENABLED"));
 
-// 빠진 설정은 이름만 한 번 남긴다(값은 남기지 않는다) — 함수 Logs에서 원인을 찾을 수 있게
+// 빠진 설정은 이름만 한 번 남긴다(값은 남기지 않는다) — 함수 Logs에서 원인을 찾을 수 있게. AI가 꺼져 있으면 Anthropic 키는 없어도 된다.
 const missing = [
   ["SUPABASE_URL", supabaseUrl !== ""],
   ["SUPABASE_SECRET_KEYS|SUPABASE_SERVICE_ROLE_KEY", serverKey !== null],
-  ["ANTHROPIC_API_KEY", anthropicKey !== ""],
+  ["ANTHROPIC_API_KEY", !aiEnabled || anthropicKey !== ""],
 ]
   .filter(([, present]) => !present)
   .map(([name]) => name);
-if (missing.length > 0) console.error(JSON.stringify({ fn: "chat", startup: "missing_env", names: missing }));
+// 스위치 상태(켬·끔)도 함께 — 값 그대로가 아니라 해석한 결과만
+const ai = aiEnabled ? "on" : "off";
+if (missing.length > 0) console.error(JSON.stringify({ fn: "chat", startup: "missing_env", names: missing, ai }));
 // 어느 서버 키를 쓰는지(종류만) — 예전 키가 없어질 때 확인용
-else console.log(JSON.stringify({ fn: "chat", startup: "ok", server_key: serverKey?.source }));
+else console.log(JSON.stringify({ fn: "chat", startup: "ok", server_key: serverKey?.source, ai }));
 
 /** 서버 키(service_role 권한) 클라이언트 — 이 함수 안에서만(로그인 확인·한도). 사용자 기록(user_states)은 읽지 않는다. */
 const admin =
@@ -70,8 +77,8 @@ const admin =
       })
     : null;
 
-/** 재시도 1번(429·5xx·연결 오류) — 전체 대기는 LLM_DEADLINE_MS가 끊는다 */
-const anthropic = anthropicKey
+/** 재시도 1번(429·5xx·연결 오류) — 전체 대기는 LLM_DEADLINE_MS가 끊는다. 서버 쪽 AI 스위치가 꺼져 있으면 만들지 않는다(키가 있어도). */
+const anthropic = aiEnabled && anthropicKey
   ? new Anthropic({
       apiKey: anthropicKey,
       maxRetries: 1,
@@ -86,6 +93,7 @@ function send(client: Anthropic, params: LlmMessageParams, signal: AbortSignal) 
 
 const handler = createChatHandler({
   allowedOrigins: parseAllowedOrigins(Deno.env.get("ALLOWED_ORIGINS")),
+  aiEnabled,
   verifyUser: createVerifyUser(admin ? { getUser: (token: string) => admin.auth.getUser(token) } : null),
   consumeQuota: createConsumeQuota(admin ? (fn, args) => admin.rpc(fn, args) : null, {
     hourlyLimit,
