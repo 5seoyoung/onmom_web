@@ -165,6 +165,7 @@ export const EXPECTED_JOBS = [
   { name: "onmom-send-reminders", schedule: "0 * * * *", windowHours: 2, label: "매시 정각" },
   { name: "onmom-anon-cleanup", schedule: "0 18 * * *", windowHours: 26, label: "매일 03:00 KST" },
   { name: "onmom-llm-usage-cleanup", schedule: "30 18 * * *", windowHours: 26, label: "매일 03:30 KST" },
+  { name: "onmom-admin-audit-cleanup", schedule: "0 19 * * *", windowHours: 26, label: "매일 04:00 KST" },
 ];
 
 /** 실패·5xx를 세는 기간(시간) */
