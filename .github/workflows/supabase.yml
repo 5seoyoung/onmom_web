@@ -33,6 +33,12 @@ on:
 permissions:
   contents: read
 
+# Edge Function의 CORS 허용 주소(공개값) — Variable ALLOWED_ORIGINS가 비어 있으면 이 값을 함수 비밀값 ALLOWED_ORIGINS로 넣는다.
+# 웹 사이트 주소를 옮기면(커스텀 도메인) 이 줄을 고쳐 supabase/ 변경과 함께 커밋하거나, 커밋 뒤 Actions → Supabase → Run workflow.
+# 2026-10-24 서버 값과 같음(https://5seoyoung.github.io,http://localhost:3000 — 해시로 확인).
+env:
+  ONMOM_ALLOWED_ORIGINS: https://5seoyoung.github.io,http://localhost:3000
+
 concurrency:
   group: supabase-deploy
   cancel-in-progress: false
@@ -55,7 +61,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || env.ONMOM_ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
           CHAT_GUEST_HOURLY_LIMIT: ${{ vars.CHAT_GUEST_HOURLY_LIMIT }}
           CHAT_GLOBAL_HOURLY_LIMIT: ${{ vars.CHAT_GLOBAL_HOURLY_LIMIT }}
@@ -221,7 +227,7 @@ jobs:
           PROJECT_REF: ${{ steps.check.outputs.project_ref }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           VIDEO_API_URL: ${{ vars.VIDEO_API_URL }}
-          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS || env.ONMOM_ALLOWED_ORIGINS }}
           CHAT_HOURLY_LIMIT: ${{ vars.CHAT_HOURLY_LIMIT }}
           CHAT_GUEST_HOURLY_LIMIT: ${{ vars.CHAT_GUEST_HOURLY_LIMIT }}
           CHAT_GLOBAL_HOURLY_LIMIT: ${{ vars.CHAT_GLOBAL_HOURLY_LIMIT }}

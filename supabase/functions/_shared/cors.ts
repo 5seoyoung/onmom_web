@@ -8,7 +8,10 @@
 // 허용 목록 밖 origin의 브라우저 요청은 거절한다(403). origin이 없는 요청(서버·curl)은 CORS 대상이 아니라 그대로 받는다 —
 // 영상은 공개 데이터이고, AI 상담은 따로 로그인 토큰을 확인한다.
 
-/** ALLOWED_ORIGINS 환경 변수가 비었을 때의 기본값 — 배포 사이트와 로컬 개발 서버 */
+/**
+ * ALLOWED_ORIGINS 환경 변수가 비었을 때의 기본값 — 배포 사이트와 로컬 개발 서버. 운영에서는 Supabase 워크플로가 이 값 대신
+ * .github/workflows/supabase.yml의 ONMOM_ALLOWED_ORIGINS(또는 Variable)를 비밀값으로 넣는다 — 사이트 주소를 옮기면 둘 다 고친다.
+ */
 export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://5seoyoung.github.io", "http://localhost:3000"];
 
 /** 브라우저가 함수에 보내는 헤더 — supabase-js·fetch가 쓰는 것만 */
