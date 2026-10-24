@@ -1,12 +1,15 @@
 // 약물·음식 체크 — iOS `OnmomEngine.checkSubstance`(큐레이션 표)와 `SubstanceCheckView.run/llmLookup`을 옮긴 것.
 //
 // 판정 순서(SubstanceCheckView.swift:97-102, 검수 #1):
-//   ① 출처가 표기된 큐레이션 표를 먼저 본다(표 순서대로 첫 일치).
+//   ① 출처가 표기된 큐레이션 표를 먼저 본다 — 별칭은 낱말 단위로만 맞춘다(substanceMatch.ts). iOS처럼 "입력에 별칭이 들어
+//      있으면" 표 순서대로 첫 행을 고르지 않는다: "수술"의 술·"세티리진"의 티·"콜라겐"의 콜라가 엉뚱한 행을 골랐다
+//      (임상 사전 검토 §4-6). 확실히 맞는 행이 하나가 아니면 표에 없는 것으로 본다 — 추측하지 않는다.
 //   ② 표에 없는 항목(unknown)일 때만 LLM 프록시에 묻는다. 실패하면 표의 "정보 부족"을 그대로 둔다.
 // 표에 있는 항목은 LLM이 절대 덮어쓰지 않는다 — 코데인·아스피린·술의 "피하세요"는 출처 있는 규칙이다.
 // "AI 답변" 칩과 병기 문구는 LLM 결과에만 붙는다. 진단·처방이 아니다.
 
 import content from "@/content";
+import { createSubstanceMatcher } from "./substanceMatch";
 
 export type SubstanceVerdict = "safe" | "caution" | "avoid" | "unknown";
 
@@ -72,9 +75,12 @@ const TABLE: readonly SubstanceRow[] = content.substances.map((row) => {
   return { ...row, verdict: row.verdict };
 });
 
+const matchTable = createSubstanceMatcher(TABLE);
+
 /**
  * Swift `localizedCaseInsensitiveContains`와 같게: 대소문자 무시 포함 여부.
  * 한글 자모가 분리된(NFD) 입력도 같은 글자로 보도록 NFC로 맞춘다. 빈 문자열은 포함으로 보지 않는다.
+ * 약물 표 조회에는 쓰지 않는다(낱말 단위 — substanceMatch.ts). 챗 키워드 비교가 쓴다.
  */
 export function localizedCaseInsensitiveContains(text: string, needle: string): boolean {
   if (needle.length === 0) return false;
@@ -90,11 +96,15 @@ export function normalizeSubstanceQuery(query: string): string {
   return query.replace(/^[\p{Zs}\t]+|[\p{Zs}\t]+$/gu, "");
 }
 
-/** 큐레이션 표만 본다(OnmomEngine.swift:81-118). 표 순서대로 첫 일치, 없으면 "정보 부족". */
+/**
+ * 큐레이션 표만 본다(OnmomEngine.swift:81-118). 별칭이 낱말 단위로 맞는 행이 꼭 하나일 때만 그 행, 아니면 "정보 부족"
+ * (맞는 별칭 없음 · 다른 행이 함께 맞음 · 바로 앞이나 뒤 낱말이 품목을 바꿀 수 있음 — 규칙은 substanceMatch.ts).
+ */
 export function lookupSubstance(query: string): SubstanceResult {
   const q = normalizeSubstanceQuery(query);
-  const hit = TABLE.find((row) => row.aliases.some((alias) => localizedCaseInsensitiveContains(q, alias)));
-  if (hit) {
+  const match = matchTable(q);
+  if (match.kind === "match") {
+    const hit = match.row;
     return { query: q, verdict: hit.verdict, detail: hit.detail, evidenceChips: [...hit.chips], source: "table" };
   }
   const unknown = content.substance_unknown;
