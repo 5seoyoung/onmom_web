@@ -9,7 +9,7 @@
 //   Supabase  Management API GET /v1/projects/{ref}의 status가 ACTIVE_HEALTHY(일시 중지면 "Free plan paused — restore in dashboard")
 //   함수      videos·chat에 사이트 주소(Origin)로 사전 요청(OPTIONS)만 → 2xx + Access-Control-Allow-Origin(로그인·AI 호출 없음)
 //   DB        Supabase CLI(supabase.yml과 같은 연결 방식: supabase link → db query --linked)로 SELECT 한 문장(lib.mjs cronHealthSql) —
-//             pg_cron 실패 0, 예약 3개가 기대 주기 안에 돌았음, pg_net 응답에 5xx 0. 개수·예약 이름·시각만 받는다.
+//             pg_cron 실패 0, 예약 4개가 기대 주기 안에 돌았음, pg_net 응답에 5xx 0. 개수·예약 이름·시각만 받는다.
 //   의존성    npm audit --omit=dev — 높음(high)·치명(critical) 0 (package-lock.json만 읽는다, 설치 불필요)
 // 결과: 모든 항목을 다 돌린 뒤 표(한국어)를 GITHUB_STEP_SUMMARY에 쓰고(없으면 화면에만), 하나라도 실패면 종료 코드 1 → GitHub이 메일을 보낸다.
 //   CI(GITHUB_ACTIONS=true)에서는 토큰·CLI가 없어도 실패로 센다(점검이 조용히 빠지지 않게). 내 컴퓨터에서는 건너뜀으로 둔다.

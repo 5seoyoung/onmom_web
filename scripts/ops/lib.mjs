@@ -157,9 +157,11 @@ export function projectStatusVerdict(status) {
 // MARK: 예약 작업(pg_cron)·예약 요청(pg_net) 점검
 
 /**
- * 점검하는 예약 작업 — supabase/migrations 0006(onmom-anon-cleanup)·0007(onmom-send-reminders·onmom-llm-usage-cleanup)과 같아야 한다.
+ * 점검하는 예약 작업 — supabase/migrations 0006(onmom-anon-cleanup)·0007(onmom-send-reminders·onmom-llm-usage-cleanup)·
+ * 0009(onmom-admin-audit-cleanup)과 같아야 한다.
  * windowHours = 이 시간 안에 한 번 이상 돌았어야 정상(매일 점검은 09:15 KST, GitHub이 늦게 시작해도 맞도록 여유를 둔다).
  * 예약 시각(schedule)이 바뀌면 점검이 실패한다 — 마이그레이션을 바꿨다면 여기도 같이 고친다.
+ * 새 작업은 첫 실행 전까지 "실행 기록 없음"으로 실패한다 — 넣은 직후 점검 실패가 한 번 올 수 있다(2026-10-24 onmom-admin-audit-cleanup).
  */
 export const EXPECTED_JOBS = [
   { name: "onmom-send-reminders", schedule: "0 * * * *", windowHours: 2, label: "매시 정각" },
@@ -291,7 +293,7 @@ export function evaluateCronHealth(health, jobs = EXPECTED_JOBS) {
     const row = health.jobs.find((r) => r?.jobname === job.name);
     const base = names[i + 1];
     if (!row || row.present !== true) {
-      out.push({ ...base, ok: false, detail: "예약이 없음 — Supabase 워크플로(마이그레이션 0006·0007)가 적용됐는지 확인" });
+      out.push({ ...base, ok: false, detail: "예약이 없음 — Supabase 워크플로(마이그레이션 0006·0007·0009)가 적용됐는지 확인" });
       return;
     }
     if (row.active !== true) {

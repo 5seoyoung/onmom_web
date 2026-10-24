@@ -7,7 +7,7 @@
 #   사이트   /onmom_web/ · /onmom_web/login/ · robots.txt가 200, 로그인 화면의 CSP 메타가 정확히 1개이고 script-src에 'unsafe-inline' 없음
 #   Supabase 프로젝트 상태(Management API)가 ACTIVE_HEALTHY — 무료 요금제 일시 중지면 "Free plan paused — restore in dashboard"
 #   함수     videos·chat에 사이트 주소로 사전 요청(OPTIONS)만 → 2xx(로그인·AI 호출 없음)
-#   DB       Supabase CLI(supabase.yml과 같은 고정 버전·link 방식)로 SELECT 한 문장 — pg_cron 실패 0·예약 3개가 기대 주기 안에 실행,
+#   DB       Supabase CLI(supabase.yml과 같은 고정 버전·link 방식)로 SELECT 한 문장 — pg_cron 실패 0·예약 4개가 기대 주기 안에 실행,
 #            pg_net 응답 5xx 0(최근 26시간, 개수만)
 #   의존성   npm audit --omit=dev — 높음·치명 0
 # 모든 항목을 다 돌린 뒤 표를 쓰고, 하나라도 실패면 마지막에 실패로 끝낸다.
