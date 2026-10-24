@@ -14,7 +14,11 @@ export const ACCOUNT_ITEMS =
 export const HEALTH_ITEMS =
   "출산일, 분만 방식, 수유 여부, 키·현재 체중·임신 전 체중, 산모수첩 확인 항목 7개(첫 출산 여부, 임신성 당뇨, 임신중독증·고혈압, 분만 시 출혈 과다, 산후 빈혈, 골반통·치골결합 통증, 복직근 이개), 증상 기록(오로 변화·발열·통증 정도·확인된 병원 신호·기록 시각), 오늘의 질문(기분) 답변, 기록장 글과 메모";
 
-/** 서비스 설정 정보 — 건강 정보가 아닌 프로필 값과 동의 기록(profile.consentVersion·consentAcceptedAt) */
+/**
+ * 서비스 설정 정보 — 건강 정보가 아닌 프로필 값과 동의 기록. "동의한 내용과 일시"는 서버 저장 동의(profile.consentVersion·consentAcceptedAt
+ * → user_states 칸)와 AI 답변 국외 이전 동의(public.ai_consents의 판·동의 시각 — supabase/migrations/0008_ai_consents.sql)를 함께 덮는다.
+ * 둘 다 계정을 삭제할 때까지 보관한다(RETENTION_TEXT — 계정 삭제로 함께 지워진다). src/api/aiConsentsSql.test.ts가 확인한다.
+ */
 export const SETTING_ITEMS = "회복 목표, 복직 예정일, 내 동네(입력한 경우), 동의한 내용과 일시";
 
 /** 자동으로 생기는 접속 기록 — Supabase(로그인·서버)·GitHub Pages(웹 호스팅)가 보안·장애 대응용으로 남긴다 */
