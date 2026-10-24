@@ -99,6 +99,47 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
   });
 });
 
+describe("별칭이 다른 낱말 안에 숨던 입력 — 이제 표에 없는 항목과 같은 길(임상 사전 검토 §4-6)", () => {
+  // 예전에는 술 행 "피하세요", 철분·페니실린계 행 "수유 중 가능", 카페인·식중독 행으로 갔다(rules/substanceMatch.ts)
+  const NOW_UNLISTED = ["수술 후 진통제", "다이어트 영양제", "퀴놀론계 항생제", "세티리진", "레보티록신", "아티반", "콜라겐", "회음부 연고"];
+
+  it("AI 꺼짐: 표의 '정보 부족' 문구·칩 그대로, 서버 호출 없음", async () => {
+    const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');
+    const deps = substanceDeps({ llmConfigured: false, complete, context: null });
+    for (const q of NOW_UNLISTED) {
+      const r = await checkSubstance(q, deps);
+      expect(r, q).toEqual({
+        query: q,
+        verdict: "unknown",
+        detail: content.substance_unknown.detail,
+        evidenceChips: content.substance_unknown.chips,
+        source: "table",
+      });
+      expect(verdictBadge(r.verdict).label).toBe("정보 부족");
+    }
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("AI 켜짐: 같은 입력어로 AI에 묻고 'AI 답변' 표시를 단다", async () => {
+    for (const q of NOW_UNLISTED) {
+      const complete = okText('{"verdict":"caution","detail":"의료진과 상의하세요.","sources":["LactMed"]}');
+      const deps = substanceDeps({ llmConfigured: true, complete, context: { breastfeeding: true } });
+      const r = await checkSubstance(q, deps);
+      expect(complete, q).toHaveBeenCalledTimes(1);
+      const [req] = complete.mock.calls[0] as unknown as [LLMRequest];
+      expect(req.messages).toEqual([{ role: "user", content: q }]);
+      expect(r).toMatchObject({ query: q, verdict: "caution", source: "llm" });
+      expect(r.evidenceChips).toContain("AI 답변");
+    }
+  });
+
+  it("동의를 묻는 중(ask)이면 다른 미등재 항목처럼 동의 카드를 띄운다", async () => {
+    for (const q of NOW_UNLISTED) {
+      expect(shouldOfferAiConsent(await checkSubstance(q, {}), "ask"), q).toBe(true);
+    }
+  });
+});
+
 describe("makeSubstanceLlmLookup — 요청 본문(SubstanceCheckView.swift:118-126)", () => {
   it("preset substance · 512토큰(예전 경로용) · 산모 정보는 넘긴 컨텍스트 그대로 · signal 전달", async () => {
     const complete = okText('{"verdict":"safe","detail":"d","sources":["FDA"]}');

@@ -43,4 +43,15 @@ describe("SubstanceResultCard", () => {
     expect(html).not.toContain("AI");
     expect(html).not.toContain("<a ");
   });
+
+  it("예전에 엉뚱한 행으로 가던 입력도 같은 '정보 부족' 카드 — 입력어 그대로 제목, '피하세요'·'수유 중 가능' 없음", () => {
+    for (const q of ["수술 후 진통제", "다이어트 영양제", "퀴놀론계 항생제", "콜라겐"]) {
+      const html = renderToStaticMarkup(h(SubstanceResultCard, { result: lookupSubstance(q) }));
+      expect(html, q).toContain(`>${q}</h2>`);
+      expect(html, q).toContain(`>${content.verdict_labels.unknown}</span>`);
+      expect(html, q).toContain(content.substance_unknown.detail);
+      expect(html, q).not.toContain(content.verdict_labels.avoid);
+      expect(html, q).not.toContain(content.verdict_labels.safe);
+    }
+  });
 });
