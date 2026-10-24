@@ -302,3 +302,17 @@ describe("빈 별칭·NFD·대소문자", () => {
     expect(match("없는약")).toEqual({ kind: "none" } satisfies SubstanceMatch<TestRow>);
   });
 });
+
+describe("긴 입력", () => {
+  // 두 가지로 나뉘는 꼬리(이랑 = 이 + 랑)가 이어지면 정규식 반복은 되돌아가며 시도하는 길이 지수로 늘었다(24번에 1초).
+  // 그렇게 돌아가면 이 시험은 끝나지 않아 시간 초과로 실패한다.
+  const run = "이랑".repeat(200);
+
+  it("겹쳐 나뉘는 꼬리가 길게 이어져도 바로 끝난다", () => {
+    expect(rowOf(`타이레놀${run}`)).toBe("acetaminophen");
+    expect(match(`타이레놀${run}겐`).kind).toBe("none");
+    expect(match(`타이레놀 ${run}겐`).kind).toBe("qualified");
+    expect(match(`수유중${run}겐 타이레놀`).kind).toBe("qualified");
+    expect(rowOf(`수유중${run} 타이레놀`)).toBe("acetaminophen");
+  });
+});

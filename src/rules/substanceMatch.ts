@@ -118,13 +118,9 @@ const FOLLOW_WORDS = [
   "수유", "수유중", "모유", "모유수유", "중", "후", "이후", "동안", "때", "산후", "출산", "출산후", "지금", "요즘", "오늘", "가끔", "자주",
 ] as const;
 
-const SHORT_SUFFIX_RE = suffixRunRegex(SHORT_SUFFIXES);
-const LONG_SUFFIX_RE = suffixRunRegex([...SHORT_SUFFIXES, ...LONG_ONLY_SUFFIXES]);
-const LONG_SUFFIX_SOURCE = alternation([...SHORT_SUFFIXES, ...LONG_ONLY_SUFFIXES]);
-const FOLLOW_RE = suffixRunRegex([...FOLLOW_WORDS, ...SHORT_SUFFIXES, ...LONG_ONLY_SUFFIXES]);
-const CONTEXT_WORD_RE = new RegExp(`^(?:${alternation(CONTEXT_WORDS)})(?:${LONG_SUFFIX_SOURCE})*$`, "u");
-const SCENE_WORD_RE = new RegExp(`^(?:${alternation(SCENE_NOUNS)})(?:${alternation(SCENE_TAILS)})(?:${LONG_SUFFIX_SOURCE})*$`, "u");
-const SCENE_TAIL_RE = new RegExp(`^(?:${alternation(SCENE_TAILS)})(?:${LONG_SUFFIX_SOURCE})*$`, "u");
+const isShortSuffixRun = atomSplitter(SHORT_SUFFIXES);
+const isLongSuffixRun = atomSplitter([...SHORT_SUFFIXES, ...LONG_ONLY_SUFFIXES]);
+const isFollowRun = atomSplitter([...FOLLOW_WORDS, ...SHORT_SUFFIXES, ...LONG_ONLY_SUFFIXES]);
 const SCENE_NOUN_SET: ReadonlySet<string> = new Set(SCENE_NOUNS);
 /** 별칭 안의 띄어쓰기·문장부호 자리 — 입력에서는 0개 이상(호환 자모도 문장부호처럼) */
 const SEP_RUN = "(?:[^\\p{L}\\p{M}\\p{N}]|[\\u3130-\\u318f])*";
@@ -282,7 +278,7 @@ function rightBoundary(q: string, end: number, lastKind: CharKind, short: boolea
     let runEnd = end;
     while (runEnd < q.length && charKind(q[runEnd]) === "hangul") runEnd++;
     const rest = q.slice(end, runEnd);
-    return (short ? SHORT_SUFFIX_RE : LONG_SUFFIX_RE).test(rest) ? runEnd : null;
+    return (short ? isShortSuffixRun : isLongSuffixRun)(rest) ? runEnd : null;
   }
   // 한글 뒤 영문·숫자, 영문 뒤 숫자처럼 글자 종류가 바뀌면 경계(비타민C·타이레놀500). 같은 종류가 이어지면 더 긴 낱말이다.
   return next !== lastKind ? end : null;
@@ -316,7 +312,7 @@ function isNeutralFollower(word: string): boolean {
     let j = i + 1;
     while (j < word.length && charKind(word[j]) === kind) j++;
     const piece = word.slice(i, j);
-    const ok = kind === "digit" || (kind === "latin" && piece.length <= 3) || (kind === "hangul" && FOLLOW_RE.test(piece));
+    const ok = kind === "digit" || (kind === "latin" && piece.length <= 3) || (kind === "hangul" && isFollowRun(piece));
     if (!ok) return false;
     i = j;
   }
@@ -324,9 +320,17 @@ function isNeutralFollower(word: string): boolean {
 }
 
 function isContextWord(word: string, previous: string | null): boolean {
-  if (CONTEXT_WORD_RE.test(word) || SCENE_WORD_RE.test(word)) return true;
+  // 요즘에·지금은·제가 — 상황 낱말 + 꼬리(없어도 된다)
+  if (CONTEXT_WORDS.some((w) => word.startsWith(w) && isLongSuffixRun(word.slice(w.length), true))) return true;
+  // 수유중·출산후에 — 상황 이름 + 중·후 + 꼬리
+  if (SCENE_NOUNS.some((n) => word.startsWith(n) && isSceneTail(word.slice(n.length)))) return true;
   // 수유 중 · 출산 후에 · 제왕절개 수술 후 — 중·후만 따로 띄어 쓴 경우는 그 앞 낱말이 상황 이름일 때만
-  return SCENE_TAIL_RE.test(word) && previous !== null && SCENE_NOUN_SET.has(previous);
+  return isSceneTail(word) && previous !== null && SCENE_NOUN_SET.has(previous);
+}
+
+/** 중·후·이후… + 꼬리(없어도 된다) */
+function isSceneTail(word: string): boolean {
+  return SCENE_TAILS.some((t) => word.startsWith(t) && isLongSuffixRun(word.slice(t.length), true));
 }
 
 function strictlyContains(outer: Occurrence, inner: Occurrence): boolean {
@@ -346,13 +350,26 @@ function charKind(ch: string): CharKind {
   return "sep";
 }
 
-function suffixRunRegex(atoms: readonly string[]): RegExp {
-  return new RegExp(`^(?:${alternation(atoms)})+$`, "u");
-}
-
-/** 긴 조각부터 — "이랑"이 "이"보다 먼저 시도되게(뒤로 돌아가 다시 나누는 것은 정규식이 한다) */
-function alternation(atoms: readonly string[]): string {
-  return [...new Set(atoms)].sort((a, b) => b.length - a.length).map(escapeRegExp).join("|");
+/**
+ * 낱말이 조각들을 이어 붙인 것으로 끝까지 나뉘는가(한 조각 이상, allowEmpty면 빈 낱말도). 정규식 `^(?:조각|…)+$`는 쓰지 않는다 —
+ * "이랑"(= 이 + 랑)처럼 두 가지로 나뉘는 조각이 이어지면 되돌아가며 시도하는 길이 지수로 늘어 화면이 멈춘다
+ * ("타이레놀" 뒤 "이랑" 24번에 1초, 30번이면 1분). 앞에서부터 닿을 수 있는 자리만 표시해 나가 낱말 길이에 비례해 끝난다.
+ */
+function atomSplitter(atoms: readonly string[]): (word: string, allowEmpty?: boolean) => boolean {
+  const set: ReadonlySet<string> = new Set(atoms);
+  const maxLen = Math.max(...atoms.map((a) => a.length));
+  return (word, allowEmpty = false) => {
+    if (word.length === 0) return allowEmpty;
+    const reach = new Uint8Array(word.length + 1);
+    reach[0] = 1;
+    for (let i = 0; i < word.length; i++) {
+      if (reach[i] === 0) continue;
+      for (let len = 1; len <= maxLen && i + len <= word.length; len++) {
+        if (set.has(word.slice(i, i + len))) reach[i + len] = 1;
+      }
+    }
+    return reach[word.length] === 1;
+  };
 }
 
 function escapeRegExp(s: string): string {
