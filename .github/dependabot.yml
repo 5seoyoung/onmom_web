@@ -22,6 +22,17 @@ updates:
         update-types:
           - minor
           - patch
+    # 아직 올리지 않는 major(2026-10-24 확인) — 조건이 풀리면 이 줄을 지운다.
+    # - typescript 7: typescript-eslint가 typescript <6.1만 지원
+    # - eslint 10: eslint-config-next가 묶은 플러그인 일부가 eslint 10을 peer로 아직 받지 않음(설치가 peer를 덮어씀)
+    # - @types/node: CI·배포가 Node 24라 타입도 24에 맞춘다(새 Node 전용 API를 잘못 쓰지 않게)
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
