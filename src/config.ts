@@ -57,7 +57,7 @@ export const config = {
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? "",
   /**
    * 공개 사이트 주소(basePath까지, 끝 슬래시) — 공유 미리보기의 절대 주소 기준(siteUrlFrom). 공개값. 비면 GitHub Pages 주소.
-   * 커스텀 도메인으로 옮길 때 NEXT_PUBLIC_SITE_URL(배포 워크플로 Variables)과 BASE_PATH를 함께 바꾼다.
+   * 배포는 Pages 주소(configure-pages의 base_url·base_path)를 함께 넣으므로 커스텀 도메인을 연결하면 저절로 맞는다(deploy.yml "Site URL").
    */
   siteUrl: siteUrlFrom(process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_BASE_PATH ?? ""),
   /**
