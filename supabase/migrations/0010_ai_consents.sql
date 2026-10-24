@@ -13,8 +13,11 @@
 -- 처리방침·동의 문구: "동의한 내용과 일시"(features/privacy/dataItems.ts SETTING_ITEMS, 보유 = 계정을 삭제할 때까지)에 든다.
 --   2)·3)은 새 정보를 모으지 않는다 — llm_usage(사용자 id·시각, 2일 보관)를 그대로 쓴다.
 -- 먼저 0003(llm_usage — AI 상담 이용 기록)이 있어야 한다 — 아래 0)이 확인한다.
+-- 번호: 0009(관리자 접근 기록)가 이미 운영에 적용돼 있어 그 뒤 번호다(db push는 마지막으로 적용한 번호보다 앞선 새 파일을 거절한다).
+--   0008은 쓰지 않는다. 0009와는 서로 건드리는 것이 없다.
 -- 여러 번 실행해도 같은 결과(표는 있으면 건너뛰고, 제약·정책은 지우고 다시 만들고, 함수는 새로 만든다). 확장(create extension)은
 -- 부르지 않는다(0006 머리말). 이미 있는 행·함수(0003 llm_consume_quota 넷 인자)는 바꾸지 않는다. 비밀값·운영 주소는 이 파일에 없다.
+-- 파일 하나가 트랜잭션 하나다 — 중간에 실패하면 아무것도 바뀌지 않는다. 맨 끝에서 PostgREST에 스키마를 다시 읽으라고 알린다(0009와 같다).
 
 -- 0) 먼저 있어야 하는 것 확인 ------------------------------------------------------------------------------
 
@@ -190,3 +193,8 @@ comment on function public.llm_refund_quota(uuid) is
 
 revoke execute on function public.llm_refund_quota(uuid) from public, anon, authenticated;
 grant execute on function public.llm_refund_quota(uuid) to service_role;
+
+-- 4) PostgREST 스키마 다시 읽기 — 새 표(ai_consents)·새 함수(llm_consume_quota 다섯 인자·llm_refund_quota)를 함수 chat과 웹이 바로
+--   부를 수 있게. Supabase는 DDL 뒤에 스스로도 다시 읽지만, 이 파일의 변경은 그것에 기대지 않는다(0009와 같다). 알림은 commit 때 간다.
+
+notify pgrst, 'reload schema';

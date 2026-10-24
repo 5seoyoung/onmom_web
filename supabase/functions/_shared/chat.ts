@@ -157,7 +157,7 @@ export function isAiChatServerEnabled(env: string | null | undefined): boolean {
   return env != null && env.trim() === "true";
 }
 
-// MARK: 요청 한도(0003_llm_usage.sql·0008_ai_consents.sql llm_consume_quota)
+// MARK: 요청 한도(0003_llm_usage.sql·0010_ai_consents.sql llm_consume_quota)
 
 /** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) — 카카오 계정·카카오를 연결한 게스트 */
 export const CHAT_HOURLY_LIMIT_DEFAULT = 30;

@@ -5,9 +5,9 @@
 // - 키: ANTHROPIC_API_KEY는 Supabase 함수 비밀(secrets)에만 둔다. 웹·저장소에는 없다.
 // - 로그인 확인은 함수 안에서 한다(Supabase Auth getUser — 익명 게스트 계정 포함). 게이트웨이 JWT 확인은 끈다
 //   (supabase/config.toml [functions.chat] verify_jwt = false).
-// - AI 국외 이전 동의: 로그인 확인 뒤 0008_ai_consents.sql의 public.ai_consents에서 그 사용자 id의 행만 서버 키로 읽는다 —
+// - AI 국외 이전 동의: 로그인 확인 뒤 0010_ai_consents.sql의 public.ai_consents에서 그 사용자 id의 행만 서버 키로 읽는다 —
 //   판이 지금 판(_shared/aiConsent.ts)이 아니면 한도·LLM 없이 403 ai_consent_required.
-// - 한도: 0008_ai_consents.sql의 llm_consume_quota()(다섯 인자 — 0003의 기록 표 llm_usage를 그대로 쓴다)를 서버 키로 부른다.
+// - 한도: 0010_ai_consents.sql의 llm_consume_quota()(다섯 인자 — 0003의 기록 표 llm_usage를 그대로 쓴다)를 서버 키로 부른다.
 //   서버 키는 Supabase가 넣어 주는 SUPABASE_SECRET_KEYS의 "default"가
 //   먼저, 없으면 예전 SUPABASE_SERVICE_ROLE_KEY(_shared/auth.ts pickServerKey). SUPABASE_URL도 Supabase가 넣어 준다.
 // - 모델 claude-opus-5 + 서버 쪽 거절 대체(fallbacks: "default"). stop_reason을 content보다 먼저 확인한다. 어시스턴트 선채움 없음.
@@ -17,7 +17,7 @@
 // 환경 변수(선택): ALLOWED_ORIGINS, AI_CHAT_SERVER_ENABLED(기본 꺼짐), CHAT_HOURLY_LIMIT(기본 30),
 //   CHAT_GUEST_HOURLY_LIMIT(익명 게스트, 기본 5 — CHAT_HOURLY_LIMIT까지), CHAT_GLOBAL_HOURLY_LIMIT(전체 1시간, 기본 60),
 //   CHAT_GLOBAL_DAILY_LIMIT(전체 하루, 기본 500) — 한도의 형식·기본값은 _shared/chat.ts chatLimitsFromEnv.
-//   LLM이 답을 만들지 않은 실패(연결·혼잡·키·모델)면 0008의 llm_refund_quota()로 한 번을 돌려준다.
+//   LLM이 답을 만들지 않은 실패(연결·혼잡·키·모델)면 0010의 llm_refund_quota()로 한 번을 돌려준다.
 //
 // 이 파일은 연결만 한다 — 로그인 확인·한도·LLM 호출의 동작은 adapters.ts(vitest가 가짜 클라이언트로 확인), 요청 처리는 handler.ts.
 // 이 파일은 Deno에서만 돈다. Next 프로젝트의 tsc도 저장소의 모든 .ts를 읽으므로(tsconfig include),

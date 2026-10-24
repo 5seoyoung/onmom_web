@@ -1,9 +1,9 @@
-// supabase/migrations/0008_ai_consents.sql 점검 — 실행하지 않고 글자로 확인한다(DB 없이 돌리는 안전장치,
+// supabase/migrations/0010_ai_consents.sql 점검 — 실행하지 않고 글자로 확인한다(DB 없이 돌리는 안전장치,
 // userStatesSql.test.ts·schedulesAndLimitsSql.test.ts와 같은 방식).
 // AI 국외 이전 동의 기록(public.ai_consents): 본인 행만(RLS)·anon 없음·지우기 정책 없음(계정 삭제 cascade)·함수는 읽기만.
 // 판(AI_CONSENT_VERSION)은 웹과 함수가 같은 값을 쓰고, 처리방침·동의 문구의 "동의한 내용과 일시"가 이 기록을 덮는다.
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { AI_CONSENT_VERSION as WEB_AI_CONSENT_VERSION } from "@/features/chat/aiConsent";
@@ -20,7 +20,7 @@ import { parseQuotaResult } from "../../supabase/functions/_shared/chat";
 import { createConsumeQuota, createRefundQuota } from "../../supabase/functions/chat/adapters";
 
 const MIGRATIONS = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
-const FILE = "0008_ai_consents.sql";
+const FILE = "0010_ai_consents.sql";
 /** 주석(-- …)을 뺀 실행문(소문자, 공백 한 칸) — 설명 글의 낱말이 검사에 걸리지 않게 */
 const sqlOf = (file: string) =>
   readFileSync(`${MIGRATIONS}${file}`, "utf8")
@@ -36,7 +36,7 @@ function policy(name: string): string {
   return CODE.slice(start, CODE.indexOf(";", start));
 }
 
-describe("0008 — 먼저 있어야 하는 것 · 여러 번 실행", () => {
+describe("0010 — 먼저 있어야 하는 것 · 여러 번 실행", () => {
   it("llm_usage(0003)가 없으면 아무것도 바꾸기 전에 멈춘다 — 확장은 다시 켜지 않는다(Supabase 2BP01)", () => {
     expect(CODE).not.toContain("create extension");
     const guard = "if to_regclass('public.llm_usage') is null then raise exception";
@@ -47,6 +47,25 @@ describe("0008 — 먼저 있어야 하는 것 · 여러 번 실행", () => {
         .filter((i) => i >= 0),
     );
     expect(CODE.indexOf(guard)).toBeLessThan(firstChange);
+  });
+
+  it("번호 — 운영에 이미 적용된 0009보다 뒤, 다른 파일과 번호가 겹치지 않고, 이 표·함수를 만드는 파일은 이것 하나", () => {
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
+    const numbers = files.map((f) => Number(/^(\d{4})_/.exec(f)?.[1]));
+    expect(new Set(numbers).size).toBe(files.length);
+    expect(files).toContain("0009_admin_access_log.sql");
+    expect(Number(FILE.slice(0, 4))).toBeGreaterThan(9);
+    expect(files).not.toContain("0008_ai_consents.sql");
+    for (const name of ["create table if not exists public.ai_consents", "function public.llm_refund_quota("]) {
+      expect(files.filter((f) => sqlOf(f).includes(name)), name).toEqual([FILE]);
+    }
+  });
+
+  it("맨 끝에서 PostgREST에 스키마를 다시 읽으라고 알린다 — 새 표·새 함수를 바로 부를 수 있게(0009와 같다)", () => {
+    const notify = CODE.lastIndexOf("notify pgrst, 'reload schema';");
+    expect(notify).toBeGreaterThan(CODE.lastIndexOf("create or replace function"));
+    expect(notify).toBeGreaterThan(CODE.lastIndexOf("create policy"));
+    expect(CODE.slice(notify + "notify pgrst, 'reload schema';".length).trim()).toBe("");
   });
 
   it("표는 있으면 건너뛰고, 제약·정책은 같은 이름을 지우고 다시 만든다", () => {
@@ -60,7 +79,7 @@ describe("0008 — 먼저 있어야 하는 것 · 여러 번 실행", () => {
   });
 });
 
-describe("0008 — public.ai_consents 표", () => {
+describe("0010 — public.ai_consents 표", () => {
   const table = /create table if not exists public\.ai_consents \((.*?)\);/.exec(CODE)?.[1] ?? "";
 
   it("사용자당 한 행 — 사용자 id(계정을 지우면 함께 지워짐)·동의한 판·동의 시각뿐(질문·답·건강 정보 없음)", () => {
@@ -113,7 +132,7 @@ function fn(signature: string) {
 const USER_LOCK = "perform pg_advisory_xact_lock(hashtextextended('onmom.llm_usage:' || p_user_id::text, 0));";
 const GLOBAL_LOCK = "perform pg_advisory_xact_lock(hashtextextended('onmom.llm_usage:global', 0));";
 
-describe("0008 — llm_consume_quota 다섯 인자판(게스트 한도는 p_user_limit로, 전체 1시간 상한 추가)", () => {
+describe("0010 — llm_consume_quota 다섯 인자판(게스트 한도는 p_user_limit로, 전체 1시간 상한 추가)", () => {
   const consume = fn("public.llm_consume_quota( p_user_id uuid, p_user_limit integer, p_window_seconds integer, p_global_daily_limit integer, p_global_hourly_limit integer )");
 
   it("SECURITY DEFINER + 빈 search_path, 글자(text)를 돌려준다 — 돌려주는 값은 함수가 읽는 셋뿐(parseQuotaResult)", () => {
@@ -179,7 +198,7 @@ describe("0008 — llm_consume_quota 다섯 인자판(게스트 한도는 p_user
   });
 });
 
-describe("0008 — llm_refund_quota(LLM이 답을 만들지 않은 실패에서 한 번 돌려주기)", () => {
+describe("0010 — llm_refund_quota(LLM이 답을 만들지 않은 실패에서 한 번 돌려주기)", () => {
   const refund = fn("public.llm_refund_quota(p_user_id uuid)");
 
   it("SECURITY DEFINER + 빈 search_path, 참·거짓을 돌려준다", () => {

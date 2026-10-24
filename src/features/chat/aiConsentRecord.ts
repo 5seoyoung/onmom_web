@@ -1,4 +1,4 @@
-// AI 국외 이전 동의의 서버 기록 — public.ai_consents 한 행(supabase/migrations/0008_ai_consents.sql). Edge Function chat이 이 행으로
+// AI 국외 이전 동의의 서버 기록 — public.ai_consents 한 행(supabase/migrations/0010_ai_consents.sql). Edge Function chat이 이 행으로
 // 동의를 확인하고, 지금 판의 행이 없으면 403 ai_consent_required로 답한다(supabase/functions/_shared/aiConsent.ts).
 //
 // - 쓰는 때: 동의 카드에서 [동의하고 계속하기]를 누른 뒤(aiConsent.ts useAiConsent accept), 이 계정의 서버 세션이 있을 때만.

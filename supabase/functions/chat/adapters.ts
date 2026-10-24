@@ -44,7 +44,7 @@ export function createVerifyUser(auth: AuthClientLike | null): (token: string) =
   };
 }
 
-// MARK: AI 국외 이전 동의(0008_ai_consents.sql)
+// MARK: AI 국외 이전 동의(0010_ai_consents.sql)
 
 /**
  * 이 사용자의 동의 행을 읽는 함수 — index.ts는 서버 키 클라이언트로
@@ -69,7 +69,7 @@ export function createReadAiConsentVersion(query: AiConsentQuery | null): (userI
   };
 }
 
-// MARK: 요청 한도(0008_ai_consents.sql llm_consume_quota 5인자 · llm_refund_quota)
+// MARK: 요청 한도(0010_ai_consents.sql llm_consume_quota 5인자 · llm_refund_quota)
 
 export interface QuotaArgs {
   p_user_id: string;

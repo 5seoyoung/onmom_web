@@ -148,7 +148,7 @@ describe("Edge Function chat", () => {
     expect(JSON.stringify(logs)).not.toContain("죽고");
   });
 
-  describe("AI 국외 이전 동의 — 로그인 확인 뒤, 한도·LLM 전에(0008_ai_consents.sql)", () => {
+  describe("AI 국외 이전 동의 — 로그인 확인 뒤, 한도·LLM 전에(0010_ai_consents.sql)", () => {
     it("지금 판의 동의 기록이 있으면 진행 — 순서: 로그인 → 동의 → 한도 → LLM, 동의는 확인된 사용자 id로만 읽는다", async () => {
       const { handler, calls } = setup({ user: { id: "verified-user-9", guest: false } });
       const res = await handler(post(ask()));
