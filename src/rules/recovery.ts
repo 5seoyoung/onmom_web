@@ -225,9 +225,10 @@ export function hasRedFlag(output: EngineOutput): boolean {
 
 // MARK: - 결과 화면 표시 범위
 //
-// ⚠️ CPO 결정 대기(감사 #3): 기록 탭에서 레드플래그가 켜져 있어도 iOS 분석 화면은 "가능" 운동과
-// 추천 영상을 그대로 보여준다(분석은 증상을 받지 않아 hospitalSignal이 늘 null). 운동 탭·홈은 멈추는데
-// 분석만 권하는 셈이다. 결정 전까지 기본값은 iOS 동작(숨기지 않음)이고, 분석 결과 자체는 바꾸지 않는다.
+// 감사 #3: 기록 탭에서 레드플래그가 켜져 있어도 iOS 분석 화면은 "가능" 운동과 추천 영상을 그대로
+// 보여준다(분석은 증상을 받지 않아 hospitalSignal이 늘 null). 운동 탭·홈은 멈추는데 분석만 권하는 셈이다.
+// 웹 분석 화면은 D1(DEV_NOTES §6)대로 가린다 — analyzeModel이 suppressExerciseOnRedFlag: true로 부른다.
+// 옵션을 끄면 iOS 동작(숨기지 않음)이다. 분석 결과 자체는 바꾸지 않는다.
 
 export interface AnalysisSections {
   allowed: boolean;
