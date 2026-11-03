@@ -333,7 +333,7 @@ describe("다시 동의(?consent=1)", () => {
 
     // 서버 저장 빌드(requireCurrentConsent = true): 지금 판의 동의가 없으면 "consent"
     expect(rootScreenFor(signedInSnapshot(oldConsent), true)).toBe("consent");
-    // 설정 없는 빌드는 그대로 앱(지금 배포와 같음)
+    // 설정 없는 빌드(브라우저 전용)는 그대로 앱
     expect(rootScreenFor(signedInSnapshot(oldConsent), false)).toBe("main");
 
     // 앱의 어느 주소로 와도(설정·홈·로그인) 다시 동의 주소로 — 온보딩 주소에서만 그린다(쿼리 없이 와도)

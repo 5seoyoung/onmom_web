@@ -6,7 +6,7 @@
 //
 // 모두 웹 신규 문구 — CPO 확인 필요 (법률 검토 전 초안)
 
-/** 계정 정보 — 게스트 = Supabase 익명 사용자, 카카오 = Supabase 카카오 로그인(동의항목: docs/SUPABASE_SETUP.md 4-6) */
+/** 계정 정보 — 게스트 = Supabase 익명 사용자, 카카오 = Supabase 카카오 로그인(동의항목: docs/SUPABASE_SETUP.md A-7) */
 export const ACCOUNT_ITEMS =
   "이용자 식별자(게스트는 임의로 만든 식별자, 카카오 로그인은 카카오 회원번호와 카카오에서 제공에 동의한 닉네임·카카오계정(이메일)·프로필 사진 주소)";
 

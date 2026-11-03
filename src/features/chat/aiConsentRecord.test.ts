@@ -169,7 +169,7 @@ describe("afterAiConsentRecord — 방금 동의한 계정의 AI 요청은 기�
   });
 });
 
-describe("브라우저 기본값 — Supabase가 없는 빌드(지금 공개 사이트)는 네트워크 없이 건너뛴다", () => {
+describe("브라우저 기본값 — Supabase가 없는 빌드(브라우저 전용)는 네트워크 없이 건너뛴다", () => {
   it("canRecord는 설정·저장된 세션만 본다(이 테스트 빌드는 Supabase 없음) → skipped, fetch 없음", async () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);

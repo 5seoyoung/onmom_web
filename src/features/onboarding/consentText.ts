@@ -1,5 +1,5 @@
 // 온보딩 동의 단계 — 서버 저장 빌드(Supabase 설정 있음)의 문구. 개인정보보호법에 맞춘 초안이며 CPO·법률 검토 전이다.
-// 설정이 없는 빌드(지금 배포)는 iOS 원문 동의(onboardingModel.ts ONBOARDING_TEXT.consent*)를 그대로 쓴다.
+// 설정이 없는 빌드(브라우저 전용)는 iOS 원문 동의(onboardingModel.ts ONBOARDING_TEXT.consent*)를 그대로 쓴다.
 //
 // 동의 구조 — docs/privacy/CONSENT_AND_POLICY_DRAFT.md
 // - 필수 (a) 개인정보 수집·이용(법 §15②: 항목·목적·보유 기간·거부 권리와 불이익을 알린다)

@@ -74,7 +74,7 @@ describe("youtubeActiveFor — 실을 영상이 있고 웹 처리방침 초안(G
 });
 
 describe("영상이 실린 빌드 — Supabase 설정이 있을 때만 켜진다", () => {
-  it("Supabase 없는 빌드(지금 공개 사이트): iOS 처리방침 원문 · 운동 탭 목록 없음 · CSP에 i.ytimg.com 없음", async () => {
+  it("Supabase 없는 빌드(브라우저 전용): iOS 처리방침 원문 · 운동 탭 목록 없음 · CSP에 i.ytimg.com 없음", async () => {
     const b = await build(false);
     expect(b.configured).toBe(false);
     expect(b.catalog.YOUTUBE_VIDEOS.map((v) => v.videoId)).toEqual([VIDEO_ID]); // 실려는 있다

@@ -7,7 +7,7 @@
 //   (OnboardingFlowView.swift:6-10). 웹은 빈 값이 곧 "안 고름"이다. 오늘보다 뒤(직접 입력)도 고르지 않은 것으로 본다.
 //
 // 동의 단계는 빌드에 따라 둘(ConsentKind):
-// - "local"  — Supabase 설정이 없는 빌드(지금 배포). iOS 원문 그대로 토글 하나. 기록은 이 브라우저에만 남는다.
+// - "local"  — Supabase 설정이 없는 빌드(브라우저 전용). iOS 원문 그대로 토글 하나. 기록은 이 브라우저에만 남는다.
 //              consentVersion은 null로 둔다 — 이 동의는 서버 저장 동의가 아니므로, 나중에 Supabase를 켜면 관문이 다시 묻는다.
 // - "server" — Supabase 설정이 있는 빌드. 필수 동의 셋(개인정보 수집·이용 / 민감정보 / 만 14세 이상)을 따로 받는다(consentText.ts).
 //              모두 켜면 consentVersion = CURRENT_CONSENT_VERSION — 이 값이 있어야 서버 동기화가 올린다(hasCurrentConsent).

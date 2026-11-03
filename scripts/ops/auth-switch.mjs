@@ -111,7 +111,7 @@ async function main(argv) {
   console.log(
     enable
       ? "다시 켰습니다. 사이트에서 [게스트로 시작]·카카오 로그인을 한 번씩 확인합니다."
-      : "껐습니다. 이미 로그인한 세션은 그대로입니다. 사이트 화면은 바뀌지 않으므로(버튼은 보임) 필요하면 사이트 Variables로도 끕니다(docs/RUNBOOK.md). 다시 켜기: --on",
+      : "껐습니다. 이미 로그인한 세션은 그대로입니다. 사이트 화면은 바뀌지 않으므로(버튼은 보임) 필요하면 deploy.yml의 ONMOM_SITE_MODE를 browser로 커밋해 사이트에서도 끕니다(docs/RUNBOOK.md 3-8). 다시 켜기: --on",
   );
 }
 

@@ -6,7 +6,7 @@
 //   키가 없는 빌드(내 컴퓨터·e2e)는 늘 같은 결과(유튜브 목록 없음, 요청 없음).
 // - 실제로 싣는 것은 두 파일을 다시 맞춘 결과(resolveCatalog)뿐이다. 허용 목록에서 빠진 영상은 낡은 생성 파일에 남아 있어도 보이지 않는다.
 // - Supabase 설정이 있는 빌드에서만 켠다(youtubeActiveFor): 미리보기 이미지를 주는 Google(YouTube)은 웹 처리방침 초안(webPolicyText.ts)에만
-//   적혀 있고, 그 초안은 Supabase 빌드에서만 보인다(features/privacy/policy.ts activePolicy). Supabase가 없는 빌드(지금 공개 사이트)는
+//   적혀 있고, 그 초안은 Supabase 빌드에서만 보인다(features/privacy/policy.ts activePolicy). Supabase가 없는 빌드(브라우저 전용)는
 //   iOS 처리방침 원문을 보이는데 거기에는 Google이 없다 — 그 빌드에서는 영상이 실려 있어도 목록·요청이 없다.
 // YOUTUBE_ACTIVE가 false면 운동 탭에 목록이 없고(YOUTUBE_SHOWN_VIDEOS가 빈 목록), CSP img-src에 i.ytimg.com을 넣지 않으며(src/csp.ts),
 // 처리방침에 Google을 적지 않는다.

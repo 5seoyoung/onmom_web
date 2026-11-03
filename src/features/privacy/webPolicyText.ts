@@ -1,5 +1,5 @@
 // 웹 개인정보처리방침 — 초안(법률 검토 전). Supabase 설정이 있는 빌드(서버 저장·카카오 로그인·게스트 익명 계정)에서 보인다.
-// 설정이 없는 빌드(지금 배포)는 iOS 원문(policyText.ts)을 그대로 보인다 — policy.ts policyFor.
+// 설정이 없는 빌드(브라우저 전용)는 iOS 원문(policyText.ts)을 그대로 보인다 — policy.ts policyFor.
 //
 // 구성은 개인정보보호법 §30·시행령 §31의 기재 사항 순서(목적·항목·보유·위탁·국외 이전·제3자 제공·민감정보·아동·
 // 자동 수집 장치·안전성 확보 조치·권리·책임자·구제·변경). 검토용 요약과 체크리스트: docs/privacy/CONSENT_AND_POLICY_DRAFT.md

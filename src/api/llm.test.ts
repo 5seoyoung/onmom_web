@@ -349,7 +349,7 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     expect(res).toEqual({ ok: false, kind: "server", message: LLM_MESSAGES.server, status: 502 });
   });
 
-  it("예전 NEXT_PUBLIC_LLM_URL 경로는 실패 본문을 읽지 않는다(지금 배포와 같다)", async () => {
+  it("예전 NEXT_PUBLIC_LLM_URL 경로는 실패 본문을 읽지 않는다(브라우저 전용 빌드)", async () => {
     stubFetch(async () => jsonResponse(403, { ok: false, code: AI_CONSENT_REQUIRED_CODE }));
     const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: testConfig });
     expect(res).toEqual({ ok: false, kind: "server", message: LLM_MESSAGES.server, status: 403 });

@@ -213,7 +213,7 @@ describe("ServerConsentStep — 화면", () => {
 });
 
 describe("ConsentStep — 설정 없는 빌드는 iOS 원문 그대로", () => {
-  it("토글 하나와 iOS 안내 3줄 — [동의하지 않고 나가기]는 없다(지금 배포와 같음)", () => {
+  it("토글 하나와 iOS 안내 3줄 — [동의하지 않고 나가기]는 없다(브라우저 전용 빌드)", () => {
     const markup = renderToStaticMarkup(
       h(ConsentStep, { draft: initialDraft(defaultProfile()), onChange: () => {}, headingRef: null, onOpenPolicy: () => {} }),
     );

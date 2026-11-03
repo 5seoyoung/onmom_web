@@ -2,7 +2,7 @@
 import { vi } from "vitest";
 import type { BackendConfig } from "./http";
 
-/** Supabase가 없는 빌드(지금 배포)와 같은 설정 — 예전 주소를 직접 부른다 */
+/** Supabase가 없는 빌드(브라우저 전용)와 같은 설정 — 예전 주소를 직접 부른다 */
 export const testConfig: BackendConfig = {
   videoURL: "https://video.onmom.test",
   llmURL: "https://llm.onmom.test",

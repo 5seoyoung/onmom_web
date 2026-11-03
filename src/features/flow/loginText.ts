@@ -20,7 +20,7 @@ export const LOGIN_TEXT = {
 
 /**
  * [개인정보처리방침 보기] 위의 한 줄.
- * - 설정 없는 빌드(지금 배포 — 기록은 이 브라우저에만): iOS 원문 그대로.
+ * - 설정 없는 빌드(브라우저 전용 — 기록은 이 브라우저에만): iOS 원문 그대로.
  * - 서버 저장 빌드(Supabase 설정 있음): 알림만 — 로그인·게스트 시작을 민감정보 처리 동의로 보지 않는다(동의는 온보딩 동의 단계).
  */
 export function loginConsentText(supabaseConfigured: boolean): string {

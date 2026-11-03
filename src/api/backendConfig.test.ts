@@ -1,4 +1,4 @@
-// 빌드 설정(NEXT_PUBLIC_*) → 영상·AI가 어디로 가는지. 설정이 없는 빌드(지금 배포)는 예전과 똑같아야 한다.
+// 빌드 설정(NEXT_PUBLIC_*) → 영상·AI가 어디로 가는지. 설정이 없는 빌드(브라우저 전용)는 예전과 똑같아야 한다.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const SUPABASE = {

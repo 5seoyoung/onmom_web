@@ -5,7 +5,7 @@
 //   Authorization = 이 브라우저의 Supabase 로그인 토큰(익명 게스트 포함), apikey = 공개 키. Anthropic 키는 함수 비밀에만 있다.
 //   보내는 것: preset · 대화(최근 20개, 각 2000자) · 컨텍스트 {week, delivery, breastfeeding}뿐(검수 #14 — BMI·목표·위험 신호 여부 없음).
 //   시스템 프롬프트·모델·토큰 수는 함수가 정한다 — max_tokens도 보내지 않는다(함수가 모르는 필드는 거절한다).
-// - 설정이 없는 빌드(지금 배포): 예전처럼 NEXT_PUBLIC_LLM_URL의 POST /chat → { text } (비어 있으면 notConfigured).
+// - 설정이 없는 빌드(브라우저 전용): 예전처럼 NEXT_PUBLIC_LLM_URL의 POST /chat → { text } (비어 있으면 notConfigured).
 // - 서버 쪽 AI 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)가 꺼져 있으면 함수는 503 { code: "ai_disabled" }로 답한다 — 웹의 스위치가
 //   켜져 있어도 "AI 미설정"(notConfigured)과 똑같이 다루고(상담은 앱 규칙 안내, 약물은 표의 "정보 부족"), 그 함수에는 이 페이지에서
 //   다시 묻지 않는다(serverAiOff — 질문마다 요청·배너가 되풀이되지 않게). 새로 고치면 다시 확인한다.
