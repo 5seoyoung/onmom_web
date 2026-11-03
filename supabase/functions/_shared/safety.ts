@@ -149,7 +149,7 @@ const BLOOD_AFTER = "가|를|도|만|이|랑|와|하고|나|났|난|좀|계속|�
 /**
  * 출혈 키워드 "피"(content.json chat_fallback.bleeding_keywords)를 품은 다른 낱말 — 앱 규칙 폴백(src/rules/chat.ts)만 쓴다
  * (함수에는 출혈 분기가 없다. 목록을 한곳에서 검토하도록 여기 함께 둔다).
- * 뒤 꼴을 보는 낱말: 피로(피+로 "피로 젖었어요"), 피부(피 부족), 피자(피 자국·자꾸·자주), 피하(피 하고·하루·하혈·하나),
+ * 뒤 꼴을 보는 낱말: 피로(피+로 "피로 젖었어요"), 커피(커피색·커피빛 — 분비물 색), 피부(피 부족·피 부터), 피자(피 자국·자꾸·자주), 피하(피 하고·하루·하혈·하나),
  * 해피(어떡해+피가), 피난(피 난다), 피드·피크·피동·피의자(피 드디어·크게·동반·자국) — 띄어 쓰지 않은 꼴은 피(血)일 수 있다.
  */
 export const BLEEDING_BENIGN_WORDS: readonly BenignPhrase[] = [
@@ -162,8 +162,9 @@ export const BLEEDING_BENIGN_WORDS: readonly BenignPhrase[] = [
       "[가를는도감해하한증와랑에만]|로|까지|회복|누적|골절|때문|쌓|풀|물질|\\s*(?:$|[.,!?~ㅠㅜ])|\\s+(?:회복|누적|때문|쌓|풀|해소|증상|증후군|골절)",
     keepIfFollowedBy: "가득",
   },
-  { phrase: "커피" },
-  { phrase: "피부", keepIfFollowedBy: "족|분" },
+  // "커피색 분비물"·"커피빛 오로"는 오래된 피의 색이라 남긴다
+  { phrase: "커피", keepIfFollowedBy: "\\s*(?:색|빛)" },
+  { phrase: "피부", keepIfFollowedBy: "족|분|터" },
   { phrase: "피임" },
   { phrase: "피자", keepIfFollowedBy: "국|꾸|주" },
   { phrase: "피아노" },
