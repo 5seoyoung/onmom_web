@@ -54,6 +54,8 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
 
       <Card className="flex flex-col gap-4">
         <SectionTitle id={deliveryTitleId}>{ANALYZE_TEXT.deliverySection}</SectionTitle>
+        {/* 선택된 분할 버튼 — iOS의 primary 면·흰 글씨(2.76:1) 대신 coral-tint 면 · primary-text 글씨(5.00:1) · primary-strong 2px 테두리
+            (선택 표시 4.63:1 — 비텍스트 3:1, DEV_NOTES §3 CPO 12) */}
         <div role="radiogroup" aria-labelledby={deliveryTitleId} className="flex gap-2">
           {DELIVERY_OPTIONS.map((opt) => {
             const selected = values.deliveryMethod === opt.value;
@@ -63,7 +65,7 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
                 className={cx(
                   "flex min-h-11 flex-1 cursor-pointer items-center justify-center rounded-button border px-4 py-2.5 text-center text-[0.9375rem] font-semibold has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
                   selected
-                    ? "border-primary bg-primary text-white forced-colors:border-[3px] forced-colors:border-[Highlight]"
+                    ? "border-primary-strong bg-coral-tint text-primary-text inset-ring inset-ring-primary-strong forced-colors:border-[3px] forced-colors:border-[Highlight]"
                     : "border-divider bg-surface text-text-primary forced-colors:border-[CanvasText]",
                 )}
               >

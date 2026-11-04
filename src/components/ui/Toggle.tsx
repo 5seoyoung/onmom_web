@@ -21,9 +21,11 @@ export interface ToggleProps {
 
 // iOS Toggle(.tint primary) — 라벨 왼쪽, 스위치 오른쪽.
 // 스위치는 button role="switch"; <label for>로 이름을 붙여 라벨을 눌러도 켜지고 꺼진다.
-// 트랙 51×31, 손잡이 27(iOS 기본 크기). 누르는 영역은 높이 44.
+// 트랙 51×31, 손잡이 27(iOS 기본 크기 — 꺼짐에서는 75%). 누르는 영역은 높이 44.
 // 켜짐/꺼짐은 색과 함께 손잡이 위치로도 보인다. 고대비(강제 색) 모드에서는 배경·그림자가 지워지므로
 // 트랙은 시스템 색 윤곽선(outline — 크기를 바꾸지 않는다), 손잡이는 CanvasText로 채워 위치가 보이게 한다.
+// 색(비텍스트 3:1 — DEV_NOTES §3 CPO 12): 켬 = primary-strong·state-alert-strong 트랙 + 흰 손잡이(4.63:1),
+// 꺼짐 = 흰 트랙 + control-off 1.5 테두리 + control-off 손잡이(3.36:1). iOS 꺼짐 트랙(text-subtle 50%)은 1.65:1.
 export function Toggle({
   label,
   description,
@@ -46,7 +48,7 @@ export function Toggle({
     onCheckedChange?.(next);
   }
 
-  const onColor = variant === "alert" ? "bg-state-alert" : "bg-primary";
+  const onColor = variant === "alert" ? "bg-state-alert-strong" : "bg-primary-strong";
 
   return (
     <div className="flex w-full items-center justify-between gap-4">
@@ -74,13 +76,13 @@ export function Toggle({
           aria-hidden
           className={cx(
             "flex h-7.75 w-12.75 items-center rounded-full p-0.5 transition-colors duration-200 motion-reduce:transition-none forced-colors:outline forced-colors:outline-[CanvasText]",
-            on ? onColor : "bg-text-subtle/50",
+            on ? onColor : "bg-surface inset-ring-[1.5px] inset-ring-control-off",
           )}
         >
           <span
             className={cx(
-              "size-6.75 rounded-full bg-surface shadow-[0_0.1875rem_0.5rem_rgb(0_0_0/0.15)] transition-transform duration-200 motion-reduce:transition-none forced-colors:bg-[CanvasText]",
-              on && "translate-x-5",
+              "size-6.75 rounded-full transition-transform duration-200 motion-reduce:transition-none forced-colors:bg-[CanvasText]",
+              on ? "translate-x-5 bg-surface shadow-[0_0.1875rem_0.5rem_rgb(0_0_0/0.15)]" : "scale-75 bg-control-off",
             )}
           />
         </span>

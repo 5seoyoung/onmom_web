@@ -11,7 +11,8 @@ import { UI_TEXT } from "./uiText";
  *      아이콘은 iOS 원색 코랄 그대로 — aria-hidden 장식이라 대비 요구 대상이 아니고, 뜻은 sr-only "출처:"가 전한다.
  *      currentColor를 물려받으면 글자 토큰으로 어두워지므로 text-primary를 명시. docs/ACCESSIBILITY.md §2)
  *   - 근거 설명 칩: textSecondary 글씨 + background(#F9FAFB) 배경
- * inverse = RedFlagCard 안(AnalyzeResultView.swift:221-228): 둘 다 흰 글씨 + 흰 22% 배경, 아이콘 없음
+ * inverse = RedFlagCard 안(AnalyzeResultView.swift:221-228): 둘 다 흰 글씨, 아이콘 없음. iOS의 흰 22% 채움은 짙은 코랄 카드 위에서도
+ *   3.31:1이라 채움 없이 흰 60% 테두리만 둔다 — 글자 대비는 카드 면 그대로 4.63:1(DEV_NOTES §3 CPO 12)
  * 06 §5의 "divider 배경 / 출처는 회색"은 오기(검수 #26).
  */
 export type EvidenceChipTone = "default" | "inverse";
@@ -29,7 +30,7 @@ export function EvidenceChip({ token, tone = "default" }: EvidenceChipProps) {
 
   if (tone === "inverse") {
     return (
-      <span className="inline-flex items-center rounded-full bg-white/22 px-2 py-1 text-xs font-medium text-white">
+      <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium text-white inset-ring inset-ring-white/60">
         {sourceHint}
         {text}
       </span>

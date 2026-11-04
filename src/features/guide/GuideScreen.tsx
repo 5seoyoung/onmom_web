@@ -35,16 +35,17 @@ export function GuideScreen() {
   );
 }
 
-// 즉시 내원 신호 강조 카드 — GuideView.swift:106-133 (stateAlert 배경 · 흰 글씨 · 패딩 lg · 간격 sm)
+// 즉시 내원 신호 강조 카드 — GuideView.swift:106-133 (배경 전면 · 흰 글씨 · 패딩 lg · 간격 sm).
+// 배경은 iOS의 stateAlert(흰 글씨 2.76:1) 대신 state-alert-strong(4.63:1), 출처 줄은 흰 85%(3.76:1) 대신 흰 글씨(DEV_NOTES §3 CPO 12).
 function RedFlagSignsCard({ flags }: { flags: readonly string[] }) {
   return (
     <section
       aria-labelledby={RED_FLAG_HEADING_ID}
-      className="flex w-full flex-col gap-2 rounded-card bg-state-alert p-6 text-white"
+      className="flex w-full flex-col gap-2 rounded-card bg-state-alert-strong p-6 text-white"
     >
       <div className="flex items-center gap-2">
         {/* exclamationmark.triangle.fill — 흰 삼각형 안에 배경색 느낌표 */}
-        <TriangleAlert aria-hidden className="size-5 shrink-0 fill-white text-state-alert" />
+        <TriangleAlert aria-hidden className="size-5 shrink-0 fill-white text-state-alert-strong" />
         <h2 id={RED_FLAG_HEADING_ID} className="text-base font-bold">
           {GUIDE_TEXT.redFlagTitle}
         </h2>
@@ -60,7 +61,7 @@ function RedFlagSignsCard({ flags }: { flags: readonly string[] }) {
           </li>
         ))}
       </ul>
-      <p className="pt-0.5 text-[0.6875rem] font-medium text-white/85">{GUIDE_TEXT.redFlagSource}</p>
+      <p className="pt-0.5 text-[0.6875rem] font-medium text-white">{GUIDE_TEXT.redFlagSource}</p>
     </section>
   );
 }

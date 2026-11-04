@@ -3,7 +3,8 @@
 /* 디자인 토큰 — iOS Theme.swift / 06_DESIGN.md.
    라이트 모드 하나(iOS도 라이트 고정). 코랄은 CTA·핵심 강조에만.
    ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다(docs/DEV_NOTES.md §3 CPO 12).
-      iOS 원색은 아이콘·배경·테두리용으로 그대로 두고, 글자에는 아래 "글자 전용" 토큰을 쓴다(기본값 — CPO가 되돌릴 수 있음, docs/ACCESSIBILITY.md). */
+      iOS 원색은 아이콘·배경·테두리용으로 그대로 두고, 글자에는 아래 "글자 전용" 토큰을 쓴다(CPO 12 결정, docs/ACCESSIBILITY.md).
+      흰 글씨가 올라가는 면·스위치 켬 트랙·선택 테두리에는 "strong"(짙은 코랄), 스위치 꺼짐에는 control-off를 쓴다(CPO 12 결정). */
 @theme {
   --color-primary: #fb6f6f;
   --color-coral-tint: #fff0f0;
@@ -25,12 +26,17 @@
   /* 글자 전용 색(WCAG AA 4.5:1) — iOS 원색(위)을 글자로 쓰면 흰 배경에서 1.8~3.0:1이라 못 읽는 사람이 있다.
      같은 색상(hue)을 짙게만 한 값. 원색이 깔린 배경(배지 12%·15%, 출처 칩 primary 10%, coral-tint, background, divider) 위에서도
      모두 4.5:1 이상(components/ui/contrast.test.ts가 잰다). 아이콘·배경·테두리에는 쓰지 않는다 — 그건 원색 그대로.
-     기본값(CPO 12 결정 전) — iOS 색으로 되돌리려면 여기 값만 원색으로 바꾸면 모든 화면에 한 번에 적용된다. */
+     CPO 12 결정으로 유지 — iOS 색으로 되돌리려면 여기 값만 원색으로 바꾸면 모든 화면에 한 번에 적용된다. */
   --color-state-normal-text: #0c7449;
   --color-state-watch-text: #9a5b00;
   --color-state-alert-text: #bf3636;
   --color-primary-text: #bf3636; /* 코랄 글자(출처 칩·활성 메뉴·NRS 값) — primary와 state-alert가 같은 색이라 alert-text와 같다 */
   --color-text-subtle-aa: #646e7b; /* text-subtle(#8b95a1, 3.0:1) 대신 쓰는 보조 글자 — placeholder·면책·안내 */
+  /* 짙은 코랄 면 — 흰 글씨(4.5:1)·비텍스트(3:1)가 올라가는 면 전용(CPO 12). 원색(primary·state-alert)은 아이콘·연한 배경용 그대로 */
+  --color-primary-strong: #d04242;
+  --color-state-alert-strong: #d04242;
+  /* 스위치 꺼짐 트랙·테두리(비텍스트 3:1 — surface 3.36 · background 3.21) */
+  --color-control-off: #848d99;
 
   --radius-card: 1.25rem; /* 20 */
   --radius-button: 0.875rem; /* 14 */
@@ -85,7 +91,7 @@ body {
     outline-color: var(--color-surface);
   }
 
-  /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 CPO 결정(docs/DEV_NOTES.md §3 CPO 12) 전까지 그대로. */
+  /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 기본값이 이미 AA(docs/DEV_NOTES.md §3 CPO 12)라 그대로. */
   @media (prefers-contrast: more) {
     :focus-visible {
       outline-width: 3px;

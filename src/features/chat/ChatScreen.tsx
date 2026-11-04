@@ -302,7 +302,7 @@ export function ChatScreen() {
           onMouseDown={(e) => e.preventDefault()}
           className="group flex size-11 shrink-0 items-center justify-center rounded-full disabled:cursor-not-allowed"
         >
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary text-white group-disabled:bg-divider">
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary-strong text-white group-disabled:bg-divider">
             <ArrowUp aria-hidden className="size-5" strokeWidth={2.75} />
           </span>
         </button>
@@ -326,7 +326,8 @@ function FallbackNotice({ text }: { text: string }) {
   );
 }
 
-// 말풍선 — 16 · 라운드 18 · 좌우 16 위아래 8, 사용자는 오른쪽 primary/흰 글씨, 온맘은 왼쪽 surface(ChatView.swift:199-219).
+// 말풍선 — 16 · 라운드 18 · 좌우 16 위아래 8, 사용자는 오른쪽, 온맘은 왼쪽 surface(ChatView.swift:199-219).
+// 사용자 말풍선은 iOS의 primary/흰 글씨(2.76:1) 대신 coral-tint/text-primary(14.96:1). 보내기 버튼은 primary-strong(DEV_NOTES §3 CPO 12).
 // 온맘 말풍선 아래 12px 표시(앱 안내 / AI 답변 …) — 인사말에는 없다. 웹 신규(iOS는 배너만 — ChatView.swift:61-74).
 // 테스트(chatMarkup.test.ts)가 따로 그려 본다 — AI 답에 전화 링크가 생기지 않는지, 앱 안내의 안전 연계 번호가 링크인지.
 export function ChatBubble({ message }: { message: ChatBubbleMessage }) {
@@ -338,7 +339,7 @@ export function ChatBubble({ message }: { message: ChatBubbleMessage }) {
       <p
         className={cx(
           "whitespace-pre-wrap rounded-[1.125rem] px-4 py-2 text-base",
-          isUser ? "bg-primary text-white" : "bg-surface text-text-primary",
+          isUser ? "bg-coral-tint text-text-primary" : "bg-surface text-text-primary",
         )}
       >
         <span className="sr-only">{SPEAKER_SR_LABEL[message.role]}</span>

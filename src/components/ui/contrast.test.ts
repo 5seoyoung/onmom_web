@@ -77,6 +77,7 @@ describe("색 토큰(globals.css @theme)", () => {
       "primary", "neutral", "background", "surface", "divider", "coral-tint",
       "state-normal", "state-watch", "state-alert", "text-primary", "text-secondary", "text-subtle",
       "focus-ring", "state-normal-text", "state-watch-text", "state-alert-text", "primary-text", "text-subtle-aa",
+      "primary-strong", "state-alert-strong", "control-off",
     ]) {
       expect(C[name], name).toMatch(/^#[0-9a-f]{6}$/);
     }
@@ -216,25 +217,75 @@ describe("공용 컴포넌트는 글자에 글자 전용 토큰을 쓴다(원색
   });
 });
 
-// ─── iOS 원색을 글자로 쓰면 — 못 미침(그래서 글자 전용 토큰을 쓴다). 원색이 바뀌어 통과하면 아래가 실패하니 그때 토큰을 거둔다. ───
-describe("iOS 원색 글자(DEV_NOTES §3 CPO 12 — it.fails = 지금은 못 미침)", () => {
-  it.fails("흰 글씨 / primary 코랄(레드플래그 카드 라벨 15 bold — 큰 글씨 기준 3:1도 못 미침)", () => {
-    expect(contrast(WHITE, C["state-alert"])).toBeGreaterThanOrEqual(AA_LARGE);
+// ─── iOS 원색을 글자로 쓰면 못 미친다 — CPO 12 결정(원색은 글자·흰 글씨 바탕에 쓰지 않는다). 결정 전에는 it.fails(기대 실패)였다. ───
+// 원색이 바뀌어 통과하게 되면 아래가 실패한다 — 그때 글자 전용·strong 토큰을 거둘지 다시 정한다(docs/ACCESSIBILITY.md §4).
+describe("iOS 원색 글자는 AA에 못 미친다 — 그래서 글자 전용 토큰·strong 면을 쓴다(DEV_NOTES §3 CPO 12)", () => {
+  it("흰 글씨 / 원색 코랄(state-alert)은 큰 글씨 3:1도 못 미친다 — 레드플래그 카드는 state-alert-strong", () => {
+    expect(contrast(WHITE, C["state-alert"])).toBeLessThan(AA_LARGE);
   });
 
-  it.fails("text-subtle(면책·placeholder) / surface 4.5:1", () => {
-    expect(contrast(C["text-subtle"], C.surface)).toBeGreaterThanOrEqual(AA_TEXT);
+  it("text-subtle(면책·placeholder) / surface는 4.5:1 미만 — 글자는 text-subtle-aa", () => {
+    expect(contrast(C["text-subtle"], C.surface)).toBeLessThan(AA_TEXT);
   });
 
-  it.fails("state-watch 글자('{단계} 제외 — 사유' 줄) / surface 4.5:1", () => {
-    expect(contrast(C["state-watch"], C.surface)).toBeGreaterThanOrEqual(AA_TEXT);
+  it("state-watch 원색 글자('{단계} 제외 — 사유' 줄) / surface는 4.5:1 미만 — 글자는 state-watch-text", () => {
+    expect(contrast(C["state-watch"], C.surface)).toBeLessThan(AA_TEXT);
   });
 
-  it.fails("상태 배지 글자(state 원색) / 12% 같은 색 배경(surface 위) 4.5:1", () => {
-    for (const s of STATES) expect(contrast(C[`state-${s}`], blend(C[`state-${s}`], 0.12, C.surface))).toBeGreaterThanOrEqual(AA_TEXT);
+  it("상태 배지 원색 글자 / 12% 같은 색 배경(surface 위)은 4.5:1 미만 — 글자는 state-*-text", () => {
+    for (const s of STATES) expect(contrast(C[`state-${s}`], blend(C[`state-${s}`], 0.12, C.surface)), s).toBeLessThan(AA_TEXT);
   });
 
-  it.fails("출처 칩 글자(primary 원색) / primary 10% 배경 4.5:1", () => {
-    expect(contrast(C.primary, blend(C.primary, 0.1, C.surface))).toBeGreaterThanOrEqual(AA_TEXT);
+  it("출처 칩 원색 글자 / primary 10%는 4.5:1 미만 — 글자는 primary-text", () => {
+    expect(contrast(C.primary, blend(C.primary, 0.1, C.surface))).toBeLessThan(AA_TEXT);
+  });
+});
+
+describe("짙은 코랄 면(strong) — 흰 글씨 4.5:1 · 비텍스트 3:1 (CPO 12)", () => {
+  it("흰 글씨 / state-alert-strong·primary-strong 4.5:1 이상 — 레드플래그 카드(라벨 15 bold·문구 18 bold·칩 12)·보내기 버튼", () => {
+    for (const bg of [C["state-alert-strong"], C["primary-strong"]]) expect(contrast(WHITE, bg), bg).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
+  it("strong은 surface·background·coral-tint 위에서 3:1 이상 — 스위치 켬 트랙·선택 테두리·보내기 버튼", () => {
+    for (const fg of [C["state-alert-strong"], C["primary-strong"]]) {
+      for (const bg of [C.surface, C.background, C["coral-tint"]]) expect(contrast(fg, bg), `${fg} / ${bg}`).toBeGreaterThanOrEqual(AA_NON_TEXT);
+    }
+  });
+
+  it("strong은 원색과 같은 색상(hue ±10°)을 짙게만 한 값", () => {
+    expect(hueDistance(C["state-alert-strong"], C["state-alert"])).toBeLessThanOrEqual(10);
+    expect(hueDistance(C["primary-strong"], C.primary)).toBeLessThanOrEqual(10);
+    expect(luminance(C["state-alert-strong"])).toBeLessThan(luminance(C["state-alert"]));
+    expect(luminance(C["primary-strong"])).toBeLessThan(luminance(C.primary));
+  });
+
+  it("primary와 state-alert가 같은 색이면 primary-strong과 state-alert-strong도 같다", () => {
+    if (C.primary === C["state-alert"]) expect(C["primary-strong"]).toBe(C["state-alert-strong"]);
+  });
+
+  it("포커스 링(neutral)은 strong 면 위에서도 3:1 이상 — 카드 안 링크", () => {
+    expect(contrast(C["focus-ring"], C["state-alert-strong"])).toBeGreaterThanOrEqual(AA_NON_TEXT);
+  });
+
+  it("RedFlagCard는 bg-state-alert-strong + 흰 글씨, 카드 안 칩은 채움 없는 흰 테두리(흰 22% 채움이면 4.5:1 미만)", () => {
+    expect(here("./RedFlagCard.tsx")).toMatch(/bg-state-alert-strong[^"]*text-white/);
+    expect(contrast(WHITE, blend(WHITE, 0.22, C["state-alert-strong"]))).toBeLessThan(AA_TEXT);
+    const chip = here("./EvidenceChip.tsx");
+    expect(chip).not.toContain("bg-white/22");
+    expect(chip).toContain("inset-ring-white/60");
+  });
+});
+
+describe("스위치 — 비텍스트 3:1(WCAG 1.4.11, CPO 12)", () => {
+  it("꺼짐 control-off는 surface·background 위에서 3:1 이상 — 테두리·손잡이", () => {
+    for (const bg of [C.surface, C.background]) expect(contrast(C["control-off"], bg), bg).toBeGreaterThanOrEqual(AA_NON_TEXT);
+  });
+
+  it("Toggle: 켬 state-alert-strong·primary-strong, 꺼짐 control-off(옛 text-subtle 50%는 1.65:1)", () => {
+    const src = here("./Toggle.tsx");
+    expect(src).toContain('"bg-state-alert-strong" : "bg-primary-strong"');
+    expect(src).toContain("inset-ring-control-off");
+    expect(src).not.toContain("bg-text-subtle/50");
+    expect(contrast(blend(C["text-subtle"], 0.5, C.surface), C.surface)).toBeLessThan(AA_NON_TEXT);
   });
 });

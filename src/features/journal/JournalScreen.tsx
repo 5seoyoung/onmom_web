@@ -42,11 +42,12 @@ export function JournalScreen() {
           <div className="min-w-0 flex-1">
             <SectionTitle id={LIST_HEADING_ID}>{JOURNAL_TEXT.sectionTitle}</SectionTitle>
           </div>
-          {/* 글쓰기 캡슐 — primary 배경 · 흰 13 semibold · 패딩 12/7 (CommunityView.swift:58-66).
+          {/* 글쓰기 캡슐 — 13 semibold · 패딩 12/7 (CommunityView.swift:58-66). 색은 iOS의 primary 배경·흰 글씨(2.76:1) 대신
+              홈 [AI 상담]과 같은 coral-tint 배경·primary-text 글씨(5.00:1, DEV_NOTES §3 CPO 12).
               보이는 크기는 iOS대로 두고, 누르는 영역만 위아래로 넓혀 44px 이상을 맞춘다. */}
           <Link
             href={JOURNAL_WRITE_HREF}
-            className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.75 text-[0.8125rem] font-semibold text-white before:absolute before:inset-x-0 before:-inset-y-1.5"
+            className="relative inline-flex shrink-0 items-center gap-1 rounded-full bg-coral-tint px-3 py-1.75 text-[0.8125rem] font-semibold text-primary-text before:absolute before:inset-x-0 before:-inset-y-1.5"
           >
             <SquarePen aria-hidden className="size-3.5" strokeWidth={2.5} />
             {JOURNAL_TEXT.write}

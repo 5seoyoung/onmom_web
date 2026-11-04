@@ -17,18 +17,19 @@ export interface RedFlagCardProps {
 }
 
 // 병원 신호 카드 — AnalyzeResultView.swift:202-239.
-// stateAlert 배경 전면, 흰 글씨, ⚠ 22 + 라벨 15 bold, 문구 18 bold, 칩은 흰 22% 캡슐, 패딩 24.
+// 배경 전면 + 흰 글씨 — iOS의 stateAlert(흰 글씨 2.76:1) 대신 짙은 코랄 state-alert-strong(4.63:1, DEV_NOTES §3 CPO 12).
+// ⚠ 22 + 라벨 15 bold, 문구 18 bold, 칩은 채움 없는 흰 테두리 캡슐(iOS의 흰 22% 채움이면 3.31:1), 패딩 24.
 export function RedFlagCard({ severity, message, chips = [], announce = false }: RedFlagCardProps) {
   // 모르는 severity 코드는 라벨 없이 아이콘만 — 원시 코드를 화면에 내지 않는다
   const label = severityLabel(severity);
   return (
     <div
       role={announce ? "alert" : undefined}
-      className="flex w-full flex-col gap-4 rounded-card bg-state-alert p-6 text-white shadow-[0_0.25rem_1.25rem_color-mix(in_srgb,var(--color-state-alert)_30%,transparent)]"
+      className="flex w-full flex-col gap-4 rounded-card bg-state-alert-strong p-6 text-white shadow-[0_0.25rem_1.25rem_color-mix(in_srgb,var(--color-state-alert-strong)_30%,transparent)]"
     >
       <div className="flex items-center gap-2">
         {/* 채운 삼각형처럼 보이게: 흰 면 + 배경색 느낌표 */}
-        <TriangleAlert aria-hidden className="size-[1.375rem] shrink-0 fill-white text-state-alert" />
+        <TriangleAlert aria-hidden className="size-[1.375rem] shrink-0 fill-white text-state-alert-strong" />
         {label !== null ? <p className="text-[0.9375rem] font-bold">{label}</p> : null}
       </div>
       <p className="text-lg font-bold">{message}</p>

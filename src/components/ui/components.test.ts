@@ -46,10 +46,11 @@ describe("EvidenceChip", () => {
     expect(html).not.toContain("출처");
   });
 
-  it("inverse(레드플래그 카드 안): 흰 22%, 아이콘 없음", () => {
+  it("inverse(레드플래그 카드 안): 채움 없는 흰 테두리 + 흰 글씨, 아이콘 없음", () => {
     const html = render(h(EvidenceChip, { token: "src:ACOG-736", tone: "inverse" }));
     expect(visibleText(html)).toBe("ACOG-736");
-    expect(html).toContain("bg-white/22");
+    expect(html).toContain("inset-ring-white/60");
+    expect(html).not.toContain("bg-white/22");
     expect(html).not.toContain("<svg");
   });
 
@@ -114,7 +115,7 @@ describe("RedFlagCard", () => {
     const html = render(h(RedFlagCard, { severity: "immediate", message: "문구", chips: ["근거", "src:출처명"] }));
     expect(html).toContain(">즉시 내원</p>");
     expect(html).toContain(">문구</p>");
-    expect(html).toContain("bg-state-alert");
+    expect(html).toContain("bg-state-alert-strong");
     expect(html).not.toContain("src:");
     expect(html).not.toContain('role="alert"');
   });

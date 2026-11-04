@@ -67,7 +67,7 @@ describe("입력 폼", () => {
     expect(html).toContain(`<p id="${describedBy}" class="text-[0.8125rem] text-text-secondary">${RECORD_TEXT.neighborhoodHelp}</p>`);
   });
 
-  it("위험 증상을 켜면 경고색(stateAlert), 기본 토글은 primary", () => {
+  it("위험 증상을 켜면 경고색(state-alert-strong), 기본 토글은 primary-strong", () => {
     const html = renderToStaticMarkup(
       h(SymptomFormCards, {
         form: { ...INITIAL_SYMPTOM_FORM, calfPainSwelling: true, feverEvent: true },
@@ -77,8 +77,8 @@ describe("입력 폼", () => {
         onNeighborhoodChange: noop,
       }),
     );
-    expect(count(html, 'bg-state-alert"')).toBe(1);
-    expect(count(html, 'bg-primary"')).toBe(1);
+    expect(count(html, 'bg-state-alert-strong"')).toBe(1);
+    expect(count(html, 'bg-primary-strong"')).toBe(1);
     expect(count(html, 'aria-checked="true"')).toBe(2);
   });
 

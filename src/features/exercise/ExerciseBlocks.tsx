@@ -183,12 +183,13 @@ export function NeedsProfileBlock({ title, body }: { title: string; body: string
   );
 }
 
-/** 운동 영상 추천 전면 중단 — stateAlert 배경, 흰 글씨(ExerciseView.swift:132-150). 영상은 조회하지 않는다. */
+/** 운동 영상 추천 전면 중단 — 배경 전면 + 흰 글씨(ExerciseView.swift:132-150). 배경은 iOS의 stateAlert(2.76:1) 대신 state-alert-strong(4.63:1,
+ *  DEV_NOTES §3 CPO 12). 영상은 조회하지 않는다. */
 export function RedFlagBlock() {
   return (
-    <section className={cx("flex w-full flex-col gap-4 rounded-card bg-state-alert p-6 text-white", BLOCK_WIDTH)}>
+    <section className={cx("flex w-full flex-col gap-4 rounded-card bg-state-alert-strong p-6 text-white", BLOCK_WIDTH)}>
       <h2 className="flex items-center gap-2 text-lg font-bold">
-        <FilledOctagonAlert className="size-6" shapeClassName="fill-white" markClassName="stroke-state-alert" />
+        <FilledOctagonAlert className="size-6" shapeClassName="fill-white" markClassName="stroke-state-alert-strong" />
         {EXERCISE_TEXT.redFlagTitle}
       </h2>
       <p className="text-base">{EXERCISE_TEXT.redFlagBody}</p>
