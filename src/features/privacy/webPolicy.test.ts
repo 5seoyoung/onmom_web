@@ -8,20 +8,25 @@ import { SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { LLM_FUNCTION_MAX_MESSAGES } from "@/api/llm";
 import { PUSH_SERVICE_HOSTS } from "@/features/pwa/reminderModel";
 import { CHAT_MAX_MESSAGES } from "../../../supabase/functions/_shared/chat";
+import { CONTACT_EMAIL } from "@/features/terms/contact";
 import {
+  ACCESS_LOG_ITEMS,
   ACCOUNT_ITEMS,
+  ADMIN_LOG_RETENTION_YEARS,
   AI_CONTEXT_MAX_MESSAGES,
   AI_USAGE_ITEMS,
   AI_USAGE_RETENTION_DAYS,
   ANON_CLEANUP_DAYS,
+  BACKUP_RETENTION_DAYS,
   HEALTH_ITEMS,
   PUSH_ITEMS,
   SETTING_ITEMS,
+  STATS_MIN_GROUP_SIZE,
 } from "./dataItems";
 import { policyFor } from "./policy";
 import { PolicySections, PolicyWebNote } from "./PrivacyPolicy";
 import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_WEB_NOTE } from "./policyText";
-import { WEB_POLICY_DRAFT_LABEL, webPolicySections } from "./webPolicyText";
+import { OPERATOR_NAME, PRIVACY_OFFICER, SERVICE_URL, WEB_POLICY_DRAFT_LABEL, webPolicySections } from "./webPolicyText";
 
 const web = policyFor({ serverStorage: true });
 const ios = policyFor({ serverStorage: false });
@@ -95,6 +100,8 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
       "쿠키",
       "안전성 확보 조치",
       "이용자의 권리",
+      "AI 상담",
+      "의료 관련 고지",
       "보호책임자",
       "권익침해 구제",
       "방침의 변경",
@@ -132,11 +139,18 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
     expect(section("권리")).toContain(`[${SERVER_CONSENT_TEXT.decline}]로 계정과 모든 데이터를 즉시 삭제`);
   });
 
-  it("수탁자·국외 이전 — Supabase(서울 리전·미국 법인), GitHub Pages, 카카오, Anthropic(미국), Render", () => {
+  it("수탁자·국외 이전 — Supabase(계약 주체 Supabase Pte. Ltd.·싱가포르, 저장은 서울), GitHub Pages, 카카오, Anthropic(미국), Render", () => {
     const transfer = section("국외 이전");
-    expect(transfer).toMatch(/Supabase, Inc\. \(미국 법인 · 저장 위치 대한민국 서울 리전\)/);
+    expect(transfer).toContain("② Supabase Pte. Ltd. (싱가포르)");
+    expect(transfer).toContain("대한민국(서울, Amazon Web Services 데이터센터)에 저장합니다");
+    expect(transfer).not.toContain("Supabase, Inc.");
     expect(transfer).toMatch(/Anthropic, PBC \(미국\)/);
     expect(transfer).toMatch(/GitHub, Inc\. \(미국\)/);
+    // 이전받는 자의 연락처(법 §28의8②3) — 공개 고지에서 확인한 주소
+    for (const contact of ["privacy@anthropic.com", "privacy@supabase.com", "privacy@github.com"]) expect(transfer).toContain(`– 연락처: ${contact}`);
+    // 이전의 근거(시행령 §31①2) — AI는 별도 동의(①1), 나머지는 계약 이행에 필요한 처리위탁·보관을 방침에 공개(①3)
+    expect(transfer).toContain("제28조의8제1항제1호");
+    expect(transfer).toContain("같은 항 제3호");
     // 국외 이전 블록마다 법 §28의8② 항목
     for (const word of ["이전 항목", "이전 시기·방법", "목적", "보유 기간", "거부 방법과 효과"]) {
       expect(transfer.split(word).length - 1, word).toBeGreaterThanOrEqual(4);
@@ -144,9 +158,12 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
     // AI에는 질문 내용과 최소 맥락만
     expect(transfer).toContain("질문 내용, 산후 주차, 분만 방식, 수유 여부");
     const processors = section("처리 위탁");
-    for (const name of ["Supabase, Inc.", "GitHub, Inc.", "GitHub Pages", "주식회사 카카오", "Anthropic, PBC", "Render"]) {
+    for (const name of ["Supabase Pte. Ltd.", "GitHub, Inc.", "GitHub Pages", "주식회사 카카오", "Anthropic, PBC", "Render"]) {
       expect(processors).toContain(name);
     }
+    expect(processors).not.toContain("Supabase, Inc.");
+    // 재수탁자 확인 경로(법 §26②)
+    expect(processors).toContain("https://supabase.com/legal/subprocessors");
   });
 
   it("Cloudflare Turnstile은 쓸 때만 적는다", () => {
@@ -156,7 +173,7 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
       .join("\n");
     expect(withTurnstile).toContain("Cloudflare, Inc.");
     expect(withTurnstile).toContain("Turnstile");
-    expect(withTurnstile).toContain("⑤ Cloudflare, Inc. (미국)");
+    expect(withTurnstile).toContain("⑤ Cloudflare, Inc. (미국)\n– 연락처: dpo@cloudflare.com");
   });
 
   it("오래된 게스트 계정 자동 삭제(서버 저장 전이면 30일) — 5절, 늘(Supabase 빌드)", () => {
@@ -215,7 +232,7 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
     expect(transfer).toContain("⑥ Cloudflare, Inc. (미국)");
     // AI 상담 국외 이전은 늘 ①(4절이 "6절 ①"로 가리킨다)
     expect(transfer).toContain("① Anthropic, PBC (미국)");
-    expect(both.find((s) => s.title.includes("동의와 처리 근거"))!.body).toContain("(6절 ①)");
+    expect(both.find((s) => s.title.includes("동의를 받는 방법"))!.body).toContain("(6절 ①)");
   });
 
   it("권리(열람·정정·삭제·처리 정지·동의 철회), 14세 미만, 쿠키·브라우저 저장소, 문의처, 구제 기관", () => {
@@ -223,7 +240,6 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
     expect(section("권리")).toContain("동의를 철회");
     expect(section("만 14세")).toContain("만 14세 미만");
     expect(section("쿠키")).toContain("localStorage");
-    expect(section("보호책임자")).toBe("개인정보 관련 문의: inmani1555@gmail.com");
     for (const n of ["1833-6972", "118", "1301", "182"]) expect(section("구제")).toContain(n);
   });
 
@@ -233,9 +249,111 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
     }
   });
 
-  it("의료 관련 고지는 iOS 원문 그대로", () => {
-    const ios6 = PRIVACY_POLICY_SECTIONS.find((s) => s.title.includes("의료 관련 고지"))!.body;
-    expect(section("의료 관련 고지")).toBe(ios6);
+});
+
+describe("웹 방침 — 2026-11-04 시행판에서 사실에 맞춘 것", () => {
+  it("운영 주체와 서비스 주소(1절) — 개인 이름 없이 '온맘 운영자'", () => {
+    expect(OPERATOR_NAME).toBe("온맘 운영자");
+    expect(SERVICE_URL).toBe("https://onmomcare.app");
+    expect(section("총칙")).toContain(`${OPERATOR_NAME}(이하 '온맘')는`);
+    expect(section("총칙")).toContain(`온맘 웹 서비스(${SERVICE_URL})`);
+  });
+
+  it("동의하기 전에 처리하는 정보(2절 가) — 게스트는 계정 ID와 접속 기록뿐, 근거 법 §15①4, 동의 전에는 건강 정보를 서버에 두지 않음, 30일 정리", () => {
+    const items = section("항목");
+    const before = items.slice(items.indexOf("가. "), items.indexOf("나. "));
+    expect(before).toContain("가. 동의하기 전에 처리하는 정보(개인정보 보호법 제15조제1항제4호");
+    expect(before).toContain(
+      `• [게스트로 시작]을 누르면 동의 화면보다 먼저 게스트 계정이 만들어집니다. 이때 처리하는 정보는 임의로 만든 계정 ID와 서버 업체(Supabase)가 남기는 ${ACCESS_LOG_ITEMS}뿐입니다.`,
+    );
+    expect(before).toContain("[카카오로 시작하기]로 처음 로그인하면 동의 화면보다 먼저");
+    expect(before).toContain("동의하기 전에는 건강 정보를 서버에 저장하지 않습니다.");
+    expect(before).toContain(`[${SERVER_CONSENT_TEXT.decline}]를 누르면 계정을 바로 삭제합니다.`);
+    expect(before).toContain(`만든 지 ${ANON_CLEANUP_DAYS}일이 지나면 자동으로 삭제합니다.`);
+    // 건강 정보는 "나. 동의를 받아 처리하는 정보"에만 있다
+    expect(before).not.toContain(HEALTH_ITEMS);
+    expect(items.slice(items.indexOf("나. 동의를 받아 처리하는 정보"))).toContain(`• 건강 정보(민감정보): ${HEALTH_ITEMS}`);
+  });
+
+  it(`서비스 개선 통계 — 개인을 알아볼 수 없는 집계만, ${STATS_MIN_GROUP_SIZE}명 미만인 칸은 숨김, 운영자는 개인별 기록을 보지 않음(3절 목적·9절 민감정보)`, () => {
+    expect(STATS_MIN_GROUP_SIZE).toBe(5);
+    expect(section("처리 목적")).toContain(
+      "• 서비스 개선을 위한 통계 - 개인을 알아볼 수 없는 집계만 만들고(5명 미만인 칸은 숨김), 운영자는 개인별 건강 기록을 보지 않습니다",
+    );
+    expect(section("민감정보")).toContain("개인을 알아볼 수 없는 통계에 씁니다");
+  });
+
+  it(`보유 기간(5절) — 백업 최대 ${BACKUP_RETENTION_DAYS}일, 관리자 기록 ${ADMIN_LOG_RETENTION_YEARS}년, 운영자 직접 접근 기록 2년, 파기 절차`, () => {
+    const keep = section("보유 기간");
+    expect(keep).toContain(`• 데이터베이스 백업에 남은 사본은 최대 ${BACKUP_RETENTION_DAYS}일 동안 보관된 뒤 삭제됩니다.`);
+    expect(keep).not.toContain("30일 안에 삭제");
+    expect(keep).toMatch(
+      new RegExp(`관리자 기록\\(관리 화면에서 계정 정보를 조회·내려받기·삭제할 때마다 [^)]*\\)은 ${ADMIN_LOG_RETENTION_YEARS}년 동안 보관한 뒤 자동으로 삭제합니다\\.`),
+    );
+    expect(keep).toContain("데이터베이스에 직접 접근한 기록");
+    expect(keep).toContain("보유 기간이 끝나거나 처리 목적을 이루면 지체 없이 파기");
+  });
+
+  it("안전성 확보 조치(12절) — 사실이 아닌 '관리자 2단계 인증'이 없고, 관리 화면 기록 2년이 있다", () => {
+    const safety = section("안전성 확보 조치");
+    expect(WEB_TEXT).not.toContain("2단계 인증");
+    expect(safety).toContain("관리자 계정은 꼭 필요한 최소한의 사람에게만 줍니다.");
+    expect(safety).toContain(`그 기록을 ${ADMIN_LOG_RETENTION_YEARS}년 동안 보관합니다.`);
+  });
+
+  it("AI 상담(14절) — 지금은 꺼져 있고, 켜면 처음 쓸 때 국외 이전 동의를 따로 받는다", () => {
+    const ai = section("AI 상담(생성형 AI)");
+    expect(ai).toContain("지금은 AI 상담과 약물·음식 체크(안전표에 없는 항목)의 AI 답변이 꺼져 있습니다.");
+    expect(ai).toContain("국외 이전(6절 ①)에 대해 따로 동의를 받은 뒤에만 보냅니다.");
+    expect(ai).toContain("대화 내용과 AI 답변을 저장하지 않으며");
+    const anthropic = section("국외 이전").split("\n\n").find((b) => b.includes("Anthropic, PBC (미국)"))!;
+    expect(anthropic).toContain("지금은 AI 상담이 꺼져 있어 보내지 않습니다.");
+    expect(section("처리 위탁")).toContain("지금은 꺼져 있습니다");
+  });
+
+  it("의료 관련 고지(15절) — 의료기기가 아님(식약처 권고 주의 문구), 진단·치료·판단을 하지 않음, 일반 정보와 본인 기록, 결정은 의료진, 응급은 119", () => {
+    const medical = section("의료 관련 고지");
+    expect(medical).toContain("온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.");
+    expect(medical).toContain("질병을 진단하거나 치료하지 않고, 몸 상태를 판단하지 않습니다.");
+    expect(medical).toContain("일반적인 건강 정보와 이용자가 직접 입력한 기록을 보여 줄 뿐입니다.");
+    expect(medical).toContain("진단과 치료에 관한 결정은 의료진이 합니다.");
+    expect(medical).toContain("119");
+    // iOS 원문 한 줄(설정 없는 빌드의 방침 6절)은 바꾸지 않았다 — 그 빌드에는 그대로 남는다
+    expect(PRIVACY_POLICY_SECTIONS.find((s) => s.title.includes("의료 관련 고지"))!.body).toBe(
+      "온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다. 진단·치료에 관한 판단은 반드시 의료진과 상담하세요.",
+    );
+  });
+
+  it("개인정보 보호책임자(16절) — 직책·업무·연락처, 이메일은 문의 링크와 같은 한 곳(contact.ts)에서", () => {
+    expect(PRIVACY_OFFICER).toBe("온맘 운영 책임자(대표)");
+    expect(CONTACT_EMAIL).toBe("inmani1555@gmail.com");
+    expect(section("보호책임자")).toBe(
+      [`• 개인정보 보호책임자: ${PRIVACY_OFFICER}`, "• 개인정보 보호 업무와 고충 처리도 개인정보 보호책임자가 맡습니다.", `• 연락처: ${CONTACT_EMAIL}`].join("\n"),
+    );
+  });
+
+  it("다른 절을 가리키는 번호가 실제 절과 맞는다", () => {
+    const no = (prefix: string) => web.sections.find((s) => s.title.includes(prefix))!.title.match(/^(\d+)\./)![1];
+    expect(section("권리")).toContain(`${no("문의처")}절 연락처`);
+    expect(section("방침의 변경")).toContain(`${no("문의처")}절 연락처`);
+    expect(section("처리 목적")).toContain(`(${no("AI 상담")}절)`);
+    expect(section("동의를 받는 방법")).toContain(`(${no("이용자의 권리")}절)`);
+    expect(section("동의를 받는 방법")).toContain(`${no("항목")}절 가`);
+    expect(section("민감정보")).toContain(`(${no("보유 기간")}절)`);
+    expect(section("국외 이전")).toContain(`${no("처리 위탁")}절에 적은 주소`);
+  });
+
+  it("이용자의 권리(13절) — 내려받기, 10일 안 처리, 계정 ID, 대리인 위임장, 이의제기", () => {
+    const rights = section("권리");
+    expect(rights).toContain("설정 > 내 데이터 내려받기");
+    expect(rights).toContain("요구를 받은 날부터 10일 안에 처리하고 결과를 알려 드립니다.");
+    expect(rights).toContain("설정 > 내 데이터에 보이는 계정 ID");
+    expect(rights).toContain("위임장");
+    expect(rights).toContain("이의를 제기할 수 있습니다");
+  });
+
+  it("만 14세 미만(10절) — 알게 되면 지체 없이 삭제", () => {
+    expect(section("만 14세")).toContain("만 14세 미만인 것을 알게 되면 그 계정과 기록을 지체 없이 삭제합니다.");
   });
 });
 
@@ -285,11 +403,18 @@ describe("수집 항목이 실제 저장 상태를 빠짐없이 덮는다", () =
 
 // AI 상담 이용 기록의 보관 기간 — 서버(0003_llm_usage.sql)의 지우는 기준과 문구의 숫자가 같아야 한다
 const LLM_USAGE_SQL = fileURLToPath(new URL("../../../supabase/migrations/0003_llm_usage.sql", import.meta.url));
+// 관리자 기록(admin_audit)의 보존 기간 — 서버(0009_admin_access_log.sql)의 매일 정리 기준과 같아야 한다
+const ADMIN_LOG_SQL = fileURLToPath(new URL("../../../supabase/migrations/0009_admin_access_log.sql", import.meta.url));
 
 describe("문구의 숫자 = 서버 동작", () => {
   it.skipIf(!existsSync(LLM_USAGE_SQL))("AI 상담 이용 시각 보유 기간(일) = llm_usage를 지우는 기준", () => {
     const sql = readFileSync(LLM_USAGE_SQL, "utf8");
     expect(sql).toMatch(new RegExp(`delete from public\\.llm_usage where created_at < now\\(\\) - interval '${AI_USAGE_RETENTION_DAYS} days'`));
+  });
+
+  it.skipIf(!existsSync(ADMIN_LOG_SQL))("관리자 기록 보유 기간(년) = admin_audit를 지우는 기준", () => {
+    const sql = readFileSync(ADMIN_LOG_SQL, "utf8");
+    expect(sql).toMatch(new RegExp(`delete from public\\.admin_audit where at < now\\(\\) - interval '${ADMIN_LOG_RETENTION_YEARS} years'`));
   });
 });
 
@@ -297,9 +422,9 @@ describe("문구의 숫자 = 서버 동작", () => {
 const POLICY_SWIFT = fileURLToPath(new URL("../../../web/reference/swift/PrivacyPolicyView.swift", import.meta.url));
 
 describe("원문 대조", () => {
-  it.skipIf(!existsSync(POLICY_SWIFT))("웹 초안이 iOS에서 그대로 가져온 줄(문의처·의료 고지)", () => {
+  it.skipIf(!existsSync(POLICY_SWIFT))("웹 방침 16절의 연락처 = iOS 방침 원문 문의처의 주소(2026-11-04부터 문의처·의료 고지의 나머지 글자는 웹 신규 문구)", () => {
     const src = readFileSync(POLICY_SWIFT, "utf8");
-    expect(src).toContain(section("보호책임자"));
-    expect(src).toContain(section("의료 관련 고지"));
+    expect(src).toContain(`개인정보 관련 문의: ${CONTACT_EMAIL}`);
+    expect(section("보호책임자")).toContain(`• 연락처: ${CONTACT_EMAIL}`);
   });
 });

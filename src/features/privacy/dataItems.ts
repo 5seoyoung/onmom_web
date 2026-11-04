@@ -59,6 +59,24 @@ export const ANON_CLEANUP_DAYS = 30;
 export const STORAGE_REGION = "대한민국 서울";
 
 /**
+ * 데이터베이스 백업에 남는 사본의 보관 상한(일) — Supabase Pro 요금제의 일일 백업 보관 7일(요금 표). 2026-11 Pro 전환 예정이고,
+ * 무료 요금제는 백업이 없어 "최대 7일"은 어느 쪽이든 맞다. PITR을 켜거나 보관이 더 긴 요금제로 바꾸면 이 값과 문구를 함께 고친다.
+ */
+export const BACKUP_RETENTION_DAYS = 7;
+
+/**
+ * 관리자 기록(public.admin_audit — 관리 화면의 조회·CSV 내려받기·계정 삭제) 보존 기간(년) —
+ * supabase/migrations/0009_admin_access_log.sql의 `interval '2 years'`와 같아야 한다(webPolicy.test.ts).
+ */
+export const ADMIN_LOG_RETENTION_YEARS = 2;
+
+/**
+ * 서비스 개선 통계(관리 화면의 집계)에서 숨기는 칸의 기준 — 이 수보다 적은 사람이 든 칸은 보이지 않는다(개인을 알아볼 수 없게).
+ * 처리방침 3절·동의 (b)의 "5명 미만인 칸은 숨김"과 같은 값 — 관리자 통계 화면(src/features/admin)도 이 값을 써야 한다.
+ */
+export const STATS_MIN_GROUP_SIZE = 5;
+
+/**
  * 보유 기간 — 계정 삭제 = 서버 행 + 로그인 계정 즉시 삭제(delete_my_account()).
  * 백업 30일은 상한으로 적은 값 — Supabase 요금제의 백업 보관 기간·PITR 사용 여부로 확인해야 한다(docs/privacy/CONSENT_AND_POLICY_DRAFT.md 체크리스트).
  */
