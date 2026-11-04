@@ -6,8 +6,8 @@
 
 /** 운영 프로젝트(공개값 — supabase/config.toml project_id, docs/SUPABASE_SETUP.md 0-2). 다른 프로젝트는 SUPABASE_PROJECT_REF로. */
 export const DEFAULT_PROJECT_REF = "movrwmoniopgetdmagon";
-/** 공개 사이트(basePath까지, 끝 슬래시) — src/config.ts DEFAULT_SITE_URL과 같다. 다른 주소는 SITE_URL로. */
-export const DEFAULT_SITE_URL = "https://5seoyoung.github.io/onmom_web/";
+/** 공개 사이트(basePath까지, 끝 슬래시) — 2026-11-04 전용 도메인으로 옮김(GitHub Pages Custom domain, basePath 없음). 다른 주소는 SITE_URL로. */
+export const DEFAULT_SITE_URL = "https://onmomcare.app/";
 const MANAGEMENT_API = "https://api.supabase.com";
 
 export class OpsError extends Error {}
@@ -35,7 +35,7 @@ export function readSiteUrl(env = process.env) {
   try {
     u = new URL(raw);
   } catch {
-    throw new OpsError("SITE_URL이 주소 형식이 아닙니다. 예: https://5seoyoung.github.io/onmom_web/");
+    throw new OpsError("SITE_URL이 주소 형식이 아닙니다. 예: https://onmomcare.app/");
   }
   const local = u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1");
   if (u.protocol !== "https:" && !local) throw new OpsError("SITE_URL은 https 주소여야 합니다.");

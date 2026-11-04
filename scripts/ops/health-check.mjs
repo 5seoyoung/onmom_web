@@ -4,7 +4,7 @@
 //   SUPABASE_ACCESS_TOKEN이 있으면            → 프로젝트 상태·DB 항목까지(DB 항목은 Supabase CLI가 PATH에 있어야 한다)
 //
 // 점검(모두 읽기만 — 운영 DB·함수·설정을 바꾸지 않는다. 사용자 데이터는 읽지 않는다):
-//   사이트    SITE_URL(기본 https://5seoyoung.github.io/onmom_web/)과 login/·robots.txt가 200, 로그인 화면의 CSP 메타가 정확히 1개이고
+//   사이트    SITE_URL(기본 https://onmomcare.app/)과 login/·robots.txt가 200, 로그인 화면의 CSP 메타가 정확히 1개이고
 //             script-src에 'unsafe-inline'·'unsafe-eval'이 없음(HTML 엔티티를 풀어서 본다 — src/csp.ts·scripts/csp-hash.mjs)
 //   Supabase  Management API GET /v1/projects/{ref}의 status가 ACTIVE_HEALTHY(일시 중지면 "Free plan paused — restore in dashboard")
 //   함수      videos·chat에 사이트 주소(Origin)로 사전 요청(OPTIONS)만 → 2xx + Access-Control-Allow-Origin(로그인·AI 호출 없음)
