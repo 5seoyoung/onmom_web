@@ -256,7 +256,7 @@ function AccountCard({
         className="flex min-h-11 w-full flex-col items-start gap-0.5 py-1 text-left disabled:cursor-not-allowed disabled:opacity-50"
       >
         <span className="text-[0.9375rem] font-semibold text-state-alert-text">{actions.deleteLabel}</span>
-        <span className="text-[0.8125rem] text-text-secondary">{SETTINGS_TEXT.deleteAccountHint}</span>
+        <span className="text-[0.8125rem] text-text-secondary">{actions.deleteHint}</span>
       </button>
       {actions.notice !== null ? <p className="text-[0.8125rem] text-text-secondary">{actions.notice}</p> : null}
       {/* 진행 상태는 polite로, 실패는 alert로 읽힌다. 실패는 색만이 아니라 문장으로 알린다. */}

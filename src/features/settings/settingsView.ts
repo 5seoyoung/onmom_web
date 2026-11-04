@@ -93,15 +93,24 @@ export interface AccountCardActions {
   linkKakao: boolean;
   /** 삭제 버튼 제목 */
   deleteLabel: string;
+  /** 삭제 버튼 설명 줄 — 서버 계정이면 서버 기록까지 지운다고 알린다(iOS 원문의 "이 기기"는 서버 저장 빌드에서 사실이 아니다) */
+  deleteHint: string;
   /** 로그아웃이 없는 까닭(게스트) — 없으면 null */
   notice: string | null;
 }
 
 export function accountCardActions(mode: AccountMode): AccountCardActions {
   if (mode === "guest") {
-    return { signOut: false, linkKakao: true, deleteLabel: GUEST_ACCOUNT_TEXT.deleteAccount, notice: GUEST_ACCOUNT_TEXT.noSignOut };
+    return {
+      signOut: false,
+      linkKakao: true,
+      deleteLabel: GUEST_ACCOUNT_TEXT.deleteAccount,
+      deleteHint: SERVER_ACCOUNT_TEXT.deleteAccountHint,
+      notice: GUEST_ACCOUNT_TEXT.noSignOut,
+    };
   }
-  return { signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null };
+  const deleteHint = mode === "kakao" ? SERVER_ACCOUNT_TEXT.deleteAccountHint : SETTINGS_TEXT.deleteAccountHint;
+  return { signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, deleteHint, notice: null };
 }
 
 export const GUEST_ACCOUNT_TEXT = {
@@ -109,8 +118,9 @@ export const GUEST_ACCOUNT_TEXT = {
   linkKakao: "카카오 계정 연결",
   // 웹 신규 문구 — CPO 확인 필요 (위 버튼의 설명 줄 — 작업 지시의 CPO 표현)
   linkKakaoHint: "기록을 잃지 않고 다른 기기에서도 이어 쓰기",
-  // 웹 신규 문구 — CPO 확인 필요 (게스트의 계정 삭제 버튼 — 작업 지시의 CPO 표현. 설명 줄은 원문 deleteAccountHint)
-  deleteAccount: "이 기기에서 기록 지우기(계정 삭제)",
+  // 웹 신규 문구 — CPO 확인 필요 (게스트의 계정 삭제 버튼. 2026-11-04: "이 기기에서 기록 지우기(계정 삭제)"는 서버의 익명 계정·기록까지
+  // 지우는 동작을 줄여 말해 바꿈 — DEV_NOTES §3 CPO 9. 설명 줄은 SERVER_ACCOUNT_TEXT.deleteAccountHint)
+  deleteAccount: "기록과 계정 지우기",
   // 웹 신규 문구 — CPO 확인 필요 (게스트에게 로그아웃이 없는 까닭 — 익명 계정은 로그아웃하면 다시 들어갈 방법이 없다)
   noSignOut: "게스트는 로그아웃하면 기록을 다시 찾을 수 없어요. 기록을 지키려면 카카오 계정을 연결해 주세요.",
   /** 카카오 화면으로 보내지 못했다(연결 설정 꺼짐·네트워크) */
@@ -118,6 +128,9 @@ export const GUEST_ACCOUNT_TEXT = {
 } as const;
 
 export const SERVER_ACCOUNT_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요 (서버 계정의 삭제 버튼 설명 줄 — 원문 deleteAccountHint "계정과 이 기기의 모든 건강 데이터…"를
+  // 서버 저장 빌드에 맞게. 삭제는 서버 기록·로그인 계정과 이 브라우저의 사본을 함께 지운다 — src/auth session deleteAccount)
+  deleteAccountHint: "계정과 서버·이 브라우저의 모든 건강 데이터가 즉시 삭제되며 복구할 수 없어요",
   // 웹 신규 문구 — CPO 확인 필요 (카카오 로그아웃 확인 창: 서버에 다 올라갔으면 이 브라우저 사본을 지운다 — 감사 #19)
   signOutMessage: "서버에 저장된 기록은 같은 카카오 계정으로 다시 로그인하면 이어서 볼 수 있어요. 공용 기기에 남지 않도록 이 브라우저의 기록은 지워요.",
   // 웹 신규 문구 — CPO 확인 필요 (로그아웃 전 올리지 못함 — 네트워크 실패·서버 저장 동의 전·새 형식 서버 기록)
