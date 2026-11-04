@@ -35,9 +35,9 @@ permissions:
 
 # Edge Function의 CORS 허용 주소(공개값) — Variable ALLOWED_ORIGINS가 비어 있으면 이 값을 함수 비밀값 ALLOWED_ORIGINS로 넣는다.
 # 웹 사이트 주소를 옮기면(커스텀 도메인) 이 줄을 고쳐 supabase/ 변경과 함께 커밋하거나, 커밋 뒤 Actions → Supabase → Run workflow.
-# 2026-11-04 전용 도메인 onmomcare.app으로 옮기는 중 — 새 주소를 먼저 더했다. 옮긴 것을 확인하면 옛 주소(https://5seoyoung.github.io)를 뺀다.
+# 2026-11-04 전용 도메인 onmomcare.app으로 옮겼다. 옛 Pages 주소(https://5seoyoung.github.io)는 다른 사이트와 같은 출처라 허용하지 않는다(옛 주소는 새 주소로 넘어간다).
 env:
-  ONMOM_ALLOWED_ORIGINS: https://onmomcare.app,https://5seoyoung.github.io,http://localhost:3000
+  ONMOM_ALLOWED_ORIGINS: https://onmomcare.app,http://localhost:3000
 
 concurrency:
   group: supabase-deploy

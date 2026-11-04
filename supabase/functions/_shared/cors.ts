@@ -12,8 +12,8 @@
  * ALLOWED_ORIGINS 환경 변수가 비었을 때의 기본값 — 배포 사이트와 로컬 개발 서버. 운영에서는 Supabase 워크플로가 이 값 대신
  * .github/workflows/supabase.yml의 ONMOM_ALLOWED_ORIGINS(또는 Variable)를 비밀값으로 넣는다 — 사이트 주소를 옮기면 둘 다 고친다.
  */
-// 2026-11-04 전용 도메인(onmomcare.app)으로 옮기는 동안 옛 Pages 주소도 둔다 — 옮긴 것을 확인하면 뺀다(위 워크플로 값과 함께).
-export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://onmomcare.app", "https://5seoyoung.github.io", "http://localhost:3000"];
+// 2026-11-04 전용 도메인(onmomcare.app)으로 옮겼다 — 옛 Pages 주소(5seoyoung.github.io)는 다른 사이트와 같은 출처라 넣지 않는다.
+export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://onmomcare.app", "http://localhost:3000"];
 
 /** 브라우저가 함수에 보내는 헤더 — supabase-js·fetch가 쓰는 것만 */
 export const ALLOWED_REQUEST_HEADERS = "authorization, apikey, content-type, x-client-info";

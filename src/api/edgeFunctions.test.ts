@@ -218,8 +218,9 @@ describe("0003_llm_usage.sql — 처리방침에 적은 것과 같다", () => {
 });
 
 describe("CORS 허용 목록", () => {
-  it("기본값 — 배포 사이트(새 도메인·옮기는 동안의 옛 Pages 주소)와 로컬 개발 서버", () => {
-    expect(parseAllowedOrigins(undefined)).toEqual(["https://onmomcare.app", "https://5seoyoung.github.io", "http://localhost:3000"]);
+  it("기본값 — 배포 사이트(전용 도메인)와 로컬 개발 서버. 옛 Pages 주소는 다른 사이트와 같은 출처라 넣지 않는다", () => {
+    expect(parseAllowedOrigins(undefined)).toEqual(["https://onmomcare.app", "http://localhost:3000"]);
+    expect(parseAllowedOrigins(undefined)).not.toContain("https://5seoyoung.github.io");
     expect(parseAllowedOrigins("  ")).toEqual([...DEFAULT_ALLOWED_ORIGINS]);
   });
   it("쉼표로 여럿, 경로·끝 슬래시는 떼고 중복은 하나로", () => {
