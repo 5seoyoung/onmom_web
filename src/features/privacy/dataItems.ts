@@ -1,18 +1,25 @@
-// 온맘이 처리하는 개인정보 항목·보유 기간 — 웹 처리방침 초안(webPolicyText.ts)과 온보딩 동의(onboarding/consentText.ts)가
+// 온맘이 처리하는 개인정보 항목·보유 기간 — 웹 처리방침(webPolicyText.ts)과 온보딩 동의(onboarding/consentText.ts)가
 // 같은 글자를 쓰도록 한 곳에 둔다(두 문서가 서로 다른 항목을 말하지 않게).
 //
 // 항목은 실제 저장 상태(domain/types.ts PersistedState·UserProfile)와 Supabase 로그인 계정(auth.users·identities)에서 뽑았다.
 // 상태에 필드를 더하면 여기도 고친다(privacy/webPolicy.test.ts가 UserProfile·MaternityRecord 필드를 대조한다).
+// 동의 (a)(b)가 쓰는 글자(계정·건강·설정·접속 기록·AI 이용 항목, 보유 기간, 저장 위치)를 바꾸면 동의 판(domain/consent.ts)을 올린다.
 //
-// 모두 웹 신규 문구 — CPO 확인 필요 (법률 검토 전 초안)
+// 모두 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판에서 새로 쓰거나 고친 줄에는 따로 표시를 달았다)
 
 /** 계정 정보 — 게스트 = Supabase 익명 사용자, 카카오 = Supabase 카카오 로그인(동의항목: docs/SUPABASE_SETUP.md A-7) */
 export const ACCOUNT_ITEMS =
   "이용자 식별자(게스트는 임의로 만든 식별자, 카카오 로그인은 카카오 회원번호와 카카오에서 제공에 동의한 닉네임·카카오계정(이메일)·프로필 사진 주소)";
 
-/** 건강 정보(민감정보) — 산모수첩 7항목 이름은 회복 단계 분석 화면(analyzeModel.ts CLINICAL_TOGGLES)의 말을 줄여 썼다 */
+/**
+ * 건강 정보(민감정보) — 산모수첩 7항목 이름은 회복 단계 분석 화면(analyzeModel.ts CLINICAL_TOGGLES)의 말을 줄여 썼다.
+ * 증상 기록은 체크 항목을 하나씩 적지 않고 "위험 증상 체크 항목"으로 묶어 쓴다(2026-11-04) — 기록 화면의 확인 항목(다량 출혈·임신중독증 신호·
+ * 자신을 해치고 싶은 생각 같은 새 항목 포함)이 늘어도 동의 글자가 그대로 덮도록. 기록마다 남는 안내 규칙의 판(SymptomRecord.rulesVersion)과
+ * 기분 문항의 판(MoodCheckRecord.moodVersion)도 기록의 일부라 함께 적는다(domain/types.ts).
+ */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 판: 증상 기록을 체크 항목 묶음으로, 규칙·문항의 판)
 export const HEALTH_ITEMS =
-  "출산일, 분만 방식, 수유 여부, 키·현재 체중·임신 전 체중, 산모수첩 확인 항목 7개(첫 출산 여부, 임신성 당뇨, 임신중독증·고혈압, 분만 시 출혈 과다, 산후 빈혈, 골반통·치골결합 통증, 복직근 이개), 증상 기록(오로 변화·발열·통증 정도·확인된 병원 신호·기록 시각), 오늘의 질문(기분) 답변, 기록장 글과 메모";
+  "출산일, 분만 방식, 수유 여부, 키·현재 체중·임신 전 체중, 산모수첩 확인 항목 7개(첫 출산 여부, 임신성 당뇨, 임신중독증·고혈압, 분만 시 출혈 과다, 산후 빈혈, 골반통·치골결합 통증, 복직근 이개), 증상 기록(오로·발열·통증 정도·위험 증상 체크 항목, 확인된 병원 신호, 기록 시각, 그때 쓴 안내 규칙의 판), 오늘의 질문(기분) 답변과 그 문항의 판, 기록장 글과 메모";
 
 /**
  * 서비스 설정 정보 — 건강 정보가 아닌 프로필 값과 동의 기록. "동의한 내용과 일시"는 서버 저장 동의(profile.consentVersion·consentAcceptedAt
@@ -78,7 +85,7 @@ export const STATS_MIN_GROUP_SIZE = 5;
 
 /**
  * 보유 기간 — 계정 삭제 = 서버 행 + 로그인 계정 즉시 삭제(delete_my_account()).
- * 백업 30일은 상한으로 적은 값 — Supabase 요금제의 백업 보관 기간·PITR 사용 여부로 확인해야 한다(docs/privacy/CONSENT_AND_POLICY_DRAFT.md 체크리스트).
+ * 백업은 BACKUP_RETENTION_DAYS(7일 — Supabase Pro 일일 백업, 무료 요금제는 백업 없음)의 상한(2026-11-04 판 — 예전 판은 30일로 적었다).
  */
-export const RETENTION_TEXT =
-  "계정을 삭제할 때까지 보관해요. 계정을 삭제하면 서버의 기록과 로그인 계정을 바로 삭제하고, 백업에 남은 사본은 30일 안에 삭제돼요.";
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 판: 백업 7일)
+export const RETENTION_TEXT = `계정을 삭제할 때까지 보관해요. 계정을 삭제하면 서버의 기록과 로그인 계정을 바로 삭제하고, 백업에 남은 사본은 ${BACKUP_RETENTION_DAYS}일 안에 삭제돼요.`;

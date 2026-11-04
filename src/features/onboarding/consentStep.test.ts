@@ -10,7 +10,14 @@ import { defaultProfile } from "@/store/defaults";
 import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT, type ConsentItemText } from "./consentText";
 import { initialDraft, ONBOARDING_TEXT, type OnboardingDraft, type OnboardingMode } from "./onboardingModel";
 import { ConsentStep } from "./OnboardingSteps";
-import { ConsentDetails, DETAIL_EMPHASIS_CLASS, DETAIL_TEXT_CLASS, ServerConsentStep, type ServerConsentStepProps } from "./ServerConsentStep";
+import {
+  ConsentDetails,
+  DETAIL_EMPHASIS_CLASS,
+  DETAIL_TEXT_CLASS,
+  ServerConsentStep,
+  SUMMARY_EMPHASIS_CLASS,
+  type ServerConsentStepProps,
+} from "./ServerConsentStep";
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const textOf = (markup: string) =>
@@ -36,6 +43,7 @@ function serverStep(
 /** 모든 동의 문구(요약·전문) */
 const ALL_SERVER_TEXT = [
   SERVER_CONSENT_TEXT.subtitle,
+  SERVER_CONSENT_TEXT.trialNote,
   ...SERVER_CONSENT_TEXT.lines,
   SERVER_CONSENT_TEXT.reconsentNote,
   ...[...REQUIRED_CONSENTS, AI_TRANSFER_NOTICE].flatMap((c) => [c.title, c.summary, ...c.details.flatMap((d) => [d.term, d.text])]),
@@ -113,6 +121,51 @@ describe("서버 저장 빌드 동의 문구 — 법정 고지 항목", () => {
   it("진단·점수 같은 의료기기 표현이 없다", () => {
     expect(ALL_SERVER_TEXT).not.toMatch(/진단합|점수|등급|위험도/);
   });
+
+  it("안내 셋째 줄은 안내만 한다 — 앱이 위험을 '확인'하는 말이 아니라, 이용자가 체크한 증상에 맞는 연락처 안내(2026-11-04 판)", () => {
+    const third = SERVER_CONSENT_TEXT.lines[2];
+    expect(third).toBe("바로 도움이 필요한 증상을 체크하면 병원·119 등 연락할 곳 안내");
+    expect(ALL_SERVER_TEXT).not.toMatch(/확인되면 의료진|위험 신호가 확인/);
+  });
+
+  it("시범 안내 줄 — 시범 운영 중이고 바뀌면 다시 묻는다(동의 화면에 '초안'·'법률 검토'를 붙이지 않는다)", () => {
+    expect(SERVER_CONSENT_TEXT.trialNote).toBe("시범 운영 중이에요. 내용이 바뀌면 다시 동의를 받아요.");
+    expect(ALL_SERVER_TEXT).not.toMatch(/초안|법률 검토/);
+  });
+
+  it("민감정보 (b) — 늘 보이는 요약에 항목·보유 기간, 이용 목적에 서비스 개선 통계(5명 미만 숨김), 열람 제한은 실제 통제대로, AI는 이 동의 밖", () => {
+    const sensitive = REQUIRED_CONSENTS[1];
+    expect(sensitive.summaryEmphasis).toBe(true);
+    for (const word of ["출산일", "분만 방식", "수유 여부", "키", "체중", "산모수첩 확인 항목", "증상 기록", "기분 답변", "기록장 글"]) {
+      expect(sensitive.summary, word).toContain(word);
+    }
+    expect(sensitive.summary).toContain("계정을 삭제할 때까지 보관해요.");
+    expect(sensitive.summary).toContain("개인을 알아볼 수 없는 통계");
+    const row = (term: string) => sensitive.details.find((d) => d.term === term)!.text;
+    expect(row("이용 목적")).toContain("서비스 개선을 위한 통계(개인을 알아볼 수 없는 집계만 만들고 5명 미만인 칸은 숨겨요. 운영자는 개인별 건강 기록을 보지 않아요)");
+    expect(row("열람 제한")).toContain("관리 화면에는 집계 수치와 계정 정보만 보이고 건강 기록 내용은 보이지 않아요.");
+    expect(row("열람 제한")).toContain("열어 보면 그 사실을 기록으로 남겨요.");
+    expect(row("AI 답변")).toContain("이 동의로는 AI 답변에 쓰지 않아요.");
+    // 증상 기록은 체크 항목 묶음으로 — 기록 화면의 새 확인 항목도 덮는다
+    expect(row("처리 항목")).toContain("증상 기록(오로·발열·통증 정도·위험 증상 체크 항목, 확인된 병원 신호, 기록 시각, 그때 쓴 안내 규칙의 판)");
+    // 다른 동의의 요약은 보통 모양
+    expect(REQUIRED_CONSENTS[0].summaryEmphasis).toBeUndefined();
+    expect(REQUIRED_CONSENTS[2].summaryEmphasis).toBeUndefined();
+  });
+
+  it("(a) 동의 전에 만들어지는 정보 — 게스트 계정 ID·접속 기록, 카카오 계정, 건강 정보는 동의 뒤에만, 나가면 삭제, 30일 정리", () => {
+    const text = REQUIRED_CONSENTS[0].details.find((d) => d.term === "동의 전에 만들어지는 정보")!.text;
+    expect(text).toContain("[게스트로 시작]을 누르면 이 화면보다 먼저 임의로 만든 계정 ID와 접속 기록이");
+    expect(text).toContain("카카오로 처음 로그인하면");
+    expect(text).toContain("건강 정보는 동의한 뒤에만 서버에 저장해요.");
+    expect(text).toContain(`[${SERVER_CONSENT_TEXT.decline}]를 누르면 계정을 바로 지우고`);
+    expect(text).toContain("만든 지 30일이 지나면 자동으로 지워요.");
+    expect(REQUIRED_CONSENTS[0].details.find((d) => d.term === "보유 기간")!.text).toContain("백업에 남은 사본은 7일 안에 삭제돼요.");
+  });
+
+  it("(c) 만 14세 미만인 것이 확인되면 삭제", () => {
+    expect(REQUIRED_CONSENTS[2].details.find((d) => d.term === "확인되면")!.text).toBe("만 14세 미만인 것이 확인되면 계정과 기록을 지체 없이 삭제해요.");
+  });
 });
 
 describe("ServerConsentStep — 화면", () => {
@@ -164,7 +217,8 @@ describe("ServerConsentStep — 화면", () => {
   it("[동의하지 않고 나가기] — 지우는 중에는 잠기고, 실패하면 이유를 알린다", () => {
     const busy = serverStep("reconsent", {}, { declineBusy: true });
     expect(busy).toMatch(/<button[^>]*disabled=""[^>]*>계정을 삭제하고 있어요<\/button>/);
-    expect(busy).not.toContain(SERVER_CONSENT_TEXT.decline);
+    // 버튼 글자만 바뀐다((a) 전문의 "[동의하지 않고 나가기]를 누르면…" 안내 글자는 그대로 보인다)
+    expect(busy).not.toMatch(new RegExp(`<button\\b[^>]*>${esc(SERVER_CONSENT_TEXT.decline)}</button>`));
     const failed = serverStep("reconsent", {}, { declineError: "계정을 삭제하지 못했어요." });
     expect(failed).toMatch(/<p role="alert"[^>]*>계정을 삭제하지 못했어요\.<\/p>/);
     expect(serverStep()).not.toContain('role="alert"');
@@ -181,6 +235,12 @@ describe("ServerConsentStep — 화면", () => {
       for (const d of c.details) if (d.term.includes("보유 기간")) expect(d.emphasis, `${c.title} ${d.term}`).toBe(true);
     }
     for (const cls of ["text-base", "font-semibold", "text-text-primary", "underline"]) expect(DETAIL_EMPHASIS_CLASS.split(" ")).toContain(cls);
+    // 요약에 중요한 내용이 든 동의(민감정보 (b))는 늘 보이는 요약도 굵게·밑줄·본문색 — 다른 요약은 보통 글자
+    for (const cls of ["font-semibold", "text-text-primary", "underline"]) expect(SUMMARY_EMPHASIS_CLASS.split(" ")).toContain(cls);
+    for (const c of REQUIRED_CONSENTS) {
+      const emphasized = markup.includes(`<span class="${SUMMARY_EMPHASIS_CLASS}">${c.summary}</span>`);
+      expect(emphasized, c.title).toBe(c.summaryEmphasis === true);
+    }
 
     for (const item of [...REQUIRED_CONSENTS, AI_TRANSFER_NOTICE]) {
       const html = renderToStaticMarkup(h(ConsentDetails, { item }));
@@ -193,10 +253,15 @@ describe("ServerConsentStep — 화면", () => {
     }
   });
 
-  it("머리는 iOS 제목 + 서버 저장 부제, 안내 3줄, 처리방침 링크, 면책", () => {
+  it("머리는 iOS 제목 + 서버 저장 부제 + 시범 안내 한 줄, 안내 3줄, 처리방침 링크, 면책", () => {
     const text = textOf(markup);
     expect(markup).toMatch(new RegExp(`<h1[^>]*>${ONBOARDING_TEXT.consentTitle}</h1>`));
     expect(text).toContain(SERVER_CONSENT_TEXT.subtitle);
+    // 시범 안내는 부제 바로 다음 — 처음 온보딩·다시 동의 모두
+    for (const mode of ["full", "reconsent"] as const) {
+      const t = textOf(serverStep(mode));
+      expect(t, mode).toContain(`${SERVER_CONSENT_TEXT.subtitle} ${SERVER_CONSENT_TEXT.trialNote}`);
+    }
     for (const line of SERVER_CONSENT_TEXT.lines) expect(text).toContain(line);
     expect(markup).toMatch(new RegExp(`aria-haspopup="dialog"[^>]*>${ONBOARDING_TEXT.consentPolicyLink}</button>`));
     expect(text).toContain(content.disclaimers.onboarding_consent);
@@ -227,19 +292,23 @@ describe("ConsentStep — 설정 없는 빌드는 iOS 원문 그대로", () => {
 });
 
 /**
- * 동의 문구의 지문 — 판(CURRENT_CONSENT_VERSION)마다 하나. (a)~(c)와 머리의 부제·안내 3줄(이용자가 동의하는 내용)을 바꾸면 지문이 바뀌어
- * 여기서 실패한다. 그때는 CURRENT_CONSENT_VERSION을 새 날짜로 올리고(모든 이용자에게 다시 받는다) 아래에 **새 줄을 더한다**.
+ * 동의 문구의 지문 — 판(CURRENT_CONSENT_VERSION)마다 하나. (a)~(c)와 머리의 부제·시범 안내 줄·안내 3줄(이용자가 동의하는 내용)을 바꾸면
+ * 지문이 바뀌어 여기서 실패한다. 그때는 CURRENT_CONSENT_VERSION을 새 날짜로 올리고(모든 이용자에게 다시 받는다) 아래에 **새 줄을 더한다**.
  * 이미 있는 줄의 지문을 고쳐 판을 올리지 않고 넘어가지 않는다 — 예전 판에 동의한 사람이 바뀐 문구에 동의한 것으로 남는다.
  * 뱃지·버튼·"자세히" 같은 화면 글자(SERVER_CONSENT_TEXT의 나머지)와 (d) AI 안내(동의는 AI 기능이 처음 쓸 때 따로 — 판 AI_CONSENT_VERSION)는 넣지 않는다.
- * 서버 저장 빌드를 켜기 전(2026-09-28, 아직 이 판에 동의한 이용자가 없음)에 확정한 지문이다.
+ * - web-2026-09-28: 서버 저장 빌드를 켜기 전(아직 이 판에 동의한 이용자가 없음)에 확정한 지문. 시범 안내 줄이 생기기 전이라
+ *   [부제, 안내 3줄, (a)~(c)]로 만든 값이다.
+ * - web-2026-11-04: 시범 운영 시행판(이 판부터 시범 안내 줄도 지문에 든다 — [부제, 시범 안내 줄, 안내 3줄, (a)~(c)]). 판을 올릴 때 실제
+ *   이용자는 운영자 본인 1명(초대 0명)이었다.
  */
 const CONSENT_TEXT_FINGERPRINTS: Readonly<Record<string, string>> = {
   "web-2026-09-28": "ceef90399e94d16b2e87e428cf6e6b49c32ef72b6e05541e7ee21427bd46f369",
+  "web-2026-11-04": "5035bf1493b50bd7fdecfea39c62a65e5ce0ef09b40062e4b6ad551523245635",
 };
 
 describe("동의 판 — 문구를 바꾸면 판을 올린다", () => {
   it("지금 문구의 지문 = 지금 판의 지문", () => {
-    const consented = JSON.stringify([SERVER_CONSENT_TEXT.subtitle, SERVER_CONSENT_TEXT.lines, REQUIRED_CONSENTS]);
+    const consented = JSON.stringify([SERVER_CONSENT_TEXT.subtitle, SERVER_CONSENT_TEXT.trialNote, SERVER_CONSENT_TEXT.lines, REQUIRED_CONSENTS]);
     const fingerprint = createHash("sha256").update(consented).digest("hex");
     expect({ version: CURRENT_CONSENT_VERSION, fingerprint }).toEqual({
       version: CURRENT_CONSENT_VERSION,
@@ -257,10 +326,11 @@ describe("동의 판 — 문구를 바꾸면 판을 올린다", () => {
 const ONBOARDING_SWIFT = fileURLToPath(new URL("../../../web/reference/swift/OnboardingFlowView.swift", import.meta.url));
 
 describe("원문 대조", () => {
-  it.skipIf(!existsSync(ONBOARDING_SWIFT))("서버 저장 빌드에서도 그대로 쓰는 iOS 문구", () => {
+  it.skipIf(!existsSync(ONBOARDING_SWIFT))("서버 저장 빌드에서도 그대로 쓰는 iOS 문구(안내 셋째 줄은 2026-11-04 판부터 웹 신규 문구라 뺐다)", () => {
     const src = readFileSync(ONBOARDING_SWIFT, "utf8");
-    for (const text of [ONBOARDING_TEXT.consentTitle, SERVER_CONSENT_TEXT.lines[2], ONBOARDING_TEXT.consentPolicyLink]) {
+    for (const text of [ONBOARDING_TEXT.consentTitle, ONBOARDING_TEXT.consentPolicyLink]) {
       expect(src, text).toContain(`"${text}"`);
     }
+    expect(src).not.toContain(`"${SERVER_CONSENT_TEXT.lines[2]}"`);
   });
 });

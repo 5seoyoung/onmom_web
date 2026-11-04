@@ -1,8 +1,9 @@
 "use client";
 
 // 온보딩 동의 단계 — 서버 저장 빌드(Supabase 설정 있음). 설정이 없는 빌드는 OnboardingSteps.tsx의 ConsentStep(iOS 원문).
-// 머리(iOS 제목 + 서버 저장 부제) · 안내 3줄 · 필수 동의 셋(토글 + 요약 + "자세히") · AI 국외 이전 안내(토글 없음) ·
+// 머리(iOS 제목 + 서버 저장 부제 + 시범 안내 한 줄) · 안내 3줄 · 필수 동의 셋(토글 + 요약 + "자세히") · AI 국외 이전 안내(토글 없음) ·
 // 처리방침 전문 링크 · [동의하지 않고 나가기] · 면책. 필수 셋을 모두 켜야 아래 버튼이 켜진다(onboardingModel.ts canProceed).
+// 요약에 중요한 내용이 든 동의(summaryEmphasis — 민감정보 (b))는 요약을 굵게·밑줄로 그린다(전문을 접어도 늘 보이게).
 // 문구는 consentText.ts(웹 신규 문구 — CPO 확인 필요). 다시 동의(mode "reconsent")는 부제 아래 안내 한 줄이 더 붙는다.
 // [동의하지 않고 나가기]는 두 모드 모두 — 누르면 부모(OnboardingFlow)가 계정 삭제 확인 창을 연다(동의하지 않은 채 이용할 수는 없으므로,
 // 나가는 길은 계정과 모든 데이터를 지우는 것). 전문 중 법이 "명확히 표시"하라는 줄(emphasis)은 크게·굵게·밑줄로 그린다.
@@ -49,6 +50,8 @@ export function ServerConsentStep({
   return (
     <div className="flex flex-col gap-6 px-6 pt-6">
       <StepHeader title={T.consentTitle} subtitle={S.subtitle} headingRef={headingRef} />
+      {/* 시범 안내 — 부제 바로 아래 한 줄(부제와 같은 글자 모양, 겉보기 간격은 머리 안의 간격과 같게 음수 여백으로) */}
+      <p className="-mt-4 text-sm font-medium text-text-secondary">{S.trialNote}</p>
 
       {mode === "reconsent" ? (
         <p className="-mt-2 rounded-chip bg-coral-tint px-4 py-3 text-sm font-medium text-text-primary">{S.reconsentNote}</p>
@@ -80,7 +83,7 @@ export function ServerConsentStep({
                     {item.title}
                   </span>
                 }
-                description={item.summary}
+                description={item.summaryEmphasis === true ? <span className={SUMMARY_EMPHASIS_CLASS}>{item.summary}</span> : item.summary}
                 checked={draft.requiredConsents[item.id]}
                 onCheckedChange={(v) => onChange({ requiredConsents: { ...draft.requiredConsents, [item.id]: v } })}
               />
@@ -149,6 +152,8 @@ function Badge({ children, tone = "required" }: { children: ReactNode; tone?: "r
 /** 전문의 보통 줄(13px, 부모 dl) / 중요한 내용 줄(16px = 13px의 123% · 굵게 · 밑줄 · 본문색) — consentText.ts 머리말 */
 export const DETAIL_TEXT_CLASS = "text-text-secondary";
 export const DETAIL_EMPHASIS_CLASS = "text-base font-semibold text-text-primary underline underline-offset-2";
+/** 중요한 내용이 든 요약(summaryEmphasis) — 토글 설명(13px) 안에서 굵게 · 밑줄 · 본문색으로 다른 요약과 구분한다 */
+export const SUMMARY_EMPHASIS_CLASS = "font-semibold text-text-primary underline underline-offset-2";
 
 /**
  * "자세히" — 펼치면 항목·목적·보유 기간·거부 권리 전문. 브라우저 기본 <details>라 스크립트 없이도 열리고 닫힌다.
