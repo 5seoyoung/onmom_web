@@ -174,6 +174,8 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
     expect(withTurnstile).toContain("Cloudflare, Inc.");
     expect(withTurnstile).toContain("Turnstile");
     expect(withTurnstile).toContain("⑤ Cloudflare, Inc. (미국)\n– 연락처: dpo@cloudflare.com");
+    // 동의 전에 처리하는 정보(2절 가)에도 — 게스트 시작 때 Cloudflare가 받는다
+    expect(withTurnstile).toContain("• 자동 가입 방지를 쓰는 동안에는 게스트로 시작할 때 Cloudflare가 접속 기록과 브라우저 확인 정보를 받습니다(6절).");
   });
 
   it("오래된 게스트 계정 자동 삭제(서버 저장 전이면 30일) — 5절, 늘(Supabase 빌드)", () => {
