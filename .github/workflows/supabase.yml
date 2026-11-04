@@ -35,9 +35,9 @@ permissions:
 
 # Edge Function의 CORS 허용 주소(공개값) — Variable ALLOWED_ORIGINS가 비어 있으면 이 값을 함수 비밀값 ALLOWED_ORIGINS로 넣는다.
 # 웹 사이트 주소를 옮기면(커스텀 도메인) 이 줄을 고쳐 supabase/ 변경과 함께 커밋하거나, 커밋 뒤 Actions → Supabase → Run workflow.
-# 2026-10-24 서버 값과 같음(https://5seoyoung.github.io,http://localhost:3000 — 해시로 확인).
+# 2026-11-04 전용 도메인 onmomcare.app으로 옮기는 중 — 새 주소를 먼저 더했다. 옮긴 것을 확인하면 옛 주소(https://5seoyoung.github.io)를 뺀다.
 env:
-  ONMOM_ALLOWED_ORIGINS: https://5seoyoung.github.io,http://localhost:3000
+  ONMOM_ALLOWED_ORIGINS: https://onmomcare.app,https://5seoyoung.github.io,http://localhost:3000
 
 concurrency:
   group: supabase-deploy
@@ -108,7 +108,7 @@ jobs:
               o="${o//[[:space:]]/}"
               [ -z "${o}" ] && continue
               if ! [[ "${o}" =~ ^https?://[^/?#]+(/.*)?$ ]]; then
-                echo "::error title=ALLOWED_ORIGINS 형식::'${o}' — https://5seoyoung.github.io 처럼 http(s)://로 시작해야 하고, 여러 개는 쉼표로 나눕니다."
+                echo "::error title=ALLOWED_ORIGINS 형식::'${o}' — https://onmomcare.app 처럼 http(s)://로 시작해야 하고, 여러 개는 쉼표로 나눕니다."
                 exit 1
               fi
             done
@@ -281,7 +281,7 @@ jobs:
               case "${name}" in
                 ANTHROPIC_API_KEY) echo "::warning title=AI 상담 꺼짐::ANTHROPIC_API_KEY가 서버에 없습니다. AI 상담은 동작하지 않습니다 — Variables의 NEXT_PUBLIC_AI_CHAT_ENABLED는 false로 두세요." ;;
                 VIDEO_API_URL) echo "::notice title=영상 서버 기본값::VIDEO_API_URL이 서버에 없어 함수 기본값(https://hackathon-video-api.onrender.com)을 씁니다." ;;
-                ALLOWED_ORIGINS) echo "::notice title=CORS 기본값::ALLOWED_ORIGINS가 서버에 없어 함수 기본값(https://5seoyoung.github.io, http://localhost:3000)을 씁니다. 도메인을 바꾸면 Variables에 넣으세요." ;;
+                ALLOWED_ORIGINS) echo "::notice title=CORS 기본값::ALLOWED_ORIGINS가 서버에 없어 함수 기본값(supabase/functions/_shared/cors.ts DEFAULT_ALLOWED_ORIGINS)을 씁니다. 도메인을 바꾸면 위 env ONMOM_ALLOWED_ORIGINS를 고치세요." ;;
               esac
             fi
           done
