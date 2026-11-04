@@ -2,15 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { formatMonthDayTime } from "@/domain/date";
-import type { MoodCheckRecord, SymptomRecord } from "@/domain/types";
+import { RISK_SYMPTOM_KEYS, type MoodCheckRecord, type SymptomRecord } from "@/domain/types";
 import { questionForDay } from "@/rules/mood";
 import { RECORD_NORMAL_RESULT } from "@/rules/record";
 import { RULES_VERSION } from "@/rules/version";
 import {
+  CRISIS_CALLS,
   INITIAL_SYMPTOM_FORM,
   RECENT_RECORDS_LIMIT,
   RECORD_SERVER_TEXT,
   RECORD_TEXT,
+  RECORD_WEB_TEXT,
   RISK_TOGGLES,
   answeredMoodText,
   firedRiskLabels,
@@ -21,9 +23,13 @@ import {
   recordLayout,
   recordShowsLochia,
   recordSubtitle,
+  resultCards,
   riskFlagsFromForm,
   submitSymptomCheck,
 } from "./recordView";
+
+/** 위험 증상 토글이 모두 꺼진 기록 칸(rules-1.2부터 기록에 남는다) */
+const NO_RISK = Object.fromEntries(RISK_SYMPTOM_KEYS.map((k) => [k, false])) as Record<(typeof RISK_SYMPTOM_KEYS)[number], boolean>;
 
 const kst = (local: string) => new Date(`${local}:00+09:00`);
 const NOW = kst("2026-09-23T12:00");
@@ -81,20 +87,43 @@ describe("폼 초기값 · 위험 증상 순서", () => {
       lochiaRed: false,
       feverEvent: false,
       painNrs: 0,
-      woundPainWorsening: false,
-      dizzinessFainting: false,
-      chestPainBreathing: false,
-      calfPainSwelling: false,
+      ...NO_RISK,
     });
   });
 
-  it("위험 증상 4개는 Swift 순서", () => {
+  it("위험 증상 — 다량 출혈이 맨 앞, iOS 넷은 Swift 순서 그대로, 자간전증·자간증 신호와 위기 생각이 뒤(rules-1.2)", () => {
     expect(RISK_TOGGLES.map((t) => t.label)).toEqual([
+      "피가 많이 나요",
       "수술부위·회음부 통증 급격 악화",
       "어지러움·실신·균형장애",
       "흉통·가슴 압박·호흡곤란",
       "한쪽 종아리 통증·부종",
+      "두통이 심하거나 눈이 잘 안 보여요",
+      "얼굴이나 손이 갑자기 심하게 부었어요",
+      "명치나 오른쪽 윗배가 심하게 아파요",
+      "경련(발작)을 했어요",
+      "나 자신이나 아기를 해칠 것 같은 생각이 들어요",
     ]);
+    // 기록 필드(domain/types RISK_SYMPTOM_KEYS)마다 토글이 하나씩
+    expect([...RISK_TOGGLES.map((t) => t.key)].sort()).toEqual([...RISK_SYMPTOM_KEYS].sort());
+  });
+
+  it("기준이 필요한 토글은 설명 줄을 둔다 — 다량 출혈의 양 기준(임상 사전 검토 §3-2 T1)", () => {
+    const desc = Object.fromEntries(RISK_TOGGLES.map((t) => [t.key, t.description ?? null]));
+    expect(desc.bleedingHeavy).toBe("1시간 안에 패드 1장 이상이 흠뻑 젖거나, 달걀만 한 핏덩이가 나와요");
+    expect(desc.headacheVision).toBe(RECORD_WEB_TEXT.headacheVisionHint);
+    expect(desc.harmThoughts).toBe(RECORD_WEB_TEXT.harmThoughtsHint);
+    expect(desc.dizzinessFainting).toBeNull();
+  });
+
+  it("산후 10일 전 오로 안내는 '정상'이라고 말하지 않고, 날짜와 상관없는 다량 출혈 체크를 가리킨다", () => {
+    expect(RECORD_WEB_TEXT.lochiaEarly).not.toContain("정상");
+    expect(RECORD_WEB_TEXT.lochiaEarly).toContain("날짜와 상관없이");
+    expect(RECORD_WEB_TEXT.lochiaEarly).toContain("위험 증상");
+  });
+
+  it("RECORD_TEXT에는 Swift 원문만 — 바꾼 문구(10일 전 오로 안내)는 RECORD_WEB_TEXT로 옮겼다", () => {
+    expect(Object.keys(RECORD_TEXT)).not.toContain("lochiaEarly");
   });
 });
 
@@ -137,10 +166,7 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
       redFlagCode: null,
       postpartumDays: 10,
       rulesVersion: RULES_VERSION,
-      woundPainWorsening: false,
-      dizzinessFainting: false,
-      chestPainBreathing: false,
-      calfPainSwelling: false,
+      ...NO_RISK,
     });
     expect("id" in newRecord).toBe(false);
   });
@@ -171,20 +197,22 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
     expect(newRecord.redFlagCode).toBe("pph_suspect");
   });
 
-  it("위험 증상 토글 4개는 판정에 쓰고, 어떤 신호였는지 되짚을 수 있게 기록에도 싣는다(04 §1 저장 권장, 검수 #46)", () => {
+  it("위험 증상 토글은 판정에 쓰고, 어떤 신호였는지 되짚을 수 있게 기록에도 싣는다(04 §1 저장 권장, 검수 #46)", () => {
     const { newRecord, result } = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, dizzinessFainting: true }, "2026-09-01", NOW);
     expect(result.hospitalSignal?.code).toBe("neuro_flag");
     expect(newRecord.redFlagCode).toBe("neuro_flag");
     // 필드명은 SymptomInput(RedFlagEngine.swift:18-21) 그대로 — 폼 값이 boolean으로 들어간다(null은 옛 기록 몫)
-    expect(riskFlagsFromForm({ ...INITIAL_SYMPTOM_FORM, dizzinessFainting: true })).toEqual({
-      woundPainWorsening: false,
-      dizzinessFainting: true,
-      chestPainBreathing: false,
-      calfPainSwelling: false,
-    });
-    expect(newRecord).toMatchObject({ dizzinessFainting: true, woundPainWorsening: false, chestPainBreathing: false, calfPainSwelling: false });
+    expect(riskFlagsFromForm({ ...INITIAL_SYMPTOM_FORM, dizzinessFainting: true })).toEqual({ ...NO_RISK, dizzinessFainting: true });
+    expect(newRecord).toMatchObject({ ...NO_RISK, dizzinessFainting: true });
     // 판정 규칙은 그대로다 — 토글을 기록에 실어도 결과가 달라지지 않는다
     expect(newRecord.painNrs).toBe(0);
+  });
+
+  it("다량 출혈·위기 생각 토글도 기록에 싣는다 — 산후 일수와 상관없이(rules-1.2)", () => {
+    const { newRecord, result } = submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, bleedingHeavy: true, harmThoughts: true }, "2026-09-20", NOW);
+    expect(newRecord.postpartumDays).toBe(3);
+    expect(result.signals.map((s) => s.code)).toEqual(["harm_thoughts", "heavy_bleeding"]);
+    expect(newRecord).toMatchObject({ bleedingHeavy: true, harmThoughts: true, redFlagCode: "harm_thoughts" });
   });
 
   it("firedRiskLabels — 켜진 토글의 라벨만 화면 순서로. 필드가 없거나 null인 옛 기록은 빈 배열(지어내지 않음)", () => {
@@ -209,8 +237,18 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
     expect(
       firedRiskLabels({ ...base, woundPainWorsening: true, dizzinessFainting: false, chestPainBreathing: true, calfPainSwelling: true }),
     ).toEqual([RECORD_TEXT.woundPain, RECORD_TEXT.chestBreath, RECORD_TEXT.calfSwelling]);
-    // 라벨은 RISK_TOGGLES(RECORD_TEXT 원문)와 같다 — 새 문구 없음
-    expect(RISK_TOGGLES.map((t) => t.label)).toEqual([RECORD_TEXT.woundPain, RECORD_TEXT.dizziness, RECORD_TEXT.chestBreath, RECORD_TEXT.calfSwelling]);
+    // rules-1.2 토글도 같은 화면 순서(다량 출혈이 맨 앞) — omit의 칸은 뺀다(PDF 리포트는 다량 출혈을 따로 칸에 둔다)
+    const many = { ...base, ...NO_RISK, bleedingHeavy: true, seizure: true, dizzinessFainting: true };
+    expect(firedRiskLabels(many)).toEqual([RECORD_WEB_TEXT.bleedingHeavy, RECORD_TEXT.dizziness, RECORD_WEB_TEXT.seizure]);
+    expect(firedRiskLabels(many, ["bleedingHeavy"])).toEqual([RECORD_TEXT.dizziness, RECORD_WEB_TEXT.seizure]);
+    // iOS 넷의 라벨은 RISK_TOGGLES에서도 RECORD_TEXT 원문 그대로
+    const label = (key: string) => RISK_TOGGLES.find((t) => t.key === key)?.label;
+    expect(["woundPainWorsening", "dizzinessFainting", "chestPainBreathing", "calfPainSwelling"].map(label)).toEqual([
+      RECORD_TEXT.woundPain,
+      RECORD_TEXT.dizziness,
+      RECORD_TEXT.chestBreath,
+      RECORD_TEXT.calfSwelling,
+    ]);
   });
 
   it("통증 8 이상 → severe_pain", () => {
@@ -231,11 +269,37 @@ describe("화면 배치", () => {
   it("병원 신호 → 레드플래그 카드 + 가까운 산부인과(질문·최근 기록은 숨김)", () => {
     const layout = recordLayout(signal, 3);
     expect(layout.phase).toBe("result");
-    expect(layout).toMatchObject({ showsClinics: true, redFlag: { code: "fever_infection" } });
+    expect(layout).toMatchObject({ showsClinics: true, cards: [{ code: "fever_infection" }] });
   });
 
-  it("신호 없음 → 위험 신호 없음 카드만", () => {
-    expect(recordLayout(normal, 3)).toEqual({ phase: "result", redFlag: null, showsClinics: false, showsRecent: true });
+  it("신호 없음 → 카드 없음(신호 없음 안내), 가까운 산부인과 없음", () => {
+    expect(recordLayout(normal, 3)).toEqual({ phase: "result", cards: [], showsClinics: false, showsRecent: true });
+  });
+
+  const check = (over: Partial<typeof INITIAL_SYMPTOM_FORM>) => submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, ...over }, "2026-09-01", NOW).result;
+  const codes = (over: Partial<typeof INITIAL_SYMPTOM_FORM>) => resultCards(check(over)).map((c) => c.code);
+
+  it("같은 등급의 병원 신호는 모두 카드로 — 흉통의 '심하면 119'를 놓치지 않는다(iOS는 대표 하나)", () => {
+    expect(codes({ feverEvent: true, chestPainBreathing: true })).toEqual(["fever_infection", "cardioresp_flag"]);
+  });
+
+  it("119 신호가 있으면 즉시 내원 카드는 겹쳐 보이지 않는다 — 다량 출혈 + 어지러움 → 119 카드 하나", () => {
+    expect(codes({ bleedingHeavy: true, dizzinessFainting: true })).toEqual(["heavy_bleeding_dizzy"]);
+    expect(codes({ seizure: true, feverEvent: true })).toEqual(["seizure"]);
+  });
+
+  it("위기 상담 카드는 다른 신호가 있어도 늘 — 병원 신호가 함께면 가까운 산부인과도", () => {
+    const alone = recordLayout(check({ harmThoughts: true }), 0);
+    expect(alone).toMatchObject({ cards: [{ code: "harm_thoughts", severity: "crisis" }], showsClinics: false });
+    const withFever = recordLayout(check({ harmThoughts: true, feverEvent: true }), 0);
+    expect(withFever).toMatchObject({ cards: [{ code: "harm_thoughts" }, { code: "fever_infection" }], showsClinics: true });
+    // 119 신호와 같은 높이 — 평가 순서대로 119 카드가 앞
+    expect(codes({ harmThoughts: true, seizure: true, feverEvent: true })).toEqual(["seizure", "harm_thoughts"]);
+  });
+
+  it("위기 상담 카드의 전화 — 109(24시간)·1577-0199, 지금 위험하면 119·112", () => {
+    expect(CRISIS_CALLS.map((c) => c.number)).toEqual(["109", "1577-0199", "119", "112"]);
+    expect(CRISIS_CALLS[0].name).toContain("자살예방상담전화");
   });
 
   it("결과 단계에도 최근 기록 여부를 준다(PC 두 열에서 결과 옆에 보임)", () => {

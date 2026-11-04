@@ -129,6 +129,14 @@ describe("RedFlagCard", () => {
     expect(html).not.toContain("routine");
     expect(visibleText(html)).toBe("문구");
   });
+
+  it("rules-1.2 등급 라벨 · 문구 아래·칩 위에 행동(전화 링크 등)을 둘 수 있다", () => {
+    expect(render(h(RedFlagCard, { severity: "emergency", message: "m" }))).toContain(">119 연락</p>");
+    expect(render(h(RedFlagCard, { severity: "crisis", message: "m" }))).toContain(">위기 상담 연락</p>");
+    const html = render(h(RedFlagCard, { severity: "emergency", message: "문구", chips: ["src:출처명"] }, h("a", { href: "tel:119" }, "119")));
+    expect(html.indexOf(">문구</p>")).toBeLessThan(html.indexOf('href="tel:119"'));
+    expect(html.indexOf('href="tel:119"')).toBeLessThan(html.indexOf("출처명"));
+  });
 });
 
 describe("PrimaryButton", () => {

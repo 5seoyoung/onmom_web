@@ -269,7 +269,8 @@ export function stageLabel(code: StageCode): string {
   }
 }
 
-export type Severity = "immediate" | "urgent";
+/** 안내 등급 — emergency·crisis는 rules-1.2에 더했다(높낮이는 rules/redflag severityRank) */
+export type Severity = "emergency" | "crisis" | "immediate" | "urgent";
 
 /**
  * 심각도 코드 → 표시 라벨. 모르는 코드는 null — 화면은 배지를 빼고, 코드를 그대로 내지 않는다
@@ -277,6 +278,12 @@ export type Severity = "immediate" | "urgent";
  */
 export function severityLabel(code: string): string | null {
   switch (code) {
+    case "emergency":
+      // 웹 신규 문구 — CPO 확인 필요 (rules-1.2 — 지금 바로 119에 연락해야 하는 신호의 등급. 임상 사전 검토 §3-2 "119")
+      return "119 연락";
+    case "crisis":
+      // 웹 신규 문구 — CPO 확인 필요 (rules-1.2 — 나·아기를 해칠 것 같은 생각: 병원 찾기 대신 위기 상담 전화 안내. §3-2 T11)
+      return "위기 상담 연락";
     case "immediate":
       return "즉시 내원"; // 원문: AnalyzeComponents.swift:33
     case "urgent":

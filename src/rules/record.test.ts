@@ -27,6 +27,12 @@ const form = (over: Partial<SymptomForm> = {}): SymptomForm => ({
   dizzinessFainting: false,
   chestPainBreathing: false,
   calfPainSwelling: false,
+  bleedingHeavy: false,
+  headacheVision: false,
+  faceHandSwelling: false,
+  upperBellyPain: false,
+  seizure: false,
+  harmThoughts: false,
   ...over,
 });
 
@@ -82,6 +88,15 @@ describe("buildSymptomRecord", () => {
     expect(r).toMatchObject({ postpartumDays: 9, lochiaIncreased: false, lochiaRed: false, redFlagCode: null });
     expect(showsLochiaInputs(9)).toBe(false);
     expect(showsLochiaInputs(10)).toBe(true);
+  });
+
+  it("다량 출혈은 오로 질문과 달리 산후 10일 전에도 판정한다(rules-1.2 — 임상 사전 검토 B1)", () => {
+    const { record: r, result } = buildSymptomRecord(form({ bleedingHeavy: true }), DELIVERY, at("2026-09-15T09:00:00+09:00"));
+    expect(r.postpartumDays).toBe(2);
+    expect(result.hospitalSignal?.code).toBe("heavy_bleeding");
+    expect(r.redFlagCode).toBe("heavy_bleeding");
+    // 출산일이 없어도(0일로 계산) 묻고 판정한다
+    expect(buildSymptomRecord(form({ bleedingHeavy: true }), null, at("2026-09-15T09:00:00+09:00")).record.redFlagCode).toBe("heavy_bleeding");
   });
 
   it("위험 증상 토글은 판정에만 쓰고 저장하지 않는다 → 지표는 정상인데 상태는 '확인 필요'(감사 #42)", () => {

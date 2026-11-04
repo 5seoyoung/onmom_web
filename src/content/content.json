@@ -35,7 +35,8 @@
       "severity": "immediate",
       "message": "어지러움·실신·균형장애는 즉시 병원 확인이 필요한 신호예요. 혼자 이동하지 말고 보호자와 함께 방문하세요.",
       "chips": [
-        "어지러움·실신·균형장애"
+        "어지러움·실신·균형장애",
+        "src:CDC Hear Her 2024"
       ],
       "condition_swift": "$0.dizzinessFainting"
     },
@@ -44,7 +45,8 @@
       "severity": "immediate",
       "message": "흉통·가슴 압박·호흡곤란은 즉시 병원 확인이 필요한 신호예요. 심하면 119에 연락하세요.",
       "chips": [
-        "흉통·가슴 압박·호흡곤란"
+        "흉통·가슴 압박·호흡곤란",
+        "src:AWHONN 2018"
       ],
       "condition_swift": "$0.chestPainBreathing"
     },
@@ -53,9 +55,86 @@
       "severity": "immediate",
       "message": "한쪽 종아리만 아프거나 붓는 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.",
       "chips": [
-        "한쪽 종아리 통증·부종"
+        "한쪽 종아리 통증·부종",
+        "src:CDC Hear Her 2024",
+        "src:NICE NG194"
       ],
       "condition_swift": "$0.calfPainSwelling"
+    },
+    {
+      "code": "heavy_bleeding_dizzy",
+      "severity": "emergency",
+      "message": "피가 많이 나면서 어지럽거나 쓰러질 것 같은 것은 지금 바로 119에 연락해야 하는 신호예요. 혼자 움직이지 말고 곁에 있는 사람에게 알리세요.",
+      "chips": [
+        "많은 출혈+어지러움·실신",
+        "src:AWHONN 2018",
+        "src:CDC Hear Her 2024"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.bleedingHeavy && $0.dizzinessFainting"
+    },
+    {
+      "code": "seizure",
+      "severity": "emergency",
+      "message": "경련(발작)은 지금 바로 119에 연락해야 하는 신호예요. 곁에 있는 사람에게 바로 알리세요.",
+      "chips": [
+        "경련(발작)",
+        "src:AWHONN 2018"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.seizure"
+    },
+    {
+      "code": "harm_thoughts",
+      "severity": "crisis",
+      "message": "혼자 견디지 마세요. 지금 곁에 있는 가족에게 알리고 자살예방상담전화 109(24시간)나 정신건강위기상담전화 1577-0199에 연락하세요. 지금 위험하다면 119나 112에 연락하세요.",
+      "chips": [
+        "나·아기를 해칠 것 같은 생각",
+        "src:CDC Hear Her 2024",
+        "src:AWHONN 2018"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.harmThoughts"
+    },
+    {
+      "code": "heavy_bleeding",
+      "severity": "immediate",
+      "message": "피가 많이 나는 것은 즉시 병원 확인이 필요한 신호예요. 어지럽거나 쓰러질 것 같으면 119에 연락하세요.",
+      "chips": [
+        "많은 출혈(1시간에 패드 1장·달걀만 한 핏덩이)",
+        "src:AWHONN 2018",
+        "src:NICE NG194"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.bleedingHeavy"
+    },
+    {
+      "code": "headache_vision",
+      "severity": "immediate",
+      "message": "심한 두통이나 눈이 잘 안 보이는 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.",
+      "chips": [
+        "심한 두통·시야 이상",
+        "src:CDC Hear Her 2024",
+        "src:AWHONN 2018"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.headacheVision"
+    },
+    {
+      "code": "face_hand_swelling",
+      "severity": "immediate",
+      "message": "얼굴이나 손이 갑자기 심하게 붓는 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.",
+      "chips": [
+        "얼굴·손이 갑자기 심하게 부음",
+        "src:CDC Hear Her 2024"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.faceHandSwelling"
+    },
+    {
+      "code": "upper_belly_pain",
+      "severity": "immediate",
+      "message": "명치나 오른쪽 윗배가 심하게 아픈 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.",
+      "chips": [
+        "명치·오른쪽 윗배의 심한 통증",
+        "src:AWHONN 2018",
+        "src:NICE NG133"
+      ],
+      "condition_swift": "(웹 rules-1.2) $0.upperBellyPain"
     }
   ],
   "stage_buckets": [

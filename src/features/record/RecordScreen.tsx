@@ -2,7 +2,8 @@
 
 // 기록 탭 — 이상 증상 빠른 기록(RecordFlowView.swift). AI 아님: 판정은 전부 rules/redflag 규칙 조회다.
 // 입력 단계: 머리 → 폼 5카드 → [확인하기] → 오늘의 한 가지 질문 → 최근 기록(있을 때) → 면책
-// 결과 단계: 머리 → 레드플래그 카드 + 가까운 산부인과 | 위험 신호 없음 카드 → [다시 입력] → 면책
+// 결과 단계: 머리 → 안내 카드(119·위기 상담·즉시 내원 — recordView resultCards) + 병원 신호면 가까운 산부인과 | 신호 없음 카드
+//            → [다시 입력] → 면책
 // 기록은 결과와 무관하게 저장한다. 저장소를 읽기 전(hydrated=false)에는 제목만 그린다 — 기본값이 번쩍이지 않게.
 //
 // 폰: 위처럼 단계가 바뀌면 폼 자리에 결과가 온다(iOS 그대로).
@@ -121,7 +122,8 @@ export function RecordScreen() {
           {layout.phase === "result" ? (
             <div ref={resultRef} tabIndex={-1} className="flex flex-col gap-4 focus:outline-none">
               <RecordResult
-                redFlag={layout.redFlag}
+                cards={layout.cards}
+                showsClinics={layout.showsClinics}
                 neighborhood={neighborhood.value}
                 onNeighborhoodChange={neighborhood.change}
               />
