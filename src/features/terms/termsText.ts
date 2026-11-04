@@ -1,4 +1,5 @@
-// 이용약관 — 초안(법률 검토 전). /terms/ 화면과 온보딩 동의 옆 시트(TermsDialog)가 같이 쓴다.
+// 이용약관 — 시범 운영 중 시행판(2026-11-04 시행, 그 전 2026-10-24부터는 "초안 - 법률 검토 전"으로 게시). 대표 결정(2026-11-04):
+// 바깥 법률 검토 없이 이 판을 시행한다. /terms/ 화면과 온보딩 동의 옆 시트(TermsDialog)가 같이 쓴다.
 // 근거: web/08_OPEN_ITEMS.md §1 법률 자문("이용약관 화면이 추가될 수 있음(온보딩 동의 옆)"), docs/LAUNCH_CHECKLIST.md 1-9.
 // iOS에는 이용약관이 없었다 — 원문이 없는 화면이라 아래 문구는 원문 표시가 붙은 줄을 빼고 모두 웹 신규 문구 — CPO 확인 필요.
 // 검토용 사본과 체크리스트: docs/privacy/TERMS_DRAFT.md (termsDoc.test.ts가 코드의 모든 줄이 문서에 있는지 확인한다).
@@ -7,7 +8,7 @@
 // - 의료기기가 아니다(web/07 §1): 진단·판정·처방·치료라는 말을 우리가 하는 일에 쓰지 않는다. 면책은 content.json의 문장을 그대로 쓴다.
 // - 사실만 쓴다: 지금 서비스가 하는 일(게스트·카카오 계정, 계정 삭제, 내 데이터 내려받기)만 적고, 없는 기능(유료 등)을 약속하지 않는다.
 // - 문의처는 개인정보처리방침의 이메일과 같다(contact.ts).
-// - 법 조항 이름은 검토 요청을 위한 표시일 뿐 법률 의견이 아니다 — 확정 전에는 "초안 — 법률 검토 전"을 늘 먼저 보인다.
+// - 시범 운영 동안에는 "시범 운영 중"(개인정보처리방침과 같은 글자)을 늘 먼저 보인다.
 
 import content from "@/content";
 import { WEB_POLICY_DRAFT_LABEL } from "@/features/privacy/webPolicyText";
@@ -21,15 +22,16 @@ export const TERMS_TEXT = {
   /** 온보딩 동의 옆 링크(개인정보처리방침 전문 보기 옆) — 시트로 연다 */
   openLink: "이용약관 보기",
   close: "닫기", // 원문: PrivacyPolicyView.swift:77
-  /** 초안 표시 — 웹 개인정보처리방침 초안과 같은 글자 */
+  /** 상태 표시("시범 운영 중") — 웹 개인정보처리방침과 같은 글자 */
   draftLabel: WEB_POLICY_DRAFT_LABEL,
-  effective: "작성일: 2026년 9월 28일 · 시행일: 법률 검토 후 정함",
-  note: "이 약관은 웹 온맘의 이용 조건을 정리한 초안이에요. 법률 검토를 마친 뒤 확정하고 시행일을 적어요.",
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판의 시행일·안내 — 시범 운영 중에도 시행 중인 약관이다)
+  effective: "시행일: 2026년 11월 4일",
+  note: "이 약관은 시범 운영 중인 온맘에 적용돼요. 내용이 바뀌면 14조에 따라 미리 알려요.",
 } as const;
 
 export interface TermsDocument {
   title: string;
-  /** 제목 아래 한 줄(작성일·시행일 미정) */
+  /** 제목 아래 한 줄(시행일) */
   effective: string;
   /** 본문 위 안내 상자의 굵은 첫 줄 */
   draftLabel: string;
@@ -160,12 +162,17 @@ export function termsSections(): readonly PolicySection[] {
     },
     {
       title: "부칙",
-      body: "이 약관은 법률 검토를 마친 뒤 정한 시행일부터 적용합니다.",
+      // 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판: 시행일과 변경 이력 — 판을 새로 시행할 때마다 줄을 더한다)
+      body: [
+        "이 약관은 2026년 11월 4일부터 시행합니다.",
+        "• 2026년 10월 24일: 시범 운영 시작(초안 게시)",
+        "• 2026년 11월 4일: 시행(이 판)",
+      ].join("\n"),
     },
   ];
 }
 
-/** 이 빌드의 이용약관 — 초안. 본문은 빌드 설정과 무관하다(서버 저장·카카오 로그인이 켜졌는지는 처리방침이 다룬다). */
+/** 이 빌드의 이용약관 — 2026-11-04 시행판. 본문은 빌드 설정과 무관하다(서버 저장·카카오 로그인이 켜졌는지는 처리방침이 다룬다). */
 export function termsDocument(): TermsDocument {
   return {
     title: TERMS_TEXT.title,
@@ -178,7 +185,7 @@ export function termsDocument(): TermsDocument {
 
 /**
  * 약관 본문이 있는가 — 링크(로그인 화면·설정·온보딩 동의 옆)는 본문이 있을 때만 그린다.
- * 지금은 초안이 있어 늘 true다. 법률 검토에서 초안을 내리기로 하면 termsSections를 비워 링크가 함께 사라지게 한다(빈 화면을 링크하지 않는다).
+ * 지금은 시행 중인 약관이 있어 늘 true다. 약관을 내리기로 하면 termsSections를 비워 링크가 함께 사라지게 한다(빈 화면을 링크하지 않는다).
  */
 export function hasTermsText(): boolean {
   return termsSections().length > 0;

@@ -2,7 +2,8 @@
 //
 // - Supabase 설정이 없는 빌드(브라우저 전용): iOS 방침 원문(policyText.ts) + "iOS 기준이에요" 안내. 기록은 브라우저에만 남으므로
 //   iOS 방침의 "기기에만 저장"이 웹에서도 대체로 맞다(차이는 안내 줄이 알린다).
-// - Supabase 설정이 있는 빌드: 웹 방침 초안(webPolicyText.ts) — 서버 저장·카카오 로그인·AI 국외 이전을 적은 것. "초안 — 법률 검토 전" 표시.
+// - Supabase 설정이 있는 빌드: 웹 방침(webPolicyText.ts) — 서버 저장·카카오 로그인·AI 국외 이전을 적은 것. 2026-11-04부터 시행 중이고
+//   "시범 운영 중" 표시를 먼저 보인다(그 전 2026-10-24부터는 "초안 - 법률 검토 전" 표시의 초안).
 //   iOS 방침은 서버 저장을 부정하므로("별도의 회원 데이터베이스를 운영하지 않습니다") 이 빌드에서는 보이지 않는다.
 
 import { config, isReminderConfigured, isSupabaseConfigured } from "@/config";
@@ -24,12 +25,12 @@ import {
 } from "./webPolicyText";
 
 export interface PolicyDocument {
-  /** "ios" = iOS 원문, "webDraft" = 웹 초안 */
+  /** "ios" = iOS 원문, "webDraft" = 웹 방침(서버 저장 빌드 — 이름은 초안 때 그대로, 2026-11-04부터 시행 중) */
   kind: "ios" | "webDraft";
   title: string;
-  /** 제목 아래 한 줄(시행일 또는 작성일·시행일 미정) */
+  /** 제목 아래 한 줄(시행일) */
   effective: string;
-  /** 초안 표시(웹 초안만) — 본문 위 안내 상자의 굵은 첫 줄 */
+  /** 상태 표시(웹 방침만 — 지금은 "시범 운영 중") — 본문 위 안내 상자의 굵은 첫 줄 */
   draftLabel: string | null;
   /** 본문 위 안내 */
   note: string;

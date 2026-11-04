@@ -45,15 +45,31 @@ describe("어느 방침을 보이나", () => {
     expect(ios.effective).toBe("시행일: 2026년 9월 7일");
   });
 
-  it("설정이 있는 빌드 — 웹 초안, '초안 — 법률 검토 전'을 먼저 보인다", () => {
+  it("설정이 있는 빌드 — 2026-11-04 시행 중인 웹 방침, '시범 운영 중'을 먼저 보인다(초안·법률 검토 표시 없음)", () => {
     expect(web.kind).toBe("webDraft");
-    expect(web.draftLabel).toBe("초안 - 법률 검토 전");
+    expect(web.draftLabel).toBe("시범 운영 중");
     expect(web.title).toBe(ios.title);
-    expect(web.effective).toContain("법률 검토 후");
+    expect(web.effective).toBe("시행일: 2026년 11월 4일");
     const note = renderToStaticMarkup(h(PolicyWebNote, { policy: web }));
     expect(textOf(note).startsWith(WEB_POLICY_DRAFT_LABEL)).toBe(true);
-    // iOS 방침에는 초안 표시가 없다
+    // 시행 중인 방침이다 — 초안·"법률 검토"를 말하지 않는다(대표 결정 2026-11-04: 바깥 법률 검토 없이 시행)
+    for (const t of [web.draftLabel!, web.effective, web.note, WEB_TEXT]) {
+      expect(t).not.toContain("법률 검토");
+      expect(t).not.toMatch(/초안(?! 게시)/);
+    }
+    // iOS 방침에는 시범 표시가 없다
     expect(textOf(renderToStaticMarkup(h(PolicyWebNote, { policy: ios })))).not.toContain(WEB_POLICY_DRAFT_LABEL);
+  });
+
+  it("방침의 변경 — 고지 기간과 변경 이력(시범 시작 초안 게시 → 이 판 시행)", () => {
+    const change = section("방침의 변경");
+    expect(change).toContain("시행 7일 전에 이 화면에 알립니다");
+    expect(change).toContain("• 2026년 10월 24일: 시범 운영 시작(초안 게시)");
+    expect(change).toContain("• 2026년 11월 4일: 시행(이 판)");
+    expect(change).toContain("이전 판은");
+    // 이전 판 안내가 가리키는 연락처 절 번호가 실제 "보호책임자와 문의처" 절이다
+    const contactNo = web.sections.find((s) => s.title.includes("문의처"))!.title.match(/^(\d+)\./)![1];
+    expect(change).toContain(`${contactNo}절 연락처`);
   });
 
   it("본문은 고른 방침 그대로 그린다(절 제목 = 제목 요소)", () => {

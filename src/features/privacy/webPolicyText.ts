@@ -1,5 +1,6 @@
-// 웹 개인정보처리방침 — 초안(법률 검토 전). Supabase 설정이 있는 빌드(서버 저장·카카오 로그인·게스트 익명 계정)에서 보인다.
-// 설정이 없는 빌드(브라우저 전용)는 iOS 원문(policyText.ts)을 그대로 보인다 — policy.ts policyFor.
+// 웹 개인정보처리방침 — 시범 운영 중 시행판(2026-11-04 시행, 그 전 2026-10-24부터는 "초안 - 법률 검토 전"으로 게시).
+// Supabase 설정이 있는 빌드(서버 저장·카카오 로그인·게스트 익명 계정)에서 보인다. 대표 결정(2026-11-04): 바깥 법률 검토 없이
+// 사실과 맞춘 이 판을 시행한다. 설정이 없는 빌드(브라우저 전용)는 iOS 원문(policyText.ts)을 그대로 보인다 — policy.ts policyFor.
 //
 // 구성은 개인정보보호법 §30·시행령 §31의 기재 사항 순서(목적·항목·보유·위탁·국외 이전·제3자 제공·민감정보·아동·
 // 자동 수집 장치·안전성 확보 조치·권리·책임자·구제·변경). 검토용 요약과 체크리스트: docs/privacy/CONSENT_AND_POLICY_DRAFT.md
@@ -26,15 +27,29 @@ import {
 } from "./dataItems";
 import type { PolicySection } from "./policyText";
 
-/** 제목 위 표시 — 초안임을 늘 먼저 보인다 */
-export const WEB_POLICY_DRAFT_LABEL = "초안 - 법률 검토 전";
+/**
+ * 본문 위 안내 상자의 굵은 첫 줄 — 시범 운영 중임을 늘 먼저 보인다(이용약관도 같은 글자 — termsText.ts).
+ * 이름은 예전(초안 표시) 그대로 둔다 — 화면·시험이 이 이름으로 읽는다. 시범을 끝내면 이 표시를 빼고 시행일만 남긴다.
+ */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판: "초안 - 법률 검토 전" → 시범 운영 중 표시)
+export const WEB_POLICY_DRAFT_LABEL = "시범 운영 중";
 
-/** 시행일 줄 자리 — 검토 전이라 시행일이 없다 */
-export const WEB_POLICY_EFFECTIVE = "작성일: 2026년 9월 28일 · 시행일: 법률 검토 후 정함";
+/** 제목 아래 시행일 줄 — 변경 이력은 맨 끝 "방침의 변경" 절에 둔다 */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판의 시행일)
+export const WEB_POLICY_EFFECTIVE = "시행일: 2026년 11월 4일";
 
 /** 본문 위 안내 */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판 — 시범 운영 중에도 시행 중인 방침이다)
 export const WEB_POLICY_NOTE =
-  "이 방침은 웹 온맘의 서버 저장·카카오 로그인·AI 상담에 맞춰 새로 쓴 초안이에요. 법률 검토를 마친 뒤 확정하고 시행일을 적어요.";
+  "이 방침은 시범 운영 중인 온맘 웹(로그인·서버 저장)에 적용돼요. 내용이 바뀌면 미리 알리고, 필요하면 다시 동의를 받아요.";
+
+/** 변경 이력 — "방침의 변경" 절 끝에 둔다. 판을 새로 시행할 때마다 줄을 더한다(지우지 않는다). */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판: 변경 이력 — 개인정보 처리방침 작성지침의 이전 판 안내)
+const WEB_POLICY_HISTORY = [
+  "변경 이력",
+  "• 2026년 10월 24일: 시범 운영 시작(초안 게시)",
+  "• 2026년 11월 4일: 시행(이 판)",
+] as const;
 
 /** 선택 항목 — 쓰는 빌드에서만 방침에 넣는다(쓰지 않는 업체를 적지 않는다) */
 export interface WebPolicyOptions {
@@ -47,7 +62,7 @@ export interface WebPolicyOptions {
   reminders: boolean;
   /**
    * 운동 탭 "유튜브 추천 영상"이 있는 빌드인가(features/youtube/catalog.ts YOUTUBE_ACTIVE — 승인된 영상이 하나라도 실렸고 Supabase가 설정된
-   * 빌드일 때. 이 초안을 보이는 빌드에서만 켜진다 — Supabase 없는 빌드의 iOS 방침 원문에는 Google이 없어 그 빌드에서는 목록을 싣지 않는다).
+   * 빌드일 때. 이 방침을 보이는 빌드에서만 켜진다 — Supabase 없는 빌드의 iOS 방침 원문에는 Google이 없어 그 빌드에서는 목록을 싣지 않는다).
    * 켜면 미리보기 이미지를 불러오는 Google LLC(YouTube)를 6·7·11절에 적는다. 생략하면 false.
    */
   youtube?: boolean;
@@ -149,7 +164,7 @@ function transferBlocks(o: WebPolicyOptions): string[] {
   return blocks.map(([head, ...rest], i) => [`${CIRCLED[i]} ${head}`, ...rest].join("\n"));
 }
 
-/** 웹 처리방침 초안 본문 — 절 제목은 번호를 붙여 목차처럼 읽힌다 */
+/** 웹 처리방침 본문 — 절 제목은 번호를 붙여 목차처럼 읽힌다 */
 export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIONS): readonly PolicySection[] {
   return [
     {
@@ -299,7 +314,13 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
     },
     {
       title: "17. 방침의 변경",
-      body: "이 방침을 바꾸면 시행 7일 전에 이 화면에 알립니다. 이용자에게 불리하거나 중요한 변경은 30일 전에 알리고, 필요하면 다시 동의를 받습니다.",
+      body: [
+        "이 방침을 바꾸면 시행 7일 전에 이 화면에 알립니다. 이용자에게 불리하거나 중요한 변경은 30일 전에 알리고, 필요하면 다시 동의를 받습니다.",
+        "",
+        ...WEB_POLICY_HISTORY,
+        // 웹 신규 문구 — CPO 확인 필요 (2026-11-04 시행판: 이전 판 — 저장소 기록에 모든 판이 남아 있어 보낼 수 있다)
+        "이전 판은 15절 연락처로 요청하면 보내 드립니다.",
+      ].join("\n"),
     },
   ];
 }
