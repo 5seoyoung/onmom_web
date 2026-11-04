@@ -152,6 +152,26 @@ describe("mergeStates — 기록 목록", () => {
     expect(canonicalJSON(mergeStates(once, local, { accountId: ACCOUNT }))).toBe(canonicalJSON(once));
   });
 
+  it("위험 증상 토글 칸(rules-1.2) — 서버 쪽에 없는 칸은 이 브라우저 쪽 값으로 채운다(칸을 모르는 옛 탭이 떨어뜨린 것)", () => {
+    const t = "2026-11-04T10:00:00.000Z";
+    // 서버: 옛 탭이 다시 저장해 칸이 빠진 기록 / 이 브라우저: 만들 때의 기록 그대로
+    const server = state({ symptomHistory: [symptom("a", t, { redFlagCode: "harm_thoughts" })] });
+    const local = state({ symptomHistory: [symptom("a", t, { redFlagCode: "harm_thoughts", harmThoughts: true, bleedingHeavy: false })] });
+    const merged = mergeStates(server, local, { accountId: ACCOUNT });
+    expect(merged.symptomHistory[0]).toMatchObject({ harmThoughts: true, bleedingHeavy: false });
+    // 양쪽에 다 있으면 서버 쪽, 채울 칸이 없으면 서버 쪽 기록 그대로 — 다시 합쳐도 바뀌지 않는다
+    const both = mergeStates(
+      state({ symptomHistory: [symptom("a", t, { seizure: true })] }),
+      state({ symptomHistory: [symptom("a", t, { seizure: false })] }),
+      { accountId: ACCOUNT },
+    );
+    expect(both.symptomHistory[0].seizure).toBe(true);
+    expect(canonicalJSON(mergeStates(merged, local, { accountId: ACCOUNT }))).toBe(canonicalJSON(merged));
+    // 칸이 없는 옛 기록끼리는 칸을 지어내지 않는다
+    const legacy = mergeStates(state({ symptomHistory: [symptom("a", t)] }), state({ symptomHistory: [symptom("a", t)] }), { accountId: ACCOUNT });
+    expect("harmThoughts" in legacy.symptomHistory[0]).toBe(false);
+  });
+
   it("합친 결과를 서버 JSON으로 보냈다 다시 읽어도 버전이 그대로다(store/decode)", () => {
     const t = "2026-09-10T10:00:00.000Z";
     const merged = mergeStates(

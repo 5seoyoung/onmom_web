@@ -27,6 +27,8 @@ export const REPORT_TEXT = {
   symptomsTitle: "증상 기록",
   // 웹 신규 문구 — CPO 확인 필요 (증상 기록 표의 열 이름 — 발열·통증·산후 일수 열은 앱 원문을 쓴다)
   colRecordedAt: "기록 시각",
+  // 웹 신규 문구 — CPO 확인 필요 (증상 기록 표의 열 이름 — rules-1.2의 다량 출혈 토글. 산후 0일부터 묻는다)
+  colBleedingHeavy: "많은 출혈",
   colLochiaIncreased: "오로 늘어남",
   colLochiaRed: "붉은 오로",
   colResult: "결과",

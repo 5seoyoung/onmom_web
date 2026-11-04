@@ -80,7 +80,7 @@ function SymptomResult({ row }: { row: ReportSymptomRow }) {
   );
 }
 
-/** 넓은 폭·인쇄 — 7열 표 */
+/** 넓은 폭·인쇄 — 8열 표(rules-1.2: 산후 일수 다음에 다량 출혈 칸 — 산후 0일부터 묻는다) */
 function SymptomTable({ labelledBy, columns, rows }: { labelledBy: string; columns: readonly string[]; rows: readonly ReportSymptomRow[] }) {
   return (
     <table aria-labelledby={labelledBy} className={cx(TABLE, "tabular-nums")}>
@@ -100,6 +100,7 @@ function SymptomTable({ labelledBy, columns, rows }: { labelledBy: string; colum
               <time dateTime={r.iso}>{r.dateText}</time>
             </th>
             <td className={cx(TD, "whitespace-nowrap")}>{r.dayText ?? <NoValue />}</td>
+            <td className={TD}>{r.bleedingHeavy ?? <NoValue />}</td>
             <td className={TD}>{r.lochiaIncreased ?? <NoValue />}</td>
             <td className={TD}>{r.lochiaRed ?? <NoValue />}</td>
             <td className={TD}>{r.fever}</td>
@@ -121,10 +122,11 @@ function SymptomBlocks({ columns, rows }: { columns: readonly string[]; rows: re
       {rows.map((r) => {
         const details: ReadonlyArray<readonly [string, string | null]> = [
           [columns[1], r.dayText],
-          [columns[2], r.lochiaIncreased],
-          [columns[3], r.lochiaRed],
-          [columns[4], r.fever],
-          [columns[5], r.pain],
+          [columns[2], r.bleedingHeavy],
+          [columns[3], r.lochiaIncreased],
+          [columns[4], r.lochiaRed],
+          [columns[5], r.fever],
+          [columns[6], r.pain],
         ];
         return (
           <li key={r.id} className={cx("flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0", ROW)}>

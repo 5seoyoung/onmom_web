@@ -166,7 +166,22 @@ describe("증상 기록", () => {
     const t = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "symptoms");
     expect(t.rows.map((r) => r.id)).toEqual(["c", "b", "a"]);
     expect(t.columns).toBe(SYMPTOM_COLUMNS);
-    expect(t.columns).toEqual(["기록 시각", "산후 일수", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)", "결과"]);
+    expect(t.columns).toEqual(["기록 시각", "산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)", "결과"]);
+  });
+
+  it("많은 출혈 칸(rules-1.2 — 산후 0일부터 묻는다): 예·아니요, 그 칸이 없는 옛 기록은 값 없음(null) — 신호 줄에는 겹쳐 쓰지 않는다", () => {
+    let s = addSymptomRecord(onboarded(), symptom("old", "2026-09-05T01:00:00.000Z", { postpartumDays: 1 }));
+    s = addSymptomRecord(s, { ...symptom("no", "2026-09-06T01:00:00.000Z", { postpartumDays: 2 }), bleedingHeavy: false });
+    s = addSymptomRecord(s, {
+      ...symptom("yes", "2026-09-07T01:00:00.000Z", { postpartumDays: 3, redFlagCode: "heavy_bleeding_dizzy" }),
+      bleedingHeavy: true,
+      dizzinessFainting: true,
+    });
+    const byId = Object.fromEntries(section(buildReport(s, GUEST, NOW, { includeJournal: false }), "symptoms").rows.map((r) => [r.id, r]));
+    expect(byId.old.bleedingHeavy).toBeNull();
+    expect(byId.no.bleedingHeavy).toBe("아니요");
+    expect(byId.yes.bleedingHeavy).toBe("예");
+    expect(byId.yes.signals).toEqual(["어지러움·실신·균형장애"]);
   });
 
   it("최대 50건(저장 한도) — 51건이 들어와도 최신 50건", () => {
@@ -190,6 +205,7 @@ describe("증상 기록", () => {
       iso: "2026-10-14T06:05:00.000Z",
       dateText: "10월 14일 오후 3:05",
       dayText: "40일차",
+      bleedingHeavy: null, // 위험 증상 칸이 없는 기록(rules-1.2 전 모양)
       lochiaIncreased: "예",
       lochiaRed: "예",
       fever: "아니요",

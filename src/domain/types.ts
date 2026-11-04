@@ -74,6 +74,21 @@ export type RiskSymptomKey = (typeof RISK_SYMPTOM_KEYS)[number];
  */
 export type RiskSymptomFlags = { [K in RiskSymptomKey]?: boolean | null };
 
+/**
+ * 위험 증상 토글 칸만 — true/false인 칸만 옮기고, 없거나 다른 값(null 포함)이면 칸을 비운다(묻지 않은 것 — false로 지어내지 않는다).
+ * 그래서 옛 기록은 읽고 다시 써도 모양이 그대로다. 저장소 읽기(store/decode)·새 기록(appStore.addSymptomRecord)·동기화 합치기
+ * (store/sync/merge)가 같은 규칙을 쓴다.
+ */
+export function pickRiskFlags(raw: object): RiskSymptomFlags {
+  const fields = raw as Readonly<Record<string, unknown>>;
+  const out: RiskSymptomFlags = {};
+  for (const key of RISK_SYMPTOM_KEYS) {
+    const v = fields[key];
+    if (typeof v === "boolean") out[key] = v;
+  }
+  return out;
+}
+
 export interface SymptomRecord extends RiskSymptomFlags {
   id: string;
   date: IsoDateTimeString;

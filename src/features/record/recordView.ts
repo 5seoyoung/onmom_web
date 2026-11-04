@@ -199,7 +199,6 @@ export function submitSymptomCheck(
 ): { newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean>; result: RedFlagResult } {
   // id는 스토어가 새로 붙인다(DEV_NOTES §4).
   const { record, result } = buildSymptomRecord(form, deliveryDate, now);
-  // 위험 증상 토글 4개도 함께 싣는다(RiskSymptomFlags 주석) — 스토어에 필드가 생기면 그대로 저장된다.
   const newRecord: NewSymptomRecord & Record<RiskSymptomKey, boolean> = {
     date: record.date,
     lochiaIncreased: record.lochiaIncreased,
@@ -210,6 +209,7 @@ export function submitSymptomCheck(
     postpartumDays: record.postpartumDays,
     // 결과를 낸 규칙의 버전 — rules/record buildSymptomRecord가 찍은 값 그대로(여기서 다시 정하지 않는다)
     rulesVersion: record.rulesVersion,
+    // 위험 증상 토글 — 판정에 쓴 값 그대로 기록에 남긴다(rules-1.2 — buildSymptomRecord의 record에 든 값과 같은 폼 값)
     ...riskFlagsFromForm(form),
   };
   return { newRecord, result };

@@ -53,6 +53,11 @@ export interface ReportSymptomRow {
   dateText: string;
   /** "40일차" — 기록 시점의 산후 일수. 옛 기록이면 null */
   dayText: string | null;
+  /**
+   * 피가 많이 남(위험 증상 bleedingHeavy — rules-1.2부터 산후 0일부터 묻는다) "예"/"아니요". 그 칸이 없는 옛 기록(rules-1.2 전·iOS)은 null —
+   * 묻지 않았으므로 "아니요"로 지어내지 않는다(임상 사전 검토 §3-3 "리포트 칸 정의도 함께").
+   */
+  bleedingHeavy: string | null;
   lochiaIncreased: string | null;
   lochiaRed: string | null;
   fever: string;
@@ -61,7 +66,7 @@ export interface ReportSymptomRow {
   flagged: boolean;
   /** "위험신호 없음" / "병원 신호" */
   result: string;
-  /** 그 기록에서 켜져 있던 위험 증상 라벨(firedRiskLabels — 필드가 없는 기록은 빈 배열) */
+  /** 그 기록에서 켜져 있던 위험 증상 라벨(firedRiskLabels — 필드가 없는 기록은 빈 배열). 다량 출혈은 따로 칸이 있어 뺀다 */
   signals: string[];
   /** "규칙 버전 rules-1.1" — 그 기록을 남길 때의 안내 규칙 버전. 버전이 없는 옛 기록·iOS 기록이면 null(그리지 않는다) */
   rulesVersionText: string | null;
@@ -125,6 +130,7 @@ export interface Report {
 export const SYMPTOM_COLUMNS: readonly string[] = [
   REPORT_TEXT.colRecordedAt,
   SETTINGS_TEXT.dayCount, // "산후 일수" — 원문: MoreView.swift:49
+  REPORT_TEXT.colBleedingHeavy, // rules-1.2 — 산후 0일부터 묻는 다량 출혈(오로 두 칸은 10일부터)
   REPORT_TEXT.colLochiaIncreased,
   REPORT_TEXT.colLochiaRed,
   RECORD_TEXT.feverTitle, // "발열 (38.0℃ 이상)" — 원문: RecordFlowView.swift:191
@@ -217,13 +223,16 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
         iso: r.date,
         dateText: formatMonthDayTime(r.date),
         dayText: days === null ? null : `${days}일차`, // 설정 "산후 일수" 값과 같은 형식 — 원문: MoreView.swift:49
+        // 칸이 없는 옛 기록(rules-1.2 전·iOS)은 묻지 않은 것 — "-"
+        bleedingHeavy: typeof r.bleedingHeavy === "boolean" ? yesNo(r.bleedingHeavy) : null,
         lochiaIncreased: lochiaCell(r.lochiaIncreased, days),
         lochiaRed: lochiaCell(r.lochiaRed, days),
         fever: yesNo(r.feverEvent),
         pain: formatNrs(r.painNrs),
         flagged,
         result: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
-        signals: firedRiskLabels(r),
+        // 다량 출혈은 위 칸에 있으니 신호 줄에서는 뺀다(같은 말을 두 번 보이지 않게)
+        signals: firedRiskLabels(r, ["bleedingHeavy"]),
         rulesVersionText: versionText(REPORT_TEXT.recordRulesVersion, r.rulesVersion),
       };
     });

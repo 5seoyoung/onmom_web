@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { MOOD_CHECKS_LIMIT, SYMPTOM_HISTORY_LIMIT, type PersistedState } from "@/domain/types";
+import { MOOD_CHECKS_LIMIT, RISK_SYMPTOM_KEYS, SYMPTOM_HISTORY_LIMIT, type PersistedState } from "@/domain/types";
 import { AI_USAGE_RETENTION_DAYS } from "@/features/privacy/dataItems";
 import { RECORD_VERSION_MAX_LENGTH } from "@/store/decode";
 import { initialState } from "@/store/defaults";
@@ -130,10 +130,13 @@ describe("0007 — user_states 크기 상한 5MB → 1MB", () => {
         lochiaRed: true,
         feverEvent: true,
         painNrs: 10,
-        redFlagCode: "cardioresp_flag",
+        // 가장 긴 레드플래그 code(rules-1.2)
+        redFlagCode: "heavy_bleeding_dizzy",
         postpartumDays: 365,
-        // 기록마다의 규칙 버전 — 디코더가 받는 가장 긴 값으로(실제는 "rules-1.1" 9자)
+        // 기록마다의 규칙 버전 — 디코더가 받는 가장 긴 값으로(실제는 "rules-1.2" 9자)
         rulesVersion: "r".repeat(RECORD_VERSION_MAX_LENGTH),
+        // 위험 증상 토글 칸 전부(rules-1.2부터 기록에 남는다)
+        ...Object.fromEntries(RISK_SYMPTOM_KEYS.map((key) => [key, true])),
       })),
       moodChecks: Array.from({ length: MOOD_CHECKS_LIMIT }, (_, i) => ({
         id: `00000000-0000-4000-9000-${String(i).padStart(12, "0")}`,

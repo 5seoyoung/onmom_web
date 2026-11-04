@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SYMPTOM_HISTORY_LIMIT, type SymptomRecord } from "@/domain/types";
+import { RISK_SYMPTOM_KEYS, SYMPTOM_HISTORY_LIMIT, type SymptomRecord } from "@/domain/types";
 import { metrics } from "./redflag";
 import { RULES_VERSION } from "./version";
 import {
@@ -65,6 +65,8 @@ describe("buildSymptomRecord", () => {
       redFlagCode: "pph_suspect",
       postpartumDays: 10,
       rulesVersion: RULES_VERSION,
+      // 위험 증상 토글 — 모두 꺼짐(판정에 쓴 값 그대로, rules-1.2)
+      ...Object.fromEntries(RISK_SYMPTOM_KEYS.map((k) => [k, false])),
     });
   });
 
@@ -99,13 +101,15 @@ describe("buildSymptomRecord", () => {
     expect(buildSymptomRecord(form({ bleedingHeavy: true }), null, at("2026-09-15T09:00:00+09:00")).record.redFlagCode).toBe("heavy_bleeding");
   });
 
-  it("위험 증상 토글은 판정에만 쓰고 저장하지 않는다 → 지표는 정상인데 상태는 '확인 필요'(감사 #42)", () => {
+  it("위험 증상 토글은 판정에 쓰고 기록에도 남긴다(rules-1.2 — 임상 사전 검토 R-STORE) → 어떤 신호였는지 기록에서 보인다(감사 #42·#46)", () => {
     const { record: r } = buildSymptomRecord(form({ dizzinessFainting: true }), DELIVERY, at("2026-09-30T09:00:00+09:00"));
     expect(Object.keys(r).sort()).toEqual(
-      ["date", "feverEvent", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode", "rulesVersion"].sort(),
+      ["date", "feverEvent", "lochiaIncreased", "lochiaRed", "painNrs", "postpartumDays", "redFlagCode", "rulesVersion", ...RISK_SYMPTOM_KEYS].sort(),
     );
+    expect(r).toMatchObject({ dizzinessFainting: true, bleedingHeavy: false, harmThoughts: false });
     expect(r.redFlagCode).toBe("neuro_flag");
     const stored = { ...r, id: "x" }; // 스토어가 id를 붙여 저장한 기록
+    // 지표(오로·발열·통증)에는 어지러움 칸이 없다 — 지표는 모두 normal이고, 상태는 기록의 신호(redFlagCode)를 따른다
     expect(metrics(stored).every((m) => m.status === "normal")).toBe(true);
     expect(recoveryStateLabel(stored)).toBe("확인 필요");
   });

@@ -4,7 +4,7 @@
 
 import content from "@/content";
 import { isSameLocalDay, postpartumDayCount } from "@/domain/date";
-import { SYMPTOM_HISTORY_LIMIT, type LocalDateString, type SymptomRecord } from "@/domain/types";
+import { RISK_SYMPTOM_KEYS, SYMPTOM_HISTORY_LIMIT, type LocalDateString, type RiskSymptomKey, type SymptomRecord } from "@/domain/types";
 import { checkRedFlags, LOCHIA_GATE_DAYS, metrics, type RedFlagResult, type SymptomInput } from "./redflag";
 
 // MARK: 기록 만들기
@@ -12,15 +12,25 @@ import { checkRedFlags, LOCHIA_GATE_DAYS, metrics, type RedFlagResult, type Symp
 /** 기록 폼 값 — 산후 경과일은 폼이 아니라 출산일에서 계산한다. */
 export type SymptomForm = Omit<SymptomInput, "postpartumDays">;
 
-/** 오로 질문은 산후 10일(LOCHIA_GATE_DAYS — 레드플래그 판정과 같은 값)부터 묻는다(RecordFlowView.swift:167). 그 전에는 붉은 오로가 정상이라 묻지 않는다. */
+/**
+ * 오로 질문은 산후 10일(LOCHIA_GATE_DAYS — 레드플래그 판정과 같은 값)부터 묻는다(RecordFlowView.swift:167). 그 전에는 붉은 오로가 흔해서
+ * 색·증가를 묻지 않는다. 다량 출혈(위험 증상 bleedingHeavy)은 이 게이트와 상관없이 늘 묻는다(rules-1.2, 임상 사전 검토 B1).
+ */
 export function showsLochiaInputs(postpartumDays: number): boolean {
   return postpartumDays >= LOCHIA_GATE_DAYS;
+}
+
+/** 판정에 쓴 위험 증상 토글 값 — 기록에 그대로 남긴다(칸 이름 = domain/types RISK_SYMPTOM_KEYS) */
+function riskFlagsOf(input: SymptomInput): Record<RiskSymptomKey, boolean> {
+  return Object.fromEntries(RISK_SYMPTOM_KEYS.map((key) => [key, input[key] === true])) as Record<RiskSymptomKey, boolean>;
 }
 
 /**
  * 폼 → 판정 + 저장할 기록 1건(RecordFlowView.swift:304-327).
  * - 산후 경과일은 기록 시점 값을 기록에 함께 남긴다(나중에 출산일을 고쳐도 판정을 되짚을 수 있게).
- * - 위험 증상 토글 4개는 판정에만 쓰고 저장하지 않는다(iOS SymptomRecord에 필드가 없다 — 감사 #46).
+ * - 위험 증상 토글은 판정에 쓰고 기록에도 남긴다(rules-1.2 — 임상 사전 검토 R-STORE·§3-3, DEV_NOTES §3 CPO 3). iOS 기록에는 이 칸이
+ *   없어서(감사 #46) 어지러움만 켠 기록이 지표는 모두 "해당 없음"인데 상태는 병원 신호로 보였다 — 이제 최근 기록·PDF 리포트가 어떤
+ *   신호였는지 보인다. 이 칸이 생기기 전의 기록은 칸이 없다(묻지 않은 것 — false로 지어내지 않는다).
  * - 결과를 낸 규칙의 버전(checkRedFlags trace.configVersion = RULES_VERSION)을 기록에 찍는다 — 리포트·내려받기 파일이
  *   기록마다 그때의 규칙 버전을 보인다(감사 추적). 나중에 RULES_VERSION을 올려도 이미 남긴 기록의 버전은 그대로다.
  * - id는 붙이지 않는다 — 저장할 때 스토어가 붙인다(여기엔 무작위가 없다).
@@ -50,6 +60,7 @@ export function buildSymptomRecord(
     redFlagCode: result.hospitalSignal?.code ?? null,
     postpartumDays,
     rulesVersion: result.trace.configVersion,
+    ...riskFlagsOf(input),
   };
   return { record, result };
 }

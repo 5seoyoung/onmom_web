@@ -338,6 +338,20 @@ describe("action과 저장", () => {
     expect(saved(storage).moodChecks.map((m: { moodVersion: string | null }) => m.moodVersion)).toEqual([MOOD_VERSION]);
   });
 
+  it("증상 기록의 위험 증상 토글(rules-1.2)은 true/false 그대로 저장하고, 넘기지 않은 칸은 만들지 않는다 — 다시 읽어도 같다", () => {
+    const { store, storage } = setup();
+    store.actions.signInGuest();
+    const input = { lochiaIncreased: false, lochiaRed: false, feverEvent: false, painNrs: 1, redFlagCode: "harm_thoughts", postpartumDays: 3, rulesVersion: RULES_VERSION };
+    const rec = store.actions.addSymptomRecord({ ...input, harmThoughts: true, bleedingHeavy: false, seizure: null });
+    expect(rec).toMatchObject({ harmThoughts: true, bleedingHeavy: false });
+    expect("seizure" in rec).toBe(false); // null은 "묻지 않음" — 칸을 비운다
+    expect("headacheVision" in rec).toBe(false);
+    expect(saved(storage).symptomHistory[0]).toMatchObject({ harmThoughts: true, bleedingHeavy: false });
+    const reopened = createAppStore({ persistence: createStoragePersistence(() => storage), now: () => NOW, newId: () => "unused" });
+    reopened.load();
+    expect(reopened.getSnapshot().state.symptomHistory[0]).toEqual(rec);
+  });
+
   it("거부된 글·댓글은 저장하지 않고 null/false", () => {
     const { store } = setup();
     store.actions.signInGuest();
