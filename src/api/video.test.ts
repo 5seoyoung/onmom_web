@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sanitizeVideoPayload } from "../../supabase/functions/_shared/videos";
-import { fetchVideos, parseVideoResponse, VIDEO_MESSAGES } from "./video";
+import { fetchVideos, parseVideoResponse, VIDEO_MESSAGES, VIDEO_ROUTE_TAGS } from "./video";
 import { hangingFetch, jsonResponse, lastCall, stubFetch, supabaseTestConfig, testConfig } from "./testUtils";
 
 afterEach(() => {
@@ -163,9 +163,11 @@ describe("parseVideoResponse", () => {
 
 describe("fetchVideos — Supabase Edge Function videos(영상 서버에 CORS가 없어 함수를 거친다)", () => {
   it("GET {functionsURL}/videos?include=&limit=500 — apikey(공개 키)만, 로그인 토큰·앱 키 없음", async () => {
-    const fetch = stubFetch(async () => jsonResponse(200, { count: 1, videos: [serverVideo] }));
+    const other = { ...serverVideo, video_id: "vd_cesarean", tags: ["route_cesarean_section"] };
+    const fetch = stubFetch(async (url) => jsonResponse(200, { count: 1, videos: [url.includes("route_vaginal_delivery") ? serverVideo : other] }));
     const res = await fetchVideos("route_vaginal_delivery", { config: supabaseTestConfig });
-    const { url, init, headers } = lastCall(fetch);
+    const [url, init] = fetch.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
     expect(url).toBe("https://proj.supabase.test/functions/v1/videos?include=route_vaginal_delivery&limit=500");
     expect(init.method).toBe("GET");
     expect(headers.get("apikey")).toBe("sb_publishable_test");
@@ -173,6 +175,34 @@ describe("fetchVideos — Supabase Edge Function videos(영상 서버에 CORS가
     expect(headers.has("authorization")).toBe(false);
     expect(headers.has("x-onmom-key")).toBe(false);
     expect(res).toEqual({ ok: true, videos: [serverVideo] });
+  });
+
+  it("함수로 물을 때는 두 라우트를 늘 함께 묻는다 — 요청 주소(Supabase 요청 기록)만으로 분만 방식을 알 수 없게, 쓰는 것은 내 라우트 응답", async () => {
+    expect([...VIDEO_ROUTE_TAGS].sort()).toEqual(["route_cesarean_section", "route_vaginal_delivery"]);
+    for (const mine of VIDEO_ROUTE_TAGS) {
+      const fetch = stubFetch(async (url) =>
+        jsonResponse(200, { count: 1, videos: [{ ...serverVideo, video_id: url.includes(mine) ? "vd_mine" : "vd_other", tags: [] }] }),
+      );
+      const res = await fetchVideos(mine, { config: supabaseTestConfig });
+      const urls = fetch.mock.calls.map(([u]) => u as string).sort();
+      expect(urls).toEqual(
+        VIDEO_ROUTE_TAGS.map((t) => `https://proj.supabase.test/functions/v1/videos?include=${t}&limit=500`).sort(),
+      );
+      expect(res).toMatchObject({ ok: true, videos: [{ video_id: "vd_mine" }] });
+    }
+  });
+
+  it("다른 라우트 요청이 실패해도 내 결과에는 영향이 없다", async () => {
+    stubFetch(async (url) =>
+      url.includes("route_cesarean_section") ? jsonResponse(502, { ok: false, code: "upstream_timeout" }) : jsonResponse(200, { count: 1, videos: [serverVideo] }),
+    );
+    expect(await fetchVideos("route_vaginal_delivery", { config: supabaseTestConfig })).toEqual({ ok: true, videos: [serverVideo] });
+  });
+
+  it("영상 서버를 직접 부르는 빌드(설정 없는 쪽)는 내 라우트 하나만 묻는다", async () => {
+    const fetch = stubFetch(async () => jsonResponse(200, { count: 1, videos: [serverVideo] }));
+    await fetchVideos("route_vaginal_delivery", { config: testConfig });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("영상 서버 주소(NEXT_PUBLIC_VIDEO_URL)가 비어 있어도 함수로 묻는다", async () => {
