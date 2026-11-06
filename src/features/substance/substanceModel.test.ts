@@ -23,11 +23,11 @@ const failed = () =>
 
 describe("상단 안내(SubstanceCheckView.swift:18-27)", () => {
   it("수유 중이면 안내 한 줄, 보조 문구 없음", () => {
-    expect(substanceHeader(true)).toEqual({ lead: "수유 중 약·음식을 입력하면 안전 분류를 확인해요.", note: null });
+    expect(substanceHeader(true)).toEqual({ lead: "수유 중 약·음식을 입력하면 일반 정보를 보여 드려요.", note: null });
   });
   it("수유 안 함이면 프로필 안내 전체 문장", () => {
     expect(substanceHeader(false)).toEqual({
-      lead: "약·음식을 입력하면 산후 안전 분류를 확인해요.",
+      lead: "약·음식을 입력하면 산후 일반 정보를 보여 드려요.",
       note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 - 분류 기준이 달라져요.",
     });
   });
@@ -101,7 +101,7 @@ describe("substanceDeps — LLM은 서버가 설정됐을 때만", () => {
 
 describe("별칭이 다른 낱말 안에 숨던 입력 — 이제 표에 없는 항목과 같은 길(임상 사전 검토 §4-6)", () => {
   // 예전에는 술 행 "피하세요", 철분·페니실린계 행 "수유 중 가능", 카페인·식중독 행으로 갔다(rules/substanceMatch.ts)
-  const NOW_UNLISTED = ["수술 후 진통제", "다이어트 영양제", "퀴놀론계 항생제", "세티리진", "레보티록신", "아티반", "콜라겐", "회음부 연고"];
+  const NOW_UNLISTED = ["수술 후 진통제", "다이어트 영양제", "퀴놀론계 항생제", "레보티록신", "아티반", "콜라겐", "회음부 연고"];
 
   it("AI 꺼짐: 표의 '정보 부족' 문구·칩 그대로, 서버 호출 없음", async () => {
     const complete = okText('{"verdict":"safe","detail":"x","sources":[]}');

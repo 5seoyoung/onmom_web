@@ -75,7 +75,7 @@ describe("guideContent (GuideView.swift)", () => {
       "src:ACOG-736 · 임산부수첩 2023",
       "src:임산부수첩 2023",
       "src:임산부수첩 2023",
-      "src:임산부수첩 2023(EPDS) · NICE NG194",
+      "src:임산부수첩 2023(EPDS) · NICE NG194 · CDC Hear Her 2024",
       "src:임산부수첩 2023 · ACOG-736",
     ]);
     expect(cards.map((c) => c.points)).toEqual(content.guide_cards.map((c) => c.points));
@@ -144,8 +144,10 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
     expect(segs.filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "02-2276-2276"]);
   });
 
-  it("안전 연계 짧은 번호(109 · 119 · 1350)도 번호로 본다 — 앞뒤에 숫자·하이픈이 없을 때만", () => {
-    expect(SAFETY_SHORT_NUMBERS).toEqual(["109", "119", "1350"]);
+  it("안전 연계 짧은 번호(109 · 112 · 119 · 1350)도 번호로 본다 — 앞뒤에 숫자·하이픈이 없을 때만", () => {
+    expect(SAFETY_SHORT_NUMBERS).toEqual(["109", "112", "119", "1350"]);
+    expect(splitPhoneNumbers("지금 위험하다면 119나 112에 연락하세요.").filter((s) => s.phone).map((s) => s.text)).toEqual(["119", "112"]);
+    expect(splitPhoneNumbers("1120원").filter((s) => s.phone)).toEqual([]);
     const crisis = content.chat_fallback.replies.self_harm;
     expect(splitPhoneNumbers(crisis).filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "109", "119"]);
     expect(splitPhoneNumbers("고용노동부 — 고객상담 1350").filter((s) => s.phone).map((s) => s.text)).toEqual(["1350"]);
@@ -155,7 +157,7 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
       if (text === "119-0000-0000") expect(phones.map((s) => s.text)).toEqual(["119-0000-0000"]);
       else expect(phones, text).toEqual([]);
     }
-    // content.json의 가이드·생활 권고·지원사업 문장에서 번호로 잡히는 것은 이 셋뿐
+    // content.json의 가이드·생활 권고·지원사업 문장에서 번호로 잡히는 것은 이 다섯뿐(109·119는 산후 정신건강 카드의 위기 안내)
     const all = [
       ...content.guide_red_flags,
       ...content.guide_cards.flatMap((c) => c.points),
@@ -163,7 +165,7 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
       ...content.support_domains.flatMap((d) => d.solutions.flatMap((s) => [s.name, s.note])),
     ];
     expect(new Set(all.flatMap((t) => splitPhoneNumbers(t).filter((s) => s.phone).map((s) => s.text)))).toEqual(
-      new Set(["1577-0199", "02-2276-2276", "1350"]),
+      new Set(["1577-0199", "02-2276-2276", "1350", "109", "119"]),
     );
   });
 
@@ -181,8 +183,10 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
     expect(renderToStaticMarkup(h(PhoneLinks, { text: "상담 109", link: false }))).toBe('<span>상담 <span class="whitespace-nowrap">109</span></span>');
   });
 
-  it("회복 가이드 화면의 전화번호는 정신건강복지센터 1577-0199 하나 — tel: 링크", () => {
-    expect(html.match(/href="tel:/g)).toHaveLength(1);
-    expect(html).toContain(phoneAnchor("1577-0199"));
+  it("회복 가이드 화면의 전화번호는 산후 정신건강 카드의 1577-0199 두 곳과 위기 안내의 109·119 — tel: 링크", () => {
+    expect(html.match(/href="tel:/g)).toHaveLength(4);
+    expect(html.split(phoneAnchor("1577-0199"))).toHaveLength(3);
+    expect(html).toContain(phoneAnchor("109"));
+    expect(html).toContain(phoneAnchor("119"));
   });
 });

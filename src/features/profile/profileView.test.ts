@@ -125,7 +125,7 @@ describe("PROFILE_MENU", () => {
     expect(PROFILE_MENU.map((m) => m.subtitle)).toEqual([
       "내 상황에 맞는 산모 지원사업",
       "수면·영양·정신건강",
-      "수유 중 안전 분류",
+      "수유 중 일반 정보",
       "산후 회복 질문하기",
       "내 동네 가까운 산부인과 찾기",
       "검증된 가이드라인",

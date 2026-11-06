@@ -1,9 +1,10 @@
+import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import { EvidenceChipList } from "./EvidenceChip";
 import { severityLabel } from "./labels";
 
 export interface RedFlagCardProps {
-  /** 레드플래그 severity 코드("immediate" | "urgent") — 라벨은 EngineLabel.severity 원문 */
+  /** 레드플래그 severity 코드("emergency" | "crisis" | "immediate" | "urgent") — 라벨은 EngineLabel.severity 원문(+ rules-1.2 두 등급) */
   severity: string;
   /** 규칙 결과의 환자용 문구(content.json red_flags[].message) 그대로 */
   message: string;
@@ -14,12 +15,14 @@ export interface RedFlagCardProps {
    * 처음부터 화면에 있는 카드에는 쓰지 않는다.
    */
   announce?: boolean;
+  /** 문구 아래·칩 위에 둘 행동(전화 걸기 링크 등) — 기록 결과의 119·위기 상담 카드가 쓴다(웹 추가) */
+  children?: ReactNode;
 }
 
 // 병원 신호 카드 — AnalyzeResultView.swift:202-239.
 // 배경 전면 + 흰 글씨 — iOS의 stateAlert(흰 글씨 2.76:1) 대신 짙은 코랄 state-alert-strong(4.63:1, DEV_NOTES §3 CPO 12).
 // ⚠ 22 + 라벨 15 bold, 문구 18 bold, 칩은 채움 없는 흰 테두리 캡슐(iOS의 흰 22% 채움이면 3.31:1), 패딩 24.
-export function RedFlagCard({ severity, message, chips = [], announce = false }: RedFlagCardProps) {
+export function RedFlagCard({ severity, message, chips = [], announce = false, children }: RedFlagCardProps) {
   // 모르는 severity 코드는 라벨 없이 아이콘만 — 원시 코드를 화면에 내지 않는다
   const label = severityLabel(severity);
   return (
@@ -33,6 +36,7 @@ export function RedFlagCard({ severity, message, chips = [], announce = false }:
         {label !== null ? <p className="text-[0.9375rem] font-bold">{label}</p> : null}
       </div>
       <p className="text-lg font-bold">{message}</p>
+      {children}
       <EvidenceChipList tokens={chips} tone="inverse" />
     </div>
   );

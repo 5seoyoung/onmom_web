@@ -15,18 +15,19 @@
 import { parseLocalDate, toLocalDateString } from "@/domain/date";
 import { normalizeMoodAnswer } from "@/rules/mood";
 import { clampNrs } from "@/rules/record";
-import type {
-  CommunityComment,
-  CommunityPost,
-  DeliveryMethod,
-  IsoDateTimeString,
-  LocalDateString,
-  MaternityRecord,
-  MoodCheckRecord,
-  PersistedState,
-  RecoveryGoal,
-  SymptomRecord,
-  UserProfile,
+import {
+  pickRiskFlags,
+  type CommunityComment,
+  type CommunityPost,
+  type DeliveryMethod,
+  type IsoDateTimeString,
+  type LocalDateString,
+  type MaternityRecord,
+  type MoodCheckRecord,
+  type PersistedState,
+  type RecoveryGoal,
+  type SymptomRecord,
+  type UserProfile,
 } from "@/domain/types";
 import { defaultMaternity, defaultProfile, initialState } from "./defaults";
 
@@ -176,6 +177,8 @@ function decodeSymptomRecord(raw: Json, deps: DecodeDeps): SymptomRecord {
     postpartumDays: isDayCount(raw.postpartumDays) ? raw.postpartumDays : null,
     // 결과를 낸 안내 규칙의 버전 — 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없다(null)
     rulesVersion: recordVersion(raw.rulesVersion),
+    // 위험 증상 토글 — true/false인 칸만(domain/types pickRiskFlags). rules-1.2 전의 기록에는 칸이 없다 — false로 지어내지 않는다
+    ...pickRiskFlags(raw),
   };
 }
 

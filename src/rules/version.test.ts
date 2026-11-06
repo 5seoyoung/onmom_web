@@ -44,6 +44,29 @@ const RULES_FINGERPRINTS: Record<string, ReturnType<typeof rulesFingerprint>> = 
       "dvt_suspect:immediate",
     ],
   },
+  // 2026-11-04 — 다량 출혈(산후 일수 무관)·자간전증·자간증 신호·나/아기를 해칠 것 같은 생각, 119·위기 상담 등급(임상 사전 검토 B1~B3)
+  "rules-1.2": {
+    LOCHIA_GATE_DAYS: 10,
+    SEVERE_PAIN_NRS: 8,
+    PAIN_WATCH_NRS: 4,
+    LOSS_PLAN_BMI: 23,
+    LOSS_PLAN_RETAINED_KG: 4.5,
+    redFlags: [
+      "heavy_bleeding_dizzy:emergency",
+      "seizure:emergency",
+      "harm_thoughts:crisis",
+      "heavy_bleeding:immediate",
+      "pph_suspect:immediate",
+      "severe_pain:immediate",
+      "fever_infection:immediate",
+      "neuro_flag:immediate",
+      "cardioresp_flag:immediate",
+      "dvt_suspect:immediate",
+      "headache_vision:immediate",
+      "face_hand_swelling:immediate",
+      "upper_belly_pain:immediate",
+    ],
+  },
 };
 
 function moodFingerprint() {
@@ -94,6 +117,12 @@ describe("RULES_VERSION — 판정 기준값과 짝", () => {
       dizzinessFainting: false,
       chestPainBreathing: false,
       calfPainSwelling: false,
+      bleedingHeavy: false,
+      headacheVision: false,
+      faceHandSwelling: false,
+      upperBellyPain: false,
+      seizure: false,
+      harmThoughts: false,
       ...over,
     });
     const code = (over: Partial<SymptomInput>) => checkRedFlags(input(over)).hospitalSignal?.code ?? null;

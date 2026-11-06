@@ -58,6 +58,7 @@ export function SubstanceCheckScreen() {
   const resultRef = useRef<HTMLDivElement>(null);
   const leadId = useId();
   const noteId = useId();
+  const generalId = useId();
 
   // 화면을 떠나면 진행 중인 LLM 요청을 끊고, 늦게 온 결과는 버린다.
   useEffect(() => {
@@ -146,16 +147,7 @@ export function SubstanceCheckScreen() {
       {/* 저장소를 읽기 전에는 수유 여부를 모른다 — 기본값 문구를 번쩍이지 않게 그리지 않는다 */}
       {hydrated ? (
         <div className="flex flex-col gap-4 pt-2">
-          <div className="flex flex-col gap-1">
-            <p id={leadId} className="text-base text-text-secondary">
-              {header.lead}
-            </p>
-            {header.note ? (
-              <p id={noteId} className="text-[0.8125rem] text-text-subtle-aa">
-                {header.note}
-              </p>
-            ) : null}
-          </div>
+          <SubstanceIntro header={header} leadId={leadId} noteId={noteId} generalId={generalId} />
 
           <form role="search" onSubmit={run} className="flex flex-col gap-4">
             {/* iOS 카드 높이(약 61pt)에 맞춰 위아래 패딩만 8로 줄인다 — 입력창 44 + 8·8. 좌우는 Card 기본 20 그대로.
@@ -168,7 +160,7 @@ export function SubstanceCheckScreen() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={PLACEHOLDER}
                 aria-labelledby={leadId}
-                aria-describedby={header.note ? noteId : undefined}
+                aria-describedby={header.note ? `${generalId} ${noteId}` : generalId}
                 enterKeyHint="search"
                 autoComplete="off"
                 spellCheck={false}
@@ -197,6 +189,35 @@ export function SubstanceCheckScreen() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+// 머리 안내 — 안내(16) / 일반 정보·상담 고정 문구(13, 결과가 있든 없든 늘) / 프로필 안내(13, 수유 안 함일 때만). 테스트가 따로 그려 본다.
+export function SubstanceIntro({
+  header,
+  leadId,
+  noteId,
+  generalId,
+}: {
+  header: { lead: string; note: string | null };
+  leadId: string;
+  noteId: string;
+  generalId: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <p id={leadId} className="text-base text-text-secondary">
+        {header.lead}
+      </p>
+      <p id={generalId} className="text-[0.8125rem] text-text-secondary">
+        {SUBSTANCE_TEXT.generalNote}
+      </p>
+      {header.note ? (
+        <p id={noteId} className="text-[0.8125rem] text-text-subtle-aa">
+          {header.note}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

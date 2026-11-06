@@ -233,6 +233,27 @@ describe("decodePersisted — 없는 키는 기본값", () => {
     expect(s.moodChecks.map((m) => m.moodVersion)).toEqual(bad.map(() => null));
   });
 
+  it("위험 증상 토글(rules-1.2) — true/false만 그대로, 칸이 없거나 다른 값이면 칸을 비운다(false로 지어내지 않는다) · 다시 읽어도 같다", () => {
+    const s = decodePersisted(
+      {
+        symptomHistory: [
+          { id: "new", date: "2026-11-04T01:00:00.000Z", bleedingHeavy: true, harmThoughts: false, dizzinessFainting: true, seizure: false },
+          { id: "old", date: "2026-10-20T01:00:00.000Z", rulesVersion: "rules-1.1" },
+          { id: "bad", date: "2026-10-19T01:00:00.000Z", bleedingHeavy: "yes", harmThoughts: null, seizure: 1, unknownFlag: true },
+        ],
+      },
+      deps(),
+    );
+    const [fresh, old, bad] = s.symptomHistory;
+    expect(fresh).toMatchObject({ bleedingHeavy: true, harmThoughts: false, dizzinessFainting: true, seizure: false });
+    expect("headacheVision" in fresh).toBe(false);
+    for (const key of ["bleedingHeavy", "harmThoughts", "seizure", "dizzinessFainting", "unknownFlag"]) {
+      expect(key in old, `old ${key}`).toBe(false);
+      expect(key in bad, `bad ${key}`).toBe(false);
+    }
+    expect(decodePersisted(JSON.parse(JSON.stringify(s)), deps())).toEqual(s);
+  });
+
   it("구버전 기록의 postpartumDays 없음은 null(오로 판정 보류)", () => {
     const s = decodePersisted({ symptomHistory: [{ id: "x", date: 780000000 }] }, deps());
     expect(s.symptomHistory[0].postpartumDays).toBeNull();

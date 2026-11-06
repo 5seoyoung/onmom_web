@@ -48,7 +48,48 @@ export interface MaternityRecord {
   diastasisRecti: boolean;
 }
 
-export interface SymptomRecord {
+/**
+ * 기록 탭 "위험 증상" 카드의 토글 — 필드명은 rules/redflag SymptomInput과 같다(화면 순서·라벨은 features/record RISK_TOGGLES).
+ * 앞 넷은 iOS SymptomInput에 있던 것(RedFlagEngine.swift:18-21), 뒤 여섯은 rules-1.2에 더한 신호(임상 사전 검토 §3 T1~T5·T11).
+ * rules-1.2부터 판정에 쓴 값을 기록에도 남긴다(임상 사전 검토 R-STORE·§3-3, DEV_NOTES §3 CPO 3) — 최근 기록·PDF 리포트에서
+ * 어떤 신호였는지 되짚을 수 있게.
+ */
+export const RISK_SYMPTOM_KEYS = [
+  "woundPainWorsening",
+  "dizzinessFainting",
+  "chestPainBreathing",
+  "calfPainSwelling",
+  "bleedingHeavy",
+  "headacheVision",
+  "faceHandSwelling",
+  "upperBellyPain",
+  "seizure",
+  "harmThoughts",
+] as const;
+export type RiskSymptomKey = (typeof RISK_SYMPTOM_KEYS)[number];
+
+/**
+ * 기록에 남긴 위험 증상 토글. 칸이 없으면(rules-1.2 전의 웹 기록·iOS 기록) 묻지 않았거나 모르는 것 — false(물었고 아니었다)와 구분한다.
+ * 저장소에서 읽을 때는 true/false만 남기고 나머지는 칸을 비운다(store/decode). null은 옛 화면 코드와의 호환으로만 받는다.
+ */
+export type RiskSymptomFlags = { [K in RiskSymptomKey]?: boolean | null };
+
+/**
+ * 위험 증상 토글 칸만 — true/false인 칸만 옮기고, 없거나 다른 값(null 포함)이면 칸을 비운다(묻지 않은 것 — false로 지어내지 않는다).
+ * 그래서 옛 기록은 읽고 다시 써도 모양이 그대로다. 저장소 읽기(store/decode)·새 기록(appStore.addSymptomRecord)·동기화 합치기
+ * (store/sync/merge)가 같은 규칙을 쓴다.
+ */
+export function pickRiskFlags(raw: object): RiskSymptomFlags {
+  const fields = raw as Readonly<Record<string, unknown>>;
+  const out: RiskSymptomFlags = {};
+  for (const key of RISK_SYMPTOM_KEYS) {
+    const v = fields[key];
+    if (typeof v === "boolean") out[key] = v;
+  }
+  return out;
+}
+
+export interface SymptomRecord extends RiskSymptomFlags {
   id: string;
   date: IsoDateTimeString;
   lochiaIncreased: boolean;

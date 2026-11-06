@@ -93,7 +93,7 @@ describe("리포트 본문", () => {
   });
 
   it("표: 열 머리는 th scope=col, 행 머리(기록 시각·날짜)는 th scope=row + <time>", () => {
-    expect(count(html, '<th scope="col"')).toBe(7 + 3);
+    expect(count(html, '<th scope="col"')).toBe(8 + 3);
     expect(count(html, '<th scope="row"')).toBe(2 + 2);
     expect(html).toContain('<time dateTime="2026-10-14T01:00:00.000Z">10월 14일 오전 10:00</time>');
     // 표는 섹션 제목으로 이름이 붙는다. 가로 스크롤 묶음(초점 정류장)은 없다
@@ -104,10 +104,10 @@ describe("리포트 본문", () => {
   it("증상 기록: 넓은 폭(카드 안 36rem 이상)·인쇄는 표, 좁은 폭은 기록마다 덩어리 — 결과 열이 화면 밖에 숨지 않게", () => {
     expect(html).toMatch(/<div class="@container"><div class="hidden @xl:block print:block"><table aria-labelledby="report-symptoms"/);
     const blocks = /<div class="@xl:hidden print:hidden"><ul [^>]*>([\s\S]*?)<\/ul><\/div>/.exec(html)?.[1] ?? "";
-    // 기록 2건, 최신순, 시각·결과 + 표의 나머지 열 이름(산후 일수·오로 늘어남·붉은 오로·발열·통증)
+    // 기록 2건, 최신순, 시각·결과 + 표의 나머지 열 이름(산후 일수·많은 출혈·오로 늘어남·붉은 오로·발열·통증)
     expect(count(blocks, /<li /)).toBe(2);
-    expect(blocks.indexOf("병원 신호")).toBeLessThan(blocks.indexOf("위험신호 없음"));
-    for (const label of ["산후 일수", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)"]) {
+    expect(blocks.indexOf("병원 확인 신호")).toBeLessThan(blocks.indexOf("해당 없음"));
+    for (const label of ["산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)"]) {
       expect(count(blocks, `<dt class="text-text-secondary">${label}</dt>`)).toBe(2);
     }
     expect(blocks).toContain('<time dateTime="2026-10-14T01:00:00.000Z"');
@@ -122,8 +122,8 @@ describe("리포트 본문", () => {
   });
 
   it("결과는 글자로(색만이 아님), 값 없는 칸은 '-'(낭독 제외) + 범례", () => {
-    expect(html).toContain("병원 신호");
-    expect(html).toContain("위험신호 없음");
+    expect(html).toContain("병원 확인 신호");
+    expect(html).toContain("해당 없음");
     expect(html).toContain('<span aria-hidden="true">-</span>');
     expect(html).toContain(REPORT_TEXT.noValueNote);
   });
@@ -140,7 +140,7 @@ describe("리포트 본문", () => {
     const tableRows = table.split("<tr ").slice(1); // 머리 줄은 <tr>(속성 없음), 본문 줄만
     expect(tableRows).toHaveLength(2);
     expect(tableRows[0]).toContain("2026-10-14T01:00:00.000Z");
-    expect(tableRows[0]).toMatch(new RegExp(`병원 신호</span>${escape(rulesNote)}</td>`));
+    expect(tableRows[0]).toMatch(new RegExp(`병원 확인 신호</span>${escape(rulesNote)}</td>`));
     expect(tableRows[1]).toContain("2026-09-07T01:00:00.000Z");
     expect(tableRows[1]).not.toContain(REPORT_TEXT.recordRulesVersion);
     // 좁은 폭 덩어리에도 같은 한 줄(결과 아래)

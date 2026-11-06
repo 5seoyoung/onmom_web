@@ -8,14 +8,16 @@ import type { PersistedState, SymptomRecord, UserProfile } from "@/domain/types"
 import { DELIVERY_TITLE, GOAL_TITLE, homeStageCard, type HomeStageCard } from "@/rules/exercise";
 import { moodCardSignal } from "@/rules/mood";
 import {
+  RECOVERY_RECORD_TITLE,
   isRedFlagActive,
   latestRecord,
+  recordHasCrisisSignal,
   recoveryStateLabel,
   recoveryStateTitle,
   relativeRecordTime,
   type RecoveryStateLabel,
 } from "@/rules/record";
-import { metrics, type RecoveryMetric } from "@/rules/redflag";
+import { METRIC_STATUS_LABEL, metrics, type RecoveryMetric } from "@/rules/redflag";
 import { weightPlan, type WeightPlan } from "@/rules/weight";
 import { ROUTES } from "@/routes";
 
@@ -29,9 +31,10 @@ export const HOME_TEXT = {
   dayUnit: "일차", // 원문: HomeView.swift:93
   // 웹 신규 문구 — CPO 확인 필요 (히어로 칩 목록의 스크린리더 이름. 칩 = 분만 방식 + 목표 또는 복직 D-n — heroChips)
   heroChipsLabel: "분만 방식·목표",
-  emptyStateTitle: "오늘의 회복 상태", // 원문: HomeView.swift:191
+  emptyStateTitle: RECOVERY_RECORD_TITLE, // 기록 카드 제목과 같다(rules/record)
   emptyStateHeadline: "아직 기록이 없어요", // 원문: HomeView.swift:194
-  emptyStateBody: "오로·통증·발열을 기록하면 상태를 알려드려요.", // 원문: HomeView.swift:197
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "…상태를 알려드려요"를 바꿈 — 앱이 상태를 평가해 준다는 말로 읽힌다. 법률 사전 검토 H5)
+  emptyStateBody: "오로·통증·발열을 기록하면 해당하는 안내를 보여 드려요.",
   moodTitle: "요즘 힘든 날이 이어지고 있어요", // 원문: HomeView.swift:275
   moodBody: "산후에는 열 명 중 한두 명이 겪는 일이고, 이야기를 나누면 나아져요. 혼자 견디지 마세요.", // 원문: HomeView.swift:279
   moodSupport: "지원사업 보기", // 원문: HomeView.swift:286
@@ -50,37 +53,58 @@ export const HOME_TEXT = {
  */
 export const HOME_CHAT_HREF = `${ROUTES.chat}?from=home`;
 
-/** 마음 연계 카드의 전화 두 줄 — 원문: HomeView.swift:282-283 */
+/**
+ * 마음 연계 카드의 전화 — 1577-0199·02-2276-2276은 원문(HomeView.swift:282-283). 02-2276-2276은 예약 상담 기관이라 위기 연락처가 아니므로
+ * 자살예방상담전화 109와 위급할 때 119를 더했다(임상 사전 검토 M-CARD·B3, K3·K7 — 2026-11-04 대표 결정으로 "목록 변경 금지"를 이 갱신에 한해 풀었다).
+ */
 export const MOOD_CALLS: readonly { name: string; number: string }[] = [
   { name: "정신건강복지센터", number: "1577-0199" },
+  // 웹 신규 문구 — CPO 확인 필요
+  { name: "자살예방상담전화 (24시간)", number: "109" },
   { name: "중앙난임·우울증상담센터", number: "02-2276-2276" },
+  // 웹 신규 문구 — CPO 확인 필요
+  { name: "위급할 때", number: "119" },
 ];
 
 /** 분만 방식을 고르지 않았을 때의 히어로 칩 — 원문: HomeView.swift:99 `?? "분만"` */
 export const DELIVERY_CHIP_FALLBACK = "분만";
 
-// MARK: - 오늘의 회복 상태
+// MARK: - 오늘의 회복 기록
 
 export type StateTone = "normal" | "watch" | "alert";
 
-/** 3단계 인디케이터 순서(HomeView.swift:147-148) */
+/** 3단계 인디케이터 순서(HomeView.swift:147-148) — 라벨은 지표 배지와 같은 글자(rules/redflag METRIC_STATUS_LABEL) */
 export const RECOVERY_STEPS: readonly { label: RecoveryStateLabel; tone: StateTone }[] = [
-  { label: "양호", tone: "normal" },
-  { label: "관찰", tone: "watch" },
-  { label: "확인 필요", tone: "alert" },
+  { label: METRIC_STATUS_LABEL.normal, tone: "normal" },
+  { label: METRIC_STATUS_LABEL.watch, tone: "watch" },
+  { label: METRIC_STATUS_LABEL.alert, tone: "alert" },
 ];
 
-/** 상태별 설명 — 원문: HomeView.swift:159-161 */
+/**
+ * 라벨별 설명 — 회복이 좋다·나쁘다를 평가하지 않고, 기록한 값이 목록과 맞았는지만 말한다(iOS 원문 "회복이 순조롭게 진행되고 있어요" 등을 바꿈 —
+ * 법률 사전 검토 H5, 임상 사전 검토 H-DESC). 해당 없음에도 "걱정되면 의료진" 안내를 늘 붙인다.
+ */
 export const RECOVERY_DESCRIPTOR: Readonly<Record<RecoveryStateLabel, string>> = {
-  양호: "회복이 순조롭게 진행되고 있어요.",
-  관찰: "몇 가지 지표를 지켜보고 있어요.",
-  "확인 필요": "병원 확인이 필요할 수 있는 기록이 있어요. 기록 탭에서 확인하세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  [METRIC_STATUS_LABEL.normal]: "기록한 항목 중에는 살펴볼 신호나 병원 확인 신호에 해당하는 것이 없었어요. 증상이 계속되거나 걱정되면 의료진과 상담하세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  [METRIC_STATUS_LABEL.watch]: "기록한 항목 중에 살펴볼 신호가 있어요. 회복 지표에서 어떤 항목인지 볼 수 있어요. 계속되거나 심해지면 의료진과 상담하세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  [METRIC_STATUS_LABEL.alert]: "기록에 '바로 병원에 가야 하는 신호'에 해당하는 항목이 있어요. 아직 병원에 가지 않았다면 바로 문의하세요.",
 };
 
+/**
+ * 가장 최근 기록에 위기 상담 신호가 있을 때의 설명 — 결과 화면의 상담 전화 카드는 그때만 보이므로, 홈에서도 연락처를 놓치지 않게 한다.
+ * 어떤 생각이었는지는 적지 않는다(곁에서 화면을 볼 수 있다). 임상 사전 검토 §3-2 T11.
+ */
+// 웹 신규 문구 — CPO 확인 필요
+export const RECOVERY_CRISIS_DESCRIPTOR =
+  "혼자 견디지 마세요. 자살예방상담전화 109(24시간)나 정신건강위기상담전화 1577-0199에 연락하세요. 지금 위험하다면 119나 112에 연락하세요.";
+
 const TONE_OF: Readonly<Record<RecoveryStateLabel, StateTone>> = {
-  양호: "normal",
-  관찰: "watch",
-  "확인 필요": "alert",
+  [METRIC_STATUS_LABEL.normal]: "normal",
+  [METRIC_STATUS_LABEL.watch]: "watch",
+  [METRIC_STATUS_LABEL.alert]: "alert",
 };
 
 export type RecoveryStateCard =
@@ -88,7 +112,7 @@ export type RecoveryStateCard =
   | { kind: "empty" }
   | {
       kind: "filled";
-      /** "오늘의 회복 상태" 또는 "최근 회복 상태 · M월 d일 기록" */
+      /** "오늘의 회복 기록" 또는 "최근 회복 기록 · M월 d일" */
       title: string;
       label: RecoveryStateLabel;
       tone: StateTone;
@@ -191,6 +215,6 @@ export function recoveryStateCard(state: Pick<PersistedState, "symptomHistory">,
     title: recoveryStateTitle(latest, recordReferenceTime(latest, now)),
     label,
     tone: TONE_OF[label],
-    descriptor: RECOVERY_DESCRIPTOR[label],
+    descriptor: recordHasCrisisSignal(latest) ? RECOVERY_CRISIS_DESCRIPTOR : RECOVERY_DESCRIPTOR[label],
   };
 }

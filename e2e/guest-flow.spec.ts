@@ -1,5 +1,5 @@
 // 브라우저 자동 시험 — 브라우저 전용 빌드(Supabase 값 없음)의 게스트 흐름 전체. docs/DEV_NOTES.md §11.
-// 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 기록(어지러움 → 즉시 내원) → 홈 "확인 필요" → 운동 멈춤
+// 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 기록(어지러움 → 즉시 내원 + 전체 신호 목록) → 홈 "병원 확인 신호" → 운동 멈춤
 // → 이용약관 → 한국어 404 → 시작 주소(/) → 홈 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
 // 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다).
 import { expect, test as base, type Page } from "@playwright/test";
@@ -162,11 +162,16 @@ test("게스트 흐름: 온보딩 → 위험 신호 → 계정 삭제", async ({
   const redFlag = page.getByRole("main").getByRole("alert");
   await expect(redFlag.getByText("즉시 내원", { exact: true })).toBeVisible();
   await expect(redFlag).toContainText("어지러움·실신·균형장애");
+  // 결과와 상관없이 전체 신호 목록(일반 안내)이 늘 보인다 — 등급 묶음·출처 칩
+  const warningSigns = page.getByRole("region", { name: "바로 병원에 가야 하는 신호" });
+  await expect(warningSigns.getByRole("heading", { level: 3, name: "119 연락" })).toBeVisible();
+  await expect(warningSigns.getByRole("heading", { level: 3, name: "위기 상담 연락" })).toBeVisible();
+  await expect(warningSigns.getByText("경련(발작)", { exact: true })).toBeVisible();
 
-  // 홈 — 확인 필요 + 운동 안내 멈춤
+  // 홈 — 병원 확인 신호 + 운동 안내 멈춤
   await nav.getByRole("link", { name: "홈", exact: true }).click();
   await expect(page).toHaveURL(/\/home\/$/);
-  await expect(page.getByRole("region", { name: "오늘의 회복 상태" }).getByRole("paragraph").filter({ hasText: /^확인 필요$/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "오늘의 회복 기록" }).getByRole("paragraph").filter({ hasText: /^병원 확인 신호$/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "운동 안내를 멈췄어요" })).toBeVisible();
 
   // 운동 — 위험 신호면 영상 추천을 멈춘다(영상 서버도 부르지 않는다)

@@ -5,13 +5,14 @@
 // 첫 구독(마운트 후 effect) 때 저장소를 읽어 hydrated=true로 바꾼다 — 하이드레이션 불일치 없이,
 // 화면은 hydrated 전에는 아무것도(또는 뼈대만) 그리지 않아 잘못된 데이터가 번쩍이지 않는다.
 
-import type {
-  IsoDateTimeString,
-  MaternityRecord,
-  MoodCheckRecord,
-  PersistedState,
-  SymptomRecord,
-  UserProfile,
+import {
+  pickRiskFlags,
+  type IsoDateTimeString,
+  type MaternityRecord,
+  type MoodCheckRecord,
+  type PersistedState,
+  type SymptomRecord,
+  type UserProfile,
 } from "@/domain/types";
 import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
 import { isSupabaseConfigured } from "@/config";
@@ -336,6 +337,8 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
         redFlagCode: input.redFlagCode,
         postpartumDays: input.postpartumDays,
         rulesVersion: input.rulesVersion,
+        // 위험 증상 토글(rules-1.2 — 판정에 쓴 값). true/false인 칸만 — 저장소에서 읽을 때와 같은 규칙(domain/types pickRiskFlags)
+        ...pickRiskFlags(input),
       };
       commit(S.addSymptomRecord(snapshot.state, record));
       return record;

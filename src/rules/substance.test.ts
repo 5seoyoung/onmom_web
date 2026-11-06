@@ -51,7 +51,7 @@ describe("큐레이션 표 (02 §8)", () => {
     expect(lookupSubstance("SSRI").verdict).toBe("caution");
     expect(lookupSubstance("codeine 30mg").verdict).toBe("avoid");
     expect(lookupSubstance("맥주 한 잔").verdict).toBe("avoid");
-    expect(lookupSubstance("비타민C").evidenceChips).toEqual(["수유 가능", "src:WHO-PNC"]);
+    expect(lookupSubstance("철분 20mg").evidenceChips).toEqual(["수유 가능", "src:WHO-PNC"]);
   });
 
   it("표 순서대로 첫 일치가 아니다 — iOS의 부분일치 특성은 따르지 않는다", () => {
@@ -89,15 +89,76 @@ describe("큐레이션 표 (02 §8)", () => {
   });
 });
 
+describe("묶음 낱말·뜻이 넓은 낱말은 표가 답하지 않는다(임상 사전 검토 B4 — 보수적으로만)", () => {
+  // 예전에는 "수유 중 가능"이 나왔다(영양제·항생제·비타민) — 표의 행은 특정 성분의 근거일 뿐, 그 묶음 전체의 근거가 아니다.
+  // 비타민은 비타민 A처럼 일괄 권고되지 않는 것도 묶이므로(임상 사전 검토 S9, WHO R21) 함께 뺐다.
+  const UNLISTED = [
+    "영양제",
+    "영양제 먹어도 되나요?",
+    "산후 영양제",
+    "철분 영양제",
+    "항생제",
+    "수유 중 항생제",
+    "항생제 먹어도 돼요?",
+    "비타민",
+    "비타민C",
+    "비타민 D",
+    "비타민A",
+    "티",
+    "티 한 잔",
+    "tea",
+    "회",
+    "회 먹어도 되나요",
+  ];
+
+  it.each(UNLISTED)("%s → 정보 부족(의사·약사와 상담)", (q) => {
+    const r = lookupSubstance(q);
+    expect(r.verdict, q).toBe("unknown");
+    expect(r.detail).toBe(UNKNOWN_DETAIL);
+    expect(r.detail).toContain("의료진·약사와 상담");
+  });
+
+  it("'수유 중 가능' 행의 별칭에 묶음 낱말이 없다", () => {
+    const safeAliases = content.substances.filter((row) => row.verdict === "safe").flatMap((row) => row.aliases);
+    for (const word of ["영양제", "항생제", "비타민", "진통제", "해열제", "소염제", "감기약", "한약"]) expect(safeAliases, word).not.toContain(word);
+  });
+
+  it("지운 별칭 말고 그 행의 품목은 그대로 답한다", () => {
+    for (const q of ["아목시실린", "철분", "철분제", "엽산", "종합비타민", "녹차", "홍차", "생선회", "초밥"]) {
+      expect(lookupSubstance(q).source, q).toBe("table");
+      expect(lookupSubstance(q).verdict, q).not.toBe("unknown");
+    }
+  });
+
+  it("이미 있는 행에만 한글 별칭을 더했다 — 세티리진은 항히스타민 행, 말차·보이차·우롱차는 녹차·홍차 행(둘 다 주의)", () => {
+    expect(content.substances).toHaveLength(21);
+    expect(lookupSubstance("세티리진").detail).toBe(lookupSubstance("cetirizine").detail);
+    expect(lookupSubstance("세티리진 먹어도 되나요?").verdict).toBe("caution");
+    for (const q of ["말차", "보이차", "우롱차"]) {
+      expect(lookupSubstance(q).detail, q).toBe(lookupSubstance("녹차").detail);
+      expect(lookupSubstance(q).verdict, q).toBe("caution");
+    }
+    // 카페인이 없을 수 있는 차는 여전히 답하지 않는다
+    for (const q of ["허브티", "캐모마일티", "루이보스티", "보리차"]) expect(lookupSubstance(q).verdict, q).toBe("unknown");
+  });
+
+  it("표의 설명이 '안전합니다'라고 단정하지 않는다 — 칩도 판정 글자와 같은 '수유 가능'(법률 사전 검토 4-3)", () => {
+    for (const row of content.substances) {
+      expect(row.detail, row.aliases[0]).not.toContain("안전합니다");
+      expect(row.chips, row.aliases[0]).not.toContain("수유 안전");
+    }
+    expect(lookupSubstance("철분").detail).not.toContain("영양제");
+  });
+});
+
 describe("별칭이 다른 낱말 안에 숨어 엉뚱한 행으로 가지 않는다(임상 사전 검토 §0-1 순위 4, §4-6)", () => {
   // 예전 결과(부분 문자열·표 순서 첫 일치): 술 행 "피하세요", 철분 행 "수유 중 가능", 페니실린계 문구 "수유 중 가능",
   // 녹차·티 행(카페인), 에너지드링크·콜라 행(카페인), 회 행(식중독). 맞는 행이 없으면 추측하지 않고 "정보 부족"으로 간다.
   const REPORTED = [
     "수술 후 진통제", // 술 ⊂ 수술
     "제왕절개 수술 후 먹는 약",
-    "다이어트 영양제", // "다이어트"가 영양제를 꾸밈 — 표의 "일반적인 산후 영양제"가 아니다
-    "퀴놀론계 항생제", // "퀴놀론계"가 항생제를 꾸밈 — 표의 문구는 페니실린계
-    "세티리진", // 티 ⊂ 세티리진
+    "다이어트 영양제", // 영양제는 이제 별칭이 아니다(묶음 낱말)
+    "퀴놀론계 항생제", // 항생제는 이제 별칭이 아니다(표의 문구는 페니실린계)
     "레보티록신",
     "아티반",
     "케티아핀",
@@ -242,11 +303,11 @@ describe("LLM 요청 (SubstanceCheckView.swift:118-126, 검수 #24)", () => {
 
 describe("화면 안내 (SubstanceCheckView.swift:18-27, 검수 #32)", () => {
   it("수유 중이면 수유 안내만", () => {
-    expect(substanceHeader(true)).toEqual({ lead: "수유 중 약·음식을 입력하면 안전 분류를 확인해요.", note: null });
+    expect(substanceHeader(true)).toEqual({ lead: "수유 중 약·음식을 입력하면 일반 정보를 보여 드려요.", note: null });
   });
   it("수유 안 하면 다른 안내 + 프로필 안내 전문", () => {
     expect(substanceHeader(false)).toEqual({
-      lead: "약·음식을 입력하면 산후 안전 분류를 확인해요.",
+      lead: "약·음식을 입력하면 산후 일반 정보를 보여 드려요.",
       note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 - 분류 기준이 달라져요.",
     });
   });
@@ -314,9 +375,9 @@ describe("content.json 표 — 모든 별칭이 자기 행을 찾는다(회귀)"
     }
   });
 
-  it("한 글자 별칭은 술·회·티뿐이다 — 새 한 글자 별칭은 꼬리가 다른 낱말을 만들지 확인한 뒤 이 목록에 더한다", () => {
+  it("한 글자 별칭은 술뿐이다(회·티는 뜻이 넓어 뺐다 — 임상 사전 검토 B4) — 새 한 글자 별칭은 꼬리가 다른 낱말을 만들지 확인한 뒤 이 목록에 더한다", () => {
     const short = content.substances.flatMap((row) => row.aliases).filter((a) => [...a.normalize("NFC")].length === 1);
-    expect(short.sort()).toEqual(["술", "티", "회"]);
+    expect(short.sort()).toEqual(["술"]);
   });
 
   it("두 글자 별칭이 흔한 합성어 안에서 맞지 않는다(꼬리가 아닌 낱말이 붙음)", () => {

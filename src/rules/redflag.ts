@@ -1,13 +1,22 @@
 // 레드플래그(즉시 병원 신호)와 홈 회복 지표 — iOS `RedFlagEngine.swift`를 옮긴 것.
 // 판정은 전부 아래 규칙 조회 결과다. 문구·근거 칩은 content.json `red_flags`에서 읽고, 여기엔 조건만 둔다.
 // 순수 함수만 둔다(React·DOM·시계 없음).
+//
+// rules-1.2(임상 사전 검토 §0-2 B1~B3 · §3 T1~T5·T11): 산후 일수와 상관없는 다량 출혈, 자간전증·자간증 신호(심한 두통·시야 이상,
+// 얼굴·손 부종, 명치·오른쪽 윗배 통증, 경련), 나·아기를 해칠 것 같은 생각을 더했다. 등급도 둘 더했다 — "emergency"(지금 바로 119)와
+// "crisis"(병원 찾기 대신 위기 상담 전화 안내). 출처 칩은 임상 사전 검토 §5에 원문으로 확인한 자료만 쓴다(지어내지 않는다).
+// 웹 신규 문구 — CPO 확인 필요 (content.json red_flags의 heavy_bleeding_dizzy·seizure·harm_thoughts·heavy_bleeding·headache_vision·
+// face_hand_swelling·upper_belly_pain 문구·칩, neuro_flag·cardioresp_flag·dvt_suspect에 더한 출처 칩)
 
 import content from "@/content";
-import type { MetricStatus, SymptomRecord } from "@/domain/types";
+import type { MetricStatus, RiskSymptomKey, SymptomRecord } from "@/domain/types";
 import { RULES_VERSION } from "./version";
 
-/** 증상 입력 — 필드명은 iOS `SymptomInput`과 같다(02 §1). */
-export interface SymptomInput {
+/**
+ * 증상 입력 — 앞 아홉 필드명은 iOS `SymptomInput`과 같다(02 §1). 위험 증상 토글은 domain/types RISK_SYMPTOM_KEYS와 같은 이름이다
+ * (extends가 빠진 토글을 컴파일에서 잡는다).
+ */
+export interface SymptomInput extends Record<RiskSymptomKey, boolean> {
   /** 기록 시점의 산후 경과일(10일 게이팅용) */
   postpartumDays: number;
   /** 오로가 어제보다 늘었는가 */
@@ -18,16 +27,28 @@ export interface SymptomInput {
   feverEvent: boolean;
   /** 통증 0~10 */
   painNrs: number;
-  // 절대 금기 위험 증상(가이드라인 §1) — 판정에만 쓰고 기록에는 저장하지 않는다(iOS와 같음).
+  // 위험 증상 토글 — 판정에 쓰고, rules-1.2부터 기록에도 남긴다(rules/record buildSymptomRecord).
   woundPainWorsening: boolean;
   dizzinessFainting: boolean;
   chestPainBreathing: boolean;
   calfPainSwelling: boolean;
+  /** 피가 많이 남(1시간 안에 패드 1장 이상이 흠뻑 젖거나 달걀만 한 핏덩이) — 산후 일수와 상관없이 묻는다(§3 T1) */
+  bleedingHeavy: boolean;
+  /** 심한 두통(약을 먹어도 낫지 않음) 또는 시야 이상(§3 T2) */
+  headacheVision: boolean;
+  /** 얼굴·손이 갑자기 심하게 부음(§3 T3) */
+  faceHandSwelling: boolean;
+  /** 명치·오른쪽 윗배가 심하게 아픔(§3 T4) */
+  upperBellyPain: boolean;
+  /** 경련(발작)(§3 T5) */
+  seizure: boolean;
+  /** 나 자신이나 아기를 해칠 것 같은 생각(§3 T11) */
+  harmThoughts: boolean;
 }
 
 export interface RedFlag {
   code: string;
-  /** "immediate" | "urgent" — content.json 값을 그대로 싣는다 */
+  /** "emergency" | "crisis" | "immediate" | "urgent" — content.json 값을 그대로 싣는다(표시는 rules/recovery severityLabel) */
   severity: string;
   messagePatient: string;
   /** "src:" 접두 칩이 출처 칩이다. 출처가 확정되지 않은 규칙에는 없다(지어내지 않는다). */
@@ -35,7 +56,10 @@ export interface RedFlag {
 }
 
 export interface RedFlagResult {
+  /** 대표 신호 — signals의 첫 항목(없으면 null). 기록의 redFlagCode가 이 값이다. */
   hospitalSignal: RedFlag | null;
+  /** 걸린 신호 전부 — 등급이 높은 순, 같으면 평가 순서(RED_FLAG_ORDER). 기록 결과 화면이 이 목록으로 안내 카드를 그린다. */
+  signals: RedFlag[];
   trace: { firedRules: string[]; configVersion: string };
 }
 
@@ -51,20 +75,37 @@ export const PAIN_WATCH_NRS = 4;
 
 // 규칙 집합과 평가 순서는 코드가 정한다(RedFlagEngine.swift:107-143). 순서는 대표 신호 동률 처리와 trace 순서를 바꾸므로
 // content.json 교체(임상 회신 반영)로 규칙이 빠지거나 순서가 바뀌면 안 된다.
+// rules-1.2: 등급이 높은 규칙을 앞에 둔다(119 → 위기 상담 → 즉시 내원). rules-1.1의 여섯 규칙은 서로의 순서를 그대로 둔다.
+// 다량 출혈은 오로 규칙보다 앞 — 둘 다 걸리면 양 기준과 119 안내가 있는 쪽이 대표 신호다.
 const RED_FLAG_ORDER = [
+  "heavy_bleeding_dizzy",
+  "seizure",
+  "harm_thoughts",
+  "heavy_bleeding",
   "pph_suspect",
   "severe_pain",
   "fever_infection",
   "neuro_flag",
   "cardioresp_flag",
   "dvt_suspect",
+  "headache_vision",
+  "face_hand_swelling",
+  "upper_belly_pain",
 ] as const;
 type RedFlagCode = (typeof RED_FLAG_ORDER)[number];
 
 // 조건은 코드로, 문구는 content.json으로. 각 규칙이 겨냥하는 상태는 임상 검토용 주석에만 남긴다
-// (사용자에게 질병명을 추정해 말하지 않는다 — 의료기기 경계).
+// (사용자에게 질병명을 추정해 말하지 않는다 — 의료기기 경계). 코드 이름도 질병명이 아니라 증상으로 짓는다(내려받기 파일에 실린다).
 const MATCHERS: Record<RedFlagCode, (i: SymptomInput) => boolean> = {
-  // 겨냥: 산후출혈·자궁복고부전. 산후 10일 이전의 붉은 오로는 정상이라 판정하지 않는다.
+  // 겨냥: 산후출혈 + 순환 저하. 다량 출혈에 어지러움·실신이 함께면 119(§3 T1·T14 — 등급은 임상 사전 검토의 보수적 제안)
+  heavy_bleeding_dizzy: (i) => i.bleedingHeavy && i.dizzinessFainting,
+  // 겨냥: 산후 자간증 등. 경련은 119(§3 T5, AWHONN 911)
+  seizure: (i) => i.seizure,
+  // 겨냥: 산후 우울증·산후 정신병의 자해·영아 위해 위험(§3 T11, AWHONN 911) — 병원 찾기 대신 위기 상담 안내
+  harm_thoughts: (i) => i.harmThoughts,
+  // 겨냥: 1차·2차 산후출혈 — 산후 일수와 상관없이(§3 T1. 10일 게이트는 오로 색 질문에만 둔다)
+  heavy_bleeding: (i) => i.bleedingHeavy,
+  // 겨냥: 산후출혈·자궁복고부전. 산후 10일 이전의 붉은 오로는 흔해서 판정하지 않는다(양이 많으면 heavy_bleeding이 날짜와 상관없이 본다).
   pph_suspect: (i) => i.postpartumDays >= LOCHIA_GATE_DAYS && i.lochiaIncreased && i.lochiaRed,
   // 겨냥: 상처 감염·혈종 등
   severe_pain: (i) => i.painNrs >= SEVERE_PAIN_NRS || i.woundPainWorsening,
@@ -76,6 +117,12 @@ const MATCHERS: Record<RedFlagCode, (i: SymptomInput) => boolean> = {
   cardioresp_flag: (i) => i.chestPainBreathing,
   // 겨냥: 심부정맥혈전증
   dvt_suspect: (i) => i.calfPainSwelling,
+  // 겨냥: 산후 자간전증(§3 T2)
+  headache_vision: (i) => i.headacheVision,
+  // 겨냥: 산후 자간전증(§3 T3 — 이것만 있을 때 당일 진료로 둘지는 임상 결정이라 보수적으로 즉시 내원)
+  face_hand_swelling: (i) => i.faceHandSwelling,
+  // 겨냥: 산후 자간전증·HELLP(§3 T4)
+  upper_belly_pain: (i) => i.upperBellyPain,
 };
 
 interface RedFlagRule {
@@ -98,6 +145,8 @@ for (const r of content.red_flags) {
     throw new Error(`레드플래그 규칙 '${r.code}'에 조건이 없습니다 (src/rules/redflag.ts MATCHERS)`);
   }
   if (seenCodes.has(r.code)) throw new Error(`레드플래그 규칙 '${r.code}'이 content.json red_flags에 중복돼 있습니다`);
+  // 모르는 등급은 대표 신호 고르기에서 맨 뒤로 밀리고 화면에 등급 이름도 없다 — 조용히 넘기지 않는다
+  if (severityRank(r.severity) === 0) throw new Error(`레드플래그 규칙 '${r.code}'의 등급 '${r.severity}'을 모릅니다 (src/rules/redflag.ts severityRank)`);
   seenCodes.add(r.code);
 }
 const RULES: RedFlagRule[] = RED_FLAG_ORDER.map((code) => {
@@ -111,13 +160,28 @@ export const RED_FLAG_CODES: readonly string[] = RULES.map((r) => r.code);
 /** 조건이 정의된 code 목록 — 테스트·감사용 */
 export const RED_FLAG_MATCHER_CODES: readonly string[] = Object.keys(MATCHERS);
 
-function severityRank(s: string): number {
-  return s === "immediate" ? 2 : s === "urgent" ? 1 : 0;
+/**
+ * 안내 등급의 높낮이 — emergency(지금 바로 119)·crisis(위기 상담 전화) > immediate(즉시 내원) > urgent(당일 진료). 모르는 등급은 0.
+ * crisis는 emergency와 같은 높이다(AWHONN은 자해 생각을 911로 둔다) — 같으면 평가 순서(emergency 규칙이 앞)를 따른다.
+ */
+export function severityRank(s: string): number {
+  switch (s) {
+    case "emergency":
+    case "crisis":
+      return 3;
+    case "immediate":
+      return 2;
+    case "urgent":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 /**
- * 증상 입력 → 즉시 병원 신호. 걸린 규칙이 없으면 hospitalSignal = null.
- * 대표 신호는 severity가 가장 높은 규칙(immediate > urgent), 같으면 먼저 걸린 규칙(RedFlagEngine.swift:34-35).
+ * 증상 입력 → 즉시 병원 신호. 걸린 규칙이 없으면 hospitalSignal = null, signals = [].
+ * 대표 신호는 severity가 가장 높은 규칙, 같으면 먼저 걸린 규칙(RedFlagEngine.swift:34-35 — Swift `max(by:)`와 같은 결과).
+ * signals는 걸린 규칙 전부를 같은 기준(등급 높은 순, 같으면 평가 순서)으로 늘어놓은 것이다 — 첫 항목이 대표 신호.
  */
 export function checkRedFlags(input: SymptomInput): RedFlagResult {
   const fired = RULES.filter((r) => r.matches(input));
@@ -125,41 +189,63 @@ export function checkRedFlags(input: SymptomInput): RedFlagResult {
     firedRules: fired.length ? fired.map((r) => `redflag:${r.code}`) : ["redflag:none"],
     configVersion: RULES_VERSION,
   };
-  // Swift `max(by:)`와 같게 — 더 높은 것만 교체하므로 동률이면 첫 규칙이 남는다
-  let top: RedFlagRule | null = null;
-  for (const r of fired) {
-    if (!top || severityRank(r.severity) > severityRank(top.severity)) top = r;
-  }
-  if (!top) return { hospitalSignal: null, trace };
-  return {
-    hospitalSignal: {
-      code: top.code,
-      severity: top.severity,
-      messagePatient: top.message,
-      evidenceChips: [...top.chips],
-    },
-    trace,
-  };
+  // 안정 정렬 — 같은 등급이면 평가 순서 그대로(동률이면 첫 규칙이 대표 신호로 남는다)
+  const signals: RedFlag[] = [...fired]
+    .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))
+    .map((r) => ({ code: r.code, severity: r.severity, messagePatient: r.message, evidenceChips: [...r.chips] }));
+  return { hospitalSignal: signals[0] ?? null, signals, trace };
 }
+
+/** 규칙 code의 등급(content.json red_flags) — 모르는 code(옛 판·다른 기기의 기록)는 null */
+export function redFlagSeverity(code: string | null | undefined): string | null {
+  if (code == null) return null;
+  return RULES.find((r) => r.code === code)?.severity ?? null;
+}
+
+/** 규칙 하나의 안내 — 등급·문구·칩(content.json red_flags 그대로) */
+export interface RedFlagGuide {
+  code: string;
+  severity: string;
+  message: string;
+  chips: readonly string[];
+}
+
+/**
+ * 모든 규칙의 안내(평가 순서). 입력과 상관없는 일반 안내다(개인 판정이 아님) — 기록 결과 화면이 결과와 상관없이 늘 보이는
+ * "바로 병원에 가야 하는 신호" 목록을 여기서 만든다(features/record warningSignGroups).
+ */
+export const RED_FLAG_GUIDES: readonly RedFlagGuide[] = RULES.map((r) => ({
+  code: r.code,
+  severity: r.severity,
+  message: r.message,
+  chips: [...r.chips],
+}));
 
 // MARK: 홈 회복 지표
 //
 // 레드플래그까지는 아니어도 "지켜볼 만한" 구간을 홈에서 보여준다. 임계값을 레드플래그와 같은 파일에 두는 이유:
-// iOS에서 한때 홈이 자체 임계값을 가져, 산후 10일 이내 붉은 오로를 기록 탭은 "정상", 홈은 "확인 필요"로 말했다.
+// iOS에서 한때 홈이 자체 임계값을 가져, 산후 10일 이내 붉은 오로를 기록 탭과 홈이 서로 다르게 말했다.
 // 근거: 오로 "10일 이후 선홍색 재발·양 증가"(임산부수첩 2023 p.60), 발열 38°C 이상, 통증 NRS 8 이상 = 즉시 내원 기준.
-// NRS 4~7의 "관찰"은 임상 판정이 아니라 중등도 통증을 눈에 띄게 하려는 표시 구간이다.
+// NRS 4~7의 "살펴볼 신호"는 임상 판정이 아니라 중등도 통증을 눈에 띄게 하려는 표시 구간이다.
 
 export interface RecoveryMetric {
   name: string;
   status: MetricStatus;
 }
 
-/** 지표 상태 라벨 — 웰니스 앱이라 "이상" 대신 "확인 필요". 원문: Models.swift:59-61 */
-export const METRIC_STATUS_LABEL: Record<MetricStatus, string> = {
-  normal: "정상",
-  watch: "관찰",
-  alert: "확인 필요",
-};
+/**
+ * 기록의 표시 라벨 — 건강 상태를 평가하지 않고, 기록한 값이 어떤 안내에 해당하는지만 말한다(의료기기 경계 — 법률 사전 검토 H5·4-3,
+ * 임상 사전 검토 질문 16). iOS 원문 "정상/관찰/확인 필요"(Models.swift:59-61)를 바꿨다. 홈 회복 지표 배지·기록 카드·최근 기록·PDF 리포트가
+ * 모두 이 세 글자를 쓴다. "기록 없음"은 쓰지 않는다 — 기록은 있고, 그 값이 목록에 해당하지 않을 뿐이다.
+ */
+export const METRIC_STATUS_LABEL = {
+  // 웹 신규 문구 — CPO 확인 필요
+  normal: "해당 없음",
+  // 웹 신규 문구 — CPO 확인 필요
+  watch: "살펴볼 신호",
+  // 웹 신규 문구 — CPO 확인 필요
+  alert: "병원 확인 신호",
+} as const satisfies Record<MetricStatus, string>;
 
 /**
  * 최근 기록 → 홈 회복 지표. 기록이 없으면 빈 배열(카드 숨김).

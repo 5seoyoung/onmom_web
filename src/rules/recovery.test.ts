@@ -189,7 +189,8 @@ describe("회복 단계 분석 — Swift 벡터", () => {
         allowed: toWebLabels(v.allowed),
         caution: toWebLabels(v.caution),
         forbidden: toWebLabels(v.forbidden),
-        trace: { firedRules: v.firedRules, configVersion: "rules-1.1" },
+        // 판은 앱 전체의 규칙 판(RULES_VERSION) — rules-1.2는 레드플래그만 바꿨고 이 분석의 판정은 Swift 벡터 그대로다
+        trace: { firedRules: v.firedRules, configVersion: "rules-1.2" },
       });
     });
   }
@@ -303,6 +304,9 @@ describe("단계 코드·라벨(감사 #25)", () => {
   it("severity·문서 종류 라벨", () => {
     expect(severityLabel("immediate")).toBe("즉시 내원");
     expect(severityLabel("urgent")).toBe("당일 진료");
+    // rules-1.2 — 지금 바로 119, 위기 상담 전화(웹 신규 문구)
+    expect(severityLabel("emergency")).toBe("119 연락");
+    expect(severityLabel("crisis")).toBe("위기 상담 연락");
     // 모르는 코드는 null — 화면은 배지를 빼고 코드를 그대로 내지 않는다
     expect(severityLabel("routine")).toBeNull();
     expect(severityLabel("")).toBeNull();

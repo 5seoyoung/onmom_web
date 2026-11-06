@@ -7,6 +7,11 @@
 //   ② 표에 없는 항목(unknown)일 때만 LLM 프록시에 묻는다. 실패하면 표의 "정보 부족"을 그대로 둔다.
 // 표에 있는 항목은 LLM이 절대 덮어쓰지 않는다 — 코데인·아스피린·술의 "피하세요"는 출처 있는 규칙이다.
 // "AI 답변" 칩과 병기 문구는 LLM 결과에만 붙는다. 진단·처방이 아니다.
+//
+// 2026-11-04(임상 사전 검토 B4, 보수적으로만): "영양제"·"항생제"·"비타민" 같은 묶음 낱말은 "수유 중 가능" 행에 닿지 않게 별칭에서 뺐고
+// (표에 없음 → 정보 부족 → 의사·약사 상담), 뜻이 넓은 "티"·"tea"·"회"도 뺐다. 행은 더하지 않았다. 별칭은 이미 있는 행에만 더했다
+// (세티리진, 말차·보이차·우롱차). 칩 "수유 안전"은 "수유 가능"으로 — 판정 글자(verdict_labels)와 같은 말.
+// 웹 신규 문구 — CPO 확인 필요 (content.json substances의 이부프로펜·철분·매운 음식 행 detail — "안전합니다"라고 단정하지 않게 바꿈)
 
 import content from "@/content";
 import { createSubstanceMatcher } from "./substanceMatch";
@@ -175,15 +180,18 @@ export function buildSubstanceLlmRequest(input: { query: string }): SubstanceLlm
   };
 }
 
-/** 화면 상단 안내 — 수유 여부에 따라 달라진다(SubstanceCheckView.swift:18-27). */
+/**
+ * 화면 상단 안내 — 수유 여부에 따라 달라진다(SubstanceCheckView.swift:18-27).
+ * iOS 원문 "…안전 분류를 확인해요"를 바꿨다 — 개인에게 안전을 판정해 주는 말로 읽힌다(법률 사전 검토 4-2 약물·음식 표).
+ */
 export function substanceHeader(isBreastfeeding: boolean): { lead: string; note: string | null } {
   return isBreastfeeding
     ? {
-        lead: "수유 중 약·음식을 입력하면 안전 분류를 확인해요.", // 원문: SubstanceCheckView.swift:19
+        lead: "수유 중 약·음식을 입력하면 일반 정보를 보여 드려요.", // 웹 신규 문구 — CPO 확인 필요
         note: null,
       }
     : {
-        lead: "약·음식을 입력하면 산후 안전 분류를 확인해요.", // 원문: SubstanceCheckView.swift:20
+        lead: "약·음식을 입력하면 산후 일반 정보를 보여 드려요.", // 웹 신규 문구 — CPO 확인 필요
         // 원문: SubstanceCheckView.swift:24
         note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 - 분류 기준이 달라져요.",
       };

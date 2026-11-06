@@ -3,10 +3,12 @@
 import { useId } from "react";
 import { Card, NrsSlider, SectionTitle, Toggle } from "@/components/ui";
 import type { SymptomForm } from "@/rules/record";
-import { RECORD_TEXT, RISK_TOGGLES } from "./recordView";
+import { RECORD_TEXT, RECORD_WEB_TEXT, RISK_TOGGLES } from "./recordView";
 
 // 입력 폼 카드 5개 — RecordFlowView.swift:161-254.
-// 오로(10일 이상일 때만 토글 2개, 아니면 안내문) · 발열 · 통증 NRS · 위험 증상 4개(켜짐 색 stateAlert) · 내 동네.
+// 오로(10일 이상일 때만 토글 2개, 아니면 안내문) · 발열 · 통증 NRS · 위험 증상(켜짐 색 stateAlert) · 내 동네.
+// 위험 증상은 iOS의 넷에 rules-1.2의 여섯(다량 출혈·자간전증·자간증 신호·위기 생각)을 더했다 — 산후 일수와 상관없이 늘 묻는다.
+// 기준이 필요한 토글(다량 출혈 등)은 라벨 아래 설명 줄을 둔다(Toggle description = 스위치의 aria-describedby).
 
 export interface SymptomFormCardsProps {
   form: SymptomForm;
@@ -59,7 +61,7 @@ export function SymptomFormCards({
             />
           </>
         ) : (
-          <p className="text-[0.8125rem] text-text-secondary">{RECORD_TEXT.lochiaEarly}</p>
+          <p className="text-[0.8125rem] text-text-secondary">{RECORD_WEB_TEXT.lochiaEarly}</p>
         )}
       </Card>
 
@@ -84,12 +86,13 @@ export function SymptomFormCards({
 
       <Card as="section" aria-labelledby={riskId} className="flex flex-col gap-2">
         <SectionTitle id={riskId}>{RECORD_TEXT.riskTitle}</SectionTitle>
-        {RISK_TOGGLES.map(({ key, label }, i) => (
+        {RISK_TOGGLES.map(({ key, label, description }, i) => (
           <div key={key} className="flex flex-col gap-2">
             {i > 0 ? <RowDivider /> : null}
             <Toggle
               variant="alert"
               label={label}
+              description={description}
               checked={form[key]}
               disabled={disabled}
               onCheckedChange={(v) => onChange({ [key]: v })}

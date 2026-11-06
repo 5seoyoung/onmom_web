@@ -5,6 +5,7 @@
 //   합집합이 곧 "양쪽에서 쓴 것 전부"다. 같은 id가 양쪽에 있으면 서버 쪽을 쓴다(기록은 쓴 뒤 바뀌지 않는다).
 //   다만 증상 기록의 규칙 버전(rulesVersion)·기분 답의 문항 버전(moodVersion)이 서버 쪽에만 없으면(null) 다른 쪽 값을 남긴다 —
 //   그 칸을 모르는 옛 웹(칸이 생기기 전에 열어 둔 탭)이 기록을 읽고 다시 저장하며 떨어뜨린 것이라, 감사용 버전을 잃지 않게(keepVersion).
+//   증상 기록의 위험 증상 토글 칸(rules-1.2 — domain/types RISK_SYMPTOM_KEYS)도 같다: 서버 쪽에 없는 칸은 이 브라우저 쪽 값으로 채운다.
 // - 순서는 날짜(최신순, 댓글은 오래된 순), 같은 시각이면 id — 어느 기기에서 합쳐도 같은 순서가 나와
 //   기기끼리 순서만 바꿔 서로 덮어쓰는 일이 없다. 개수 제한은 저장 규칙과 같다(기록 50·기분 60, domain/types).
 // - 프로필·산모수첩·온보딩 완료: 서버가 온보딩을 마친 상태면 서버, 아니면 이 브라우저(첫 합치기 규칙).
@@ -19,7 +20,9 @@
 import { hasCurrentConsent } from "@/domain/consent";
 import {
   MOOD_CHECKS_LIMIT,
+  RISK_SYMPTOM_KEYS,
   SYMPTOM_HISTORY_LIMIT,
+  pickRiskFlags,
   type CommunityComment,
   type CommunityPost,
   type IsoDateTimeString,
@@ -44,7 +47,10 @@ export interface MergeOptions {
 export function mergeStates(server: PersistedState, local: PersistedState, opts: MergeOptions): PersistedState {
   const base = opts.base ?? null;
   const personal = base === null ? firstMergePersonal(server, local) : threeWayPersonal(server, local, base);
-  const symptomHistory = mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst, keepVersion("rulesVersion"));
+  const keepRulesVersion = keepVersion("rulesVersion");
+  const symptomHistory = mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst, (s, l) =>
+    keepRiskFlags(keepRulesVersion(s, l), l),
+  );
   const moodChecks = mergeById<MoodCheckRecord>(server.moodChecks, local.moodChecks, newestFirst, keepVersion("moodVersion"));
   return {
     hasOnboarded: server.hasOnboarded || local.hasOnboarded,
@@ -152,6 +158,20 @@ function mergeById<T extends Dated>(
 function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
   return <T extends Dated & Record<K, string | null>>(serverItem: T, localItem: T): T =>
     serverItem[key] === null && localItem[key] !== null ? { ...serverItem, [key]: localItem[key] } : serverItem;
+}
+
+/**
+ * 같은 증상 기록 — 서버 쪽에 없는(칸이 없거나 true/false가 아닌) 위험 증상 토글 칸은 이 브라우저 쪽 값으로 채운다(머리 주석, keepVersion과 같은 까닭).
+ * 서버 쪽에 값이 있으면 그대로 — 기록은 쓴 뒤 바뀌지 않는다. 채울 것이 없으면 서버 쪽 객체 그대로(같은 결과를 같은 모양으로).
+ */
+function keepRiskFlags(serverItem: SymptomRecord, localItem: SymptomRecord): SymptomRecord {
+  const mine = pickRiskFlags(localItem);
+  const theirs = pickRiskFlags(serverItem);
+  const missing = RISK_SYMPTOM_KEYS.filter((k) => theirs[k] === undefined && mine[k] !== undefined);
+  if (missing.length === 0) return serverItem;
+  const filled: SymptomRecord = { ...serverItem };
+  for (const k of missing) filled[k] = mine[k];
+  return filled;
 }
 
 /** 글은 id로 합치고(같은 글이면 서버의 제목·본문), 댓글은 양쪽 댓글을 id로 합친다. */

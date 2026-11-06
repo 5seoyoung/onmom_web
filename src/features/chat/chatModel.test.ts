@@ -406,18 +406,18 @@ describe("AI 동의를 거절했을 때 — \"연결되지 않아\"가 아니라
   it("거절했으면 기본 답만 바꾸고(키워드 답은 그대로), 거절하지 않았으면 원문", async () => {
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
     const ask = (text: string) => [...initialChatMessages(), { id: 1, role: "user" as const, text }];
-    const declined = await requestChatReply(ask("오로가 언제까지?"), { llmConfigured: false, complete, context: null, declined: true });
+    const declined = await requestChatReply(ask("산후 검진은 언제?"), { llmConfigured: false, complete, context: null, declined: true });
     expect(declined).toEqual({ text: CHAT_DECLINED_DEFAULT_REPLY, fromFallback: true, crisis: false, origin: "rules", fallbackReason: "declined" });
     const bleeding = await requestChatReply(ask("출혈이 많아요"), { llmConfigured: false, complete, context: null, declined: true });
     expect(bleeding.text).toBe(content.chat_fallback.replies.bleeding);
-    const off = await requestChatReply(ask("오로가 언제까지?"), { llmConfigured: false, complete, context: null });
+    const off = await requestChatReply(ask("산후 검진은 언제?"), { llmConfigured: false, complete, context: null });
     expect(off.text).toBe(content.chat_fallback.replies.default);
     expect(complete).not.toHaveBeenCalled();
   });
 });
 
 describe("앱 안내로 답한 이유 — 서버 함수의 한도·혼잡·거절을 \"연결되지 않아\"로 뭉개지 않는다(handler.ts · SUPABASE_FUNCTIONS §5)", () => {
-  const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "오로가 언제까지 나오나요?" }];
+  const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "산후 검진은 언제 받나요?" }];
   const serverFail = (status: number) => vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status }));
 
   it("chatFallbackReasonFor — 429 한도 · 503 혼잡/이용 불가 · 422 거절, 그 밖은 연결되지 않아", () => {

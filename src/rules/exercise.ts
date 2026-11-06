@@ -236,8 +236,8 @@ export const EXERCISE_TEXT = {
   // 원문: ExerciseView.swift:124
   needsDeliveryBody: "자연분만과 제왕절개는 운동이 열리는 시기가 달라요. 프로필 > 설정 > 프로필 편집에서 분만 방식을 골라주세요.",
   redFlagTitle: "운동 영상 추천을 멈췄어요", // 원문: ExerciseView.swift:137
-  // 원문: ExerciseView.swift:140
-  redFlagBody: "최근 기록에서 즉시 내원이 필요한 위험 신호가 확인됐어요. 회복을 위해 모든 운동 추천을 일시 중단합니다. 먼저 의료기관에 방문하세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "…위험 신호가 확인됐어요…"를 바꿈 — 앱이 확인·판정했다는 말로 읽힌다. 법률 사전 검토 H5)
+  redFlagBody: "최근 기록에 '바로 병원에 가야 하는 신호'에 해당하는 항목이 있어요. 모든 운동 추천을 잠시 멈춰요. 먼저 의료기관에 방문하세요.",
   emptyPlan: "이 단계에 표시할 영상이 없어요.", // 원문: ExerciseView.swift:60
   unlockedSection: "지금 가능한 운동", // 원문: ExerciseView.swift:67
   lockedSectionBlocked: "지금은 권하지 않는 운동", // 원문: ExerciseView.swift:72

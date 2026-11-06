@@ -1,5 +1,6 @@
 // 회복 가이드 화면의 보기 모델 — iOS GuideView.swift.
 // 위험 신호 5줄·카드 8장은 content.json(guide_red_flags · guide_cards)에서 읽는다(재입력 금지).
+// 웹 신규 문구 — CPO 확인 필요 (content.json guide_cards "산후 정신건강"의 넷째 요점 — 임상 사전 검토 B3: 109·1577-0199·119. 출처에 CDC Hear Her 2024 더함)
 // 화면 문구 중 content.json에 없는 것만 Swift 원문을 글자 그대로 옮긴다.
 import content from "@/content";
 import { SOURCE_PREFIX } from "@/components/ui/evidence";
@@ -55,9 +56,9 @@ export function guideCardViews(cards: readonly GuideCardSource[] = content.guide
 
 // 문장 속 전화번호 — 화면이 한 덩어리로 묶어 tel: 링크를 건다(PhoneLinks.tsx). 글자는 그대로.
 // - 하이픈이 든 번호(1577-0199 · 02-2276-2276): 자릿수 형태로 찾는다.
-// - 하이픈 없는 짧은 번호는 안전 연계 번호 목록(web/07 §5 — 자살예방상담 109 · 응급 119 · 고용노동부 1350)만 — 앞뒤에 숫자·하이픈이
-//   없을 때만 맞아, "10~20%"·"1190"·"400~500kcal" 같은 수치는 번호로 보지 않는다. 그 밖의 숫자 나열은 전화번호로 지어내지 않는다.
-export const SAFETY_SHORT_NUMBERS: readonly string[] = ["109", "119", "1350"];
+// - 하이픈 없는 짧은 번호는 안전 연계 번호 목록(web/07 §5 — 자살예방상담 109 · 응급 119 · 고용노동부 1350, 2026-11-04 위기 안내의 경찰 112)만 —
+//   앞뒤에 숫자·하이픈이 없을 때만 맞아, "10~20%"·"1190"·"400~500kcal" 같은 수치는 번호로 보지 않는다. 그 밖의 숫자 나열은 전화번호로 지어내지 않는다.
+export const SAFETY_SHORT_NUMBERS: readonly string[] = ["109", "112", "119", "1350"];
 const PHONE_RE = new RegExp(`\\d{2,4}-\\d{3,4}(?:-\\d{4})?|(?<![\\d-])(?:${SAFETY_SHORT_NUMBERS.join("|")})(?![\\d-])`, "g");
 
 export interface TextSegment {
