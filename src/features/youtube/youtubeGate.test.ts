@@ -94,7 +94,8 @@ describe("영상이 실린 빌드 — Supabase 설정이 있을 때만 켜진다
     expect(b.catalog.YOUTUBE_ACTIVE).toBe(true);
     expect(b.catalog.YOUTUBE_SHOWN_VIDEOS.map((v) => v.videoId)).toEqual([VIDEO_ID]);
     expect(b.policy.kind).toBe("webDraft");
-    expect(b.policyText).toContain("Google LLC");
+    // "Google LLC"만으로는 부족하다 — 문의 메일(Gmail) 줄이 늘 있으므로 유튜브 줄을 집어 본다
+    expect(b.policyText).toContain("Google LLC: 운동 탭 유튜브 추천 영상의 미리보기 이미지 제공(YouTube)");
     expect(directiveOf(b.meta, "img-src")).toEqual(["'self'", "data:", "blob:", "https://i.ytimg.com"]);
   });
 

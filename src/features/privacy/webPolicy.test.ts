@@ -4,7 +4,8 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MaternityRecord, PersistedState, UserProfile } from "@/domain/types";
-import { SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
+import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
+import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { LLM_FUNCTION_MAX_MESSAGES } from "@/api/llm";
 import { PUSH_SERVICE_HOSTS } from "@/features/pwa/reminderModel";
 import { CHAT_MAX_MESSAGES } from "../../../supabase/functions/_shared/chat";
@@ -175,7 +176,7 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
       .join("\n");
     expect(withTurnstile).toContain("Cloudflare, Inc.");
     expect(withTurnstile).toContain("Turnstile");
-    expect(withTurnstile).toContain("⑤ Cloudflare, Inc. (미국)\n– 연락처: dpo@cloudflare.com");
+    expect(withTurnstile).toContain("⑥ Cloudflare, Inc. (미국)\n– 연락처: dpo@cloudflare.com");
     // 동의 전에 처리하는 정보(2절 가)에도 — 게스트 시작 때 Cloudflare가 받는다
     expect(withTurnstile).toContain("• 자동 가입 방지를 쓰는 동안에는 게스트로 시작할 때 Cloudflare가 접속 기록과 브라우저 확인 정보를 받습니다(6절).");
   });
@@ -212,7 +213,7 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
 
   it("6절 — 알림을 전달하는 브라우저 푸시 서비스(국외, 브라우저 제조사가 정함), 받는 푸시 서비스 목록과 같은 네 곳", () => {
     const push = part("국외 이전").split("\n\n").find((b) => b.includes("브라우저 푸시 서비스"))!;
-    expect(push.startsWith("⑤ 브라우저 푸시 서비스")).toBe(true);
+    expect(push.startsWith("⑥ 브라우저 푸시 서비스")).toBe(true);
     // 받는 푸시 서비스(reminderModel PUSH_SERVICE_HOSTS — 0004 check 제약과 같은 목록)마다 회사가 적혀 있다
     const company: Record<(typeof PUSH_SERVICE_HOSTS)[number], string> = {
       "fcm.googleapis.com": "Google LLC",
@@ -226,14 +227,14 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
     for (const word of ["이전 항목", "이전 시기·방법", "목적", "보유 기간", "거부 방법과 효과"]) expect(push, word).toContain(word);
   });
 
-  it("번호는 빠진 블록 없이 이어진다 — 둘 다 쓰면 푸시 ⑤, Cloudflare ⑥", () => {
+  it("번호는 빠진 블록 없이 이어진다 — 고정 블록 뒤에 푸시 ⑥, Cloudflare ⑦", () => {
     const transfer = both.find((s) => s.title.includes("국외 이전"))!.body;
     const heads = transfer
       .split("\n")
       .filter((l) => /^[①-⑧] /.test(l))
       .map((l) => l.slice(0, 1));
-    expect(heads).toEqual(["①", "②", "③", "④", "⑤", "⑥"]);
-    expect(transfer).toContain("⑥ Cloudflare, Inc. (미국)");
+    expect(heads).toEqual(["①", "②", "③", "④", "⑤", "⑥", "⑦"]);
+    expect(transfer).toContain("⑦ Cloudflare, Inc. (미국)");
     // AI 상담 국외 이전은 늘 ①(4절이 "6절 ①"로 가리킨다)
     expect(transfer).toContain("① Anthropic, PBC (미국)");
     expect(both.find((s) => s.title.includes("동의를 받는 방법"))!.body).toContain("(6절 ①)");
@@ -370,6 +371,37 @@ describe("웹 방침 — 2026-11-06 시행판에서 사실에 맞춘 것", () =>
     expect(first.title).toContain("동의를 받는 방법");
     expect(first.body).toContain(`설정 > ${SETTINGS_TEXT.deleteAccount}(게스트 화면의 이름은 [${GUEST_ACCOUNT_TEXT.deleteAccount}]입니다. 아래에서도 같습니다)`);
     expect(WEB_TEXT).not.toContain("이 기기에서 기록 지우기");
+  });
+
+  it("메일 문의 — 항목·근거(법 §15①4)·보유 기간 1년(2·5절), Google LLC(미국)를 7절 위탁·6절 ⑤ 국외 이전에", () => {
+    const items = section("항목");
+    const inquiry = items.slice(items.indexOf("다. "), items.indexOf("수집 방법:"));
+    expect(inquiry).toContain("다. 메일로 문의할 때 처리하는 정보(개인정보 보호법 제15조제1항제4호 - 이용자의 요청 처리)");
+    expect(inquiry).toContain("• 처리 항목: 이메일 주소, 문의 내용");
+    expect(inquiry).toContain("처리를 마친 날부터 1년이 지나면 삭제합니다(5절).");
+    expect(inquiry).toContain("Google LLC(미국)의 Gmail로 받습니다(6절 ⑤).");
+    expect(inquiry).toContain("문의 메일에는 건강 정보를 적지 말아 주세요.");
+    expect(items).toContain("수집 방법: 이용자가 화면에 직접 입력하거나 메일로 보내거나,");
+    expect(section("보유 기간")).toContain("• 메일 문의(이메일 주소, 문의 내용)는 처리를 마친 날부터 1년이 지나면 삭제합니다.");
+    expect(section("처리 위탁")).toContain("• Google LLC: 문의 메일 수신·보관(Gmail)");
+
+    const gmail = section("국외 이전").split("\n\n").find((b) => b.includes("문의 메일(Gmail)"))!;
+    expect(gmail.startsWith("⑤ Google LLC (미국) - 문의 메일(Gmail)\n")).toBe(true);
+    // 받는 자 연락처 — 확인한 주소가 없어 공개 방침 링크로 적는다(주소를 지어내지 않는다)
+    expect(gmail).toContain("https://policies.google.com/privacy");
+    expect(gmail).not.toMatch(/[A-Za-z0-9._%+-]+@/);
+    // 법 §28의8② 항목
+    for (const word of ["이전 항목", "이전 시기·방법", "목적", "보유 기간", "거부 방법과 효과"]) expect(gmail, word).toContain(word);
+    // 선택 블록과 상관없이 ⑤ — 2절이 "6절 ⑤"로 가리킨다
+    for (const o of [{ turnstile: true, reminders: true, youtube: true }, { turnstile: true, reminders: false }, { turnstile: false, reminders: true }]) {
+      expect(webPolicySections(o).find((s) => s.title.includes("국외 이전"))!.body).toContain("⑤ Google LLC (미국) - 문의 메일(Gmail)");
+    }
+  });
+
+  it("메일 문의는 동의 문구에 넣지 않는다 — 동의가 아니라 이용자의 요청 처리, 동의 판은 그대로", () => {
+    const consent = JSON.stringify([SERVER_CONSENT_TEXT, REQUIRED_CONSENTS, AI_TRANSFER_NOTICE]);
+    for (const word of ["Gmail", "Google", "문의 내용", "이메일 주소,"]) expect(consent, word).not.toContain(word);
+    expect(CURRENT_CONSENT_VERSION).toBe("web-2026-11-06");
   });
 
   it("만 14세 미만(10절) — 알게 되면 지체 없이 삭제", () => {
