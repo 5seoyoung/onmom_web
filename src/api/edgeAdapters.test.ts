@@ -7,12 +7,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { AI_CONSENTS_TABLE } from "../../supabase/functions/_shared/aiConsent";
 import { isGuestUser, isTokenRejection, pickServerKey, TOKEN_REJECTION_CODES } from "../../supabase/functions/_shared/auth";
-import { SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../../supabase/functions/_shared/prompts";
+import { systemPromptBlocks } from "../../supabase/functions/_shared/prompts";
 import {
   buildMessageParams,
   createComplete,
   createConsumeQuota,
-  createReadAiConsentVersion,
+  createReadAiConsent,
   createRefundQuota,
   createVerifyUser,
   interpretLlmResponse,
@@ -114,30 +114,34 @@ describe("createVerifyUser", () => {
   });
 });
 
-describe("createReadAiConsentVersion — 서버 키로 읽으므로 확인된 사용자 id의 행만", () => {
-  it("물은 사용자 id로 한 번 읽고, 그 행의 판을 돌려준다", async () => {
-    const query = vi.fn(async (userId: string) => ({ data: { user_id: userId, version: "web-2026-09-28.2" }, error: null }));
-    await expect(createReadAiConsentVersion(query)("u-1")).resolves.toBe("web-2026-09-28.2");
+describe("createReadAiConsent — 서버 키로 읽으므로 확인된 사용자 id의 행만", () => {
+  const row = { version: "web-2026-11-06.1", sensitive_agreed: true, transfer_agreed: true };
+
+  it("물은 사용자 id로 한 번 읽고, 그 행의 판·두 동의를 돌려준다", async () => {
+    const query = vi.fn(async (userId: string) => ({ data: { ...row, user_id: userId }, error: null }));
+    await expect(createReadAiConsent(query)("u-1")).resolves.toEqual({ version: "web-2026-11-06.1", sensitiveAgreed: true, transferAgreed: true });
     expect(query).toHaveBeenCalledTimes(1);
     expect(query).toHaveBeenCalledWith("u-1");
   });
   it("행 없음·판이 글자가 아님·다른 사용자의 행 → null(동의 없음 → 403)", async () => {
-    await expect(createReadAiConsentVersion(async () => ({ data: null, error: null }))("u-1")).resolves.toBeNull();
-    await expect(createReadAiConsentVersion(async () => ({ data: { user_id: "u-1", version: 2 }, error: null }))("u-1")).resolves.toBeNull();
-    await expect(
-      createReadAiConsentVersion(async () => ({ data: { user_id: "someone-else", version: "web-2026-09-28.2" }, error: null }))("u-1"),
-    ).resolves.toBeNull();
+    await expect(createReadAiConsent(async () => ({ data: null, error: null }))("u-1")).resolves.toBeNull();
+    await expect(createReadAiConsent(async () => ({ data: { ...row, user_id: "u-1", version: 2 }, error: null }))("u-1")).resolves.toBeNull();
+    await expect(createReadAiConsent(async () => ({ data: { ...row, user_id: "someone-else" }, error: null }))("u-1")).resolves.toBeNull();
+  });
+  it("두 동의는 정확히 true일 때만 동의 — 칸이 없거나(0012 전) 글자여도 동의가 아니다", async () => {
+    const read = (data: Record<string, unknown>) => createReadAiConsent(async () => ({ data: { user_id: "u-1", version: "v", ...data }, error: null }))("u-1");
+    await expect(read({})).resolves.toEqual({ version: "v", sensitiveAgreed: false, transferAgreed: false });
+    await expect(read({ sensitive_agreed: "true", transfer_agreed: 1 })).resolves.toEqual({ version: "v", sensitiveAgreed: false, transferAgreed: false });
+    await expect(read({ sensitive_agreed: true, transfer_agreed: false })).resolves.toEqual({ version: "v", sensitiveAgreed: true, transferAgreed: false });
   });
   it("읽기 오류·서버 키 없음 → throw(503 — LLM을 부르지 않는다)", async () => {
-    await expect(createReadAiConsentVersion(async () => ({ data: null, error: { message: "x" } }))("u-1")).rejects.toThrow();
-    await expect(createReadAiConsentVersion(null)("u-1")).rejects.toThrow();
+    await expect(createReadAiConsent(async () => ({ data: null, error: { message: "x" } }))("u-1")).rejects.toThrow();
+    await expect(createReadAiConsent(null)("u-1")).rejects.toThrow();
   });
   it("index.ts(Deno)의 연결 — ai_consents에서 user_id = 확인된 사용자 id인 행 하나만(maybeSingle) 읽는다", () => {
     const src = readFileSync(fileURLToPath(new URL("../../supabase/functions/chat/index.ts", import.meta.url)), "utf8");
     expect(AI_CONSENTS_TABLE).toBe("ai_consents");
-    expect(src).toContain(
-      '(userId: string) => admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle()',
-    );
+    expect(src).toContain('admin.from(AI_CONSENTS_TABLE).select("user_id, version, sensitive_agreed, transfer_agreed").eq("user_id", userId).maybeSingle()');
     expect(src.match(/AI_CONSENTS_TABLE/g)).toHaveLength(2); // 가져오기 한 번 + 읽기 한 번(쓰기 없음)
   });
 });
@@ -234,9 +238,8 @@ const errors: LlmErrorClasses = {
 
 const eduInput: LlmCallInput = {
   preset: "patient_edu",
-  system: systemPromptBlocks("patient_edu", { week: 3 }),
+  system: systemPromptBlocks({ week: 3 }),
   messages: [{ role: "user", content: "오로가 언제까지 나오나요?" }],
-  jsonSchema: null,
 };
 
 function response(over: Partial<Omit<LlmResponseLike, "usage">> & { usage?: Partial<LlmResponseLike["usage"]> } = {}): LlmResponseLike {
@@ -248,11 +251,11 @@ function response(over: Partial<Omit<LlmResponseLike, "usage">> & { usage?: Part
   };
 }
 
-describe("buildMessageParams — 모델·거절 대체·답 형식은 서버가 정한다", () => {
-  it("상담: claude-opus-5, fallbacks default + 베타 헤더, 시스템 블록, 선채움 없음, 답 형식 없음", () => {
+describe("buildMessageParams — 모델·거절 대체·생각 깊이는 서버가 정한다", () => {
+  it("상담: claude-opus-5-5, fallbacks default + 베타 헤더, effort medium, 시스템 블록, 선채움 없음", () => {
     const p = buildMessageParams(eduInput);
     expect(p).toEqual<LlmMessageParams>({
-      model: "claude-opus-5",
+      model: "claude-opus-5-5",
       max_tokens: 16_000,
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
@@ -262,9 +265,9 @@ describe("buildMessageParams — 모델·거절 대체·답 형식은 서버가 
     });
     expect(p.messages.at(-1)?.role).toBe("user");
   });
-  it("약물: structured outputs(json_schema)", () => {
-    const p = buildMessageParams({ ...eduInput, preset: "substance", jsonSchema: SUBSTANCE_OUTPUT_SCHEMA });
-    expect(p.output_config).toEqual({ effort: "medium", format: { type: "json_schema", schema: SUBSTANCE_OUTPUT_SCHEMA } });
+  it("claude-opus-5-5가 400으로 거절하는 값을 보내지 않는다 — thinking 설정·샘플링 값·강제 tool_choice 없음", () => {
+    const p = buildMessageParams(eduInput) as unknown as Record<string, unknown>;
+    for (const field of ["thinking", "temperature", "top_p", "top_k", "tool_choice", "tools"]) expect(p, field).not.toHaveProperty(field);
   });
 });
 
@@ -274,6 +277,10 @@ describe("interpretLlmResponse — stop_reason을 content보다 먼저 본다", 
       response({ content: [{ type: "fallback" }, { type: "text", text: "가" }, { type: "text", text: "나" }] as { type: string }[] }),
     );
     expect(r).toEqual({ kind: "text", text: "가나", usage: { inputTokens: 120, outputTokens: 40, fallback: false } });
+  });
+  it("앞에 생각 블록이 와도(이 모델은 생각이 늘 켜져 있다 — 기본은 글자가 빈 블록) 글 블록만 읽는다", () => {
+    const r = interpretLlmResponse(response({ content: [{ type: "thinking" }, { type: "text", text: "답" }] as { type: string }[] }));
+    expect(r).toMatchObject({ kind: "text", text: "답" });
   });
   it("refusal이면 content에 글이 있어도 쓰지 않는다", () => {
     const r = interpretLlmResponse(response({ stop_reason: "refusal" }));

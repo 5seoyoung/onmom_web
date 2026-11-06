@@ -4,10 +4,11 @@
 // 여기서는 SDK를 가져오지 않는다(타입도) — 필요한 모양만 적고, 진짜 SDK와 맞는지는 index.ts를 `deno check`가 확인한다.
 //
 // LLM 규칙(claude-api 안내):
-// - 모델 claude-opus-5, 서버 쪽 거절 대체(fallbacks: "default" + 베타 헤더 server-side-fallback-2026-07-01).
+// - 모델 claude-opus-5-5, 서버 쪽 거절 대체(fallbacks: "default" + 베타 헤더 server-side-fallback-2026-07-01). 생각은 늘 켜져 있어 thinking을 보내지 않고
+//   (disabled·budget_tokens는 400) 깊이는 output_config.effort로 정한다. temperature 같은 샘플링 값도 보내지 않는다(400).
 // - content보다 stop_reason을 먼저 본다 — "refusal"이면 content가 비었거나 일부만 있다. 잘린 답(max_tokens·문맥 창)은 쓰지 않는다.
 // - 대체 모델이 답했는지는 usage.iterations의 fallback_message로 안다(대체가 이어진 대화에는 fallback 블록이 없을 수 있다).
-// - 어시스턴트 선채움 없음. 약물은 structured outputs(output_config.format json_schema).
+// - 어시스턴트 선채움 없음(400). 응답은 블록 종류로 읽는다 — 생각 블록이 먼저 올 수 있다(isTextBlock).
 // - SDK 오류는 종류(클래스)로만 나눈다. 오류 메시지는 기록하지도 내보내지도 않는다.
 
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
@@ -18,6 +19,7 @@ import { parseQuotaResult } from "../_shared/chat.ts";
 import type { ChatLimits, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { LLM_DEADLINE_MS, LLM_EFFORT, LLM_FALLBACK_BETA, LLM_MAX_TOKENS, LLM_MODEL } from "../_shared/prompts.ts";
+import type { AiConsentRecord } from "../_shared/aiConsent.ts";
 import type { LlmCallInput, LlmCallResult, LlmUsage, VerifiedUser } from "./handler.ts";
 
 // MARK: 로그인 확인
@@ -30,7 +32,7 @@ export interface AuthClientLike {
 /**
  * 로그인 확인. 토큰이 틀림·만료·로그아웃·계정 없음이면 null(→ 401),
  * 확인 자체를 못 하면 throw(→ 503 auth_unavailable) — 서버 키가 없거나 틀린 경우 포함(_shared/auth.ts isTokenRejection).
- * 게스트 여부는 Auth가 돌려준 사용자 객체로 정한다(_shared/auth.ts isGuestUser — 게스트는 1시간 한도가 더 낮다).
+ * 게스트 여부는 Auth가 돌려준 사용자 객체로 정한다(_shared/auth.ts isGuestUser — 시범 동안 게스트는 AI를 쓰지 않는다, handler.ts).
  */
 export function createVerifyUser(auth: AuthClientLike | null): (token: string) => Promise<VerifiedUser | null> {
   return async (token) => {
@@ -44,28 +46,29 @@ export function createVerifyUser(auth: AuthClientLike | null): (token: string) =
   };
 }
 
-// MARK: AI 국외 이전 동의(0010_ai_consents.sql)
+// MARK: AI 답변 동의(0010_ai_consents.sql · 0012_ai_consents_withdraw.sql)
 
 /**
  * 이 사용자의 동의 행을 읽는 함수 — index.ts는 서버 키 클라이언트로
- * `admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle()`을 넣는다.
+ * `admin.from(AI_CONSENTS_TABLE).select("user_id, version, sensitive_agreed, transfer_agreed").eq("user_id", userId).maybeSingle()`을 넣는다.
  * 서버 키는 RLS를 건너뛰므로 사용자 id로 거르는 것이 유일한 경계다.
  */
 export type AiConsentQuery = (userId: string) => PromiseLike<{ data: unknown; error: unknown }>;
 
 /**
- * 동의 판 읽기. 행이 없으면 null(→ 403 ai_consent_required), 읽지 못하면(연결 안 됨·오류) throw(→ 503, LLM을 부르지 않는다).
+ * 동의 기록 읽기. 행이 없으면 null(→ 403 ai_consent_required), 읽지 못하면(연결 안 됨·오류) throw(→ 503, LLM을 부르지 않는다).
  * 돌아온 행의 user_id가 물은 id와 다르면 동의가 없는 것으로 본다(다른 사람의 동의로 통과하지 않게 — 닫힌 쪽으로).
+ * 두 동의 칸은 정확히 true일 때만 동의로 읽는다(빈 값·글자는 동의가 아니다). 판 비교는 handler.ts(_shared/aiConsent.ts isCurrentAiConsent).
  */
-export function createReadAiConsentVersion(query: AiConsentQuery | null): (userId: string) => Promise<string | null> {
+export function createReadAiConsent(query: AiConsentQuery | null): (userId: string) => Promise<AiConsentRecord | null> {
   return async (userId) => {
     if (!query) throw new Error("consent_not_configured");
     const { data, error } = await query(userId);
     if (error) throw new Error("consent_check_failed");
     if (data === null || typeof data !== "object") return null;
-    const row = data as { user_id?: unknown; version?: unknown };
-    if (row.user_id !== userId) return null;
-    return typeof row.version === "string" ? row.version : null;
+    const row = data as { user_id?: unknown; version?: unknown; sensitive_agreed?: unknown; transfer_agreed?: unknown };
+    if (row.user_id !== userId || typeof row.version !== "string") return null;
+    return { version: row.version, sensitiveAgreed: row.sensitive_agreed === true, transferAgreed: row.transfer_agreed === true };
   };
 }
 
@@ -131,10 +134,7 @@ export interface LlmMessageParams {
   fallbacks: "default";
   system: { type: "text"; text: string }[];
   messages: { role: "user" | "assistant"; content: string }[];
-  output_config: {
-    effort: "low" | "medium" | "high";
-    format?: { type: "json_schema"; schema: Record<string, unknown> };
-  };
+  output_config: { effort: "low" | "medium" | "high" };
 }
 
 /** 응답에서 읽는 것만(BetaMessage) */
@@ -165,9 +165,8 @@ export interface LlmErrorClasses {
 
 export type LlmSend = (params: LlmMessageParams, signal: AbortSignal) => Promise<LlmResponseLike>;
 
-/** 요청 본문 — 모델·토큰 상한·거절 대체·생각 깊이는 서버가 정한다. 약물만 답 형식(json_schema)을 붙인다. */
+/** 요청 본문 — 모델·토큰 상한·거절 대체·생각 깊이는 서버가 정한다. */
 export function buildMessageParams(input: LlmCallInput): LlmMessageParams {
-  const effort = LLM_EFFORT[input.preset];
   return {
     model: LLM_MODEL,
     max_tokens: LLM_MAX_TOKENS,
@@ -176,7 +175,7 @@ export function buildMessageParams(input: LlmCallInput): LlmMessageParams {
     fallbacks: "default",
     system: input.system.map((text) => ({ type: "text" as const, text })),
     messages: input.messages.map((m) => ({ role: m.role, content: m.content })),
-    output_config: input.jsonSchema ? { effort, format: { type: "json_schema", schema: input.jsonSchema } } : { effort },
+    output_config: { effort: LLM_EFFORT },
   };
 }
 

@@ -1,20 +1,20 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno 전용 가져오기(npm:·".ts")를 Next tsc가 읽지 못하는 줄에만 @ts-ignore를 쓴다. */
-// Supabase Edge Function "chat" — AI 상담(patient_edu)·약물 체크의 표에 없는 항목(substance)을 Anthropic(Claude)에 묻는다.
+// Supabase Edge Function "chat" — AI 상담(patient_edu)을 Anthropic(Claude)에 묻는다. AI는 상담에만 쓴다(약물 체크는 표만 — preset "substance"는 400).
 // 설명·배포·비밀 값: docs/SUPABASE_FUNCTIONS.md
 //
 // - 키: ANTHROPIC_API_KEY는 Supabase 함수 비밀(secrets)에만 둔다. 웹·저장소에는 없다.
-// - 로그인 확인은 함수 안에서 한다(Supabase Auth getUser — 익명 게스트 계정 포함). 게이트웨이 JWT 확인은 끈다
+// - 로그인 확인은 함수 안에서 한다(Supabase Auth getUser). 시범 동안 익명 게스트는 403 ai_login_required. 게이트웨이 JWT 확인은 끈다
 //   (supabase/config.toml [functions.chat] verify_jwt = false).
-// - AI 국외 이전 동의: 로그인 확인 뒤 0010_ai_consents.sql의 public.ai_consents에서 그 사용자 id의 행만 서버 키로 읽는다 —
-//   판이 지금 판(_shared/aiConsent.ts)이 아니면 한도·LLM 없이 403 ai_consent_required.
+// - AI 답변 동의: 로그인 확인 뒤 public.ai_consents(0010·0012)에서 그 사용자 id의 행만 서버 키로 읽는다 —
+//   지금 판(_shared/aiConsent.ts)의 민감정보·국외 이전 두 동의가 모두 없으면 한도·LLM 없이 403 ai_consent_required.
 // - 한도: 0010_ai_consents.sql의 llm_consume_quota()(다섯 인자 — 0003의 기록 표 llm_usage를 그대로 쓴다)를 서버 키로 부른다.
 //   서버 키는 Supabase가 넣어 주는 SUPABASE_SECRET_KEYS의 "default"가
 //   먼저, 없으면 예전 SUPABASE_SERVICE_ROLE_KEY(_shared/auth.ts pickServerKey). SUPABASE_URL도 Supabase가 넣어 준다.
-// - 모델 claude-opus-5 + 서버 쪽 거절 대체(fallbacks: "default"). stop_reason을 content보다 먼저 확인한다. 어시스턴트 선채움 없음.
+// - 모델 claude-opus-5-5 + 서버 쪽 거절 대체(fallbacks: "default"). stop_reason을 content보다 먼저 확인한다. 어시스턴트 선채움 없음.
 // - 서버 쪽 AI 스위치: AI_CHAT_SERVER_ENABLED가 정확히 "true"일 때만 켠다(_shared/chat.ts isAiChatServerEnabled). 없거나 다른 값이면 꺼짐 —
 //   Anthropic 클라이언트를 만들지 않고, 모든 요청에 CORS·메서드 확인 뒤 503 ai_disabled로 답한다(ANTHROPIC_API_KEY가 있어도).
-//   워크플로(.github/workflows/supabase.yml)는 Variables의 같은 이름 값을 넣는다 — 비우면 넣지 않으므로 한 번도 넣지 않았으면 꺼져 있다.
-// 환경 변수(선택): ALLOWED_ORIGINS, AI_CHAT_SERVER_ENABLED(기본 꺼짐), CHAT_HOURLY_LIMIT(기본 30),
+//   워크플로(.github/workflows/supabase.yml)는 Variable이 없으면 저장소의 기본값 "true"를 함수 배포 뒤에 넣는다(Variable을 false로 두면 끈다).
+// 환경 변수(선택): ALLOWED_ORIGINS, AI_CHAT_SERVER_ENABLED(코드 기본 꺼짐), CHAT_HOURLY_LIMIT(기본 10),
 //   CHAT_GUEST_HOURLY_LIMIT(익명 게스트, 기본 5 — CHAT_HOURLY_LIMIT까지), CHAT_GLOBAL_HOURLY_LIMIT(전체 1시간, 기본 60),
 //   CHAT_GLOBAL_DAILY_LIMIT(전체 하루, 기본 500) — 한도의 형식·기본값은 _shared/chat.ts chatLimitsFromEnv.
 //   LLM이 답을 만들지 않은 실패(연결·혼잡·키·모델)면 0010의 llm_refund_quota()로 한 번을 돌려준다.
@@ -38,7 +38,7 @@ import { CHAT_LIMIT_WINDOW_SECONDS, chatLimitsFromEnv, isAiChatServerEnabled } f
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { LLM_DEADLINE_MS } from "../_shared/prompts.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { createComplete, createConsumeQuota, createReadAiConsentVersion, createRefundQuota, createVerifyUser } from "./adapters.ts";
+import { createComplete, createConsumeQuota, createReadAiConsent, createRefundQuota, createVerifyUser } from "./adapters.ts";
 import type { LlmMessageParams } from "./adapters.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { createChatHandler } from "./handler.ts";
@@ -104,8 +104,11 @@ const handler = createChatHandler({
   aiEnabled,
   verifyUser: createVerifyUser(admin ? { getUser: (token: string) => admin.auth.getUser(token) } : null),
   // 서버 키는 RLS를 건너뛴다 — 방금 확인한 사용자 id(userId)의 행만 읽는다
-  readAiConsentVersion: createReadAiConsentVersion(
-    admin ? (userId: string) => admin.from(AI_CONSENTS_TABLE).select("user_id, version").eq("user_id", userId).maybeSingle() : null,
+  readAiConsent: createReadAiConsent(
+    admin
+      ? (userId: string) =>
+          admin.from(AI_CONSENTS_TABLE).select("user_id, version, sensitive_agreed, transfer_agreed").eq("user_id", userId).maybeSingle()
+      : null,
   ),
   consumeQuota: createConsumeQuota(admin ? (fn, args) => admin.rpc(fn, args) : null, {
     ...limits,

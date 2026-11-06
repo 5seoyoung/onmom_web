@@ -6,7 +6,6 @@ import { describe, expect, it } from "vitest";
 import content from "@/content";
 import { AI_TRANSFER_ITEMS, AI_USAGE_RETENTION_DAYS } from "@/features/privacy/dataItems";
 import { routeTag, VIDEO_QUERY_LIMIT } from "@/rules/exercise";
-import { parseSubstanceAnswer, resolveSubstance } from "@/rules/substance";
 import {
   bearerToken,
   CHAT_AI_DISABLED_CODE,
@@ -44,10 +43,9 @@ import {
 import {
   describeContext,
   LLM_DEADLINE_MS,
+  LLM_EFFORT,
   LLM_FALLBACK_BETA,
   LLM_MODEL,
-  parseSubstanceOutput,
-  SUBSTANCE_OUTPUT_SCHEMA,
   systemPromptBlocks,
 } from "../../supabase/functions/_shared/prompts";
 import {
@@ -87,18 +85,19 @@ describe("웹과 함수가 같은 값을 쓴다", () => {
   });
   it("AI로 보내는 산모 정보 세 항목 = 처리방침·동의 문구의 이전 항목", () => {
     expect([...CHAT_CONTEXT_FIELDS]).toEqual(["week", "delivery", "breastfeeding"]);
-    expect(AI_TRANSFER_ITEMS).toBe("질문 내용, 산후 주차, 분만 방식, 수유 여부");
+    expect(AI_TRANSFER_ITEMS).toBe("대화 내용(같은 대화의 최근 메시지 최대 20개, 이전 AI 답변 포함), 산후 주차, 분만 방식, 수유 여부");
   });
-  it("모델·거절 대체 베타 헤더(fallbacks: \"default\"용)", () => {
-    expect(LLM_MODEL).toBe("claude-opus-5");
+  it("모델·거절 대체 베타 헤더(fallbacks: \"default\"용)·생각 깊이", () => {
+    expect(LLM_MODEL).toBe("claude-opus-5-5");
     expect(LLM_FALLBACK_BETA).toBe("server-side-fallback-2026-07-01");
+    expect(LLM_EFFORT).toBe("medium");
   });
-  it("한도 기본값 — 한 사람 1시간 30회 · 익명 게스트 1시간 5회 · 전체 1시간 60회 · 전체 하루 500회", () => {
-    expect(CHAT_HOURLY_LIMIT_DEFAULT).toBe(30);
+  it("한도 기본값 — 한 사람 1시간 10회 · 익명 게스트 1시간 5회 · 전체 1시간 60회 · 전체 하루 500회", () => {
+    expect(CHAT_HOURLY_LIMIT_DEFAULT).toBe(10);
     expect(CHAT_GUEST_HOURLY_LIMIT_DEFAULT).toBe(5);
     expect(CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT).toBe(60);
     expect(CHAT_GLOBAL_DAILY_LIMIT_DEFAULT).toBe(500);
-    expect(CHAT_LIMIT_DEFAULTS).toEqual({ hourlyLimit: 30, guestHourlyLimit: 5, globalHourlyLimit: 60, globalDailyLimit: 500 });
+    expect(CHAT_LIMIT_DEFAULTS).toEqual({ hourlyLimit: 10, guestHourlyLimit: 5, globalHourlyLimit: 60, globalDailyLimit: 500 });
   });
 });
 
@@ -151,7 +150,7 @@ describe("한도 돌려주기 — LLM이 답을 만들지 않았고 이용자가
   });
 });
 
-describe("서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 꺼짐", () => {
+describe("서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 코드 기본은 꺼짐(켜는 값은 워크플로가 넣는다 — aiSwitchWorkflows.test.ts)", () => {
   it("정확히 \"true\"일 때만 켠다(앞뒤 공백만 무시) — 없거나 다른 값은 모두 꺼짐", () => {
     expect(isAiChatServerEnabled("true")).toBe(true);
     expect(isAiChatServerEnabled(" true\n")).toBe(true);
@@ -172,19 +171,16 @@ describe("서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 꺼짐", ()
     expect(src).toMatch(/createChatHandler\(\{\s*allowedOrigins: [^\n]*\n\s*aiEnabled,/);
   });
 
-  it("배포 워크플로 — Variables 값을 \"true\"·\"false\"·비움만 받아 함수 비밀값으로 넣고(비우면 건너뜀), 꺼져 있으면 알린다", () => {
+  it("배포 워크플로 — \"true\"·\"false\"·비움만 받고, 배포 확인이 503 ai_disabled를 '꺼짐'으로 알아본다", () => {
     const wf = readFileSync(new URL("../../.github/workflows/supabase.yml", import.meta.url), "utf8");
-    // 설정 확인 단계와 비밀값 넣기 단계 둘 다 같은 Variables 값을 읽는다
-    expect(wf.match(/^ {10}AI_CHAT_SERVER_ENABLED: \$\{\{ vars\.AI_CHAT_SERVER_ENABLED \}\}$/gm)).toHaveLength(2);
     expect(wf).toContain('aion="${AI_CHAT_SERVER_ENABLED//[[:space:]]/}"');
     expect(wf).toContain('if [ -n "${aion}" ] && [ "${aion}" != "true" ] && [ "${aion}" != "false" ]; then');
-    // 비밀값 넣기 반복에 들어 있다 — 빈 값은 그 반복이 건너뛴다(서버 값 그대로)
+    // 비밀값 넣기 반복에는 키만 있다 — 스위치는 함수 배포 뒤의 단계가 넣는다
     const loop = /for name in ([A-Z_ ]+); do\n\s*value="\$\{!name:-\}"/.exec(wf)?.[1].split(" ") ?? [];
-    expect(loop).toContain("AI_CHAT_SERVER_ENABLED");
     expect(loop).toContain("ANTHROPIC_API_KEY");
-    // 배포 확인이 503 ai_disabled를 "꺼짐"으로 알아보고, 요약이 5단계 전까지 꺼져 있다고 밝힌다
+    expect(loop).not.toContain("AI_CHAT_SERVER_ENABLED");
     expect(wf).toContain('elif [ "${status}" = "503" ] && [ "${code}" = "ai_disabled" ]; then');
-    expect(wf).toMatch(/ai_off\) echo "- \*\*서버 쪽 AI 상담: 꺼짐\*\*[^\n]*5단계[^\n]*AI_CHAT_SERVER_ENABLED=true/);
+    expect(wf).toMatch(/ai_off\) echo "- \*\*서버 쪽 AI 상담: 꺼짐\*\*/);
   });
 });
 
@@ -249,10 +245,10 @@ describe("CORS 허용 목록", () => {
       "Access-Control-Allow-Origin": "https://x.example",
     });
   });
-  it("preflight — 웹이 보내는 헤더(authorization·apikey·content-type)만 허용", () => {
+  it("preflight — 웹이 보내는 헤더(authorization·apikey·content-type·서울 고정 x-region)만 허용", () => {
     const h = preflightHeaders({ kind: "allowed", origin: "https://x.example" }, "POST, OPTIONS");
     expect(h["Access-Control-Allow-Methods"]).toBe("POST, OPTIONS");
-    expect(h["Access-Control-Allow-Headers"].split(", ").sort()).toEqual(["apikey", "authorization", "content-type", "x-client-info"]);
+    expect(h["Access-Control-Allow-Headers"].split(", ").sort()).toEqual(["apikey", "authorization", "content-type", "x-client-info", "x-region"]);
     expect(preflightHeaders({ kind: "denied" }, "GET")).toEqual({ Vary: "Origin" });
   });
   it("JSON 응답은 기본 캐시 금지, 실패 본문은 코드만", async () => {
@@ -320,12 +316,10 @@ describe("chat 요청 검증", () => {
     expect(validateChatRequest({ preset: "patient_edu", messages: [u("  ")] })).toEqual({ ok: false, reason: "content" });
   });
 
-  it("약물 조회는 항목 이름 한 개만, 모르는 preset은 거절", () => {
+  it("preset은 상담뿐 — 약물 체크(substance)·모르는 preset은 거절(AI는 상담에만 쓴다)", () => {
     const u = { role: "user", content: "모르는약" };
-    expect(validateChatRequest({ preset: "substance", messages: [u] })).toMatchObject({ ok: true });
-    expect(
-      validateChatRequest({ preset: "substance", messages: [u, { role: "assistant", content: "x" }, u] }),
-    ).toEqual({ ok: false, reason: "substance_messages" });
+    expect(validateChatRequest({ preset: "patient_edu", messages: [u] })).toMatchObject({ ok: true });
+    expect(validateChatRequest({ preset: "substance", messages: [u] })).toEqual({ ok: false, reason: "preset" });
     expect(validateChatRequest({ preset: "other", messages: [u] })).toEqual({ ok: false, reason: "preset" });
     expect(validateChatRequest("x")).toEqual({ ok: false, reason: "body" });
   });
@@ -441,32 +435,39 @@ describe("안전 선필터 — 자해·자살 표현이면 LLM을 부르지 않�
   });
 });
 
-describe("시스템 프롬프트·약물 답", () => {
-  it("컨텍스트 한 줄 — 상담은 세 항목, 약물은 수유 여부 기준", () => {
-    expect(describeContext("patient_edu", { week: 3, delivery: "cesarean", breastfeeding: true })).toBe(
+describe("시스템 프롬프트", () => {
+  it("컨텍스트 한 줄 — 세 항목만", () => {
+    expect(describeContext({ week: 3, delivery: "cesarean", breastfeeding: true })).toBe(
       "사용자 정보(설명을 맞추는 참고용): 산후 3주차, 제왕절개, 모유수유 중",
     );
-    expect(describeContext("patient_edu", null)).toBeNull();
-    expect(describeContext("substance", { week: 5, delivery: "vaginal", breastfeeding: false })).toBe(
-      "사용자 정보: 산후 5주차, 모유수유 안 함. 수유를 하지 않으므로 모유수유 영향이 아니라 출산 후 회복 중인 사람을 기준으로 분류합니다.",
-    );
-    expect(describeContext("substance", null)).toBe("모유수유 중인 사람을 기준으로 분류합니다.");
+    expect(describeContext(null)).toBeNull();
+    expect(systemPromptBlocks(null)).toHaveLength(1);
+    expect(systemPromptBlocks({ week: 3 })).toHaveLength(2);
   });
 
-  it("프롬프트는 서버가 가진다 — 진단·용량 금지와 응급 연락처가 들어 있다", () => {
-    const [edu] = systemPromptBlocks("patient_edu", null);
+  it("프롬프트는 서버가 가진다 — 진단·점수·약 용량 금지와 응급 연락처가 들어 있다", () => {
+    const [edu] = systemPromptBlocks(null);
     expect(edu).toContain("진단하지 않습니다");
-    expect(edu).toContain("용량");
+    expect(edu).toContain("점수·등급·위험도를 매기지 않습니다");
+    expect(edu).toContain("약의 용량·복용 방법·복용 중단 여부를 안내하지 않습니다");
     expect(edu).toContain("119");
     expect(edu).toContain("1577-0199");
     expect(edu).toContain("마크다운 표");
-    const [sub, line] = systemPromptBlocks("substance", { breastfeeding: true });
-    expect(sub).toContain("unknown을 고릅니다");
-    expect(line).toBe("사용자 정보: 모유수유 중. 모유수유 중인 사람을 기준으로 분류합니다.");
+  });
+
+  it("긴급 신호 — 임상 사전 검토 §3의 rules-1.2 목록과 맞춘다(CH4): 다량 출혈·심한 두통·시야 이상·얼굴/손 부종·윗배 통증", () => {
+    const [edu] = systemPromptBlocks(null);
+    for (const sign of ["1시간 안에 패드 1장 이상이 흠뻑 젖거나 달걀만 한 핏덩이", "심하거나 약을 먹어도 낫지 않는 두통", "눈이 흐리거나 번쩍거리는 시야 이상", "얼굴이나 손이 갑자기 심하게 부음", "명치나 오른쪽 윗배의 심한 통증"]) {
+      expect(edu, sign).toContain(sign);
+    }
+    // 경련은 병원이 아니라 119
+    expect(edu).toContain("경련(발작)을 했거나, 숨이 차거나 가슴이 아프거나, 쓰러질 것 같거나 의식이 흐려지면 즉시 119에 연락");
+    // 자신이나 아기를 해칠 생각 → 109 · 1577-0199, 위급하면 119·112
+    expect(edu).toContain("자해나 자살 생각, 자신이나 아기를 해칠 것 같은 생각이 언급되면 자살예방상담 109, 정신건강 위기상담 1577-0199로 바로 연락하고, 위급하면 119나 112에 연락");
   });
 
   it("병원 신호 — content.json guide_red_flags의 모든 항목을 글자 그대로 담는다(Deno라 복사본 — 한쪽만 바뀌면 여기서 멈춘다)", () => {
-    const [edu] = systemPromptBlocks("patient_edu", null);
+    const [edu] = systemPromptBlocks(null);
     expect(content.guide_red_flags.length).toBeGreaterThan(0);
     for (const flag of content.guide_red_flags) expect(edu, flag).toContain(flag);
     // 위기 연락처는 고정 위기 안내(CRISIS_REPLY)와 같다
@@ -476,45 +477,6 @@ describe("시스템 프롬프트·약물 답", () => {
     }
   });
 
-  it("약물 답 형식(structured outputs) — 웹 판정 4값과 같다", () => {
-    const verdict = (SUBSTANCE_OUTPUT_SCHEMA.properties as Record<string, { enum?: string[] }>).verdict.enum;
-    expect(verdict).toEqual(Object.keys(content.verdict_labels));
-    expect(SUBSTANCE_OUTPUT_SCHEMA.additionalProperties).toBe(false);
-    expect(SUBSTANCE_OUTPUT_SCHEMA.required).toEqual(["verdict", "detail", "sources"]);
-  });
-
-  it("약물 답 검증 — 주소처럼 보이는 출처·빈 출처는 빼고, 중복은 하나로, 5개까지", () => {
-    const out = parseSubstanceOutput(
-      JSON.stringify({
-        verdict: "caution",
-        detail: "  근거가 제한적이에요.  ",
-        sources: ["LactMed", "https://x.example", "www.x.example", "", "LactMed", "A", "B", "C", "D", "E"],
-      }),
-    );
-    expect(out).toEqual({ verdict: "caution", detail: "근거가 제한적이에요.", sources: ["LactMed", "A", "B", "C", "D"] });
-  });
-
-  it("약물 답 거절 — 4값 밖·빈 설명·너무 긴 설명·형식 오류", () => {
-    for (const bad of [
-      { verdict: "maybe", detail: "x", sources: [] },
-      { verdict: "safe", detail: " ", sources: [] },
-      { verdict: "safe", detail: "가".repeat(601), sources: [] },
-      { verdict: "safe", detail: "x", sources: [1] },
-      { verdict: "safe", detail: "x" },
-    ]) {
-      expect(parseSubstanceOutput(JSON.stringify(bad))).toBeNull();
-    }
-    expect(parseSubstanceOutput("not json")).toBeNull();
-    expect(parseSubstanceOutput("[]")).toBeNull();
-  });
-
-  it("함수가 돌려준 약물 답을 웹이 그대로 읽는다 — 출처 칩과 'AI 답변' 표시", async () => {
-    const json = parseSubstanceOutput(JSON.stringify({ verdict: "avoid", detail: "피하는 편이 좋아요.", sources: ["LactMed"] }))!;
-    expect(parseSubstanceAnswer(JSON.stringify(json))).toEqual(json);
-    const r = await resolveSubstance("표에없는항목", { llmLookup: async () => json });
-    expect(r).toMatchObject({ verdict: "avoid", source: "llm" });
-    expect(r.evidenceChips).toEqual(["src:LactMed", "AI 답변"]);
-  });
 });
 
 describe("영상 프록시 입력·응답", () => {

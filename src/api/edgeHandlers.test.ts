@@ -2,9 +2,13 @@
 // handler는 웹 표준 Request/Response만 써서 Node(vitest)에서도 Deno와 같게 돈다. Deno 연결(index.ts)은 `deno check`로 본다.
 
 import { describe, expect, it } from "vitest";
-import { AI_CONSENT_REQUIRED_CODE, AI_CONSENT_VERSION } from "../../supabase/functions/_shared/aiConsent";
+import {
+  AI_CONSENT_REQUIRED_CODE,
+  AI_CONSENT_VERSION,
+  AI_LOGIN_REQUIRED_CODE,
+  type AiConsentRecord,
+} from "../../supabase/functions/_shared/aiConsent";
 import { CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, CHAT_MAX_MESSAGE_CHARS, type QuotaResult } from "../../supabase/functions/_shared/chat";
-import { SUBSTANCE_OUTPUT_SCHEMA } from "../../supabase/functions/_shared/prompts";
 import { CRISIS_REPLY } from "../../supabase/functions/_shared/safety";
 import {
   createChatHandler,
@@ -20,13 +24,20 @@ const SITE = "https://5seoyoung.github.io";
 describe("Edge Function chat", () => {
   const QUESTION = "오로가 언제까지 나오나요?";
   const usage = { inputTokens: 120, outputTokens: 80, fallback: false };
+  /** 지금 판의 두 동의가 모두 있는 기록 */
+  const agreed = (over: Partial<AiConsentRecord> = {}): AiConsentRecord => ({
+    version: AI_CONSENT_VERSION,
+    sensitiveAgreed: true,
+    transferAgreed: true,
+    ...over,
+  });
 
   interface Options {
     /** 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED) — 기본 켬 */
     aiEnabled?: boolean;
     user?: VerifiedUser | null | "throw";
-    /** 서버의 동의 기록 판 — 생략하면 지금 판, null이면 행 없음 */
-    consent?: string | null | "throw";
+    /** 서버의 동의 기록 — 생략하면 지금 판의 두 동의, null이면 행 없음 */
+    consent?: AiConsentRecord | null | "throw";
     quota?: QuotaResult | null | "throw";
     llm?: LlmCallResult;
     /** 돌려주기 결과 — 생략하면 true */
@@ -53,11 +64,11 @@ describe("Edge Function chat", () => {
         if (opts.user === "throw") return Promise.reject(new Error("down"));
         return Promise.resolve(opts.user === undefined ? { id: "user-1", guest: false } : opts.user);
       },
-      readAiConsentVersion: (id) => {
+      readAiConsent: (id) => {
         calls.consent.push(id);
         calls.order.push("consent");
         if (opts.consent === "throw") return Promise.reject(new Error("db down"));
-        return Promise.resolve(opts.consent === undefined ? AI_CONSENT_VERSION : opts.consent);
+        return Promise.resolve(opts.consent === undefined ? agreed() : opts.consent);
       },
       consumeQuota: (user) => {
         calls.order.push("quota");
@@ -108,7 +119,6 @@ describe("Edge Function chat", () => {
     expect(calls.llm).toHaveLength(1);
     const input = calls.llm[0];
     expect(input.preset).toBe("patient_edu");
-    expect(input.jsonSchema).toBeNull();
     expect(input.messages).toEqual([{ role: "user", content: QUESTION }]);
     expect(input.system).toHaveLength(2);
     expect(input.system[1]).toBe("사용자 정보(설명을 맞추는 참고용): 산후 3주차, 제왕절개, 모유수유 중");
@@ -120,23 +130,15 @@ describe("Edge Function chat", () => {
     ]);
   });
 
-  it("약물 — structured outputs 형식을 붙이고, 검증한 JSON을 { ok, json }으로", async () => {
-    const { handler, calls } = setup({
-      llm: { kind: "text", text: '{"verdict":"caution","detail":"근거가 제한적이에요.","sources":["LactMed","https://x.example"]}', usage },
-    });
-    const res = await handler(
-      post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }], context: { week: 5, breastfeeding: true } }),
-    );
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, json: { verdict: "caution", detail: "근거가 제한적이에요.", sources: ["LactMed"] } });
-    expect(calls.llm[0].jsonSchema).toBe(SUBSTANCE_OUTPUT_SCHEMA);
-  });
-
-  it("약물 답 형식이 틀리면 502 bad_output", async () => {
-    const { handler } = setup({ llm: { kind: "text", text: '{"verdict":"maybe","detail":"x","sources":[]}', usage } });
-    const res = await handler(post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }] }));
-    expect(res.status).toBe(502);
-    expect(await res.json()).toEqual({ ok: false, code: "bad_output" });
+  it("약물 체크(preset substance)는 400 — AI는 상담에만 쓴다. 로그인·동의·한도·LLM 어느 것도 하지 않는다(웹이 부르지 않아도 서버가 막는다)", async () => {
+    const { handler, calls, logs } = setup();
+    for (const content of ["모르는약", "자살"]) {
+      const res = await handler(post({ preset: "substance", messages: [{ role: "user", content }], context: { week: 5, breastfeeding: true } }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ ok: false, code: "bad_request" });
+    }
+    expect(calls.verify.length + calls.consent.length + calls.quota.length + calls.llm.length).toBe(0);
+    for (const entry of logs) expect(entry).not.toHaveProperty("preset");
   });
 
   it("자해 표현 — 로그인·동의·한도·LLM 없이 고정 위기 안내", async () => {
@@ -148,7 +150,35 @@ describe("Edge Function chat", () => {
     expect(JSON.stringify(logs)).not.toContain("죽고");
   });
 
-  describe("AI 국외 이전 동의 — 로그인 확인 뒤, 한도·LLM 전에(0010_ai_consents.sql)", () => {
+  describe("시범 동안 카카오 계정만 — 익명 게스트는 403 ai_login_required", () => {
+    it("로그인 확인 뒤 바로 끝난다 — 동의를 읽지도, 한도를 쓰지도, LLM을 부르지도 않는다(동의 기록이 있어도)", async () => {
+      const { handler, calls, logs } = setup({ user: { id: "g-1", guest: true }, consent: agreed() });
+      const res = await handler(post(ask()));
+      expect(res.status).toBe(403);
+      expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+      expect(await res.json()).toEqual({ ok: false, code: AI_LOGIN_REQUIRED_CODE });
+      expect(AI_LOGIN_REQUIRED_CODE).toBe("ai_login_required");
+      expect(calls.order).toEqual(["verify"]);
+      expect(logs).toEqual([{ fn: "chat", status: 403, ms: logs[0].ms, preset: "patient_edu", code: "ai_login_required" }]);
+      expect(JSON.stringify(logs)).not.toContain("g-1");
+    });
+
+    it("카카오를 연결한 계정(guest false)은 그대로 진행한다", async () => {
+      const { handler, calls } = setup({ user: { id: "k-1", guest: false } });
+      expect((await handler(post(ask()))).status).toBe(200);
+      expect(calls.order).toEqual(["verify", "consent", "quota", "llm"]);
+    });
+
+    it("위기 표현은 게스트에게도 고정 위기 안내 — 로그인 확인 전에 끝난다", async () => {
+      const { handler, calls } = setup({ user: { id: "g-1", guest: true } });
+      const res = await handler(post(ask("요즘 죽고 싶어요")));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, text: CRISIS_REPLY, flagged: true });
+      expect(calls.order).toEqual([]);
+    });
+  });
+
+  describe("AI 답변 동의 — 로그인 확인 뒤, 한도·LLM 전에(0010·0012)", () => {
     it("지금 판의 동의 기록이 있으면 진행 — 순서: 로그인 → 동의 → 한도 → LLM, 동의는 확인된 사용자 id로만 읽는다", async () => {
       const { handler, calls } = setup({ user: { id: "verified-user-9", guest: false } });
       const res = await handler(post(ask()));
@@ -160,10 +190,13 @@ describe("Edge Function chat", () => {
     });
 
     it.each([
-      ["행 없음", null],
-      ["예전 판", "web-2026-09-28"],
-      ["다음 판(웹이 먼저 올림)", "web-2099-01-01"],
-      ["빈 판", ""],
+      ["행 없음(철회 포함)", null],
+      ["예전 판", agreed({ version: "web-2026-09-28.2" })],
+      ["다음 판(웹이 먼저 올림)", agreed({ version: "web-2099-01-01" })],
+      ["빈 판", agreed({ version: "" })],
+      ["민감정보 동의 없음", agreed({ sensitiveAgreed: false })],
+      ["국외 이전 동의 없음", agreed({ transferAgreed: false })],
+      ["둘 다 없음(0012 전의 행)", agreed({ sensitiveAgreed: false, transferAgreed: false })],
     ])("%s → 403 ai_consent_required — 한도를 쓰지 않고 LLM을 부르지 않는다", async (_label, consent) => {
       const { handler, calls, logs } = setup({ consent });
       const res = await handler(post(ask()));
@@ -175,14 +208,6 @@ describe("Edge Function chat", () => {
       expect(calls.llm).toHaveLength(0);
       expect(logs).toEqual([{ fn: "chat", status: 403, ms: logs[0].ms, preset: "patient_edu", code: "ai_consent_required" }]);
       expect(JSON.stringify(logs)).not.toContain("user-1");
-    });
-
-    it("약물 체크(substance)도 같은 동의가 있어야 한다", async () => {
-      const { handler, calls } = setup({ consent: null });
-      const res = await handler(post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }] }));
-      expect(res.status).toBe(403);
-      expect(await res.json()).toEqual({ ok: false, code: "ai_consent_required" });
-      expect(calls.quota.length + calls.llm.length).toBe(0);
     });
 
     it("동의 기록을 읽지 못하면 503 consent_unavailable — 한도·LLM 없이(열린 쪽으로 틀리지 않게)", async () => {
@@ -198,14 +223,6 @@ describe("Edge Function chat", () => {
       expect((await handler(post(ask()))).status).toBe(401);
       expect(calls.consent).toHaveLength(0);
     });
-  });
-
-  it("자해 표현 — 약물 프리셋은 422 flagged(표 결과를 그대로 두게)", async () => {
-    const { handler, calls } = setup();
-    const res = await handler(post({ preset: "substance", messages: [{ role: "user", content: "자살" }] }));
-    expect(res.status).toBe(422);
-    expect(await res.json()).toEqual({ ok: false, code: "flagged" });
-    expect(calls.llm).toHaveLength(0);
   });
 
   it("컨텍스트에 허용 목록 밖 항목(BMI 등)이 있으면 400 — 로그인 확인도 LLM도 하지 않는다", async () => {
@@ -274,17 +291,15 @@ describe("Edge Function chat", () => {
     expect(await res.json()).toEqual({ ok: false, code });
   });
 
-  describe("한도 — 익명 게스트는 더 낮은 1시간 한도(확인된 사용자 객체로 판단)", () => {
-    it("게스트·카카오 여부를 그대로 한도에 넘긴다 — 한도 함수가 게스트 한도를 고른다(adapters.ts createConsumeQuota)", async () => {
-      for (const guest of [true, false]) {
-        const { handler, calls } = setup({ user: { id: "u-7", guest } });
-        expect((await handler(post(ask()))).status).toBe(200);
-        expect(calls.quotaUsers).toEqual([{ id: "u-7", guest }]);
-      }
+  describe("한도 — 확인된 사용자로 센다", () => {
+    it("확인된 사용자를 그대로 한도에 넘긴다", async () => {
+      const { handler, calls } = setup({ user: { id: "u-7", guest: false } });
+      expect((await handler(post(ask()))).status).toBe(200);
+      expect(calls.quotaUsers).toEqual([{ id: "u-7", guest: false }]);
     });
 
-    it("게스트가 한도에 닿으면 429 rate_limited — LLM을 부르지 않고 돌려주지도 않는다", async () => {
-      const { handler, calls } = setup({ user: { id: "g-1", guest: true }, quota: "user_limit" });
+    it("한도에 닿으면 429 rate_limited — LLM을 부르지 않고 돌려주지도 않는다", async () => {
+      const { handler, calls } = setup({ user: { id: "k-1", guest: false }, quota: "user_limit" });
       const res = await handler(post(ask()));
       expect(res.status).toBe(429);
       expect(await res.json()).toEqual({ ok: false, code: "rate_limited" });
@@ -307,7 +322,7 @@ describe("Edge Function chat", () => {
       [503, "not_configured"],
       [503, "llm_model_unavailable"],
     ] as const)("%i %s → 같은 사용자 id로 한 번 돌려주고, 응답은 원래 실패 그대로", async (status, code) => {
-      const { handler, calls, logs } = setup({ user: { id: "u-3", guest: true }, llm: { kind: "error", status, code } });
+      const { handler, calls, logs } = setup({ user: { id: "u-3", guest: false }, llm: { kind: "error", status, code } });
       const res = await handler(post(ask()));
       expect(res.status).toBe(status);
       expect(await res.json()).toEqual({ ok: false, code });
@@ -323,12 +338,10 @@ describe("Edge Function chat", () => {
       ["거절 답", { kind: "refusal", usage }],
       ["잘린 답", { kind: "truncated", usage }],
       ["빈 답", { kind: "text", text: " ", usage }],
-      ["약물 답 형식 오류", { kind: "text", text: "not json", usage }],
       ["정상 답", { kind: "text", text: "답", usage }],
     ] as [string, LlmCallResult][])("%s → 돌려주지 않는다", async (_label, llm) => {
       const { handler, calls, logs } = setup({ llm });
       await handler(post(ask()));
-      await handler(post({ preset: "substance", messages: [{ role: "user", content: "모르는약" }] }));
       expect(calls.refund).toHaveLength(0);
       expect(logs.some((l) => "refunded" in l)).toBe(false);
     });
@@ -344,8 +357,8 @@ describe("Edge Function chat", () => {
       }
     });
 
-    it("한도 확인 전에 끝난 요청(동의 없음·로그인 실패·한도 초과)은 돌려줄 것이 없다", async () => {
-      for (const opts of [{ consent: null }, { user: null }, { quota: "user_limit" as const }]) {
+    it("한도 확인 전에 끝난 요청(동의 없음·로그인 실패·게스트·한도 초과)은 돌려줄 것이 없다", async () => {
+      for (const opts of [{ consent: null }, { user: null }, { user: { id: "g", guest: true } }, { quota: "user_limit" as const }]) {
         const { handler, calls } = setup({ ...opts, llm: { kind: "error", status: 503, code: "llm_busy" } });
         await handler(post(ask()));
         expect(calls.refund).toHaveLength(0);
@@ -359,7 +372,7 @@ describe("Edge Function chat", () => {
       allowedOrigins: [SITE],
       aiEnabled: true,
       verifyUser: async () => ({ id: "u", guest: false }),
-      readAiConsentVersion: async () => AI_CONSENT_VERSION,
+      readAiConsent: async () => agreed(),
       consumeQuota: async () => "ok",
       refundQuota: async () => true,
       complete: async () => {

@@ -15,8 +15,8 @@
 // 2026-11-04 전용 도메인(onmomcare.app)으로 옮겼다 — 옛 Pages 주소(5seoyoung.github.io)는 다른 사이트와 같은 출처라 넣지 않는다.
 export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = ["https://onmomcare.app", "http://localhost:3000"];
 
-/** 브라우저가 함수에 보내는 헤더 — supabase-js·fetch가 쓰는 것만 */
-export const ALLOWED_REQUEST_HEADERS = "authorization, apikey, content-type, x-client-info";
+/** 브라우저가 함수에 보내는 헤더 — supabase-js·fetch가 쓰는 것과, AI 상담을 서울 리전에서 돌게 고정하는 x-region(src/api/llm.ts LLM_FUNCTION_REGION) */
+export const ALLOWED_REQUEST_HEADERS = "authorization, apikey, content-type, x-client-info, x-region";
 
 /** "https://Host:443/path" → "https://host" (scheme+host+port). http(s)가 아니거나 URL이 아니면 null. */
 export function normalizeOrigin(value: string): string | null {

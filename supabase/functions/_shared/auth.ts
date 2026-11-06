@@ -68,8 +68,8 @@ export interface VerifiedUserLike {
 }
 
 /**
- * 익명 게스트인가 — Auth가 확인한 사용자 객체로 본다(토큰의 is_anonymous를 따로 믿지 않는다). AI 상담의 1시간 한도가 더 낮다
- * (_shared/chat.ts CHAT_GUEST_HOURLY_LIMIT_DEFAULT).
+ * 익명 게스트인가 — Auth가 확인한 사용자 객체로 본다(토큰의 is_anonymous를 따로 믿지 않는다). 시범 동안 AI 상담을 쓰지 않는다
+ * (chat/handler.ts 403 ai_login_required).
  * 카카오를 연결했는데 카카오 이메일이 확인되지 않아 is_anonymous가 true로 남은 사용자(src/auth/kakaoAccount.ts)는 게스트가 아니다 —
  * 익명 말고 다른 로그인 수단(identity)이 있으면 카카오 계정으로 본다(0006_anon_cleanup.sql과 같은 기준).
  */
