@@ -7,7 +7,9 @@
 //   사이트    SITE_URL(기본 https://onmomcare.app/)과 login/·robots.txt가 200, 로그인 화면의 CSP 메타가 정확히 1개이고
 //             script-src에 'unsafe-inline'·'unsafe-eval'이 없음(HTML 엔티티를 풀어서 본다 — src/csp.ts·scripts/csp-hash.mjs)
 //   Supabase  Management API GET /v1/projects/{ref}의 status가 ACTIVE_HEALTHY(일시 중지면 "Free plan paused — restore in dashboard")
-//   함수      videos·chat에 사이트 주소(Origin)로 사전 요청(OPTIONS)만 → 2xx + Access-Control-Allow-Origin(로그인·AI 호출 없음)
+//   함수      videos·chat에 사이트 주소(Origin)로 사전 요청(OPTIONS) → 2xx + Access-Control-Allow-Origin + 웹이 보내는 헤더 허용(x-region 포함 — 없으면 브라우저가 AI 요청을 막는다).
+//             chat에 틀린 토큰으로 POST 한 번 → 401 unauthorized면 서버 쪽 AI 스위치가 켜져 있고 로그인 확인이 돈다. 토큰 확인에서 끝나므로 동의·한도·Anthropic까지 가지 않는다
+//             (AI 토큰을 쓰지 않는다 — 진짜 AI 호출은 하지 않는다). 503 ai_disabled면 건너뜀(일부러 껐을 수 있다), 503 auth_unavailable이면 실패.
 //   DB        Supabase CLI(supabase.yml과 같은 연결 방식: supabase link → db query --linked)로 SELECT 한 문장(lib.mjs cronHealthSql) —
 //             pg_cron 실패 0, 예약 4개가 기대 주기 안에 돌았음, pg_net 응답에 5xx 0. 개수·예약 이름·시각만 받는다.
 //   의존성    npm audit --omit=dev — 높음(high)·치명(critical) 0 (package-lock.json만 읽는다, 설치 불필요)
@@ -131,13 +133,66 @@ function missingToken(group, name, ci) {
 // MARK: Edge Function 사전 요청(OPTIONS)
 
 /** 웹이 실제로 보내는 메서드·헤더(src/api/video.ts·llm.ts)로 사전 요청만 — 함수 본문(영상 서버·AI)은 부르지 않는다 */
-const FUNCTION_PREFLIGHTS = [
+export const FUNCTION_PREFLIGHTS = [
   { fn: "videos", method: "GET", headers: "apikey" },
-  { fn: "chat", method: "POST", headers: "authorization, apikey, content-type" },
+  { fn: "chat", method: "POST", headers: "authorization, apikey, content-type, x-region" },
 ];
 
+/** 사전 요청 응답이 요청한 헤더를 모두 허용하는가 — 허용하지 않은 헤더가 있으면 브라우저가 본 요청을 보내지 않는다. 빠진 헤더 이름을 돌려준다. */
+export function missingAllowedHeaders(requested, allowHeaders) {
+  const allowed = String(allowHeaders ?? "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase());
+  return requested
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter((h) => !allowed.includes(h));
+}
+
+/**
+ * 틀린 토큰으로 chat을 부르는 요청 — 함수는 토큰 확인에서 401로 끝낸다(동의·한도·Anthropic까지 가지 않는다 — supabase/functions/chat/handler.ts 순서).
+ * 진짜 로그인 토큰을 넣지 않는다. 위기 표현이 없는 평범한 글이라 안전 선필터도 지나 토큰 확인까지 닿는다. supabase.yml의 배포 확인과 같은 방식.
+ */
+export const CHAT_PROBE = {
+  token: "onmom-health-check",
+  body: { preset: "patient_edu", messages: [{ role: "user", content: "health check" }] },
+};
+
+/** chat 응답 → { status, detail }. 응답 본문은 { ok, code }뿐이다. */
+export function chatProbeVerdict(r) {
+  let code = null;
+  try {
+    code = JSON.parse(r.text)?.code ?? null;
+  } catch {
+    code = null;
+  }
+  if (r.status === 401 && code === "unauthorized") {
+    return { status: "pass", detail: "HTTP 401 unauthorized — 서버 쪽 AI 스위치 켜짐, 로그인 확인 동작(AI는 부르지 않음)" };
+  }
+  if (r.status === 503 && code === "ai_disabled") {
+    return { status: "skip", detail: "서버 쪽 AI 스위치 꺼짐(503 ai_disabled) — 일부러 끈 것이 아니면 Actions → Supabase → Run workflow" };
+  }
+  if (r.status === 503 && code === "auth_unavailable") {
+    return { status: "fail", detail: "함수가 로그인을 확인할 서버 키를 찾지 못함(503 auth_unavailable) — 모든 AI 질문이 앱 안내로만 답함(설정 안내 B-4)" };
+  }
+  if (r.status === 401) return { status: "fail", detail: `HTTP 401인데 code가 ${code ?? "없음"} — 게이트웨이가 막음(verify_jwt 확인)` };
+  return { status: "fail", detail: `${httpDetail(r)}${code ? ` ${code}` : ""}(401 unauthorized여야 함) — Edge Functions → chat → Logs` };
+}
+
+async function chatProbeCheck({ ref }) {
+  const name = "chat 서버 스위치·로그인 확인(틀린 토큰)";
+  const r = await httpRequest(`https://${ref}.supabase.co/functions/v1/chat`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${CHAT_PROBE.token}`, "Content-Type": "application/json", "User-Agent": USER_AGENT },
+    body: JSON.stringify(CHAT_PROBE.body),
+    attempts: 2,
+  });
+  const v = chatProbeVerdict(r);
+  return { group: "함수", name, status: v.status, detail: v.detail };
+}
+
 async function functionChecks({ ref, origin }) {
-  return Promise.all(
+  const preflights = await Promise.all(
     FUNCTION_PREFLIGHTS.map(async ({ fn, method, headers }) => {
       const name = `${fn} 사전 요청(OPTIONS)`;
       const r = await httpRequest(`https://${ref}.supabase.co/functions/v1/${fn}`, {
@@ -146,9 +201,11 @@ async function functionChecks({ ref, origin }) {
       });
       if (r.status !== null && r.status >= 200 && r.status < 300) {
         const allowed = r.headers?.get("access-control-allow-origin");
-        return allowed === origin
+        if (allowed !== origin) return fail("함수", name, `HTTP ${r.status}인데 Access-Control-Allow-Origin이 ${allowed ?? "없음"} — 브라우저 요청이 막힘`);
+        const missing = missingAllowedHeaders(headers, r.headers?.get("access-control-allow-headers"));
+        return missing.length === 0
           ? pass("함수", name, `HTTP ${r.status} · 허용 출처 ${origin}`)
-          : fail("함수", name, `HTTP ${r.status}인데 Access-Control-Allow-Origin이 ${allowed ?? "없음"} — 브라우저 요청이 막힘`);
+          : fail("함수", name, `HTTP ${r.status}인데 허용 헤더에 ${missing.join("·")}가 없음 — 브라우저 요청이 막힘(함수를 다시 배포)`);
       }
       const why =
         r.status === 403
@@ -161,6 +218,7 @@ async function functionChecks({ ref, origin }) {
       return fail("함수", name, `${httpDetail(r)}${why}`);
     }),
   );
+  return [...preflights, await chatProbeCheck({ ref })];
 }
 
 // MARK: DB(예약 작업·예약 요청) — Supabase CLI
