@@ -1,32 +1,13 @@
 // 약물·음식 체크 화면의 순수 로직 — SubstanceCheckView.swift.
-// 판정은 rules/substance가 한다(표 먼저, 표에 없을 때만 LLM — 검수 #1). 여기서는
-// "LLM을 붙일지", "어떤 결과를 화면에 둘지(늦게 온 이전 조회 버리기)", "배지 모양", "AI 동의를 물을지", "칩을 어떤 모양으로 그릴지"만 정한다.
-// 서버에 보내는 산모 정보는 산후 주차·수유 여부뿐이다(substanceLlmContext — 분만 방식은 약물 분류에 쓰지 않아 보내지 않는다).
+// 판정은 rules/substance의 출처 있는 표가 한다. AI는 쓰지 않는다(2026-11-06 대표 결정 — 표에 없는 항목에 AI가 판정을 매기지 않게, 사전 검토 H5·D-10):
+// 표에 없는 항목은 표의 "정보 부족"으로 끝난다. Edge Function chat도 preset "substance"를 거절한다. 여기서는 "어떤 배지·칩으로 그릴지"만 정한다.
 
-import { isAiConsentRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
-import { SOURCE_PREFIX } from "@/components/ui/evidence";
-import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
-import type { UserProfile } from "@/domain/types";
-import type { AiMode } from "@/features/chat/aiConsent";
-import {
-  buildSubstanceLlmRequest,
-  normalizeSubstanceQuery,
-  parseSubstanceAnswer,
-  resolveSubstance,
-  verdictLabel,
-  type LlmSubstanceAnswer,
-  type SubstanceDeps,
-  type SubstanceResult,
-  type SubstanceVerdict,
-} from "@/rules/substance";
+import { lookupSubstance, normalizeSubstanceQuery, verdictLabel, type SubstanceResult, type SubstanceVerdict } from "@/rules/substance";
 
 /** 화면 문구 중 페이지(src/app/(app)/substance/page.tsx — 문서 제목)와 화면이 함께 쓰는 것 */
 export const SUBSTANCE_TEXT = {
   title: "약물·음식 체크", // 원문: SubstanceCheckView.swift:56
 } as const;
-
-/** src/api/llm.ts `llmComplete`와 같은 모양 — 테스트에서 가짜로 바꿔 넣는다. */
-export type LlmCompleteFn = (req: LLMRequest, opts?: LLMOptions) => Promise<LLMResult>;
 
 /** [확인하기] 활성 조건 — 공백·탭만 있으면 조회하지 않는다(SubstanceCheckView.swift:41, :91-92). */
 export function canCheckSubstance(query: string): boolean {
@@ -49,104 +30,12 @@ export function verdictBadge(verdict: SubstanceVerdict): { label: string; classN
   return { label: verdictLabel(verdict), className: VERDICT_BADGE_CLASS[verdict] };
 }
 
-/**
- * 결과 카드의 칩 한 개 — evidence: 공용 근거·출처 칩(EvidenceChip, content.json 토큰 그대로),
- * aiSource: AI가 답에 제시한 출처(검증되지 않음 — 확인된 표 출처와 다른 모양으로 그린다).
- */
-export type SubstanceChipView = { kind: "evidence"; token: string } | { kind: "aiSource"; text: string };
-
-/**
- * 결과 칩을 화면 모양으로 나눈다(원칙 4 · DEV_NOTES §3 CPO 7 — CPO 결정 전 기본값).
- * - 표 결과: 토큰 그대로 공용 칩("src:" = 확인된 출처 칩 — 돋보기 아이콘·primary).
- * - AI 답(source "llm"): rules/substance가 LLM의 sources를 "src:" 토큰으로 싣는다 — 이 출처는 앱이 확인한 것이 아니므로
- *   출처 칩 모양을 쓰지 않고 중립 칩(aiSource)으로 그린다. "AI 답변" 칩(Swift 원문)은 그대로 공용 칩.
- * 빈 글자 칩은 그리지 않는다.
- */
-export function substanceResultChips(result: Pick<SubstanceResult, "evidenceChips" | "source">): SubstanceChipView[] {
-  const out: SubstanceChipView[] = [];
-  for (const token of result.evidenceChips) {
-    if (token.trim() === "") continue;
-    if (result.source === "llm" && token.startsWith(SOURCE_PREFIX)) {
-      const text = token.slice(SOURCE_PREFIX.length).trim();
-      if (text !== "") out.push({ kind: "aiSource", text });
-      continue;
-    }
-    out.push({ kind: "evidence", token });
-  }
-  return out;
+/** 결과 칩(공용 근거·출처 칩의 토큰) — 빈 글자 칩은 그리지 않는다. */
+export function substanceResultChips(result: Pick<SubstanceResult, "evidenceChips">): string[] {
+  return result.evidenceChips.filter((token) => token.trim() !== "");
 }
 
-/** 서버에 함께 보내는 산모 정보 — 수유 여부와, 출산일이 있으면 산후 주차. */
-export function substanceLlmContext(profile: Pick<UserProfile, "deliveryDate" | "isBreastfeeding">, now: Date): LLMContext {
-  const ctx: LLMContext = { breastfeeding: profile.isBreastfeeding };
-  if (parseLocalDate(profile.deliveryDate) !== null) ctx.week = weekFromDayCount(postpartumDayCount(profile.deliveryDate, now));
-  return ctx;
-}
-
-/**
- * LLM 조회 함수(SubstanceCheckView.swift:117-141). 대화·preset·토큰 수는 rules의 buildSubstanceLlmRequest,
- * 산모 정보는 substanceLlmContext의 두 항목(수유 여부·산후 주차 — iOS의 컨텍스트 문자열은 보내지 않는다).
- * 답 해석은 parseSubstanceAnswer — 실패·빈 응답·형식 오류는 전부 null(→ 표의 "정보 부족" 유지).
- * 서버가 이 계정의 동의 기록이 없다고 답하면(403 ai_consent_required) onConsentRequired를 부른다 — 화면은 이 계정의 동의를 지우고
- * ("정보 부족" 결과 아래에) 동의 카드를 다시 띄운다(shouldOfferAiConsent).
- */
-export function makeSubstanceLlmLookup(input: {
-  complete: LlmCompleteFn;
-  context: LLMContext | null;
-  signal?: AbortSignal;
-  onConsentRequired?: () => void;
-}): (query: string) => Promise<LlmSubstanceAnswer | null> {
-  return async (query) => {
-    const { messages, preset, maxTokens } = buildSubstanceLlmRequest({ query });
-    const request: LLMRequest = { preset, messages, context: input.context, maxTokens };
-    const res = await input.complete(request, { signal: input.signal });
-    if (isAiConsentRequired(res)) input.onConsentRequired?.();
-    return res.ok ? parseSubstanceAnswer(res.text) : null;
-  };
-}
-
-/**
- * 서버를 쓸 때만(llmConfigured — AI 스위치 + 이 사람의 AI 국외 이전 동의) llmLookup을 붙인다. 아니면 표만 본다(원칙 2·3).
- */
-export function substanceDeps(input: {
-  llmConfigured: boolean;
-  complete: LlmCompleteFn;
-  context: LLMContext | null;
-  signal?: AbortSignal;
-  onConsentRequired?: () => void;
-}): SubstanceDeps {
-  if (!input.llmConfigured) return {};
-  return { llmLookup: makeSubstanceLlmLookup(input) };
-}
-
-/**
- * AI 국외 이전 동의 카드를 보일까 — AI를 쓸 수 있는데 아직 동의를 고르지 않았고(mode "ask"),
- * 표에 없는 항목("정보 부족")이 나왔을 때만. 표에 있는 항목은 AI에 묻지 않으므로 묻지 않는다.
- */
-export function shouldOfferAiConsent(result: SubstanceResult | null, mode: AiMode): boolean {
-  return mode === "ask" && result !== null && result.source === "table" && result.verdict === "unknown";
-}
-
-/** 한 번의 조회 — 표 우선, 미등재만 LLM. */
-export function checkSubstance(query: string, deps: SubstanceDeps): Promise<SubstanceResult> {
-  return resolveSubstance(query, deps);
-}
-
-/**
- * 마지막 조회만 화면에 둔다 — 느린 이전 응답이 새 결과를 덮지 않게(SubstanceCheckView.swift:94-95, :103).
- * begin()이 준 번호가 isCurrent()일 때만 결과를 반영한다. cancel()은 진행 중인 조회를 모두 무효로 만든다(화면을 떠날 때).
- */
-export function createLatestOnly(): {
-  begin(): number;
-  isCurrent(token: number): boolean;
-  cancel(): void;
-} {
-  let current = 0;
-  return {
-    begin: () => ++current,
-    isCurrent: (token) => token === current,
-    cancel: () => {
-      current++;
-    },
-  };
+/** 한 번의 조회 — 표만 본다(표에 없으면 "정보 부족"). 서버에 아무것도 보내지 않는다. */
+export function checkSubstance(query: string): SubstanceResult {
+  return lookupSubstance(query);
 }

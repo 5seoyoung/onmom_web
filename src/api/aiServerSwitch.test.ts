@@ -1,11 +1,11 @@
 // 서버 쪽 AI 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)가 꺼진 서버 — 웹 빌드의 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)가 켜져 있어도
-// 화면 결과는 "AI 미설정"과 같아야 한다: 상담은 앱 규칙 안내(배너는 원문 "AI 서버에 연결되지 않아"), 약물은 표의 "정보 부족".
+// 화면 결과는 "AI 미설정"과 같아야 한다: 상담은 앱 규칙 안내(배너는 원문 "AI 서버에 연결되지 않아"). 약물 체크는 AI를 쓰지 않아 스위치와 상관없다.
 // 질문마다 함수를 다시 부르지 않는다(src/api/llm.ts serverAiOff). 함수 쪽 처리는 edgeHandlers.test.ts, 503 판별은 llm.test.ts가 본다.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import { chatBannerText, requestChatReply, type LlmCompleteFn } from "@/features/chat/chatModel";
-import { checkSubstance, substanceDeps } from "@/features/substance/substanceModel";
+import { checkSubstance } from "@/features/substance/substanceModel";
 import type { ChatMessage } from "@/rules/chat";
 import { lookupSubstance, verdictLabel } from "@/rules/substance";
 import { CHAT_AI_DISABLED_CODE } from "../../supabase/functions/_shared/chat";
@@ -41,19 +41,16 @@ describe("상담 — 503 ai_disabled면 AI 미설정과 같은 앱 안내", () =
   });
 });
 
-describe("약물·음식 체크 — 503 ai_disabled면 표만 본 결과(정보 부족)", () => {
-  it("표에 없는 항목은 '정보 부족' 그대로, 표에 있는 항목은 함수를 부르지 않는다", async () => {
+describe("약물·음식 체크 — AI를 쓰지 않아 서버 스위치와 상관없다", () => {
+  it("표에 없는 항목은 '정보 부족', 표에 있는 항목은 표 결과 — 어느 쪽도 함수를 부르지 않는다", () => {
     const fetch = stubFetch(async () => aiDisabled());
-    const deps = substanceDeps({ llmConfigured: true, complete: completeVia("substance-off"), context: { breastfeeding: true } });
     for (const query of ["처음보는약이름", "또다른미등재약"]) {
-      const result = await checkSubstance(query, deps);
+      const result = checkSubstance(query);
       expect(result).toEqual(lookupSubstance(query));
       expect(result).toMatchObject({ verdict: "unknown", source: "table" });
       expect(verdictLabel(result.verdict)).toBe("정보 부족");
     }
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const known = content.substances[0].aliases[0];
-    expect((await checkSubstance(known, deps)).source).toBe("table");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(checkSubstance(content.substances[0].aliases[0]).source).toBe("table");
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
