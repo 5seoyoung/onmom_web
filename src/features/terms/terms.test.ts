@@ -104,13 +104,22 @@ describe("이용약관 초안 — 내용", () => {
     expect(nature).not.toContain(content.disclaimers.onboarding_consent);
   });
 
+  it("AI 상담(2·3조) — 서비스의 일부, 틀릴 수 있는 일반 정보, 시범 동안 카카오 계정만, 처음 쓸 때 따로 동의, 약물 체크는 AI를 쓰지 않음", () => {
+    expect(all).toContain("지원사업 안내, AI 상담 등");
+    expect(all).toContain("AI 상담의 답변은 AI가 만든 일반적인 건강 정보로 틀릴 수 있으며, 진단이나 치료를 대신하지 않습니다.");
+    expect(all).toContain("시범 운영 동안 AI 상담은 카카오 계정에서만 쓸 수 있고, 처음 쓸 때 따로 동의를 받습니다.");
+    expect(all).toContain("약물·음식 체크는 AI를 쓰지 않습니다.");
+    expect(all).not.toMatch(/꺼져 있/);
+  });
+
   it("우리가 하는 일에 진단·판정·처방·치료를 쓰지 않는다(web/07 §1) — 하지 않는다는 문장에만", () => {
     expect(all).not.toMatch(/판정|처방/);
-    // "진단"·"점수"는 하지 않는다는 문장(3조)과 의료인의 일을 대신하지 않는다는 문장(11조)에만
+    // "진단"·"점수"는 하지 않는다는 문장(3조)과 의료인의 일을 대신하지 않는다는 문장(3·11조)에만
     const allowed = [
       "질병을 진단하거나 치료하지 않고, 몸 상태를 판단하거나 점수·등급을 매기지 않습니다.",
       "진단과 치료에 관한 결정은 의료진이 합니다.",
       "의료인의 진단·치료를 대신하지 않습니다.",
+      "진단이나 치료를 대신하지 않습니다.",
     ];
     let rest = all;
     for (const a of allowed) rest = rest.split(a).join("");

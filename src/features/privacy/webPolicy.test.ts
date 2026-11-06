@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { MaternityRecord, PersistedState, UserProfile } from "@/domain/types";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
-import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
+import { AI_CONSENT_ITEMS, AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { LLM_FUNCTION_MAX_MESSAGES } from "@/api/llm";
 import { PUSH_SERVICE_HOSTS } from "@/features/pwa/reminderModel";
 import { CHAT_MAX_MESSAGES } from "../../../supabase/functions/_shared/chat";
@@ -17,6 +17,7 @@ import {
   ACCOUNT_ITEMS,
   ADMIN_LOG_RETENTION_YEARS,
   AI_CONTEXT_MAX_MESSAGES,
+  AI_TRANSFER_ITEMS,
   AI_USAGE_ITEMS,
   AI_USAGE_RETENTION_DAYS,
   ANON_CLEANUP_DAYS,
@@ -158,8 +159,8 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
     for (const word of ["이전 항목", "이전 시기·방법", "목적", "보유 기간", "거부 방법과 효과"]) {
       expect(transfer.split(word).length - 1, word).toBeGreaterThanOrEqual(4);
     }
-    // AI에는 질문 내용과 최소 맥락만
-    expect(transfer).toContain("질문 내용, 산후 주차, 분만 방식, 수유 여부");
+    // AI에는 같은 대화의 최근 메시지와 최소 맥락만
+    expect(transfer).toContain(`– 이전 항목: ${AI_TRANSFER_ITEMS}`);
     const processors = section("처리 위탁");
     for (const name of ["Supabase Pte. Ltd.", "GitHub, Inc.", "GitHub Pages", "주식회사 카카오", "Anthropic, PBC", "Render"]) {
       expect(processors).toContain(name);
@@ -187,11 +188,11 @@ describe("웹 초안 — 법정 기재 사항(개인정보보호법 §30·시행
     );
   });
 
-  it(`AI 국외 이전 — 질문 내용에 같은 대화의 최근 메시지(최대 ${AI_CONTEXT_MAX_MESSAGES}개)가 함께 담긴다고 적는다(웹·서버 한도와 같은 수)`, () => {
+  it(`AI 국외 이전 — 같은 대화의 최근 메시지(최대 ${AI_CONTEXT_MAX_MESSAGES}개, 이전 AI 답변 포함)를 보낸다고 적는다(웹·서버 한도와 같은 수)`, () => {
     expect(AI_CONTEXT_MAX_MESSAGES).toBe(LLM_FUNCTION_MAX_MESSAGES);
     expect(AI_CONTEXT_MAX_MESSAGES).toBe(CHAT_MAX_MESSAGES);
     const anthropic = section("국외 이전").split("\n\n").find((b) => b.includes("Anthropic, PBC (미국)"))!;
-    expect(anthropic).toContain(`최근 메시지(이전 질문과 AI 답변을 합해 최대 ${AI_CONTEXT_MAX_MESSAGES}개)`);
+    expect(anthropic).toContain(`같은 대화의 최근 메시지 최대 ${AI_CONTEXT_MAX_MESSAGES}개, 이전 AI 답변 포함`);
   });
 });
 
@@ -306,14 +307,53 @@ describe("웹 방침 — 2026-11-06 시행판에서 사실에 맞춘 것", () =>
     expect(safety).toContain(`그 기록을 ${ADMIN_LOG_RETENTION_YEARS}년 동안 보관합니다.`);
   });
 
-  it("AI 상담(14절) — 지금은 꺼져 있고, 켜면 처음 쓸 때 국외 이전 동의를 따로 받는다", () => {
+  it("AI 상담이 켜진 판 — '꺼져 있다'는 말이 어느 절에도 없고, 약물·음식 체크의 AI 답변을 적지 않는다", () => {
+    expect(WEB_TEXT).not.toMatch(/꺼져 있/);
+    expect(WEB_TEXT).not.toContain("켜면");
+    expect(WEB_TEXT).not.toContain("약물·음식 체크(안전표에 없는 항목)");
+    expect(WEB_TEXT.split("약물·음식 체크").length - 1).toBe(1); // 14절 "AI를 쓰지 않습니다" 한 곳
+  });
+
+  it("AI 상담(14절) — 목적·대상(카카오 계정만)·쓰는 곳(상담만)·항목·저장·학습·거부·안전·한계·신고", () => {
     const ai = section("AI 상담(생성형 AI)");
-    expect(ai).toContain("지금은 AI 상담과 약물·음식 체크(안전표에 없는 항목)의 AI 답변이 꺼져 있습니다.");
-    expect(ai).toContain("국외 이전(6절 ①)에 대해 따로 동의를 받은 뒤에만 보냅니다.");
-    expect(ai).toContain("대화 내용과 AI 답변을 저장하지 않으며");
+    expect(ai).toContain("시범 운영 동안에는 카카오 계정에서만 쓸 수 있습니다.");
+    expect(ai).toContain("게스트의 질문은 AI 업체로 보내지 않고 온맘에 담긴 안내로 답하며, 카카오 계정을 연결하면 쓸 수 있습니다.");
+    expect(ai).toContain("AI는 AI 상담에만 씁니다. 약물·음식 체크는 AI를 쓰지 않고 안전표만 보며, 표에 없는 항목은 정보 부족으로 안내합니다.");
+    expect(ai).toContain(`• 처리 항목: ${AI_TRANSFER_ITEMS}, AI가 만든 답변.`);
+    expect(ai).toContain("온맘 서버는 대화 내용과 AI 답변을 저장하지 않습니다.");
+    expect(ai).toContain("온맘은 이용자의 대화를 AI 학습에 쓰지 않습니다.");
+    expect(ai).toContain("설정 > 내 데이터의 [AI 답변 동의 철회]");
+    expect(ai).toContain("자해·자살을 뜻하는 표현이 있으면 AI로 보내지 않고 위기 상담 연락처를 안내합니다.");
+    expect(ai).toContain("틀릴 수 있으며, 진단이나 치료를 대신하지 않습니다. 응급 상황에서는 바로 119에 연락하세요.");
+    // 답변 신고 — 제목만 채운 메일, 대화 내용은 담기지 않는다(ChatScreen과 같은 사실)
+    expect(ai).toContain("AI 답변 아래 [답변 신고]를 누르면 16절 연락처로 보내는 메일이 열립니다. 메일에는 제목만 채워지고 대화 내용은 담기지 않습니다.");
+  });
+
+  it("6절 ① — 받는 자·연락처·별도 동의·항목·국가·서울 리전·목적·보유 기간·거부와 철회(법 §28의8②)", () => {
     const anthropic = section("국외 이전").split("\n\n").find((b) => b.includes("Anthropic, PBC (미국)"))!;
-    expect(anthropic).toContain("지금은 AI 상담이 꺼져 있어 보내지 않습니다.");
-    expect(section("처리 위탁")).toContain("지금은 꺼져 있습니다");
+    expect(anthropic.startsWith("① Anthropic, PBC (미국)\n– 연락처: privacy@anthropic.com\n")).toBe(true);
+    expect(anthropic).toContain("AI 상담을 처음 쓸 때 국외 이전에 대해 따로 동의를 받은 뒤에만 보냅니다.");
+    expect(anthropic).toContain("시범 운영 동안 AI 상담은 카카오 계정에서만 쓸 수 있습니다.");
+    expect(anthropic).toContain("– 이전 국가: 미국");
+    expect(anthropic).toContain("온맘 서버 함수(대한민국 서울 리전)를 거쳐 암호화된 통신(HTTPS)으로 전송");
+    expect(anthropic).toContain("받은 날부터 30일 안에 삭제합니다.");
+    expect(anthropic).toContain("이용정책 위반이 의심되어 분류된 대화는 최대 2년, 그 분류 결과는 최대 7년 보관할 수 있습니다(Anthropic 공개 정책 기준).");
+    expect(anthropic).toContain("온맘 서버는 대화 내용을 저장하지 않습니다.");
+    expect(anthropic).toContain("[AI 답변 동의 철회]로 언제든 멈출 수 있습니다.");
+  });
+
+  it("2·3·4·5·7·9·13절 — AI 상담은 카카오 계정에서 따로 동의한 경우에만, 철회 경로와 기록 삭제", () => {
+    expect(section("항목")).toContain(`• AI 상담을 쓰는 경우(카카오 계정에서 따로 동의한 경우에만): ${AI_TRANSFER_ITEMS}.`);
+    expect(section("처리 목적")).toContain("• (카카오 계정에서 따로 동의한 경우) AI 상담의 답변 생성");
+    const consent = section("동의를 받는 방법");
+    expect(consent).toContain("AI 상담의 민감정보 처리와 국외 이전(6절 ①)은 AI 상담을 처음 쓸 때 각각 따로 동의를 받습니다.");
+    expect(consent).toContain("게스트에게는 이 동의를 묻지 않고 온맘에 담긴 안내로 답합니다.");
+    expect(consent).toContain("설정 > 내 데이터의 [AI 답변 동의 철회]로 따로 철회할 수 있습니다.");
+    expect(consent).toContain("다시 동의하기 전에는 AI 업체로 보내지 않습니다");
+    expect(section("보유 기간")).toContain("AI 상담 동의 기록(동의한 판과 일시, 두 동의 여부)은 철회하거나 계정을 삭제하면 즉시 삭제합니다.");
+    expect(section("처리 위탁")).toContain("• Anthropic, PBC: AI 상담의 답변 생성(카카오 계정 이용자가 따로 동의한 경우에만)");
+    expect(section("민감정보")).toContain("AI 상담의 답변 생성에는 따로 동의한 경우에만 씁니다(14절).");
+    expect(section("이용자의 권리")).toContain("철회 전에 이미 보낸 내용은 6절 ①의 보유 기간에 따라 삭제됩니다.");
   });
 
   it("의료 관련 고지(15절) — 의료기기가 아님(식약처 권고 주의 문구), 진단·치료·판단을 하지 않음, 일반 정보와 본인 기록, 결정은 의료진, 응급은 119", () => {
@@ -399,7 +439,7 @@ describe("웹 방침 — 2026-11-06 시행판에서 사실에 맞춘 것", () =>
   });
 
   it("메일 문의는 동의 문구에 넣지 않는다 — 동의가 아니라 이용자의 요청 처리, 동의 판은 그대로", () => {
-    const consent = JSON.stringify([SERVER_CONSENT_TEXT, REQUIRED_CONSENTS, AI_TRANSFER_NOTICE]);
+    const consent = JSON.stringify([SERVER_CONSENT_TEXT, REQUIRED_CONSENTS, AI_TRANSFER_NOTICE, AI_CONSENT_ITEMS]);
     for (const word of ["Gmail", "Google", "문의 내용", "이메일 주소,"]) expect(consent, word).not.toContain(word);
     expect(CURRENT_CONSENT_VERSION).toBe("web-2026-11-06");
   });
