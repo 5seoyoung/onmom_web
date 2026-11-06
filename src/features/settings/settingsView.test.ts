@@ -56,13 +56,27 @@ describe("계정 카드 — 빌드(Supabase 설정)·계정 종류별 동작", (
     for (const provider of ["guest", "kakao", null, undefined] as const) {
       expect(accountModeFor(provider, false)).toBe("local");
     }
-    expect(accountCardActions("local")).toEqual({ signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null });
+    expect(accountCardActions("local")).toEqual({
+      signOut: true,
+      linkKakao: false,
+      deleteLabel: SETTINGS_TEXT.deleteAccount,
+      deleteHint: SETTINGS_TEXT.deleteAccountHint,
+      notice: null,
+    });
   });
 
   it("설정이 있는 빌드의 게스트(익명 계정): 로그아웃 없음 — [카카오 계정 연결] + [이 기기에서 기록 지우기(계정 삭제)] + 로그아웃이 없는 까닭", () => {
     expect(accountModeFor("guest", true)).toBe("guest");
     const a = accountCardActions("guest");
-    expect(a).toEqual({ signOut: false, linkKakao: true, deleteLabel: "이 기기에서 기록 지우기(계정 삭제)", notice: GUEST_ACCOUNT_TEXT.noSignOut });
+    expect(a).toEqual({
+      signOut: false,
+      linkKakao: true,
+      deleteLabel: "기록과 계정 지우기",
+      deleteHint: SERVER_ACCOUNT_TEXT.deleteAccountHint,
+      notice: GUEST_ACCOUNT_TEXT.noSignOut,
+    });
+    // 서버의 익명 계정·기록까지 지우므로 "이 기기"만 말하지 않는다(DEV_NOTES §3 CPO 9)
+    expect(`${a.deleteLabel} ${a.deleteHint}`).not.toContain("이 기기");
     expect(GUEST_ACCOUNT_TEXT.linkKakao).toBe("카카오 계정 연결");
     expect(GUEST_ACCOUNT_TEXT.linkKakaoHint).toBe("기록을 잃지 않고 다른 기기에서도 이어 쓰기");
     expect(a.notice).toContain("로그아웃하면 기록을 다시 찾을 수 없어요");
@@ -70,7 +84,14 @@ describe("계정 카드 — 빌드(Supabase 설정)·계정 종류별 동작", (
 
   it("설정이 있는 빌드의 카카오: 로그아웃 + 계정 삭제(서버 먼저), 연결 버튼 없음", () => {
     expect(accountModeFor("kakao", true)).toBe("kakao");
-    expect(accountCardActions("kakao")).toEqual({ signOut: true, linkKakao: false, deleteLabel: SETTINGS_TEXT.deleteAccount, notice: null });
+    expect(accountCardActions("kakao")).toEqual({
+      signOut: true,
+      linkKakao: false,
+      deleteLabel: SETTINGS_TEXT.deleteAccount,
+      deleteHint: SERVER_ACCOUNT_TEXT.deleteAccountHint,
+      notice: null,
+    });
+    expect(SERVER_ACCOUNT_TEXT.deleteAccountHint).toContain("서버");
     expect(accountModeFor("apple", true)).toBe("local"); // 모르는 공급자는 이 브라우저에서만
   });
 });

@@ -279,8 +279,8 @@ test("서버 흐름: 게스트(익명 계정) → 서버 저장 동의 → 기�
     await expect(page.getByText("서버에 저장됨")).toBeVisible({ timeout: 30_000 });
     expect(await serverRecordState(request, s, recordId), "새로고침 뒤 서버 행").toBe("ok");
 
-    // 8) 계정 삭제 — 게스트는 "이 기기에서 기록 지우기(계정 삭제)". 확인 창의 첫 버튼이 되돌릴 수 없는 삭제
-    await page.getByRole("button", { name: /^(이 기기에서 기록 지우기\(계정 삭제\)|계정 삭제)/ }).click();
+    // 8) 계정 삭제 — 게스트는 "기록과 계정 지우기"(2026-11-04 전: "이 기기에서 기록 지우기(계정 삭제)"). 확인 창의 첫 버튼이 되돌릴 수 없는 삭제
+    await page.getByRole("button", { name: /^(기록과 계정 지우기|계정 삭제)/ }).click();
     const dialog = page.getByRole("dialog", { name: "계정을 삭제할까요?" });
     await expect(dialog).toBeVisible();
     const destructive = dialog.getByRole("button").first();

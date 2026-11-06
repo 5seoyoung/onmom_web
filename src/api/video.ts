@@ -10,9 +10,11 @@
 //
 // 서버로 나가는 사용자 정보는 분만 방식 라우트 태그 하나뿐이다(URL 쿼리). 이 URL은 서버 접근 로그에 남으므로
 // 분석·모니터링 도구가 네트워크 URL을 수집한다면 온맘 API 요청은 제외하거나 쿼리를 지운다(검수 #49).
+// Supabase 함수로 물을 때는 두 라우트를 늘 함께 묻는다 — 함수 요청 주소는 Supabase 요청 기록에 접속 IP와 함께 남으므로,
+// 누구나 같은 두 요청을 보내 주소만으로 그 사람의 분만 방식을 알 수 없게 한다(다른 쪽 응답은 쓰지 않는다).
 // 응답의 url은 신뢰하지 않는다 — 링크로 만들 때 safeExternalUrl을 거친다(검수 #51).
 
-import { EXERCISE_TEXT, VIDEO_QUERY_LIMIT, type Video } from "@/rules/exercise";
+import { EXERCISE_TEXT, routeTag, VIDEO_QUERY_LIMIT, type Video } from "@/rules/exercise";
 import { defaultBackendConfig, joinBackendUrl, requestJson, type BackendConfig } from "./http";
 
 /** 서버 응답 그대로의 필드명(video_id) — 규칙(exercisePlan·runRecoveryAnalysis)에 변환 없이 넘긴다. */
@@ -73,6 +75,16 @@ const fail = (kind: VideoFailureKind, status?: number): FetchVideosResult => ({
   status,
 });
 
+/** 두 분만 라우트 태그 — Supabase 함수로 물을 때는 늘 둘 다 묻는다(머리말) */
+export const VIDEO_ROUTE_TAGS: readonly string[] = [routeTag("vaginal"), routeTag("cesarean")];
+
+function withVideoQuery(base: URL, tag: string): string {
+  const url = new URL(base.toString());
+  url.searchParams.append("include", tag);
+  url.searchParams.append("limit", String(VIDEO_LIMIT));
+  return url.toString();
+}
+
 /**
  * 분만 방식 라우트 태그(route_vaginal_delivery / route_cesarean_section)로 영상 목록을 받는다.
  * 태그 매핑은 규칙 모듈 몫이다. Supabase가 설정돼 있으면 Edge Function을, 아니면 NEXT_PUBLIC_VIDEO_URL을 부른다.
@@ -86,21 +98,24 @@ export async function fetchVideos(includeTag: string, opts: FetchVideosOptions =
   const url = proxy ?? joinBackendUrl(cfg.videoURL, "videos");
   if (!url) return fail("notConfigured");
   if (includeTag.trim() === "") throw new TypeError("fetchVideos: includeTag is required");
-  url.searchParams.append("include", includeTag);
-  url.searchParams.append("limit", String(VIDEO_LIMIT));
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (proxy && cfg.supabaseKey) headers.apikey = cfg.supabaseKey;
+  const get = (tag: string) =>
+    requestJson(withVideoQuery(url, tag), {
+      method: "GET",
+      headers,
+      timeoutMs: opts.timeoutMs ?? (proxy ? VIDEO_PROXY_TIMEOUT_MS : VIDEO_TIMEOUT_MS),
+      signal: opts.signal,
+      // iOS는 200만 성공으로 본다(VideoDBClient.swift:62)
+      acceptStatus: (s) => s === 200,
+      config: cfg,
+    });
 
-  const res = await requestJson(url.toString(), {
-    method: "GET",
-    headers,
-    timeoutMs: opts.timeoutMs ?? (proxy ? VIDEO_PROXY_TIMEOUT_MS : VIDEO_TIMEOUT_MS),
-    signal: opts.signal,
-    // iOS는 200만 성공으로 본다(VideoDBClient.swift:62)
-    acceptStatus: (s) => s === 200,
-    config: cfg,
-  });
+  const pending = get(includeTag);
+  // 머리말 — 함수로 물을 때는 다른 라우트도 같이 묻는다(응답은 쓰지 않고, requestJson은 실패를 던지지 않는다)
+  if (proxy) for (const tag of VIDEO_ROUTE_TAGS) if (tag !== includeTag) void get(tag);
+  const res = await pending;
   if (!res.ok) return res.kind === "status" ? fail("server", res.status) : fail("network");
   // iOS는 디코딩 실패도 unreachable로 묶는다(VideoDBClient.swift:66-67)
   const videos = parseVideoResponse(res.data);
