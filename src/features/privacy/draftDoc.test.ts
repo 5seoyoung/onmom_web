@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
-import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
+import { AI_CONSENT_VERSION } from "@/features/chat/aiConsent";
+import { AI_CONSENT_TEXT } from "@/features/chat/AiConsentCard";
+import { AI_CONSENT_ITEMS, AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { policyFor } from "./policy";
 import { webPolicySections } from "./webPolicyText";
 
@@ -40,6 +42,17 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
       }
       const summaryLine = c.summaryEmphasis === true ? `- **요약(늘 보임 · 강조)**: ${c.summary}` : `- **요약(늘 보임)**: ${c.summary}`;
       expect(DOC, `${c.title} 요약`).toContain(summaryLine);
+    }
+  });
+
+  it("AI 답변 동의 카드 — 판·제목·첫 문장·두 동의의 요약과 전문, 강조 줄은 ●", () => {
+    for (const t of [AI_CONSENT_VERSION, AI_CONSENT_TEXT.title, AI_CONSENT_TEXT.lead, AI_CONSENT_TEXT.decline]) expect(DOC, t).toContain(t);
+    for (const c of AI_CONSENT_ITEMS) {
+      expect(DOC, c.title).toContain(c.title);
+      expect(DOC, `${c.title} 요약`).toContain(`- **요약(늘 보임 · 강조)**: ${c.summary}`);
+      for (const d of c.details) {
+        expect(DOC, `${c.title} ${d.term}`).toContain(d.emphasis === true ? `| ${d.term} | ${d.text} | ● |` : `| ${d.term} | ${d.text} | |`);
+      }
     }
   });
 

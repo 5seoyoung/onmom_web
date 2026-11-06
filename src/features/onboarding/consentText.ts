@@ -5,7 +5,8 @@
 // - 필수 (a) 개인정보 수집·이용(법 §15②: 항목·목적·보유 기간·거부 권리와 불이익을 알린다)
 // - 필수 (b) 민감정보(건강정보) 처리 — (a)와 따로 받는다(법 §23①1)
 // - 필수 (c) 만 14세 이상 확인 — 14세 미만은 법정대리인 동의가 필요한데(법 §22의2) 그 절차를 두지 않는다
-// - 안내 (d) AI 답변의 국외 이전(법 §28의8) — 여기서는 토글이 아니다. AI 기능이 처음 쓸 때 따로 묻는다. 새 필드를 두지 않는다.
+// - 안내 (d) AI 답변(법 §23①1·§28의8) — 여기서는 토글이 아니다. AI 상담을 처음 쓸 때 민감정보 처리·국외 이전을 따로 묻는다(AI_CONSENT_ITEMS —
+//   AI 동의 카드가 쓴다). 시범 동안 카카오 계정만. 이 파일에는 프로필 필드를 새로 두지 않는다.
 // (a)~(c)에 모두 동의하면 profile.consentVersion = CURRENT_CONSENT_VERSION. 이 파일의 (a)~(c) 문구(와 머리의 부제·시범 안내 줄·안내 3줄)를
 // 바꾸면 그 판을 올려 모든 이용자에게 다시 받는다(domain/consent.ts) — consentStep.test.ts가 문구의 지문을 판에 묶어 두어, 판을 올리지 않고
 // 문구만 바꾸면 테스트가 실패한다.
@@ -155,9 +156,9 @@ export const REQUIRED_CONSENTS: readonly ConsentItemText<RequiredConsentId>[] = 
         text: "관리 화면에는 집계 수치와 계정 정보만 보이고 건강 기록 내용은 보이지 않아요. 운영자는 장애 복구 등 불가피한 경우가 아니면 데이터베이스의 건강 기록을 열어 보지 않고, 열어 보면 그 사실을 기록으로 남겨요.",
       },
       {
-        // 웹 신규 문구 — CPO 확인 필요 (2026-11-06 판: 이 동의의 범위 밖 — AI 답변은 AI 카드가 따로 묻는다, 지금은 꺼져 있음)
+        // 웹 신규 문구 — CPO 확인 필요 (2026-11-06 판: 이 동의의 범위 밖 — AI 상담은 처음 쓸 때 AI 카드가 따로 묻는다, 시범 동안 카카오 계정만)
         term: "AI 답변",
-        text: "이 동의로는 AI 답변에 쓰지 않아요. AI 기능은 지금 꺼져 있고, 켜면 처음 쓸 때 따로 동의를 받아요.",
+        text: "이 동의로는 AI 답변에 쓰지 않아요. AI 상담을 쓰려면 처음 쓸 때 따로 동의를 받아요(시범 운영 동안 카카오 계정만 쓸 수 있어요).",
       },
       {
         term: "동의 거부 권리",
@@ -180,19 +181,64 @@ export const REQUIRED_CONSENTS: readonly ConsentItemText<RequiredConsentId>[] = 
   },
 ];
 
-/** (d) AI 답변의 국외 이전 — 안내만(토글 없음). 동의는 AI 기능이 처음 쓸 때 받는다. */
+// AI 동의 카드의 두 동의 — 국외 이전은 "별도의 동의"(법 §28의8①1)이고, 대화 속 건강 정보를 AI 답변에 쓰는 것도 다른 동의와 따로다(법 §23①1, §22①5).
+// 요약은 카드에 늘 보인다(접히지 않는다) — 항목·국가·시기와 방법·받는 자와 연락처·목적·보유 기간을 담고, 거부 방법과 효과는 카드의 첫 문장에 있다.
+// 전문은 "자세히"에 접는다(휴대폰 화면 — STATUS D17). 받는 자의 보유 기간은 Anthropic 공개 정책(2026-07-01 갱신판)을 따른다.
+// 글자를 바꾸면 AI_CONSENT_VERSION을 올린다(features/chat/aiConsent.test.ts가 지문을 묶어 둔다).
+
+/** AI 동의 ① 민감정보 처리 */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-06: AI 카드의 민감정보 동의 — 사전 검토 제안 (c-5))
+export const AI_SENSITIVE_CONSENT: ConsentItemText<"aiSensitive"> = {
+  id: "aiSensitive",
+  title: "민감정보(건강정보) 처리 동의",
+  summary: `${AI_TRANSFER_ITEMS}를 AI 답변을 만드는 데 써요. 온맘 서버에는 저장하지 않아요.`,
+  summaryEmphasis: true,
+  details: [
+    { term: "처리 항목", text: AI_TRANSFER_ITEMS, emphasis: true },
+    { term: "이용 목적", text: "AI 답변 생성", emphasis: true },
+    { term: "보유 기간", text: "온맘 서버에는 저장하지 않아요. 받는 곳의 보관 기간은 국외 이전 동의에 적었어요.", emphasis: true },
+    { term: "거부할 권리", text: "동의하지 않을 수 있어요. 그래도 온맘에 담긴 안내로 답해요." },
+  ],
+};
+
+/** AI 동의 ② 국외 이전 */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-06: AI 카드의 국외 이전 동의 — 사전 검토 제안 (c-5). 법 §28의8②의 항목·국가·시기·방법·받는 자와 연락처·목적·보유 기간·거부 방법과 효과)
+export const AI_TRANSFER_CONSENT: ConsentItemText<"aiTransfer"> = {
+  id: "aiTransfer",
+  title: "개인정보 국외 이전 동의",
+  summary:
+    "질문할 때마다 위 내용을 암호화해 Anthropic, PBC(미국, privacy@anthropic.com)로 보내요. 받은 날부터 30일 안에 삭제되고, 이용정책 위반이 의심되면 최대 2년 보관될 수 있어요.",
+  summaryEmphasis: true,
+  details: [
+    { term: "이전받는 자", text: "Anthropic, PBC (미국) · privacy@anthropic.com", emphasis: true },
+    { term: "이전 국가", text: "미국" },
+    { term: "해당 기능", text: "AI 상담(시범 운영 동안 카카오 계정만). 약물·음식 체크는 AI를 쓰지 않아요." },
+    { term: "이전 항목", text: AI_TRANSFER_ITEMS, emphasis: true },
+    { term: "이전 시기·방법", text: "질문을 보낼 때마다 온맘 서버(대한민국 서울)를 거쳐 암호화된 통신(HTTPS)으로 전송" },
+    // 받는 자의 이용 목적도 중요한 내용(시행령 §17 — 검토 필요)
+    { term: "이용 목적", text: "AI 답변 생성(Anthropic은 기본적으로 모델 학습에 쓰지 않아요)", emphasis: true },
+    {
+      term: "보유 기간",
+      text: "Anthropic은 받은 날부터 30일 안에 삭제해요. 이용정책 위반이 의심되어 분류된 대화는 최대 2년, 그 분류 결과는 최대 7년 보관할 수 있어요(Anthropic 공개 정책 기준).",
+      emphasis: true,
+    },
+    {
+      term: "거부 방법과 효과",
+      text: "동의하지 않으면 보내지 않고 온맘에 담긴 안내로만 답해요. 동의한 뒤에도 설정 > 내 데이터에서 언제든 철회할 수 있어요.",
+    },
+  ],
+};
+
+/** AI 동의 카드의 두 동의 — 둘 다 켜야 [동의하고 계속하기]가 켜진다(서버도 둘 다 있어야 답한다) */
+export const AI_CONSENT_ITEMS: readonly ConsentItemText<"aiSensitive" | "aiTransfer">[] = [AI_SENSITIVE_CONSENT, AI_TRANSFER_CONSENT];
+
+/** (d) AI 답변 안내 — 안내만(토글 없음). 동의는 AI 상담을 처음 쓸 때 카드가 받는다. 전문은 카드의 국외 이전 동의와 같은 글자. */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-06: 사전 검토 제안 (c-4) — 온보딩 안내와 실제 동의 카드가 같은 사실을 말하게. 상담만·카카오 계정만.
+// 제안의 "(선택 기능)"은 뺐다 — 이 자리는 고를 것이 없는 안내라 필수·선택 구분을 흐리지 않게 "선택"을 쓰지 않는다(법 §22③, noticeBadge)).
 export const AI_TRANSFER_NOTICE: ConsentItemText<"aiTransfer"> = {
   id: "aiTransfer",
-  title: "AI 상담 이용 시 국외 이전 안내",
-  summary: "AI 답변을 쓰는 기능은 처음 쓸 때 따로 동의를 받아요. 동의하지 않아도 온맘에 담긴 안내로 답해요.",
-  details: [
-    { term: "이전받는 자", text: "Anthropic, PBC (미국)", emphasis: true },
-    { term: "해당 기능", text: "AI 상담, 약물·음식 체크에서 안전표에 없는 항목" },
-    { term: "이전 항목", text: AI_TRANSFER_ITEMS, emphasis: true },
-    { term: "이전 시기·방법", text: "질문을 보낼 때마다 온맘 서버를 거쳐 암호화된 통신(HTTPS)으로 전송" },
-    // 받는 자의 이용 목적도 중요한 내용(시행령 §17 — 검토 필요)
-    { term: "이용 목적", text: "AI 답변 생성", emphasis: true },
-    { term: "보유 기간", text: "Anthropic의 API 데이터 보관 정책에 따른 기간", emphasis: true },
-    { term: "거부 방법", text: "처음 쓸 때 묻는 동의에 동의하지 않으면 보내지 않아요. 이때는 온맘에 담긴 안내로만 답해요." },
-  ],
+  title: "AI 답변 안내",
+  summary:
+    "AI 상담을 처음 쓸 때 '민감정보 처리'와 '국외 이전'을 각각 물어요. 시범 운영 동안에는 카카오 계정에서만 쓸 수 있어요. 동의하지 않아도 온맘에 담긴 안내로 답해요.",
+  details: AI_TRANSFER_CONSENT.details,
 };

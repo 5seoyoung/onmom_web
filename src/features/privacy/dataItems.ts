@@ -23,8 +23,8 @@ export const HEALTH_ITEMS =
 
 /**
  * 서비스 설정 정보 — 건강 정보가 아닌 프로필 값과 동의 기록. "동의한 내용과 일시"는 서버 저장 동의(profile.consentVersion·consentAcceptedAt
- * → user_states 칸)와 AI 답변 국외 이전 동의(public.ai_consents의 판·동의 시각 — supabase/migrations/0010_ai_consents.sql)를 함께 덮는다.
- * 둘 다 계정을 삭제할 때까지 보관한다(RETENTION_TEXT — 계정 삭제로 함께 지워진다). src/api/aiConsentsSql.test.ts가 확인한다.
+ * → user_states 칸)와 AI 답변 동의(public.ai_consents의 판·동의 시각·두 동의 — supabase/migrations/0010_ai_consents.sql·0012_ai_consents_withdraw.sql)를 함께 덮는다.
+ * 둘 다 계정을 삭제할 때까지 보관한다(RETENTION_TEXT — 계정 삭제로 함께 지워진다). AI 답변 동의는 철회하면 그때 지운다(처리방침 5절). src/api/aiConsentsSql.test.ts가 확인한다.
  */
 export const SETTING_ITEMS = "회복 목표, 복직 예정일, 내 동네(입력한 경우), 동의한 내용과 일시";
 
@@ -40,15 +40,18 @@ export const AI_USAGE_ITEMS = "AI 상담 이용 시각(이용 한도 계산용)"
 /** AI 상담 이용 기록의 보유 기간(일) — 0003_llm_usage.sql llm_consume_quota의 `interval '2 days'`와 같아야 한다 */
 export const AI_USAGE_RETENTION_DAYS = 2;
 
-/** AI 답변(Anthropic)으로 보내는 것 — CPO 결정 2026-09-28: 질문 내용 + 최소 맥락 3개 */
-export const AI_TRANSFER_ITEMS = "질문 내용, 산후 주차, 분만 방식, 수유 여부";
-
 /**
  * AI 요청 한 번에 함께 보내는 같은 대화의 최근 메시지 수(이전 질문·AI 답 포함) — 웹 src/api/llm.ts LLM_FUNCTION_MAX_MESSAGES,
- * 서버 supabase/functions/_shared/chat.ts CHAT_MAX_MESSAGES와 같아야 한다(webPolicy.test.ts). 방침 6절 ①에만 적는다 —
- * AI_TRANSFER_ITEMS("질문 내용")는 동의 (d)·AI 동의 카드의 지문에 묶여 있어 바꾸면 판을 올려야 한다(검토 문서 체크리스트).
+ * 서버 supabase/functions/_shared/chat.ts CHAT_MAX_MESSAGES와 같아야 한다(webPolicy.test.ts).
  */
 export const AI_CONTEXT_MAX_MESSAGES = 20;
+
+/**
+ * AI 답변(Anthropic)으로 보내는 것 — 실제로 보내는 그대로(src/api/llm.ts functionMessages·chatModel.ts chatLlmContext): 같은 대화의 최근 메시지 + 최소 맥락 3개.
+ * 처리방침 6절 ①·14절과 AI 동의 카드(onboarding/consentText.ts AI_CONSENT_ITEMS — 지문에 묶여 있다)가 같은 글자를 쓴다. 바꾸면 AI_CONSENT_VERSION을 올린다.
+ */
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-06: "질문 내용"이 실제 전송보다 좁아 고침 — 사전 검토 H4, AI-3)
+export const AI_TRANSFER_ITEMS = `대화 내용(같은 대화의 최근 메시지 최대 ${AI_CONTEXT_MAX_MESSAGES}개, 이전 AI 답변 포함), 산후 주차, 분만 방식, 수유 여부`;
 
 /**
  * 매일 리마인더(웹 푸시) 구독 — 알림을 켠 기기(브라우저)마다 한 행(supabase/migrations/0004_push_reminders.sql push_subscriptions).

@@ -1,7 +1,7 @@
 "use client";
 
 // 온보딩 동의 단계 — 서버 저장 빌드(Supabase 설정 있음). 설정이 없는 빌드는 OnboardingSteps.tsx의 ConsentStep(iOS 원문).
-// 머리(iOS 제목 + 서버 저장 부제 + 시범 안내 한 줄) · 안내 3줄 · 필수 동의 셋(토글 + 요약 + "자세히") · AI 국외 이전 안내(토글 없음) ·
+// 머리(iOS 제목 + 서버 저장 부제 + 시범 안내 한 줄) · 안내 3줄 · 필수 동의 셋(토글 + 요약 + "자세히") · AI 답변 안내(토글 없음) ·
 // 처리방침 전문 링크 · [동의하지 않고 나가기] · 면책. 필수 셋을 모두 켜야 아래 버튼이 켜진다(onboardingModel.ts canProceed).
 // 요약에 중요한 내용이 든 동의(summaryEmphasis — 민감정보 (b))는 요약을 굵게·밑줄로 그린다(전문을 접어도 늘 보이게).
 // 문구는 consentText.ts(웹 신규 문구 — CPO 확인 필요). 다시 동의(mode "reconsent")는 부제 아래 안내 한 줄이 더 붙는다.
@@ -93,7 +93,7 @@ export function ServerConsentStep({
         </ul>
       </div>
 
-      {/* AI 답변의 국외 이전 — 알리기만 한다. 동의는 AI 기능을 처음 쓸 때 그 화면이 따로 받는다. */}
+      {/* AI 답변 — 알리기만 한다. 동의는 AI 상담을 처음 쓸 때 그 화면이 따로 받는다. */}
       <section aria-labelledby={aiTitleId} className="rounded-card bg-surface px-4 pt-4 pb-2">
         <h2 id={aiTitleId} className="text-[0.9375rem] font-semibold text-text-primary">
           <Badge tone="notice">{S.noticeBadge}</Badge>
@@ -157,8 +157,7 @@ export const SUMMARY_EMPHASIS_CLASS = "font-semibold text-text-primary underline
 
 /**
  * "자세히" — 펼치면 항목·목적·보유 기간·거부 권리 전문. 브라우저 기본 <details>라 스크립트 없이도 열리고 닫힌다.
- * AI 첫 사용 동의(features/chat/AiConsentCard)는 같은 전문(AI_TRANSFER_NOTICE)을 접지 않고 펼쳐 보이며, 줄 모양만
- * DETAIL_TEXT_CLASS·DETAIL_EMPHASIS_CLASS로 이 컴포넌트와 맞춘다.
+ * AI 첫 사용 동의(features/chat/AiConsentCard)도 두 동의의 전문을 "자세히"에 접고, 줄 모양을 DETAIL_TEXT_CLASS·DETAIL_EMPHASIS_CLASS로 이 컴포넌트와 맞춘다.
  */
 export function ConsentDetails({ item }: { item: ConsentItemText }) {
   return (
