@@ -26,6 +26,9 @@
 --   있다"도 그 사람들의 건강 정보다) 그 칸은 null. 그리고 숨긴 칸을 뺄셈(합계 − 보이는 칸)으로 되살리지 못하게, 숨긴 칸이 하나뿐이거나
 --   숨긴 칸을 합쳐도 5명이 안 되면 보이는 칸 중 가장 작은 칸(기록·사람 수가 가장 적은 칸, 같으면 뒤쪽 칸)을 하나 더 숨긴다(보완 숨김).
 --   보이는 칸은 5명 이상이므로 한 번 더 숨기면 늘 충분하다. 모든 칸이 숨겨지면 그 분포 전체가 null.
+--   예외: 답이 비어 있다는 칸(unknown — 출산일 없음·미설정)은 5명 미만이면 숨기지만, 그 칸만 숨겨졌을 때는 다른 칸을 더 숨기지 않는다. 건강 정보가
+--   아니라 답이 없다는 뜻이라 뺄셈으로 알아내도 드러나는 것이 없고, 온보딩을 마친 사람은 거의 다 답해 이 칸이 늘 0에 가깝다 — 이 칸 때문에 매번
+--   둘째로 큰 칸까지 숨기면 분만 방식·목표 분포는 한 칸밖에 보이지 않는다. 다른 칸이 함께 숨겨지면 앞의 규칙이 그대로다("모두가 한 칸에 있다"도 숨는다).
 -- - 병원 안내: 증상 기록에 남은 결과(redFlagCode — rules/record.ts buildSymptomRecord가 즉시 병원 신호의 코드를 남긴다)가 비어 있지 않은
 --   글자이면 병원 안내가 나온 기록으로 센다. 오늘의 코드 목록을 적지 않는다 — 규칙(RULES_VERSION)이 새 경고 신호를 더해도 그대로 센다.
 -- - 기분 답: yes·unsure·no(화면 "네·글쎄요·아니요"). 모르는 값은 앱(rules/mood.ts normalizeMoodAnswer)처럼 unsure로 센다.
@@ -299,10 +302,11 @@ begin
       group by i.dist, i.user_id
     ),
     first_hidden as (
-      -- 규칙 B ①: 5명 미만(0명 포함)인 칸
+      -- 규칙 B ①: 5명 미만(0명 포함)인 칸. real_hidden_n은 그중 답이 비어 있다는 칸(unknown)을 뺀 수 — 지킬 건강 정보가 있는 칸
       select b.dist,
         bit_or(case when b.u < k_min then 1 << (b.bucket - 1) else 0 end) as mask,
         count(*) filter (where b.u < k_min) as hidden_n,
+        count(*) filter (where b.u < k_min and b.key <> 'unknown') as real_hidden_n,
         (1 << (count(*)::integer)) - 1 as all_mask
       from buckets b
       group by b.dist
@@ -315,12 +319,12 @@ begin
       group by f.dist
     ),
     extra_hidden as (
-      -- 규칙 B ②: 숨긴 칸이 하나뿐이거나 합쳐도 5명 미만이면, 보이는 칸 중 가장 작은 칸(같으면 뒤쪽 칸)을 하나 더 숨긴다
+      -- 규칙 B ②: 지킬 칸이 숨겨졌고 숨긴 칸이 하나뿐이거나 합쳐도 5명 미만이면, 보이는 칸 중 가장 작은 칸(같으면 뒤쪽 칸)을 하나 더 숨긴다
       select distinct on (b.dist) b.dist, 1 << (b.bucket - 1) as mask
       from buckets b
       join first_hidden f on f.dist = b.dist
       join hidden_users h on h.dist = b.dist
-      where f.mask <> 0
+      where f.real_hidden_n > 0
         and (f.hidden_n = 1 or h.users < k_min)
         and (f.mask & (1 << (b.bucket - 1))) = 0
       order by b.dist, b.n, b.bucket desc

@@ -267,8 +267,11 @@ describe(`0011 — 숨김(k = ${USAGE_K})`, () => {
     expect(BODY).toContain("bit_or(case when b.u < k_min then 1 << (b.bucket - 1) else 0 end) as mask");
   });
 
-  it("규칙 B ② — 뺄셈으로 되살리지 못하게, 숨긴 칸이 하나뿐이거나 합쳐 5명 미만이면 가장 작은 칸을 하나 더 숨긴다", () => {
-    expect(BODY).toContain("where f.mask <> 0 and (f.hidden_n = 1 or h.users < k_min) and (f.mask & (1 << (b.bucket - 1))) = 0");
+  it("규칙 B ② — 뺄셈으로 되살리지 못하게, 지킬 칸이 숨겨졌고 숨긴 칸이 하나뿐이거나 합쳐 5명 미만이면 가장 작은 칸을 하나 더 숨긴다", () => {
+    expect(BODY).toContain("where f.real_hidden_n > 0 and (f.hidden_n = 1 or h.users < k_min) and (f.mask & (1 << (b.bucket - 1))) = 0");
+    // 답이 비어 있다는 칸(unknown)만 숨겨졌을 때는 더 숨기지 않는다 — 다른 칸은 늘 지킨다
+    expect(BODY).toContain("count(*) filter (where b.u < k_min and b.key <> 'unknown') as real_hidden_n");
+    expect(RAW).toMatch(/예외: 답이 비어 있다는 칸\(unknown/);
     expect(BODY).toContain("order by b.dist, b.n, b.bucket desc");
     // 숨긴 칸들의 사람 수는 칸마다 더하지 않고 서로 다른 사람으로 센다(기록 분포는 한 사람이 여러 칸에 든다)
     expect(BODY).toContain("left join user_masks m on m.dist = f.dist and (m.mask & f.mask) <> 0");
