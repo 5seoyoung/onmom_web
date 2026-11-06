@@ -86,7 +86,6 @@ describe("이용약관 초안 — 내용", () => {
     expect(all).toContain("대한민국 법");
     expect(all).toContain("「민사소송법」");
     expect(all).toContain("「약관의 규제에 관한 법률」");
-    expect(all).toContain("고의나 중대한 과실");
     expect(all).toContain("만 14세 이상");
     expect(all).toContain("게스트");
     expect(all).toContain("카카오");
@@ -107,8 +106,12 @@ describe("이용약관 초안 — 내용", () => {
 
   it("우리가 하는 일에 진단·판정·처방·치료를 쓰지 않는다(web/07 §1) — 하지 않는다는 문장에만", () => {
     expect(all).not.toMatch(/판정|처방/);
-    // "진단"·"점수"는 하지 않는다는 문장(3조)에만
-    const allowed = ["질병을 진단하거나 치료하지 않고, 몸 상태를 판단하거나 점수·등급을 매기지 않습니다.", "진단과 치료에 관한 결정은 의료진이 합니다."];
+    // "진단"·"점수"는 하지 않는다는 문장(3조)과 의료인의 일을 대신하지 않는다는 문장(11조)에만
+    const allowed = [
+      "질병을 진단하거나 치료하지 않고, 몸 상태를 판단하거나 점수·등급을 매기지 않습니다.",
+      "진단과 치료에 관한 결정은 의료진이 합니다.",
+      "의료인의 진단·치료를 대신하지 않습니다.",
+    ];
     let rest = all;
     for (const a of allowed) rest = rest.split(a).join("");
     expect(rest).not.toContain("진단");
@@ -133,6 +136,49 @@ describe("이용약관 초안 — 내용", () => {
     expect(first.title).toBe("4. 계정");
     expect(first.body).toContain(`설정 > ${SETTINGS_TEXT.deleteAccount}(게스트 화면의 이름은 [${GUEST_ACCOUNT_TEXT.deleteAccount}]입니다. 아래에서도 같습니다)`);
     expect(all).not.toContain("이 기기에서 기록 지우기");
+  });
+
+  it("책임의 제한(11조) — 가벼운 과실을 면책하는 말이 없다(약관규제법 §7): 고의·과실이면 배상, 위탁 업체도 포함, 이용자에게 결과를 돌리지 않는다", () => {
+    const liability = sections.find((s) => s.title === "11. 책임의 제한")!.body;
+    expect(all).not.toContain("중대한 과실");
+    expect(all).not.toContain("위탁 업체의 장애 등");
+    expect(all).not.toContain("그 결과는 이용자에게 있습니다");
+    expect(liability).toContain("운영자(운영자가 업무를 맡긴 업체를 포함합니다)의 고의 또는 과실로 이용자에게 손해가 생긴 경우 관련 법령에 따라 배상합니다.");
+    expect(liability).toContain("운영자에게 고의 또는 과실이 없는 한 책임을 지지 않습니다.");
+    // 면책은 그 줄의 두 경우뿐이고, 어느 줄도 고의·과실 없이는 면책을 넓히지 않는다
+    expect(liability.split("\n").filter((l) => l.includes("책임을 지지 않습니다"))).toHaveLength(1);
+    expect(liability).toContain("이 조항은 「약관의 규제에 관한 법률」 등 관련 법령이 허용하는 범위에서만 적용되며");
+  });
+
+  it("서비스 변경(7조) — 상당한 이유가 있을 때만, 불리한 변경은 30일 전, 중단 손해는 11조로", () => {
+    const change = sections.find((s) => s.title === "7. 서비스의 변경·중단")!.body;
+    expect(change).toContain("운영상·기술상 상당한 이유가 있거나 임상 근거·법령이 바뀐 경우");
+    expect(change).toContain("적용 7일 전(불리한 변경은 30일 전)까지 서비스 안에 알립니다.");
+    expect(change).toContain("중단으로 생긴 손해의 책임은 11조에 따릅니다.");
+  });
+
+  it("이용 제한(6·8조) — 먼저 일시 제한·사유 통지·소명 기회, 급박한 경우만 먼저 조치, 게스트는 서비스 안의 안내로", () => {
+    const end = sections.find((s) => s.title === "8. 이용 계약의 종료")!.body;
+    expect(end).toContain("먼저 이용을 일시 제한하고 사유를 알리며, 이용자가 소명할 기회를 줍니다.");
+    expect(end).toContain("먼저 조치하고 나중에 알릴 수 있습니다.");
+    expect(end).toContain("연락할 방법이 없는 게스트에게는 서비스 안의 안내로 알립니다.");
+    expect(sections.find((s) => s.title === "6. 금지 행위")!.body).toContain("8조의 절차에 따라");
+  });
+
+  it("분쟁 조정(12조) — 개인정보분쟁조정위원회는 방침 17절과 같은 번호, 한국소비자원은 확인하지 않은 번호를 적지 않는다", () => {
+    const dispute = sections.find((s) => s.title === "12. 분쟁 해결과 준거법")!.body;
+    const remedy = webPolicySections().find((s) => s.title.includes("권익침해 구제"))!.body;
+    expect(remedy).toContain("개인정보분쟁조정위원회: 1833-6972");
+    expect(dispute).toContain("개인정보분쟁조정위원회(1833-6972)");
+    expect(dispute).toContain("한국소비자원을 통해 피해구제나 조정을 신청할 수 있습니다.");
+    expect(all).not.toMatch(/\[[^\]]*(확인|연락처)[^\]]*\]/);
+  });
+
+  it("약관 변경(14조) — 내용과 시행일을 알리고, 의사표시 의제는 그 뜻을 명확히 알린 경우에만(약관규제법 §12 1호), 시행일 전까지 끝낼 수 있다", () => {
+    const amend = sections.find((s) => s.title === "14. 약관의 변경")!.body;
+    expect(amend).toContain("바뀌는 내용과 시행일을 시행 7일 전(이용자에게 불리하거나 중요한 변경은 30일 전)부터 서비스 안에 알리고, 연락처를 아는 이용자에게는 따로 알립니다.");
+    expect(amend).toContain('"시행일 전까지 거부 의사를 밝히지 않으면 바뀐 약관에 동의한 것으로 본다"는 뜻을 함께 명확히 알렸는데도');
+    expect(amend).toContain("시행일 전까지 설정 > 계정 삭제로 이용을 끝낼 수 있습니다.");
   });
 
   it("만 14세 미만인 것이 확인되면 삭제(4조)", () => {
