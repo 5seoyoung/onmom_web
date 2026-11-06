@@ -22,8 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 # 공개 사이트 모드 — server(카카오 로그인·서버 저장 켬) | browser(브라우저 전용, 서버 없음).
-# 2026-10-24 CPO 결정: 로그인을 켠 시범 공개(server). AI 상담은 서버 스위치(AI_CHAT_SERVER_ENABLED)와 화면 스위치
-# (NEXT_PUBLIC_AI_CHAT_ENABLED)가 따로 꺼 두고, 지도·유튜브도 각자의 값이 없어 꺼진 채다. 검색 노출은 계속 막힌다(noindex).
+# 2026-10-24 CPO 결정: 로그인을 켠 시범 공개(server). 지도·유튜브는 각자의 값이 없어 꺼진 채다. 검색 노출은 계속 막힌다(noindex).
 # 끄려면 ONMOM_SITE_MODE를 browser로 바꿔 커밋하면 다음 배포부터 지금까지의 브라우저 전용으로 돌아간다.
 # GitHub Variables에 NEXT_PUBLIC_SUPABASE_URL·NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY가 있으면 그 값이 아래 기본값보다 우선한다.
 # 아래 두 값은 공개값이다(로그인을 켠 사이트의 번들에 그대로 들어간다). secret·service_role 키는 절대 여기에 두지 않는다.
@@ -35,6 +34,10 @@ env:
   # 서버 예약 값(Vault: reminder_cron_secret·project_url·publishable_key)이 없으면 구독만 모이고 알림은 가지 않으므로,
   # Vault를 다시 넣은 뒤에 on으로 바꾼다(docs/PWA_AND_REMINDERS.md §5). 2026-10-24: Vault 비어 있음 → off.
   ONMOM_REMINDERS: off
+  # AI 상담 화면 스위치 — on이면 빌드에 NEXT_PUBLIC_AI_CHAT_ENABLED=true를 넣는다(2026-11-06 대표 결정: 켠다 — 상담에만, 시범 동안 카카오 계정만).
+  # GitHub Variable NEXT_PUBLIC_AI_CHAT_ENABLED가 있으면 그 값이 먼저다(false로 두면 끈다). off로 바꿔 커밋해도 끈다.
+  # 서버 쪽 스위치는 따로다(supabase.yml ONMOM_AI_CHAT_SERVER_ENABLED) — 둘 다 켜져야 AI가 답한다. 따옴표: YAML 1.1 도구가 on을 true로 읽지 않게.
+  ONMOM_AI: "on"
 
 jobs:
   build:
@@ -108,8 +111,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || (env.ONMOM_SITE_MODE == 'server' && env.ONMOM_SUPABASE_PUBLISHABLE_KEY || '') }}
           # Cloudflare Turnstile 사이트 키(공개값) — Supabase의 CAPTCHA를 켤 때만. 비밀 키는 Supabase 대시보드에만.
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
-          # AI 상담 켜기 — "true"일 때만. Edge Function 비밀값 ANTHROPIC_API_KEY와 CPO·법률 승인(docs/LAUNCH_CHECKLIST.md)이 먼저.
-          NEXT_PUBLIC_AI_CHAT_ENABLED: ${{ vars.NEXT_PUBLIC_AI_CHAT_ENABLED }}
+          # AI 상담 화면 스위치 — "true"일 때만 웹이 함수 chat을 부른다. 값을 고르는 순서: GitHub Variable → (ONMOM_AI가 on이면) true → 빈 값(꺼짐).
+          # Supabase 값이 없는 빌드(ONMOM_SITE_MODE=browser)에서는 뜻이 없다(src/config.ts isLLMBackendConfigured).
+          NEXT_PUBLIC_AI_CHAT_ENABLED: ${{ vars.NEXT_PUBLIC_AI_CHAT_ENABLED || (env.ONMOM_AI == 'on' && 'true' || '') }}
           # 매일 리마인더(웹 푸시)의 VAPID 공개 키(공개값) — scripts/generate-vapid.mjs가 출력한 한 쌍 중 공개 키만. 비밀 키는 Supabase 함수
           # 비밀값(VAPID_PRIVATE_KEY)에만. Supabase 값과 함께 있어야 설정 > 알림 토글이 켜진다(docs/PWA_AND_REMINDERS.md). 형식이 틀리면 빌드가 멈춘다.
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ env.ONMOM_REMINDERS == 'on' && vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '' }}
