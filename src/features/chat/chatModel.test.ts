@@ -55,7 +55,7 @@ describe("게스트 — 시범 동안 AI는 카카오 계정만(aiMode login)", 
 
   it("기본 답의 첫머리는 '카카오 계정에서만', 서버를 부르지 않는다", async () => {
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
-    const r = await requestChatReply(history("오로 색이 궁금해요"), { llmConfigured: false, complete, context: null, loginRequired: true });
+    const r = await requestChatReply(history("아기 이름이 궁금해요"), { llmConfigured: false, complete, context: null, loginRequired: true });
     expect(r).toMatchObject({ fromFallback: true, crisis: false, origin: "rules", fallbackReason: "loginRequired" });
     expect(r.text).toContain("AI 상담은 카카오 계정에서만 쓸 수 있어");
     expect(r.text).not.toContain("연결되지 않아");
