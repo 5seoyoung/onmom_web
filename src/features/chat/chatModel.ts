@@ -3,6 +3,7 @@
 // 여기서는 "무엇을 보일지(배너·FAQ)", "보낼 수 있는지", "어떤 의존성으로 답을 구할지"만 정한다.
 // 대화는 화면 메모리에만 둔다(iOS와 같음) — 저장하지 않는다.
 //
+// AI는 상담에만 쓰고, 시범 동안 카카오 계정만 쓴다 — 게스트는 동의 카드 없이 앱 안내로 답하고 카카오 연결을 권한다(aiConsent.ts aiMode "login").
 // 서버에 보내는 산모 정보는 산후 주차·분만 방식·수유 여부 셋뿐이다(chatLlmContext — 검수 #14, 처리방침 "AI 국외 이전 항목").
 // iOS가 보내던 BMI·목표·최근 위험 신호 여부(ChatView.swift:188-196)는 보내지 않는다.
 //
@@ -13,7 +14,7 @@
 // 앱 안내로 답한 이유(fallbackReason)도 남긴다 — 서버 함수의 한도(429)·혼잡(503)·거절(422)을 "연결되지 않아"로 뭉개지 않고
 // 배너·기본 답의 첫머리를 이유에 맞게 바꾼다(supabase/functions/chat/handler.ts, docs/SUPABASE_FUNCTIONS.md §5).
 
-import { isAiConsentRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
+import { isAiConsentRequired, isAiLoginRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
 import content from "@/content";
 import { parseLocalDate, postpartumDayCount, weekFromDayCount } from "@/domain/date";
 import type { UserProfile } from "@/domain/types";
@@ -37,6 +38,16 @@ import { ROUTES } from "@/routes";
 /** 화면 문구 중 페이지(src/app/(app)/chat/page.tsx — 문서 제목)와 화면이 함께 쓰는 것 */
 export const CHAT_TEXT = {
   title: "AI 상담", // 원문: ChatView.swift:51
+  // 웹 신규 문구 — CPO 확인 필요 (AI 상담 화면에 늘 보이는 안내 — AI가 만든 일반 정보·틀릴 수 있음·진단·치료 아님·응급은 119)
+  notice: "AI 답변은 AI가 만든 일반적인 건강 정보로 틀릴 수 있어요. 진단이나 치료가 아니에요. 응급 상황이면 바로 119에 연락하세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (카카오 계정이 아닐 때 배너 아래 한 줄 — 시범 동안 AI 상담은 카카오 계정만)
+  kakaoInvite: "카카오 계정을 연결하면 AI 상담을 쓸 수 있어요.",
+  // 웹 신규 문구 — CPO 확인 필요 (위 한 줄의 링크 — 설정 > 계정의 [카카오 계정 연결]로 간다)
+  kakaoInviteLink: "설정에서 연결하기",
+  // 웹 신규 문구 — CPO 확인 필요 (AI 답 말풍선 아래 링크 — 누르면 메일 앱이 열린다)
+  reportLink: "답변 신고",
+  // 웹 신규 문구 — CPO 확인 필요 (답변 신고 메일의 제목 — 대화 내용은 넣지 않는다)
+  reportSubject: "온맘 AI 답변 신고",
 } as const;
 
 /** src/api/llm.ts `llmComplete`와 같은 모양 — 테스트에서 가짜로 바꿔 넣는다. */
@@ -58,13 +69,13 @@ export function initialChatMessages(): ChatBubbleMessage[] {
 
 /**
  * 말풍선 아래 작은 글씨 — 어디서 온 답인지. 인사말에는 붙이지 않는다(문장 안에 이미 "정보 안내이며 진단·처방이 아닙니다"가 있다).
- * AI 답은 plain text로만 그리므로(검수 #51) 이 표시가 유일한 "AI 답변" 표기다(약물 체크의 "AI 답변" 칩과 같은 역할).
+ * AI 답은 plain text로만 그리므로(검수 #51) 이 표시가 유일한 "AI 답변" 표기다.
  */
 export const CHAT_ORIGIN_CAPTION: Readonly<Record<ChatOrigin, string | null>> = {
   greeting: null,
   // 웹 신규 문구 — CPO 확인 필요 (규칙 폴백·위기 안내 말풍선 아래 — 앱에 담긴 안내로 답했다는 표시)
   rules: "앱 안내",
-  // 웹 신규 문구 — CPO 확인 필요 (AI 답 말풍선 아래 — 약물 체크의 "AI 답변" 칩 + 병기 문구(SubstanceCheckView.swift:137-139)를 한 줄로)
+  // 웹 신규 문구 — CPO 확인 필요 (AI 답 말풍선 아래 — iOS 약물 체크의 "AI 답변" 칩 + 병기 문구(SubstanceCheckView.swift:137-139)를 한 줄로)
   ai: "AI 답변 · 진단·처방이 아닙니다",
 };
 
@@ -76,6 +87,11 @@ export function normalizeChatDraft(draft: string): string {
   return draft.trim();
 }
 
+/** 서버에 물을 수 있는가(동의를 묻는 중 포함) — 입력 상한·배너가 이 값을 본다 */
+export function canReachAi(mode: AiMode): boolean {
+  return mode === "ask" || mode === "on";
+}
+
 /** 보내기 버튼 활성 — 글이 있고 답을 기다리는 중이 아니며, 저장소를 읽은 뒤(ChatView.swift:147). */
 export function canSendChat(input: { draft: string; thinking: boolean; hydrated: boolean }): boolean {
   return input.hydrated && !input.thinking && normalizeChatDraft(input.draft).length > 0;
@@ -84,6 +100,7 @@ export function canSendChat(input: { draft: string; thinking: boolean; hydrated:
 /**
  * 폴백 배너·FAQ 칩 표시 여부(ChatView.swift:20, :24, :31-36, :161).
  * - 배너: 서버에 물을 수 있으면(동의를 묻는 중 ask 포함) 첫 화면에는 없다 — 동의 전이라도 "연결되지 않아"는 사실이 아니다.
+ *   카카오 계정이 아니면(login) 처음부터 있다.
  * - FAQ: AI가 실제로 답할 때(on)만. 동의를 묻는 중(ask)에는 숨긴다 — 칩을 누르고 [동의하지 않기]를 고르면 앱의 질문이
  *   규칙 폴백으로 가는데, 규칙은 FAQ 질문에 맞춘 답을 주지 못한다(대부분 기본 안내 "질문에 맞춘 답을 드리기 어려워요", rules/chat.ts chatReply).
  *   동의는 처음 직접 쓴 질문에서 묻고, 동의한 뒤 다음 방문부터 칩이 보인다.
@@ -96,7 +113,7 @@ export function chatScreenState(input: {
 }): { showBanner: boolean; showFaq: boolean } {
   return {
     showBanner: shouldShowChatBanner({
-      llmConfigured: input.mode !== "off",
+      llmConfigured: canReachAi(input.mode),
       lastReplyFromFallback: input.lastReplyFromFallback,
     }),
     showFaq: shouldShowFaq({
@@ -138,14 +155,13 @@ export function isCrisisMessage(text: string): boolean {
 }
 
 /**
- * 보낸 질문을 어떻게 다룰지 — ai: 서버(LLM)에 묻는다, rules: 앱 내 안내로 답한다, consent: 먼저 AI 국외 이전 동의를 묻는다.
+ * 보낸 질문을 어떻게 다룰지 — ai: 서버(LLM)에 묻는다, rules: 앱 내 안내로 답한다, consent: 먼저 AI 답변 동의를 묻는다.
  * 위기 표현은 어느 방식이든 AI에 보내지 않고 동의도 기다리게 하지 않는다(rules → 위기 안내).
  */
 export function chatSendAction(mode: AiMode, text: string): "ai" | "rules" | "consent" {
   if (isCrisisMessage(text)) return "rules";
   if (mode === "on") return "ai";
-  if (mode === "off") return "rules";
-  return "consent";
+  return mode === "ask" ? "consent" : "rules";
 }
 
 /**
@@ -170,12 +186,13 @@ export function withoutCrisisTurns<M extends { role: "user" | "assistant"; conte
 /**
  * 앱 안내로 답한 이유 — 배너·기본 답의 첫머리를 정한다.
  * - notConnected: 서버 미설정·연결 실패·시간 초과·빈 답·답을 쓸 수 없음(5xx) — content.json 원문 그대로
- * - declined: 이번에 AI 국외 이전에 동의하지 않음
+ * - declined: 이번에 AI 답변에 동의하지 않음
+ * - loginRequired: 시범 동안 AI 상담은 카카오 계정만(게스트 — 화면이 먼저 알거나, 함수가 403 ai_login_required로 답함)
  * - rateLimited: 이 사용자의 1시간 한도(429 rate_limited)
  * - busy: 서비스가 지금 AI를 내줄 수 없음(503 — 하루 전체 상한 busy·한도 확인 실패·Auth 확인 실패·Anthropic 혼잡/키 없음)
  * - refused: AI가 이 질문에 답하지 않음(422 refused)
  */
-export type ChatFallbackReason = "notConnected" | "declined" | "rateLimited" | "busy" | "refused";
+export type ChatFallbackReason = "notConnected" | "declined" | "loginRequired" | "rateLimited" | "busy" | "refused";
 
 const DEFAULT_REPLY_NOT_CONNECTED = "지금은 AI 서버에 연결되지 않아";
 /**
@@ -184,8 +201,10 @@ const DEFAULT_REPLY_NOT_CONNECTED = "지금은 AI 서버에 연결되지 않아"
  */
 const FALLBACK_LEAD: Readonly<Record<ChatFallbackReason, string>> = {
   notConnected: DEFAULT_REPLY_NOT_CONNECTED,
-  // 웹 신규 문구 — CPO 확인 필요 (AI 국외 이전에 동의하지 않았을 때 배너·기본 답의 첫머리)
+  // 웹 신규 문구 — CPO 확인 필요 (AI 답변에 동의하지 않았을 때 배너·기본 답의 첫머리)
   declined: "AI 답변에 동의하지 않아",
+  // 웹 신규 문구 — CPO 확인 필요 (시범 동안 카카오 계정이 아닐 때 배너·기본 답의 첫머리)
+  loginRequired: "AI 상담은 카카오 계정에서만 쓸 수 있어",
   // 웹 신규 문구 — CPO 확인 필요 (이 사용자의 AI 상담 1시간 한도에 닿았을 때 — 서버 함수 429 rate_limited)
   rateLimited: "AI 상담 이용 횟수가 잠시 한도에 닿아",
   // 웹 신규 문구 — CPO 확인 필요 (서비스가 지금 AI를 내줄 수 없을 때 — 서버 함수 503 busy·unavailable 등)
@@ -210,12 +229,13 @@ export const CHAT_DECLINED_BANNER = chatBannerText("declined");
 export const CHAT_DECLINED_DEFAULT_REPLY = chatDefaultReplyText("declined");
 
 /**
- * 서버(LLM) 실패 → 앱 안내로 답한 이유. 상태 코드는 Edge Function chat의 것(handler.ts): 429 rate_limited, 503 busy·unavailable,
- * 422 refused. 그 밖(400·401·5xx·연결 실패·시간 초과·빈 답·미설정)은 모두 "연결되지 않아"(원문).
+ * 서버(LLM) 실패 → 앱 안내로 답한 이유. 상태 코드는 Edge Function chat의 것(handler.ts): 403 ai_login_required, 429 rate_limited,
+ * 503 busy·unavailable, 422 refused. 그 밖(400·401·5xx·연결 실패·시간 초과·빈 답·미설정)은 모두 "연결되지 않아"(원문).
  * 예전 NEXT_PUBLIC_LLM_URL 서버가 같은 코드를 쓰면 같은 뜻으로 본다.
  */
 export function chatFallbackReasonFor(failure: Extract<LLMResult, { ok: false }>): ChatFallbackReason {
   if (failure.kind !== "server") return "notConnected";
+  if (isAiLoginRequired(failure)) return "loginRequired";
   switch (failure.status) {
     case 429:
       return "rateLimited";
@@ -237,7 +257,7 @@ export interface ChatScreenReply extends ChatReplyResult {
   origin: Exclude<ChatOrigin, "greeting">;
   fallbackReason: ChatFallbackReason | null;
   /**
-   * 서버가 이 계정의 AI 국외 이전 동의 기록을 찾지 못했다(403 ai_consent_required — 서버 행 없음·예전 판).
+   * 서버가 이 계정의 AI 답변 동의 기록을 찾지 못했다(403 ai_consent_required — 서버 행 없음·철회·예전 판·한쪽 동의만).
    * 화면은 이 답을 그리지 않고, 이 계정의 동의를 지운 뒤(aiConsent.ts revoke) 같은 질문으로 동의 카드를 다시 띄운다.
    */
   consentRequired?: true;
@@ -258,20 +278,28 @@ export function chatLlmContext(
 }
 
 /**
- * 답 구하기(ChatView.swift:170-185). 서버를 쓸 때만(llmConfigured — AI 스위치 + 이 사람의 AI 국외 이전 동의) llmComplete를 붙이고
+ * 답 구하기(ChatView.swift:170-185). 서버를 쓸 때만(llmConfigured — AI 스위치 + 카카오 계정 + 이 사람의 AI 답변 동의) llmComplete를 붙이고
  * (preset patient_edu, 인사말은 빼고 보냄 — rules/chat buildChatLlmRequest), 실패하면 규칙 폴백 + 배너.
  * 쓰지 않으면 서버에 아무것도 보내지 않는다.
  * rules의 요청에 붙는 iOS 컨텍스트 문자열은 쓰지 않고, 대화(messages)·preset에 chatLlmContext의 세 항목만 붙여 보낸다.
  * - 마지막 질문이 위기 표현이면 어떤 경우에도 서버에 묻지 않고 고정 위기 안내(content.json replies.self_harm)로 답한다.
  * - 서버에 물을 때도 앞선 위기 턴은 뺀다(withoutCrisisTurns).
  * - 서버가 (자기 선필터로) 같은 고정 위기 안내를 돌려주면 AI 답이 아니라 위기 안내(origin rules·crisis)로 다룬다.
- * - 기본 답의 첫머리 "지금은 AI 서버에 연결되지 않아"는 이유에 맞게 바꾼다(chatDefaultReplyText) — declined(이번에 AI 국외 이전에
- *   동의하지 않음)·rateLimited·busy·refused. 다른 폴백 답(출혈·운동·기분)은 이유와 무관하게 원문 그대로다.
+ * - 기본 답의 첫머리 "지금은 AI 서버에 연결되지 않아"는 이유에 맞게 바꾼다(chatDefaultReplyText) — declined(이번에 AI 답변에
+ *   동의하지 않음)·loginRequired(카카오 계정이 아님)·rateLimited·busy·refused. 다른 폴백 답(출혈·운동·기분)은 이유와 무관하게 원문 그대로다.
  * - 서버가 동의 기록이 없다고 답하면(403 ai_consent_required) consentRequired를 붙인다 — 화면은 답 대신 동의 카드를 다시 띄운다.
  */
 export async function requestChatReply(
   history: readonly ChatMessage[],
-  input: { llmConfigured: boolean; complete: LlmCompleteFn; context: LLMContext | null; signal?: AbortSignal; declined?: boolean },
+  input: {
+    llmConfigured: boolean;
+    complete: LlmCompleteFn;
+    context: LLMContext | null;
+    signal?: AbortSignal;
+    declined?: boolean;
+    /** 시범 동안 카카오 계정이 아니라 서버에 묻지 않았다 */
+    loginRequired?: boolean;
+  },
 ): Promise<ChatScreenReply> {
   if (isCrisisMessage(lastUserText(history))) {
     return { text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null };
@@ -308,7 +336,13 @@ export async function requestChatReply(
   }
 
   const reason: ChatFallbackReason =
-    input.declined === true ? "declined" : failure !== null ? chatFallbackReasonFor(failure) : "notConnected";
+    input.loginRequired === true
+      ? "loginRequired"
+      : input.declined === true
+        ? "declined"
+        : failure !== null
+          ? chatFallbackReasonFor(failure)
+          : "notConnected";
   const text =
     reason !== "notConnected" && reply.text === content.chat_fallback.replies.default ? chatDefaultReplyText(reason) : reply.text;
   return { text, fromFallback: true, crisis: false, origin: "rules", fallbackReason: reason };
@@ -317,13 +351,13 @@ export async function requestChatReply(
 /**
  * 답을 구하다 예상하지 못한 오류가 났을 때의 답 — requestChatReply는 서버 실패를 규칙 폴백으로 돌려주므로 보통 오지 않는다.
  * 화면이 대기 표시("생각 중")를 남겨 두지 않고 이 답으로 마무리한다. 새 문구는 없다: 위기 표현이면 고정 위기 안내, 아니면
- * 기본 답(원문 "지금은 AI 서버에 연결되지 않아…" — 이번에 AI를 거절했으면 그 첫머리).
+ * 기본 답(원문 "지금은 AI 서버에 연결되지 않아…" — 카카오 계정이 아니거나 이번에 AI를 거절했으면 그 첫머리).
  */
-export function chatReplyOnError(history: readonly ChatMessage[], declined = false): ChatScreenReply {
+export function chatReplyOnError(history: readonly ChatMessage[], declined = false, loginRequired = false): ChatScreenReply {
   if (isCrisisMessage(lastUserText(history))) {
     return { text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null };
   }
-  const reason: ChatFallbackReason = declined ? "declined" : "notConnected";
+  const reason: ChatFallbackReason = loginRequired ? "loginRequired" : declined ? "declined" : "notConnected";
   return { text: chatDefaultReplyText(reason), fromFallback: true, crisis: false, origin: "rules", fallbackReason: reason };
 }
 

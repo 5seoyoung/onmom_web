@@ -249,6 +249,14 @@ export const DATA_RIGHTS_TEXT = {
   accountIdHint: "문의나 삭제 요청을 보낼 때 이 계정 ID를 함께 알려 주세요.",
   // 웹 신규 문구 — CPO 확인 필요 (철회 방법 = 계정 삭제 — 처리방침 초안 13절과 같은 사실)
   consentWithdraw: "동의를 철회하려면 위 계정 카드에서 계정을 삭제해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (AI 답변 동의 철회 행 — 동의가 남아 있을 때만 보인다. 처리방침 4·13절과 같은 사실)
+  aiWithdraw: "AI 답변 동의 철회",
+  aiWithdrawHint:
+    "철회하면 서버의 동의 기록과 이 브라우저의 기록을 지워요. 다시 동의하기 전에는 질문을 AI로 보내지 않고, 온맘에 담긴 안내로 답해요.",
+  // 웹 신규 문구 — CPO 확인 필요 (철회가 진행 중·끝남·실패)
+  aiWithdrawing: "철회하고 있어요…",
+  aiWithdrawDone: "AI 답변 동의를 철회했어요.",
+  aiWithdrawFailed: "철회하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
   // 웹 신규 문구 — CPO 확인 필요 (열람권 — 이 브라우저의 기록 전체를 JSON 파일로)
   exportButton: "내 데이터 내려받기",
   exportHint:

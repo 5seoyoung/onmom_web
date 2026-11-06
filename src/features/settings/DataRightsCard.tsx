@@ -1,6 +1,6 @@
 "use client";
 
-// 설정 > 내 데이터 — 계정 ID(서버 계정이 있을 때) · 동의 내역(판·일시, 있는 값만) · 철회 방법 · [내 데이터 내려받기](JSON 파일).
+// 설정 > 내 데이터 — 계정 ID(서버 계정이 있을 때) · 동의 내역(판·일시, 있는 값만) · 철회 방법 · AI 답변 동의 철회(동의가 남아 있을 때) · [내 데이터 내려받기](JSON 파일).
 // iOS에 없던 카드(웹 신규 — CPO 확인 필요). 근거: 웹 처리방침 초안 13절(열람·동의 철회), DEV_NOTES §8-7.
 //
 // 계정 ID = Supabase 세션의 사용자 id(auth.users.id, UUID). 이용자가 문의 이메일로 삭제를 요청할 때 관리자가 계정을 찾는 값이다
@@ -20,6 +20,7 @@ import { isSupabaseConfigured } from "@/config";
 import type { UserProfile } from "@/domain/types";
 import type { AppSnapshot } from "@/store/appStore";
 import { REPORT_HREF, REPORT_TEXT } from "@/features/report/reportText";
+import { AiConsentWithdraw } from "./AiConsentWithdraw";
 import { buildDataExport, downloadTextFile, exportFileName, serializeDataExport } from "./dataExport";
 import { DATA_RIGHTS_TEXT, accountIdRow, consentRows } from "./settingsView";
 
@@ -98,6 +99,9 @@ export function DataRightsCard({ snapshot }: { snapshot: Pick<AppSnapshot, "stat
           <p className="text-[0.8125rem] text-text-secondary">{DATA_RIGHTS_TEXT.consentWithdraw}</p>
         </div>
       ) : null}
+
+      {/* AI 답변 동의 철회 — 시범 동안 AI는 카카오 계정만 쓰므로 그 계정에서만 찾는다(동의가 없으면 아무것도 그리지 않는다) */}
+      <AiConsentWithdraw accountId={snapshot.account?.provider === "kakao" ? snapshot.account.id : null} />
 
       <hr className="border-divider" />
       <button

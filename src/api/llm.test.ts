@@ -5,10 +5,12 @@ import {
   functionContext,
   functionMessages,
   isAiConsentRequired,
+  isAiLoginRequired,
   isAiDisabledReply,
   legacyContextText,
   LLM_AI_DISABLED_CODE,
   LLM_FUNCTION_MAX_MESSAGE_CHARS,
+  LLM_FUNCTION_REGION,
   LLM_MESSAGES,
   llmComplete,
   parseFunctionReply,
@@ -68,12 +70,6 @@ describe("llmComplete", () => {
     const fetch = stubFetch(async () => jsonResponse(200, { text: "ok" }));
     await llmComplete({ preset: "patient_edu", messages: ask }, { config: testConfig });
     expect("context" in JSON.parse(lastCall(fetch).init.body as string)).toBe(false);
-  });
-
-  it("substance 프리셋은 max_tokens 512 (SubstanceCheckView.swift:121)", async () => {
-    const fetch = stubFetch(async () => jsonResponse(200, { text: "{}" }));
-    await llmComplete({ preset: "substance", messages: [{ role: "user", content: "타이레놀" }] }, { config: testConfig });
-    expect(JSON.parse(lastCall(fetch).init.body as string)).toMatchObject({ preset: "substance", max_tokens: 512 });
   });
 
   it("maxTokens를 직접 줄 수 있다", async () => {
@@ -153,10 +149,7 @@ describe("llmComplete", () => {
     expect(res).toMatchObject({ ok: false, kind: "network", message: LLM_MESSAGES.network });
   });
 
-  it.each([
-    ["patient_edu", 40_000],
-    ["substance", 25_000],
-  ] as const)("%s 타임아웃 %ims → network", async (preset, ms) => {
+  it.each([["patient_edu", 40_000]] as const)("%s 타임아웃 %ims → network", async (preset, ms) => {
     vi.useFakeTimers();
     vi.stubGlobal("fetch", hangingFetch());
     let settled = false;
@@ -224,10 +217,9 @@ describe("functionMessages — 함수 형식 검증을 통과하는 대화", () 
 });
 
 describe("parseFunctionReply", () => {
-  it("{ ok, text } → text, { ok, json } → JSON 문자열(약물 답은 예전처럼 text 안의 JSON)", () => {
+  it("{ ok, text } → text — 약물 답({ ok, json })은 더 없다(AI는 상담에만 쓴다)", () => {
     expect(parseFunctionReply({ ok: true, text: "답" })).toEqual({ ok: true, text: "답" });
-    const json = { verdict: "caution", detail: "d", sources: ["LactMed"] };
-    expect(parseFunctionReply({ ok: true, json })).toEqual({ ok: true, text: JSON.stringify(json) });
+    expect(parseFunctionReply({ ok: true, json: { verdict: "safe", detail: "d", sources: [] } })).toMatchObject({ ok: false, kind: "network" });
   });
   it("빈 text → empty, 모양이 틀리면 network", () => {
     expect(parseFunctionReply({ ok: true, text: " " })).toMatchObject({ ok: false, kind: "empty" });
@@ -241,7 +233,7 @@ describe("llmComplete — Supabase Edge Function chat", () => {
   const token = async () => "user.jwt";
   const ctx = { week: 3, delivery: "cesarean" as const, breastfeeding: true };
 
-  it("POST {functionsURL}/chat — Authorization·apikey, preset·messages·context만(max_tokens·system 없음)", async () => {
+  it("POST {functionsURL}/chat — Authorization·apikey·x-region(서울 고정), preset·messages·context만(max_tokens·system 없음)", async () => {
     const fetch = stubFetch(async () => jsonResponse(200, { ok: true, text: "보통 4~6주 정도예요." }));
     const history = [{ role: "assistant" as const, content: "인사말" }, ...ask];
     const res = await llmComplete(
@@ -254,6 +246,8 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     expect(headers.get("authorization")).toBe("Bearer user.jwt");
     expect(headers.get("apikey")).toBe("sb_publishable_test");
     expect(headers.get("content-type")).toBe("application/json");
+    expect(headers.get("x-region")).toBe("ap-northeast-2");
+    expect(LLM_FUNCTION_REGION).toBe("ap-northeast-2");
     // 예전 백엔드용 앱 키는 Supabase로 보내지 않는다
     expect(headers.has("x-onmom-key")).toBe(false);
     expect(JSON.parse(init.body as string)).toEqual({ preset: "patient_edu", messages: ask, context: ctx });
@@ -268,16 +262,6 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     const mixed = { ...ctx, bmi: 24.4 } as never;
     await llmComplete({ preset: "patient_edu", messages: ask, context: mixed }, { config: supabaseTestConfig, getAccessToken: token });
     expect(JSON.parse(lastCall(fetch).init.body as string).context).toEqual(ctx);
-  });
-
-  it("약물 — { ok, json }을 text(JSON)로", async () => {
-    const json = { verdict: "unknown", detail: "근거가 부족해요.", sources: [] };
-    stubFetch(async () => jsonResponse(200, { ok: true, json }));
-    const res = await llmComplete(
-      { preset: "substance", messages: [{ role: "user", content: "모르는약" }], context: { breastfeeding: true }, maxTokens: 512 },
-      { config: supabaseTestConfig, getAccessToken: token },
-    );
-    expect(res).toEqual({ ok: true, text: JSON.stringify(json) });
   });
 
   it("AI 스위치가 꺼져 있으면 notConfigured — 토큰도 묻지 않고 요청하지 않는다", async () => {
@@ -375,10 +359,10 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     expect(first).toEqual(notConfigured);
     expect(first).toEqual({ ok: false, kind: "notConfigured", message: LLM_MESSAGES.notConfigured, status: undefined });
     expect(fetch).toHaveBeenCalledTimes(1);
-    // 다음 질문·약물 조회는 요청 없이 같은 결과 — 질문마다 503을 되풀이하지 않는다(토큰도 묻지 않는다)
+    // 다음 질문은 요청 없이 같은 결과 — 질문마다 503을 되풀이하지 않는다(토큰도 묻지 않는다)
     const getAccessToken = vi.fn(token);
-    for (const preset of ["patient_edu", "substance"] as const) {
-      expect(await llmComplete({ preset, messages: ask }, { config, getAccessToken })).toEqual(notConfigured);
+    for (let i = 0; i < 2; i++) {
+      expect(await llmComplete({ preset: "patient_edu", messages: ask }, { config, getAccessToken })).toEqual(notConfigured);
     }
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(getAccessToken).not.toHaveBeenCalled();
@@ -416,12 +400,23 @@ describe("llmComplete — Supabase Edge Function chat", () => {
     }
   });
 
+  it("게스트 — 403 ai_login_required를 코드로 나눈다. 다른 403·같은 글자의 다른 상태는 아니다", async () => {
+    stubFetch(async () => jsonResponse(403, { ok: false, code: "ai_login_required" }));
+    const res = await llmComplete({ preset: "patient_edu", messages: ask }, { config: supabaseTestConfig, getAccessToken: token });
+    expect(res).toMatchObject({ ok: false, kind: "server", status: 403, code: "ai_login_required" });
+    expect(isAiLoginRequired(res)).toBe(true);
+    expect(isAiConsentRequired(res)).toBe(false);
+    expect(isAiLoginRequired({ ok: false, kind: "server", message: "", status: 403, code: "ai_consent_required" })).toBe(false);
+    expect(isAiLoginRequired({ ok: false, kind: "server", message: "", status: 401, code: "ai_login_required" })).toBe(false);
+    expect(isAiLoginRequired({ ok: true, text: "답" })).toBe(false);
+  });
+
   it("함수 경로는 60초까지 기다린다(함수가 Anthropic을 50초 기다리므로)", async () => {
     vi.useFakeTimers();
     vi.stubGlobal("fetch", hangingFetch());
     let settled = false;
     const p = llmComplete(
-      { preset: "substance", messages: [{ role: "user", content: "x" }] },
+      { preset: "patient_edu", messages: [{ role: "user", content: "x" }] },
       { config: supabaseTestConfig, getAccessToken: token },
     ).finally(() => {
       settled = true;

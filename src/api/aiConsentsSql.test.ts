@@ -1,12 +1,14 @@
 // supabase/migrations/0010_ai_consents.sql 점검 — 실행하지 않고 글자로 확인한다(DB 없이 돌리는 안전장치,
 // userStatesSql.test.ts·schedulesAndLimitsSql.test.ts와 같은 방식).
-// AI 국외 이전 동의 기록(public.ai_consents): 본인 행만(RLS)·anon 없음·지우기 정책 없음(계정 삭제 cascade)·함수는 읽기만.
+// AI 답변 동의 기록(public.ai_consents): 본인 행만(RLS)·anon 없음·함수는 읽기만. 0010이 표를 만들고(지우기 없음 — 계정 삭제 cascade),
+// 0012가 두 동의·서버 시각·본인 행 지우기(철회)를 더한다.
 // 판(AI_CONSENT_VERSION)은 웹과 함수가 같은 값을 쓰고, 처리방침·동의 문구의 "동의한 내용과 일시"가 이 기록을 덮는다.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import { AI_CONSENT_VERSION as WEB_AI_CONSENT_VERSION } from "@/features/chat/aiConsent";
+import type { AiConsentRow } from "@/features/chat/aiConsentRecord";
 import { REQUIRED_CONSENTS } from "@/features/onboarding/consentText";
 import { ACCOUNT_ITEMS, AI_USAGE_RETENTION_DAYS, RETENTION_TEXT, SETTING_ITEMS } from "@/features/privacy/dataItems";
 import { webPolicySections } from "@/features/privacy/webPolicyText";
@@ -232,6 +234,64 @@ describe("0010 — llm_refund_quota(LLM이 답을 만들지 않은 실패에서 
 
   it("알림·로그로 사용자 id를 내지 않는다", () => {
     expect(CODE).not.toMatch(/raise (notice|log|info|warning)/);
+  });
+});
+
+describe("0012 — 두 동의·서버 시각·철회", () => {
+  const FILE_0012 = "0012_ai_consents_withdraw.sql";
+  const SQL = sqlOf(FILE_0012);
+
+  it("번호 — 0010보다 뒤, 다른 파일과 겹치지 않는다", () => {
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql"));
+    expect(files).toContain(FILE_0012);
+    expect(files.filter((f) => f.startsWith("0012_"))).toEqual([FILE_0012]);
+  });
+
+  it("public.ai_consents가 없으면 아무것도 바꾸기 전에 멈춘다 — 확장은 다시 켜지 않는다", () => {
+    expect(SQL).not.toContain("create extension");
+    const guard = "if to_regclass('public.ai_consents') is null then raise exception";
+    expect(SQL).toContain(guard);
+    expect(SQL.indexOf(guard)).toBeLessThan(SQL.indexOf("alter table"));
+  });
+
+  it("칸 — 두 동의는 기본 false(이미 있는 행은 동의가 없는 것으로 읽힌다), 서버 시각. 여러 번 실행해도 같다", () => {
+    for (const column of ["sensitive_agreed boolean not null default false", "transfer_agreed boolean not null default false", "recorded_at timestamptz not null default now()"]) {
+      expect(SQL, column).toContain(`alter table ${TABLE} add column if not exists ${column};`);
+    }
+  });
+
+  it("서버 시각은 트리거가 적는다 — 만들 때·바꿀 때 모두, 브라우저가 보낸 값은 덮어쓴다(0001 updated_at과 같다)", () => {
+    expect(SQL).toContain("create or replace function public.ai_consents_set_recorded_at() returns trigger language plpgsql set search_path = '' as $$ begin new.recorded_at := now(); return new; end; $$;");
+    const drop = SQL.indexOf(`drop trigger if exists ai_consents_set_recorded_at on ${TABLE};`);
+    expect(drop).toBeGreaterThan(0);
+    expect(drop).toBeLessThan(SQL.indexOf("create trigger"));
+    expect(SQL).toContain(`create trigger ai_consents_set_recorded_at before insert or update on ${TABLE} for each row execute function public.ai_consents_set_recorded_at();`);
+    expect(SQL).toContain("revoke execute on function public.ai_consents_set_recorded_at() from public, anon, authenticated;");
+  });
+
+  it("철회 — 로그인한 사용자가 본인 행만 지운다. anon·service_role에는 주지 않는다", () => {
+    expect(SQL.match(/grant [^;]* to [a-z_]+;/g)).toEqual([`grant delete on table ${TABLE} to authenticated;`]);
+    const name = "ai_consents: 본인 행 지우기";
+    const drop = SQL.indexOf(`drop policy if exists "${name}" on ${TABLE};`);
+    expect(drop).toBeGreaterThan(0);
+    expect(drop).toBeLessThan(SQL.indexOf(`create policy "${name}"`));
+    expect(SQL).toContain(`create policy "${name}" on ${TABLE} for delete to authenticated using ((select auth.uid()) = user_id);`);
+    expect(SQL.match(/create policy /g)).toHaveLength(1);
+    expect(SQL).not.toMatch(/ to anon/);
+    expect(SQL).not.toMatch(/for all /);
+  });
+
+  it("이미 있는 행·다른 표는 건드리지 않는다, 맨 끝에서 PostgREST에 알린다", () => {
+    expect(SQL).not.toMatch(/\b(update|delete from|truncate|insert into)\b public\./);
+    expect(SQL).not.toContain("drop table");
+    expect(SQL.slice(SQL.lastIndexOf("notify pgrst, 'reload schema';") + "notify pgrst, 'reload schema';".length).trim()).toBe("");
+  });
+
+  it("웹이 쓰는 칸 이름 = 이 파일의 칸 이름, 함수가 읽는 칸 이름도 같다", () => {
+    const row: AiConsentRow = { user_id: "u", version: AI_CONSENT_VERSION, accepted_at: "t", sensitive_agreed: true, transfer_agreed: true };
+    for (const column of Object.keys(row).filter((k) => k.endsWith("_agreed"))) expect(SQL, column).toContain(`add column if not exists ${column} boolean`);
+    const index = readFileSync(fileURLToPath(new URL("../../supabase/functions/chat/index.ts", import.meta.url)), "utf8");
+    expect(index).toContain('.select("user_id, version, sensitive_agreed, transfer_agreed")');
   });
 });
 

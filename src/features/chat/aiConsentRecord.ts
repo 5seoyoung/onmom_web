@@ -1,12 +1,14 @@
-// AI 국외 이전 동의의 서버 기록 — public.ai_consents 한 행(supabase/migrations/0010_ai_consents.sql). Edge Function chat이 이 행으로
-// 동의를 확인하고, 지금 판의 행이 없으면 403 ai_consent_required로 답한다(supabase/functions/_shared/aiConsent.ts).
+// AI 답변 동의의 서버 기록 — public.ai_consents 한 행(supabase/migrations/0010_ai_consents.sql·0012_ai_consents_withdraw.sql). Edge Function chat이 이 행으로
+// 동의를 확인하고, 지금 판의 두 동의가 없으면 403 ai_consent_required로 답한다(supabase/functions/_shared/aiConsent.ts).
 //
-// - 쓰는 때: 동의 카드에서 [동의하고 계속하기]를 누른 뒤(aiConsent.ts useAiConsent accept), 이 계정의 서버 세션이 있을 때만.
-//   판(AI_CONSENT_VERSION)·동의 시각을 upsert한다(같은 사용자는 판·시각만 바뀐다). 화면은 기다리지 않는다 — 실패하면 한 번 더.
+// - 쓰는 때: 동의 카드에서 두 동의를 켜고 [동의하고 계속하기]를 누른 뒤(aiConsent.ts useAiConsent accept), 이 계정의 서버 세션이 있을 때만.
+//   판(AI_CONSENT_VERSION)·동의 시각·두 동의를 upsert한다(같은 사용자는 이 값들만 바뀐다). 화면은 기다리지 않는다 — 실패하면 한 번 더.
+//   서버 시각(recorded_at)은 표의 트리거가 적는다 — 여기서 보내지 않는다.
 // - 바로 뒤의 AI 요청은 이 기록이 끝난 뒤(성공·실패 모두) 보낸다(afterAiConsentRecord) — 함수가 행을 보기 전에 요청이 닿아
 //   403이 되고 동의 카드가 다시 뜨는 일이 없게. 한 번의 시도는 AI_CONSENT_RECORD_TIMEOUT_MS에서 끊는다(오래 기다리지 않게).
 // - 요청하지 않는 때: Supabase가 없는 빌드(브라우저 전용 — 지금과 같다, 네트워크 없음)·이 브라우저에 저장된 세션 없음·
 //   세션 사용자가 이 계정이 아님(계정 전환 중 — 남의 행을 쓰지 않는다).
+// - 지우는 때: 설정 > 내 데이터의 철회(withdrawAiConsent) — 진행 중인 기록이 끝난 뒤에 지운다(늦게 닿은 기록이 철회를 되살리지 않게).
 // - 행 수준 보안(RLS)이 본인 행만 쓰게 막는다. user_id는 세션 사용자 id(서버가 auth.uid()와 같은지 확인한다).
 // 질문·답·건강 정보는 보내지 않는다. 처리방침·동의 문구의 "동의한 내용과 일시"(features/privacy/dataItems.ts SETTING_ITEMS)에 든다.
 
@@ -21,6 +23,9 @@ export interface AiConsentRow {
   version: string;
   /** ISO 시각(브라우저) — 동의를 누른 때 */
   accepted_at: string;
+  /** 민감정보 처리 동의·국외 이전 동의 — 카드의 [동의하고 계속하기]는 둘 다 켜야 눌리므로 쓰는 행은 늘 둘 다 true다 */
+  sensitive_agreed: true;
+  transfer_agreed: true;
 }
 
 export type AiConsentRecordResult =
@@ -33,12 +38,18 @@ export type AiConsentRecordResult =
 
 /** 바깥 의존성 — 브라우저 기본값은 browserAiConsentPorts, 테스트는 가짜를 넣는다 */
 export interface AiConsentRecordPorts {
+  /** 서버(Supabase)를 쓰는 빌드인가 — false면 서버 기록이 있을 수 없다 */
+  usesServer: () => boolean;
   /** 쓸 수 있는 빌드·브라우저인가 — 읽기만(네트워크 없음). false면 아무 요청도 만들지 않는다 */
   canRecord: () => boolean;
   /** 지금 세션의 사용자 id와 그 사용자의 앱 계정 id. 세션이 없으면 null, 읽지 못하면 throw */
   session: () => Promise<{ userId: string; accountId: string | null } | null>;
   /** 행 쓰기(user_id로 upsert). 실패하면 throw */
   upsert: (row: AiConsentRow) => Promise<void>;
+  /** 이 사용자의 행이 있는가. 읽지 못하면 throw */
+  exists: (userId: string) => Promise<boolean>;
+  /** 이 사용자의 행 지우기. 실패하면 throw — 행이 없어도 실패가 아니다 */
+  remove: (userId: string) => Promise<void>;
   sleep: (ms: number) => Promise<void>;
 }
 
@@ -81,7 +92,13 @@ export async function recordAiConsent(
       // 세션이 없거나 다른 계정의 세션 — 다시 해도 같다. 남의 행을 쓰지 않는다.
       if (session === null || session.accountId !== accountId) return "skipped";
       await withTimeout(
-        ports.upsert({ user_id: session.userId, version: AI_CONSENT_VERSION, accepted_at: acceptedAt.toISOString() }),
+        ports.upsert({
+          user_id: session.userId,
+          version: AI_CONSENT_VERSION,
+          accepted_at: acceptedAt.toISOString(),
+          sensitive_agreed: true,
+          transfer_agreed: true,
+        }),
         AI_CONSENT_RECORD_TIMEOUT_MS,
       );
       return "recorded";
@@ -100,6 +117,7 @@ async function supabaseClientOrThrow() {
 
 /** 브라우저 기본값 — Supabase 설정과 저장된 세션이 있을 때만 supabase-js를 부른다 */
 export const browserAiConsentPorts: AiConsentRecordPorts = {
+  usesServer: () => isSupabaseConfigured(),
   canRecord: () => isSupabaseConfigured() && hasStoredAuthSession(),
   session: async () => {
     const client = await supabaseClientOrThrow();
@@ -112,6 +130,17 @@ export const browserAiConsentPorts: AiConsentRecordPorts = {
     const client = await supabaseClientOrThrow();
     const { error } = await client.from(AI_CONSENTS_TABLE).upsert(row, { onConflict: "user_id" });
     if (error) throw new Error("upsert_failed");
+  },
+  exists: async (userId) => {
+    const client = await supabaseClientOrThrow();
+    const { data, error } = await client.from(AI_CONSENTS_TABLE).select("user_id").eq("user_id", userId).maybeSingle();
+    if (error) throw new Error("read_failed");
+    return data !== null;
+  },
+  remove: async (userId) => {
+    const client = await supabaseClientOrThrow();
+    const { error } = await client.from(AI_CONSENTS_TABLE).delete().eq("user_id", userId);
+    if (error) throw new Error("delete_failed");
   },
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
@@ -137,6 +166,51 @@ export function startAiConsentRecord(
 export async function aiConsentRecordSettled(accountId: string | null): Promise<void> {
   if (accountId === null) return;
   await pending.get(accountId);
+}
+
+/** 이 계정의 서버 행이 있는가 — 쓸 수 없는 빌드·세션 없음·다른 계정의 세션·읽기 실패면 null(모른다). 던지지 않는다. */
+export async function readAiConsentOnServer(accountId: string, ports: AiConsentRecordPorts = browserAiConsentPorts): Promise<boolean | null> {
+  try {
+    if (!ports.canRecord()) return null;
+    const session = await withTimeout(ports.session(), AI_CONSENT_RECORD_TIMEOUT_MS);
+    if (session === null || session.accountId !== accountId) return null;
+    return await withTimeout(ports.exists(session.userId), AI_CONSENT_RECORD_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+}
+
+export type AiConsentWithdrawResult =
+  /** 서버 행을 지웠다(행이 없었던 경우 포함). 서버를 쓰지 않는 빌드는 지울 서버 행이 없다 */
+  | "withdrawn"
+  /** 서버 행을 지우지 못했다(오프라인·서버 오류·세션 없음·다른 계정의 세션) — 부르는 쪽은 브라우저 기록도 지우지 않는다 */
+  | "failed";
+
+/**
+ * 동의 철회 — 이 계정의 서버 행을 지운다(실패하면 한 번 더, 모두 두 번). 던지지 않는다.
+ * 진행 중인 동의 기록이 끝난 뒤에 지운다 — [동의하고 계속하기] 바로 뒤의 철회에 늦은 upsert가 행을 되살리지 않게.
+ */
+export async function withdrawAiConsent(accountId: string, ports: AiConsentRecordPorts = browserAiConsentPorts): Promise<AiConsentWithdrawResult> {
+  await aiConsentRecordSettled(accountId);
+  try {
+    if (!ports.usesServer()) return "withdrawn";
+    if (!ports.canRecord()) return "failed";
+  } catch {
+    return "failed";
+  }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await ports.sleep(AI_CONSENT_RECORD_RETRY_MS);
+    try {
+      const session = await withTimeout(ports.session(), AI_CONSENT_RECORD_TIMEOUT_MS);
+      // 세션이 없거나 다른 계정의 세션 — 다시 해도 같다. 남의 행을 지우지 않는다.
+      if (session === null || session.accountId !== accountId) return "failed";
+      await withTimeout(ports.remove(session.userId), AI_CONSENT_RECORD_TIMEOUT_MS);
+      return "withdrawn";
+    } catch {
+      // 오프라인·서버 오류·시간 초과 — 한 번만 더
+    }
+  }
+  return "failed";
 }
 
 /**

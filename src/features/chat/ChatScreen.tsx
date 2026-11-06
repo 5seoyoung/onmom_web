@@ -2,13 +2,15 @@
 
 // AI 상담 — ChatView.swift를 옮긴 화면(01 §3-11, chat.png).
 // 서버(LLM)가 설정돼 있으면 patient_edu 프리셋으로 묻고, 미설정·실패면 앱 내 규칙 안내(폴백)로 답하며 그 사실을 배너로 알린다.
-// 서버에 처음 묻기 전에 AI 국외 이전 동의를 받는다(aiConsent.ts) — 첫 질문을 보내면 동의 카드가 뜨고,
-// [동의하고 계속하기]면 그 질문을 AI에, [동의하지 않기]면 앱 내 안내로 답한다. 동의 전에는 서버에 아무것도 보내지 않는다.
+// 시범 동안 AI는 카카오 계정만 — 게스트에게는 동의 카드를 띄우지 않고 앱 안내로 답하며, 배너 아래 한 줄로 카카오 연결을 권한다(aiMode "login").
+// 서버에 처음 묻기 전에 AI 답변 동의를 받는다(aiConsent.ts) — 첫 질문을 보내면 동의 카드가 뜨고,
+// 두 동의를 켜고 [동의하고 계속하기]면 그 질문을 AI에, [동의하지 않기]면 앱 내 안내로 답한다. 동의 전에는 서버에 아무것도 보내지 않는다.
 // 동의하면 서버에도 기록을 남기고(aiConsentRecord.ts), 그 기록이 끝난 뒤 질문을 보낸다(afterAiConsentRecord).
 // 서버가 동의 기록을 찾지 못했다고 답하면(403 ai_consent_required) 답 대신 이 계정의 동의를 지우고 같은 질문으로 동의 카드를 다시 띄운다.
 // 음성 입력은 웹에서 만들지 않는다(결정 D3). 대화는 이 화면 메모리에만 둔다(저장하지 않음).
 // 정보 제공·안내만 한다. 진단·처방이 아니다.
 // 온맘 말풍선 아래에 어디서 온 답인지 작은 글씨로 남긴다(앱 안내 / AI 답변 · 진단·처방이 아닙니다 — chatModel CHAT_ORIGIN_CAPTION).
+// AI 답 아래에는 [답변 신고](제목만 채운 mailto — 대화 내용은 넣지 않는다, 처리방침 14절). 입력창 위 안내(CHAT_TEXT.notice)는 스크롤과 상관없이 늘 보인다.
 // 앱 안내로 답한 이유(미연결·동의 안 함·한도·혼잡·거절 — chatModel ChatFallbackReason)에 맞게 배너 첫머리를 바꾼다.
 // 앱 안내 말풍선의 전화번호(1577-0199 · 109 · 119)는 tel: 링크(PhoneLinks). AI 답은 plain text만(지어낸 번호가 링크가 되지 않게).
 // PC(lg 이상): 머리·배너·대화·입력창을 같은 기둥에 맞춘다 — 다른 읽기 화면과 같은 폭(최대 48rem)·같은 왼쪽 선·같은 위 여백
@@ -16,12 +18,15 @@
 // 스크롤 영역은 전체 폭이라 스크롤 막대는 가장자리에 있다. 폰 기둥(30rem)에서는 기둥이 곧 화면 폭이라 그대로다.
 
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent, type KeyboardEvent } from "react";
+import Link from "next/link";
 import { ArrowUp, Info, LoaderCircle } from "lucide-react";
 import { LLM_FUNCTION_MAX_MESSAGE_CHARS, llmComplete } from "@/api/llm";
 import { PAGE_EDGE_TOP, PAGE_EDGE_X, READING_WIDTH } from "@/components/shell/pageFrame";
 import { SubPageHeader, cx } from "@/components/ui";
 import { isLLMBackendConfigured } from "@/config";
 import { PhoneLinks } from "@/features/guide/PhoneLinks";
+import { CONTACT_EMAIL, mailtoHref } from "@/features/terms/contact";
+import { ROUTES } from "@/routes";
 import { CHAT_FAQ, CHAT_FAQ_TITLE } from "@/rules/chat";
 import { useAppStore } from "@/store/useAppStore";
 import { AiConsentCard } from "./AiConsentCard";
@@ -30,6 +35,7 @@ import { afterAiConsentRecord } from "./aiConsentRecord";
 import {
   CHAT_ORIGIN_CAPTION,
   CHAT_TEXT,
+  canReachAi,
   canSendChat,
   chatBackHref,
   chatBannerText,
@@ -63,11 +69,13 @@ export function ChatScreen() {
   const { hydrated, state, account } = useAppStore();
   const accountId = account?.id ?? null;
   const { consented, accept, revoke } = useAiConsent(accountId);
-  /** 이번 방문에 AI 국외 이전 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
+  /** 이번 방문에 AI 답변 동의를 거절했다 — 이 화면을 떠나면 다음에 다시 묻는다 */
   const [declined, setDeclined] = useState(false);
-  const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), consented, declined });
+  /** 시범 동안 AI는 카카오 계정만. 저장소를 읽기 전에는 계정을 몰라 안내를 번쩍이지 않는다(보내기는 어차피 읽은 뒤에 켜진다) */
+  const loginRequired = hydrated && account?.provider !== "kakao";
+  const mode = aiMode({ aiAvailable: isLLMBackendConfigured(), loginRequired, consented, declined });
   /** 서버에 물을 수 있는가(동의를 묻는 중 포함) — 입력 상한이 이 값을 본다. 배너·FAQ는 mode로 정한다(chatScreenState) */
-  const llmConfigured = mode !== "off";
+  const llmConfigured = canReachAi(mode);
 
   const [messages, setMessages] = useState<ChatBubbleMessage[]>(initialChatMessages);
   const [draft, setDraft] = useState("");
@@ -76,7 +84,7 @@ export function ChatScreen() {
   const [lastReplyFromFallback, setLastReplyFromFallback] = useState<boolean | null>(null);
   /** 마지막 폴백의 이유(배너 첫머리) — 아직 폴백 답이 없으면 null */
   const [fallbackReason, setFallbackReason] = useState<ChatFallbackReason | null>(null);
-  /** 동의를 기다리는 대화 — 첫 질문을 보냈는데 아직 AI 국외 이전 동의를 고르지 않았다 */
+  /** 동의를 기다리는 대화 — 첫 질문을 보냈는데 아직 AI 답변 동의를 고르지 않았다 */
   const [awaitingConsent, setAwaitingConsent] = useState<ChatBubbleMessage[] | null>(null);
 
   const nextId = useRef(1);
@@ -131,7 +139,7 @@ export function ChatScreen() {
 
   /**
    * 답 구하기 — useAi면 서버(LLM)에 묻고, 아니면 앱 내 안내(규칙 폴백)로 답한다.
-   * declinedNow: 이번에 AI 국외 이전에 동의하지 않았다(거절 직후에는 state가 아직 바뀌지 않았으므로 값으로 받는다).
+   * declinedNow: 이번에 AI 답변에 동의하지 않았다(거절 직후에는 state가 아직 바뀌지 않았으므로 값으로 받는다).
    */
   function requestAnswer(history: ChatBubbleMessage[], useAi: boolean, declinedNow: boolean) {
     setThinking(true);
@@ -149,10 +157,11 @@ export function ChatScreen() {
           context: useAi ? chatLlmContext(state.profile, new Date()) : null,
           signal: controller.signal,
           declined: declinedNow,
+          loginRequired: mode === "login",
         }),
       )
       // 예상하지 못한 오류 — 답 없이 멈추지 않게 앱 안내(위기 표현이면 위기 안내)로 답한다
-      .catch(() => chatReplyOnError(history, declinedNow))
+      .catch(() => chatReplyOnError(history, declinedNow, mode === "login"))
       .then((reply) => {
         if (controller.signal.aborted) return;
         inflight.current = null;
@@ -223,8 +232,14 @@ export function ChatScreen() {
         <SubPageHeader title={CHAT_TEXT.title} backHref={backHref} hideBackWithSidebar />
       </div>
 
-      {/* 첫머리는 이유에 맞게 — 미설정이면 원문("연결되지 않아"), 이번에 AI 동의를 거절했으면 "동의하지 않아", 한도·혼잡·거절은 서버 답에 따라 */}
-      {showBanner ? <FallbackNotice text={chatBannerText(fallbackReason ?? (declined ? "declined" : "notConnected"))} /> : null}
+      {/* 첫머리는 이유에 맞게 — 미설정이면 원문("연결되지 않아"), 카카오 계정이 아니면 "카카오 계정에서만", 이번에 AI 동의를 거절했으면 "동의하지 않아",
+          한도·혼잡·거절은 서버 답에 따라. 카카오 계정이 아니면 아래에 연결을 권하는 한 줄이 붙는다. */}
+      {showBanner ? (
+        <FallbackNotice
+          text={chatBannerText(fallbackReason ?? (mode === "login" ? "loginRequired" : declined ? "declined" : "notConnected"))}
+          kakaoInvite={mode === "login" || fallbackReason === "loginRequired"}
+        />
+      ) : null}
 
       <div ref={logRef} className="flex-1 overflow-y-auto">
         <div className={cx(CHAT_COLUMN, "p-4", PAGE_EDGE_X)}>
@@ -275,9 +290,14 @@ export function ChatScreen() {
         </div>
       </div>
 
+      {/* 늘 보이는 안내 — 대화 스크롤 밖이라 답을 읽는 동안에도 남는다. 119는 앱이 정한 글자라 전화 링크로 */}
+      <p className={cx(CHAT_COLUMN, "px-4 pt-2 text-xs text-text-subtle-aa", PAGE_EDGE_X)}>
+        <PhoneLinks text={CHAT_TEXT.notice} />
+      </p>
+
       <form
         onSubmit={onSubmit}
-        className={cx(CHAT_COLUMN, "flex items-end gap-2 bg-background px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]", PAGE_EDGE_X)}
+        className={cx(CHAT_COLUMN, "flex items-end gap-2 bg-background px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]", PAGE_EDGE_X)}
       >
         <textarea
           ref={inputRef}
@@ -313,14 +333,25 @@ export function ChatScreen() {
 
 // 서버 대신 앱 내 안내로 답하고 있음 — "AI가 답한 것처럼" 보이지 않게(ChatView.swift:61-74).
 // 문구: content.json disclaimers.chat_banner — 첫머리만 이유에 따라(chatModel chatBannerText)
-function FallbackNotice({ text }: { text: string }) {
+// kakaoInvite: 시범 동안 카카오 계정이 아니면 아래 한 줄 — 설정 > 계정의 [카카오 계정 연결]로 간다.
+export function FallbackNotice({ text, kakaoInvite = false }: { text: string; kakaoInvite?: boolean }) {
   return (
     // 폰: 화면 폭 띠 / 넓은 화면: 대화 기둥 폭의 둥근 안내 상자.
     // PC(lg)는 제목·말풍선과 같은 왼쪽 선에 두고(바깥 여백), 제목과의 간격을 다른 화면의 머리 → 첫 카드 간격과 같게 한다.
     <div className={cx(CHAT_COLUMN, PAGE_EDGE_X, "lg:pt-4")}>
       <div role="status" className="flex items-start gap-1.5 bg-state-watch/10 px-4 py-2 @3xl:rounded-button">
         <Info aria-hidden className="mt-0.75 size-3.5 shrink-0 fill-state-watch text-white" />
-        <p className="min-w-0 text-[0.8125rem] text-text-secondary">{text}</p>
+        <div className="min-w-0 text-[0.8125rem] text-text-secondary">
+          <p>{text}</p>
+          {kakaoInvite ? (
+            <p>
+              {CHAT_TEXT.kakaoInvite}{" "}
+              <Link href={ROUTES.settings} className="rounded-xs font-semibold text-primary-text underline underline-offset-2">
+                {CHAT_TEXT.kakaoInviteLink}
+              </Link>
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -345,7 +376,20 @@ export function ChatBubble({ message }: { message: ChatBubbleMessage }) {
         <span className="sr-only">{SPEAKER_SR_LABEL[message.role]}</span>
         {message.origin === "rules" ? <PhoneLinks text={message.text} /> : message.text}
       </p>
-      {caption !== null ? <p className="px-2 text-xs text-text-subtle-aa">{caption}</p> : null}
+      {caption !== null ? (
+        <div className="flex items-center gap-1">
+          <p className="px-2 text-xs text-text-subtle-aa">{caption}</p>
+          {/* 답변 신고 — AI 답에만. 제목만 채운 mailto(대화 내용은 넣지 않는다). 글자는 작게 두고 누르는 영역만 44px로 */}
+          {message.origin === "ai" && CONTACT_EMAIL !== null ? (
+            <a
+              href={mailtoHref(CONTACT_EMAIL, CHAT_TEXT.reportSubject)}
+              className="-my-3 inline-flex min-h-11 items-center rounded-button px-1 text-xs font-medium text-primary-text underline underline-offset-2"
+            >
+              {CHAT_TEXT.reportLink}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </li>
   );
 }

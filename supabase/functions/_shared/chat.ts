@@ -1,12 +1,14 @@
 // Edge Function chat 공용 — 요청 검증과 컨텍스트 허용 목록(Deno·vitest 양쪽에서 읽는다. cors.ts 머리말 참고).
 //
-// 받는 것: { preset: "patient_edu" | "substance", messages: [{ role, content }], context?: { week?, delivery?, breastfeeding? } }
+// 받는 것: { preset: "patient_edu", messages: [{ role, content }], context?: { week?, delivery?, breastfeeding? } }
+// - AI는 상담에만 쓴다(2026-11-06 대표 결정). 예전 preset "substance"(약물 체크)는 400으로 거절한다 — 웹은 약물 체크에서 LLM을 부르지 않고,
+//   함수를 직접 불러도 AI 판정이 나오지 않게 서버에서도 막는다(이중 안전장치, 사전 검토 H5·D-10).
 // - 개인정보 최소화(검수 #14): 컨텍스트는 산후 주차·분만 방식·수유 여부 세 항목만. 다른 필드가 하나라도 있으면 요청 전체를 거절한다
 //   (BMI·목표·위험 신호 여부·출산일 같은 값이 실수로 섞여 들어와도 LLM으로 넘기지 않게 — 조용히 지우지 않고 거절).
 // - 알 수 없는 최상위 필드(system·max_tokens·model 등)도 거절한다. 시스템 프롬프트·모델·토큰 수는 서버가 정한다(검수 #50).
 // 웹 src/api/llm.ts가 같은 한도로 보낼 대화를 자른다 — 두 값은 src/api/edgeFunctions.test.ts가 비교한다.
 
-export const CHAT_PRESETS = ["patient_edu", "substance"] as const;
+export const CHAT_PRESETS = ["patient_edu"] as const;
 export type ChatPreset = (typeof CHAT_PRESETS)[number];
 
 /** 한 요청에 담는 메시지 수 상한 */
@@ -95,8 +97,6 @@ export function validateChatRequest(body: unknown): ChatValidation {
   }
   // 대화는 사용자로 시작하고 사용자로 끝난다(마지막 사용자 메시지에 답한다 — 어시스턴트 선채움 없음)
   if (parsed[0].role !== "user" || parsed[parsed.length - 1].role !== "user") return { ok: false, reason: "order" };
-  // 약물 조회는 항목 이름 한 개만
-  if (preset === "substance" && parsed.length !== 1) return { ok: false, reason: "substance_messages" };
   const ctx = parseChatContext(context);
   if (ctx === undefined) return { ok: false, reason: "context" };
   return { ok: true, request: { preset: preset as ChatPreset, messages: parsed, context: ctx } };
@@ -143,7 +143,7 @@ export async function readBodyWithLimit(req: Request, maxBytes: number): Promise
 
 /**
  * 서버 쪽 AI 스위치가 꺼져 있을 때의 실패 코드(503) — 웹(src/api/llm.ts LLM_AI_DISABLED_CODE)은 "AI 미설정"과 똑같이 다룬다
- * (앱 규칙 안내·약물 표 결과로 답하고, 그 페이지에서는 다시 묻지 않는다). 두 값은 src/api/edgeFunctions.test.ts가 비교한다.
+ * (앱 규칙 안내로 답하고, 그 페이지에서는 다시 묻지 않는다). 두 값은 src/api/edgeFunctions.test.ts가 비교한다.
  */
 export const CHAT_AI_DISABLED_CODE = "ai_disabled";
 
@@ -159,11 +159,12 @@ export function isAiChatServerEnabled(env: string | null | undefined): boolean {
 
 // MARK: 요청 한도(0003_llm_usage.sql·0010_ai_consents.sql llm_consume_quota)
 
-/** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) — 카카오 계정·카카오를 연결한 게스트 */
-export const CHAT_HOURLY_LIMIT_DEFAULT = 30;
+/** 사용자 한 명이 1시간에 보낼 수 있는 LLM 요청 수(환경 변수 CHAT_HOURLY_LIMIT로 바꿀 수 있음) — 카카오 계정·카카오를 연결한 게스트. 시범 동안 10(2026-11-06) */
+export const CHAT_HOURLY_LIMIT_DEFAULT = 10;
 /**
  * 익명 게스트(카카오를 연결하지 않은 Supabase 익명 계정)가 1시간에 보낼 수 있는 LLM 요청 수(CHAT_GUEST_HOURLY_LIMIT).
  * 게스트 계정은 버튼 한 번으로 새로 만들 수 있어 더 낮게 둔다. CHAT_HOURLY_LIMIT보다 크게 넣어도 그 값까지만 쓴다(chatLimitsFromEnv).
+ * 시범 동안 익명 게스트는 AI를 쓰지 않아(handler.ts 403 ai_login_required) 이 값에 닿지 않는다 — 게스트를 다시 열 때를 위해 둔다.
  */
 export const CHAT_GUEST_HOURLY_LIMIT_DEFAULT = 5;
 /**

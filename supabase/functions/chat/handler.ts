@@ -2,29 +2,31 @@
 // Edge Function "chat"의 요청 처리 — 의존성(사용자 확인·한도·LLM·로그)을 받아 만든다.
 // 실제 연결은 index.ts(Deno), 테스트는 src/api/edgeHandlers.test.ts(vitest — 웹 표준 Request/Response만 쓰므로 Node에서도 돈다).
 //
-// POST { preset, messages, context? } (Authorization: Bearer <Supabase 로그인 토큰> — 익명 게스트 계정도 된다)
+// POST { preset, messages, context? } (Authorization: Bearer <Supabase 로그인 토큰>) — AI는 상담(patient_edu)에만 쓴다. 시범 동안 카카오 계정만.
 // 순서
 //   0) CORS·메서드 → 서버 쪽 AI 스위치(AI_CHAT_SERVER_ENABLED, deps.aiEnabled)가 꺼져 있으면 여기서 503 ai_disabled — 본문도 읽지 않고
 //      로그인·동의·한도·위기 선필터·LLM 어느 것도 하지 않는다(ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않는다). 웹은 "AI 미설정"과
 //      똑같이 앱 안내로 답하고, 위기 표현은 웹이 먼저 거른다(features/chat requestChatReply).
 //   1) 본문 크기(Content-Length가 없어도 상한까지만 읽는다) → 2) 형식 검증(컨텍스트는 week·delivery·breastfeeding만 — 그 밖이면 거절)
 //   3) 안전 선필터: 사용자 메시지 중 하나라도 자해·자살 표현 → LLM을 부르지 않고 고정 위기 안내(로그인·동의·한도와 무관하게 늘 답한다)
-//   4) 로그인 확인 → 5) AI 국외 이전 동의 확인(public.ai_consents — 방금 확인한 사용자 id의 행만, 판이 지금 판이 아니면 403 ai_consent_required)
-//   6) 사용자별 한도(1시간 30회, 익명 게스트 5회)·서비스 전체 1시간·하루 상한 → 7) LLM(claude-opus-5, 거절 시 서버 쪽 대체 모델)
+//   4) 로그인 확인 → 5) 카카오 계정 확인(익명 게스트면 403 ai_login_required — 동의를 읽지도, 한도를 쓰지도, LLM을 부르지도 않는다)
+//   6) AI 답변 동의 확인(public.ai_consents — 방금 확인한 사용자 id의 행만, 지금 판이고 민감정보·국외 이전 두 동의가 모두 있어야 한다. 아니면 403 ai_consent_required)
+//   7) 사용자별 한도(1시간 10회)·서비스 전체 1시간·하루 상한 → 8) LLM(claude-opus-5-5, 거절 시 서버 쪽 대체 모델)
 //   동의가 없으면 한도를 쓰지도 LLM을 부르지도 않는다(_shared/aiConsent.ts).
 //   LLM이 답을 만들지 않은 실패(연결·혼잡·키·모델 — _shared/chat.ts CHAT_REFUNDABLE_LLM_ERRORS)면 방금 쓴 한도 한 번을 돌려준다.
-// 응답: 성공 { ok: true, text } | { ok: true, json } (약물), 실패 { ok: false, code } + 4xx/5xx. 스택·내부 메시지는 내보내지 않는다.
+// 응답: 성공 { ok: true, text }, 실패 { ok: false, code } + 4xx/5xx. 스택·내부 메시지는 내보내지 않는다.
 // 로그: 상태·코드·preset·소요 시간·토큰 수·대체 모델 사용 여부만. 질문·답·컨텍스트·사용자 id는 기록하지 않는다(민감정보).
 
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { AI_CONSENT_REQUIRED_CODE, AI_CONSENT_VERSION } from "../_shared/aiConsent.ts";
+import { AI_CONSENT_REQUIRED_CODE, AI_LOGIN_REQUIRED_CODE, isCurrentAiConsent } from "../_shared/aiConsent.ts";
+import type { AiConsentRecord } from "../_shared/aiConsent.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { checkOrigin, corsHeaders, failure, jsonResponse, preflightHeaders } from "../_shared/cors.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { bearerToken, CHAT_AI_DISABLED_CODE, CHAT_MAX_BODY_BYTES, isRefundableLlmError, readBodyWithLimit, validateChatRequest } from "../_shared/chat.ts";
 import type { ChatMessageInput, ChatPreset, QuotaResult } from "../_shared/chat.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
-import { parseSubstanceOutput, SUBSTANCE_OUTPUT_SCHEMA, systemPromptBlocks } from "../_shared/prompts.ts";
+import { systemPromptBlocks } from "../_shared/prompts.ts";
 // @ts-ignore: TS5097(Next tsc) — Deno용 확장자
 import { CRISIS_REPLY, hasSelfHarmUserMessage } from "../_shared/safety.ts";
 
@@ -33,8 +35,6 @@ export interface LlmCallInput {
   /** 시스템 프롬프트 블록 — 서버 고정 지시문 + 컨텍스트 한 줄 */
   system: string[];
   messages: ChatMessageInput[];
-  /** 약물 답 형식(structured outputs). 상담은 null(자유 글). */
-  jsonSchema: Record<string, unknown> | null;
 }
 
 export interface LlmUsage {
@@ -65,7 +65,7 @@ export interface ChatLogEntry {
   refunded?: boolean;
 }
 
-/** Auth가 확인한 사용자 — guest: 익명 게스트(카카오 미연결)라 1시간 한도가 더 낮다(_shared/auth.ts isGuestUser) */
+/** Auth가 확인한 사용자 — guest: 익명 게스트(카카오 미연결). 시범 동안 AI를 쓰지 않는다(403 ai_login_required, _shared/auth.ts isGuestUser) */
 export interface VerifiedUser {
   id: string;
   guest: boolean;
@@ -81,10 +81,10 @@ export interface ChatHandlerDeps {
   /** Supabase 로그인 토큰 확인 — 유효하지 않으면 null, 확인 자체를 못 하면 throw */
   verifyUser: (token: string) => Promise<VerifiedUser | null>;
   /**
-   * 이 사용자의 AI 국외 이전 동의 판(public.ai_consents.version) — 행이 없으면 null, 확인하지 못하면 throw(→ 503, LLM을 부르지 않는다).
-   * 서버 키로 읽으므로 RLS가 거르지 않는다 — 반드시 인자로 받은(방금 확인한) 사용자 id의 행만 읽는다(adapters.ts createReadAiConsentVersion).
+   * 이 사용자의 AI 답변 동의 기록(public.ai_consents — 판·두 동의) — 행이 없으면 null, 확인하지 못하면 throw(→ 503, LLM을 부르지 않는다).
+   * 서버 키로 읽으므로 RLS가 거르지 않는다 — 반드시 인자로 받은(방금 확인한) 사용자 id의 행만 읽는다(adapters.ts createReadAiConsent).
    */
-  readAiConsentVersion: (userId: string) => Promise<string | null>;
+  readAiConsent: (userId: string) => Promise<AiConsentRecord | null>;
   /**
    * 한도 확인 + 한 번 기록(llm_consume_quota — 사용자 1시간 한도는 게스트면 더 낮다, 전체 1시간·하루 상한).
    * 확인하지 못하면 null 또는 throw — 그때는 LLM을 부르지 않는다.
@@ -145,8 +145,6 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
       // 안전 선필터 — LLM을 부르지 않는다. 로그인·한도보다 먼저: 위기 안내는 늘 나가야 한다.
       // 마지막 메시지만이 아니라 사용자 메시지 모두를 본다 — 앞선 턴의 위기 표현이 이어지는 질문과 함께 LLM으로 넘어가지 않게.
       if (hasSelfHarmUserMessage(request.messages)) {
-        // 약물 체크 화면에는 위기 안내를 보일 자리가 없다 — 표의 결과("정보 부족")를 그대로 두게 거절만 한다
-        if (request.preset === "substance") return fail(422, "flagged");
         return done(jsonResponse(200, { ok: true, text: CRISIS_REPLY, flagged: true }, cors), { code: "flagged" });
       }
 
@@ -160,14 +158,17 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
       }
       if (!user) return fail(401, "unauthorized");
 
-      // AI 국외 이전 동의 — 한도를 쓰거나 LLM을 부르기 전에. 지금 판의 동의 기록이 없으면(행 없음·예전 판) 403 — 웹은 동의 카드를 다시 띄운다.
-      let consentVersion: string | null;
+      // 시범 동안 AI는 카카오 계정만 — 동의 기록을 읽거나 한도를 쓰기 전에 끝낸다. 웹은 앱 안내로 답하고 카카오 연결을 권한다(동의 카드를 띄우지 않는다).
+      if (user.guest) return fail(403, AI_LOGIN_REQUIRED_CODE);
+
+      // AI 답변 동의 — 한도를 쓰거나 LLM을 부르기 전에. 지금 판의 두 동의가 모두 없으면(행 없음·철회·예전 판·한쪽만) 403 — 웹은 동의 카드를 다시 띄운다.
+      let consent: AiConsentRecord | null;
       try {
-        consentVersion = await deps.readAiConsentVersion(user.id);
+        consent = await deps.readAiConsent(user.id);
       } catch {
         return fail(503, "consent_unavailable");
       }
-      if (consentVersion !== AI_CONSENT_VERSION) return fail(403, AI_CONSENT_REQUIRED_CODE);
+      if (!isCurrentAiConsent(consent)) return fail(403, AI_CONSENT_REQUIRED_CODE);
 
       let quota: QuotaResult | null;
       try {
@@ -181,9 +182,8 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
 
       const result = await deps.complete({
         preset: request.preset,
-        system: systemPromptBlocks(request.preset, request.context),
+        system: systemPromptBlocks(request.context),
         messages: request.messages,
-        jsonSchema: request.preset === "substance" ? SUBSTANCE_OUTPUT_SCHEMA : null,
       });
       if (result.kind === "error") {
         // Anthropic이 답을 만들지 않은 실패(연결·혼잡·키·모델)면 방금 쓴 한 번을 돌려준다. 시간 초과·요청 거절·알 수 없는 오류는 돌려주지 않는다.
@@ -204,11 +204,6 @@ export function createChatHandler(deps: ChatHandlerDeps): (req: Request) => Prom
       if (result.kind === "refusal") return fail(422, "refused", usage);
       if (result.kind === "truncated") return fail(502, "truncated", usage);
 
-      if (request.preset === "substance") {
-        const json = parseSubstanceOutput(result.text);
-        if (!json) return fail(502, "bad_output", usage);
-        return done(jsonResponse(200, { ok: true, json }, cors), usage);
-      }
       const text = result.text.trim();
       if (text === "") return fail(502, "empty", usage);
       return done(jsonResponse(200, { ok: true, text }, cors), usage);

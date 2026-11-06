@@ -46,7 +46,7 @@ export function siteUrlFrom(raw: string | undefined, basePath: string): string {
 export const config = {
   /** Video DB — GET /videos?include=&exclude=&limit= */
   videoURL: url(process.env.NEXT_PUBLIC_VIDEO_URL),
-  /** LLM 서비스 — POST /chat (AI 상담·약물 체크의 미등재 항목). 지금은 미배포라 비워 둔다. */
+  /** LLM 서비스 — POST /chat (AI 상담). 지금은 미배포라 비워 둔다. */
   llmURL: url(process.env.NEXT_PUBLIC_LLM_URL),
   /** 계정 API — /auth/register, /auth/withdraw, /me/state. 비우면 브라우저 저장만. */
   accountURL: url(process.env.NEXT_PUBLIC_ACCOUNT_URL),
@@ -79,8 +79,8 @@ export const config = {
    */
   turnstileSiteKey: (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? "").trim() || null,
   /**
-   * AI 상담 스위치 — "true"일 때만 켠다(Supabase가 설정된 빌드에서만 뜻이 있다). Anthropic 키(Supabase 함수 비밀)와
-   * 처리방침·동의 문구가 준비된 뒤에 켠다(docs/LAUNCH_CHECKLIST.md 5단계). 기본은 꺼짐.
+   * AI 상담 스위치 — "true"일 때만 켠다(Supabase가 설정된 빌드에서만 뜻이 있다). 코드의 기본은 꺼짐이고,
+   * 배포 빌드는 .github/workflows/deploy.yml의 ONMOM_AI가 켠다(Variable NEXT_PUBLIC_AI_CHAT_ENABLED가 있으면 그 값이 먼저).
    */
   aiChatEnabled: (process.env.NEXT_PUBLIC_AI_CHAT_ENABLED ?? "").trim() === "true",
   /**
@@ -137,7 +137,7 @@ export function supabaseFunctionsUrl(): string | null {
 /** 운동 영상 — Supabase가 있으면 Edge Function "videos"를 거치고, 없으면 예전처럼 NEXT_PUBLIC_VIDEO_URL을 직접 부른다. */
 export const isVideoBackendConfigured = () => isSupabaseConfigured() || config.videoURL !== null;
 /**
- * AI 상담·약물 체크의 AI 답 — Supabase가 있으면 Edge Function "chat"을 쓰고 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)가 켜졌을 때만,
+ * AI 상담의 AI 답 — Supabase가 있으면 Edge Function "chat"을 쓰고 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)가 켜졌을 때만,
  * 없으면 예전처럼 NEXT_PUBLIC_LLM_URL이 있을 때만.
  */
 export const isLLMBackendConfigured = () => (isSupabaseConfigured() ? config.aiChatEnabled : config.llmURL !== null);

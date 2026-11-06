@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import content from "@/content";
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
 import { defaultProfile } from "@/store/defaults";
-import { AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT, type ConsentItemText } from "./consentText";
+import { AI_TRANSFER_CONSENT, AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT, type ConsentItemText } from "./consentText";
 import { initialDraft, ONBOARDING_TEXT, type OnboardingDraft, type OnboardingMode } from "./onboardingModel";
 import { ConsentStep } from "./OnboardingSteps";
 import {
@@ -24,6 +24,7 @@ const textOf = (markup: string) =>
   markup
     .replace(/<[^>]+>/g, " ")
     .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
     .replace(/&amp;/g, "&")
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
@@ -98,15 +99,27 @@ describe("서버 저장 빌드 동의 문구 — 법정 고지 항목", () => {
     }
   });
 
-  it("(d) AI 국외 이전은 안내 — Anthropic·미국·보내는 항목·거부 방법, 처음 쓸 때 따로 묻는다", () => {
+  it("(d) AI 답변은 안내 — Anthropic·미국·보내는 항목·거부 방법, 처음 쓸 때 두 가지를 각각 묻고, 시범 동안 카카오 계정만", () => {
     const text = [AI_TRANSFER_NOTICE.summary, ...AI_TRANSFER_NOTICE.details.map((d) => d.text)].join(" ");
     expect(text).toContain("Anthropic");
+    expect(text).toContain("privacy@anthropic.com");
     expect(text).toContain("미국");
-    for (const word of ["질문 내용", "산후 주차", "분만 방식", "수유 여부"]) expect(text).toContain(word);
-    expect(AI_TRANSFER_NOTICE.summary).toContain("처음 쓸 때 따로 동의");
+    for (const word of ["대화 내용", "최근 메시지 최대 20개", "이전 AI 답변 포함", "산후 주차", "분만 방식", "수유 여부"]) expect(text).toContain(word);
+    expect(AI_TRANSFER_NOTICE.title).toBe("AI 답변 안내");
+    expect(AI_TRANSFER_NOTICE.summary).toContain("AI 상담을 처음 쓸 때 '민감정보 처리'와 '국외 이전'을 각각 물어요.");
+    expect(AI_TRANSFER_NOTICE.summary).toContain("카카오 계정에서만");
+    expect(AI_TRANSFER_NOTICE.summary).toContain("동의하지 않아도 온맘에 담긴 안내로 답해요.");
+    // 온보딩 안내와 실제 동의 카드가 같은 사실을 말한다
+    expect(AI_TRANSFER_NOTICE.details).toBe(AI_TRANSFER_CONSENT.details);
     expect(AI_TRANSFER_NOTICE.details.map((d) => d.term)).toEqual(
-      expect.arrayContaining(["이전받는 자", "이전 항목", "이전 시기·방법", "이용 목적", "보유 기간", "거부 방법"]),
+      expect.arrayContaining(["이전받는 자", "이전 국가", "이전 항목", "이전 시기·방법", "이용 목적", "보유 기간", "거부 방법과 효과"]),
     );
+  });
+
+  it("AI는 상담에만 — 약물·음식 체크에 AI를 쓴다는 말이 없고, '꺼져 있다'는 말도 없다", () => {
+    expect(ALL_SERVER_TEXT).not.toContain("약물·음식 체크에서 안전표에 없는 항목");
+    expect(ALL_SERVER_TEXT).not.toMatch(/꺼져 있/);
+    expect(AI_TRANSFER_CONSENT.details.find((d) => d.term === "해당 기능")!.text).toContain("약물·음식 체크는 AI를 쓰지 않아요.");
   });
 
   it("서버 저장 빌드에서 사실이 아닌 iOS 문구를 쓰지 않는다", () => {
@@ -146,6 +159,7 @@ describe("서버 저장 빌드 동의 문구 — 법정 고지 항목", () => {
     expect(row("열람 제한")).toContain("관리 화면에는 집계 수치와 계정 정보만 보이고 건강 기록 내용은 보이지 않아요.");
     expect(row("열람 제한")).toContain("열어 보면 그 사실을 기록으로 남겨요.");
     expect(row("AI 답변")).toContain("이 동의로는 AI 답변에 쓰지 않아요.");
+    expect(row("AI 답변")).toContain("처음 쓸 때 따로 동의를 받아요(시범 운영 동안 카카오 계정만 쓸 수 있어요)");
     // 증상 기록은 체크 항목 묶음으로 — 기록 화면의 새 확인 항목도 덮는다
     expect(row("처리 항목")).toContain("증상 기록(오로·발열·통증 정도·위험 증상 체크 항목, 확인된 병원 신호, 기록 시각, 그때 쓴 안내 규칙의 판)");
     // 다른 동의의 요약은 보통 모양
@@ -248,7 +262,7 @@ describe("ServerConsentStep — 화면", () => {
       expect(html).toMatch(/<dl class="[^"]*text-\[0\.8125rem\]/);
       for (const d of item.details) {
         const cls = d.emphasis === true ? DETAIL_EMPHASIS_CLASS : DETAIL_TEXT_CLASS;
-        expect(html, `${item.title} ${d.term}`).toContain(`<dd class="${cls}">${d.text.replace(/&/g, "&amp;")}</dd>`);
+        expect(html, `${item.title} ${d.term}`).toContain(`<dd class="${cls}">${d.text.replace(/&/g, "&amp;").replace(/>/g, "&gt;")}</dd>`);
       }
     }
   });
@@ -299,11 +313,12 @@ describe("ConsentStep — 설정 없는 빌드는 iOS 원문 그대로", () => {
  * - web-2026-09-28: 서버 저장 빌드를 켜기 전(아직 이 판에 동의한 이용자가 없음)에 확정한 지문. 시범 안내 줄이 생기기 전이라
  *   [부제, 안내 3줄, (a)~(c)]로 만든 값이다.
  * - web-2026-11-06: 시범 운영 시행판(이 판부터 시범 안내 줄도 지문에 든다 — [부제, 시범 안내 줄, 안내 3줄, (a)~(c)]). 판을 올릴 때 실제
- *   이용자는 운영자 본인 1명(초대 0명)이었다.
+ *   이용자는 운영자 본인 1명(초대 0명)이었다. AI 상담을 켜며 (b)의 "AI 답변" 줄을 고쳐 이 줄의 지문을 제자리에서 바꿨다 — 이 판은 아직 배포하지 않아
+ *   이 판에 동의한 사람이 없어서다(2026-11-06 대표 결정, 위 규칙의 예외는 이때 한 번뿐이다).
  */
 const CONSENT_TEXT_FINGERPRINTS: Readonly<Record<string, string>> = {
   "web-2026-09-28": "ceef90399e94d16b2e87e428cf6e6b49c32ef72b6e05541e7ee21427bd46f369",
-  "web-2026-11-06": "66cbe7846e9fdda19d7cda3839ae82788410b7458f34b27dadfca4ac29aa9f71",
+  "web-2026-11-06": "a3109ec935a35cc6754bfd26f0e63391d34227959c41d18a9d65f2b232d3a4d5",
 };
 
 describe("동의 판 — 문구를 바꾸면 판을 올린다", () => {

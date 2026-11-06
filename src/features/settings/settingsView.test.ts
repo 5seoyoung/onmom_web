@@ -345,6 +345,12 @@ describe("내 데이터 — 동의 내역 행(형식만 바꾼다, 값을 만들
     expect(DATA_RIGHTS_TEXT.accountIdHint).toContain("계정 ID");
   });
 
+  it("AI 답변 동의 철회 문구 — 서버·브라우저 기록을 지우고, 다시 동의하기 전에는 AI로 보내지 않는다", () => {
+    expect(DATA_RIGHTS_TEXT.aiWithdraw).toBe("AI 답변 동의 철회");
+    expect(DATA_RIGHTS_TEXT.aiWithdrawHint).toContain("서버의 동의 기록과 이 브라우저의 기록을 지워요");
+    expect(DATA_RIGHTS_TEXT.aiWithdrawHint).toContain("다시 동의하기 전에는 질문을 AI로 보내지 않고");
+  });
+
   it("문구 — 철회 = 계정 삭제, 내려받기 설명에 건강 정보 보관 주의", () => {
     expect(DATA_RIGHTS_TEXT.consentWithdraw).toContain("계정을 삭제");
     expect(DATA_RIGHTS_TEXT.exportHint).toContain("JSON");

@@ -2,23 +2,23 @@
 # 설명서: docs/SUPABASE_SETUP.md (D단계). 웹 사이트 배포는 deploy.yml이 따로 한다.
 #
 # 필요한 값 — 저장소 Settings → Secrets and variables → Actions
-#   Secrets:   SUPABASE_ACCESS_TOKEN(필수) · SUPABASE_DB_PASSWORD(필수) · ANTHROPIC_API_KEY(AI 상담을 켤 때)
+#   Secrets:   SUPABASE_ACCESS_TOKEN(필수) · SUPABASE_DB_PASSWORD(필수) · ANTHROPIC_API_KEY(AI 상담에 필요 — 없으면 질문마다 앱 안내로만 답한다)
 #              VAPID_PRIVATE_KEY · VAPID_SUBJECT · REMINDER_CRON_SECRET(매일 리마인더를 켤 때 — docs/PWA_AND_REMINDERS.md §5)
 #   Variables: SUPABASE_PROJECT_REF(필수) · VIDEO_API_URL · ALLOWED_ORIGINS
 #              CHAT_HOURLY_LIMIT · CHAT_GUEST_HOURLY_LIMIT · CHAT_GLOBAL_HOURLY_LIMIT · CHAT_GLOBAL_DAILY_LIMIT(AI 상담 한도 — 공개값)
 #              ANTHROPIC_WORKSPACE_ID(조직 전체용 Anthropic 키일 때 — wrkspc_…, Secrets에 넣어도 읽는다)
 #              NEXT_PUBLIC_VAPID_PUBLIC_KEY(사이트 빌드와 같은 값 — 함수 비밀값 VAPID_PUBLIC_KEY로 넣어 비밀 키와 짝이 맞는지 함수가 확인)
-#              AI_CHAT_SERVER_ENABLED(서버 쪽 AI 상담 스위치 — "true"·"false"·비움만. 함수 비밀값 AI_CHAT_SERVER_ENABLED로 넣는다)
-# 서버 쪽 AI 스위치(2026-10-23 CPO 결정 — 로그인·서버 저장을 켠 시범 공개에서도 AI 상담은 꺼 둔다): chat 함수는 AI_CHAT_SERVER_ENABLED가
-# 정확히 "true"일 때만 Anthropic을 부른다. 값이 없으면 꺼짐 — ANTHROPIC_API_KEY가 있어도 모든 요청에 503 ai_disabled로 답한다.
-# 그래서 이 스위치가 들어간 함수를 배포하면, 소유자가 5단계(docs/LAUNCH_CHECKLIST.md)에서 Variables에 AI_CHAT_SERVER_ENABLED=true를 넣고
-# 이 워크플로를 다시 돌릴 때까지 서버 쪽 AI는 꺼진 채다. 웹은 그 답을 "AI 미설정"과 같게 다룬다(앱 규칙 안내·약물 표 결과).
+#              AI_CHAT_SERVER_ENABLED(서버 쪽 AI 상담 스위치 — "true"·"false"·비움만. 비우면 아래 기본값. 함수 비밀값 AI_CHAT_SERVER_ENABLED로 넣는다)
+# 서버 쪽 AI 스위치: chat 함수는 AI_CHAT_SERVER_ENABLED가 정확히 "true"일 때만 Anthropic을 부른다. 아니면 ANTHROPIC_API_KEY가 있어도 모든 요청에 503 ai_disabled로
+# 답하고, 웹은 그 답을 "AI 미설정"과 같게 다룬다(앱 규칙 안내). 2026-11-06 대표 결정으로 켠다 — 값을 고르는 순서: Variable → 아래 env의 기본값 "true".
+# 끄려면 Variable AI_CHAT_SERVER_ENABLED=false를 넣고 이 워크플로를 돌린다. 급하면 Supabase Edge Functions → Secrets에서 값을 지우면 바로 꺼지지만,
+# Variable 없이는 다음 실행이 기본값으로 되살리므로 Variable도 함께 넣는다. 스위치는 새 함수가 올라간 뒤에 넣는다(아래 "서버 쪽 AI 스위치 넣기").
 # 매일 리마인더는 이 워크플로만으로 켜지지 않는다 — 마지막에 Supabase SQL Editor에서 Vault reminder_cron_secret과 project_url을 넣어야
 # 예약이 함수를 부른다(docs/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약(0007, 매시)이 돌아도 요청을 만들지 않는다.
 # 비어 있는 선택 값은 건너뛴다(서버에 이미 있던 값은 그대로 남고, 없으면 함수 기본값 — supabase/functions/_shared).
 #
 # 하지 않는 것: 인증(Auth) 설정 올리기(`supabase config push`) — 인증 설정은 대시보드가 기준이다(supabase/config.toml 참고).
-#              비밀값 지우기 — 비운 값은 건너뛸 뿐이다. 서버에서 지우려면 Supabase 대시보드 → Edge Functions → Secrets(설명서 G).
+#              비밀값 지우기 — 비운 값은 건너뛸 뿐이다. 서버에서 지우려면 Supabase 대시보드 → Edge Functions → Secrets(설명서 G). 단 AI 스위치는 위 설명대로 되살아난다.
 # 비밀값은 로그에 찍지 않는다: set -x 금지, 명령 인자로 넘기지 않고(파일로), 값 대신 이름만 출력한다.
 # 운영 DB·함수를 바꾸므로 main에서만 돈다(Run workflow에서 다른 브랜치를 골라도 건너뜀). 테스트(npm test)가 통과해야 배포한다.
 name: Supabase
@@ -38,6 +38,9 @@ permissions:
 # 2026-11-04 전용 도메인 onmomcare.app으로 옮겼다. 옛 Pages 주소(https://5seoyoung.github.io)는 다른 사이트와 같은 출처라 허용하지 않는다(옛 주소는 새 주소로 넘어간다).
 env:
   ONMOM_ALLOWED_ORIGINS: https://onmomcare.app,http://localhost:3000
+  # 서버 쪽 AI 스위치의 기본값(공개값) — Variable AI_CHAT_SERVER_ENABLED가 비어 있으면 이 값을 함수 비밀값으로 넣는다(2026-11-06 대표 결정: 켠다).
+  # "false"로 바꿔 커밋해도 끈다. 화면 쪽 스위치는 따로다(deploy.yml ONMOM_AI).
+  ONMOM_AI_CHAT_SERVER_ENABLED: "true"
 
 concurrency:
   group: supabase-deploy
@@ -71,7 +74,7 @@ jobs:
           REMINDER_CRON_SECRET: ${{ secrets.REMINDER_CRON_SECRET }}
           VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID || secrets.ANTHROPIC_WORKSPACE_ID }}
-          AI_CHAT_SERVER_ENABLED: ${{ vars.AI_CHAT_SERVER_ENABLED }}
+          AI_CHAT_SERVER_ENABLED: ${{ vars.AI_CHAT_SERVER_ENABLED || env.ONMOM_AI_CHAT_SERVER_ENABLED }}
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
@@ -115,7 +118,7 @@ jobs:
           fi
 
           # AI 상담 요청 한도(선택) — 한 사람의 1시간 요청 수(1~1000), 익명 게스트의 1시간 요청 수(1~1000, 한 사람 한도까지),
-          # 전체 1시간 요청 수, 전체 하루 요청 수. 비우면 함수 기본값(supabase/functions/_shared/chat.ts chatLimitsFromEnv — 30·5·60·500).
+          # 전체 1시간 요청 수, 전체 하루 요청 수. 비우면 함수 기본값(supabase/functions/_shared/chat.ts chatLimitsFromEnv — 10·5·60·500).
           for name in CHAT_HOURLY_LIMIT CHAT_GUEST_HOURLY_LIMIT CHAT_GLOBAL_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT; do
             v="${!name:-}"
             v="${v//[[:space:]]/}"
@@ -138,11 +141,11 @@ jobs:
             exit 1
           fi
 
-          # 서버 쪽 AI 스위치(선택) — "true"면 chat 함수가 Anthropic을 부르고, "false"면 끈다. 비우면 넣지 않는다(서버에 있던 값 그대로 —
-          # 한 번도 넣지 않았으면 꺼짐). 그 밖의 값(TRUE·1·yes …)은 함수가 꺼짐으로 읽으므로, 켰다고 착각하지 않게 여기서 멈춘다.
+          # 서버 쪽 AI 스위치 — "true"면 chat 함수가 Anthropic을 부르고, "false"면 끈다. Variable을 비우면 위 env의 기본값을 쓴다.
+          # 그 밖의 값(TRUE·1·yes …)은 함수가 꺼짐으로 읽으므로, 켰다고 착각하지 않게 여기서 멈춘다.
           aion="${AI_CHAT_SERVER_ENABLED//[[:space:]]/}"
           if [ -n "${aion}" ] && [ "${aion}" != "true" ] && [ "${aion}" != "false" ]; then
-            echo "::error title=AI_CHAT_SERVER_ENABLED 형식::true 또는 false(소문자)만 넣습니다. 비우면 서버의 값을 그대로 둡니다 — 한 번도 넣지 않았으면 서버 쪽 AI는 꺼져 있습니다."
+            echo "::error title=AI_CHAT_SERVER_ENABLED 형식::true 또는 false(소문자)만 넣습니다. 비우면 저장소의 기본값(env ONMOM_AI_CHAT_SERVER_ENABLED)을 씁니다."
             exit 1
           fi
 
@@ -237,7 +240,6 @@ jobs:
           REMINDER_CRON_SECRET: ${{ secrets.REMINDER_CRON_SECRET }}
           VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
           ANTHROPIC_WORKSPACE_ID: ${{ vars.ANTHROPIC_WORKSPACE_ID || secrets.ANTHROPIC_WORKSPACE_ID }}
-          AI_CHAT_SERVER_ENABLED: ${{ vars.AI_CHAT_SERVER_ENABLED }}
         run: |
           set -euo pipefail
           # 값은 명령 인자(다른 프로세스가 볼 수 있음)가 아니라 이 단계에서만 읽을 수 있는 임시 파일로 넘기고 바로 지운다.
@@ -245,7 +247,7 @@ jobs:
           envfile="$(mktemp)"
           trap 'rm -f "${envfile}"' EXIT
           names=()
-          for name in ANTHROPIC_API_KEY ANTHROPIC_WORKSPACE_ID VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GUEST_HOURLY_LIMIT CHAT_GLOBAL_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET VAPID_PUBLIC_KEY AI_CHAT_SERVER_ENABLED; do
+          for name in ANTHROPIC_API_KEY ANTHROPIC_WORKSPACE_ID VIDEO_API_URL ALLOWED_ORIGINS CHAT_HOURLY_LIMIT CHAT_GUEST_HOURLY_LIMIT CHAT_GLOBAL_HOURLY_LIMIT CHAT_GLOBAL_DAILY_LIMIT VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET VAPID_PUBLIC_KEY; do
             value="${!name:-}"
             value="${value//[[:space:]]/}"   # 붙여 넣을 때 딸려 온 공백·줄바꿈 제거(모든 값이 공백을 담지 않는다)
             if [ -z "${value}" ]; then
@@ -279,16 +281,12 @@ jobs:
           for name in ANTHROPIC_API_KEY VIDEO_API_URL ALLOWED_ORIGINS; do
             if ! grep -qw -- "${name}" <<< "${present}"; then
               case "${name}" in
-                ANTHROPIC_API_KEY) echo "::warning title=AI 상담 꺼짐::ANTHROPIC_API_KEY가 서버에 없습니다. AI 상담은 동작하지 않습니다 — Variables의 NEXT_PUBLIC_AI_CHAT_ENABLED는 false로 두세요." ;;
+                ANTHROPIC_API_KEY) echo "::warning title=AI 상담 — 키 없음::ANTHROPIC_API_KEY가 서버에 없습니다. 모든 질문이 앱 안내로만 답합니다(503 not_configured). GitHub Secret ANTHROPIC_API_KEY를 넣고 이 워크플로를 다시 실행하세요." ;;
                 VIDEO_API_URL) echo "::notice title=영상 서버 기본값::VIDEO_API_URL이 서버에 없어 함수 기본값(https://hackathon-video-api.onrender.com)을 씁니다." ;;
                 ALLOWED_ORIGINS) echo "::notice title=CORS 기본값::ALLOWED_ORIGINS가 서버에 없어 함수 기본값(supabase/functions/_shared/cors.ts DEFAULT_ALLOWED_ORIGINS)을 씁니다. 도메인을 바꾸면 위 env ONMOM_ALLOWED_ORIGINS를 고치세요." ;;
               esac
             fi
           done
-          # 서버 쪽 AI 스위치 — 서버에 값이 없으면 꺼짐(chat 함수는 503 ai_disabled). 값이 있어도 목록에는 이름만 있어 켬·끔은 아래 배포 확인이 본다.
-          if ! grep -qw -- "AI_CHAT_SERVER_ENABLED" <<< "${present}"; then
-            echo "::notice title=서버 쪽 AI 꺼짐::서버에 AI_CHAT_SERVER_ENABLED가 없어 AI 상담이 꺼져 있습니다(ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않음). 켜려면 5단계에서 Variables에 AI_CHAT_SERVER_ENABLED=true를 넣고 이 워크플로를 다시 실행하세요."
-          fi
           # 매일 리마인더(선택) — 셋 중 하나라도 없으면 send-reminders는 발송하지 않는다(503 missing_env). 켜지 않을 거면 그대로 둔다.
           missing_reminder=()
           for name in VAPID_PRIVATE_KEY VAPID_SUBJECT REMINDER_CRON_SECRET; do
@@ -308,16 +306,35 @@ jobs:
         # send-reminders는 비밀값·Vault reminder_cron_secret·project_url이 생기기 전에는 부르는 곳이 없다(0007의 예약이 요청을 만들지 않음).
         run: supabase functions deploy videos chat send-reminders --project-ref "$PROJECT_REF" --use-api
 
+      # 서버 쪽 AI 스위치는 함수를 배포한 뒤에 넣는다 — 비밀값은 다음 요청부터 바로 적용되므로, 먼저 넣으면 스위치를 처음 켜는 배포에서 옛 함수 코드(약물 preset·
+      # 게스트 허용)가 AI가 켜진 채 잠시 돌 수 있다. 배포가 실패하면 이 단계도 건너뛰어 서버 값은 그대로다. 공개값이라 값을 그대로 찍는다.
+      - name: 서버 쪽 AI 스위치 넣기
+        if: steps.check.outputs.run == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: ${{ steps.check.outputs.project_ref }}
+          AI_CHAT_SERVER_ENABLED: ${{ vars.AI_CHAT_SERVER_ENABLED || env.ONMOM_AI_CHAT_SERVER_ENABLED }}
+        run: |
+          set -euo pipefail
+          value="${AI_CHAT_SERVER_ENABLED//[[:space:]]/}"
+          if [ -z "${value}" ]; then
+            echo "::notice title=건너뜀::AI_CHAT_SERVER_ENABLED 값이 비어 있어 넣지 않습니다(서버에 있던 값 그대로)."
+            exit 0
+          fi
+          supabase secrets set --project-ref "$PROJECT_REF" "AI_CHAT_SERVER_ENABLED=${value}" > /dev/null
+          echo "서버 쪽 AI 스위치: ${value}"
+
       # AI 상담 함수가 로그인 확인에 쓰는 서버 키(service_role 권한)를 갖고 있는지 본다.
       # 틀린 토큰으로 한 번 부른다 → 401이면 정상(토큰 확인에서 끝나므로 Anthropic을 부르지 않고 한도도 쓰지 않는다).
-      # 503 ai_disabled면 서버 쪽 AI 스위치가 꺼져 있다 — 함수가 로그인 확인 전에 끝내므로 서버 키는 볼 수 없다(켤 때 다시 확인한다).
+      # 503 ai_disabled면 서버 쪽 AI 스위치가 꺼져 있다 — 함수가 로그인 확인 전에 끝내므로 서버 키는 볼 수 없다. 스위치를 켠 값으로 돌렸다면 경고, 일부러 껐다면 알림만.
       # 503 auth_unavailable이면 키가 없다 — 2025-11 이후 만든·Restore한 프로젝트에는 예전 방식 SUPABASE_SERVICE_ROLE_KEY가 없다.
-      # AI 상담은 LAUNCH_CHECKLIST 5단계 전까지 꺼져 있으므로 실패로 멈추지 않고 경고만 남긴다(5-6에서 이 경고가 없어야 한다).
+      # 이 확인은 Anthropic을 부르지 않으므로 ANTHROPIC_API_KEY가 유효한지는 알 수 없다(배포 뒤 질문 하나로 본다). 실패로 멈추지 않고 경고만 남긴다.
       - name: 배포 확인 (AI 상담 함수의 로그인 확인)
         id: smoke
         if: steps.check.outputs.run == 'true'
         env:
           PROJECT_REF: ${{ steps.check.outputs.project_ref }}
+          AI_CHAT_SERVER_ENABLED: ${{ vars.AI_CHAT_SERVER_ENABLED || env.ONMOM_AI_CHAT_SERVER_ENABLED }}
         run: |
           set -uo pipefail
           url="https://${PROJECT_REF}.supabase.co/functions/v1/chat"
@@ -342,10 +359,14 @@ jobs:
             echo "AI 상담 함수: 로그인 확인 동작(401 unauthorized)"
           elif [ "${status}" = "503" ] && [ "${code}" = "ai_disabled" ]; then
             echo "chat=ai_off" >> "$GITHUB_OUTPUT"
-            echo "::notice title=AI 상담 — 서버 쪽 스위치 꺼짐::chat 함수가 503 ai_disabled로 답했습니다. AI_CHAT_SERVER_ENABLED가 \"true\"가 아니라 Anthropic을 부르지 않습니다(정상 — 5단계 전). 켜려면 Variables에 AI_CHAT_SERVER_ENABLED=true를 넣고 이 워크플로를 다시 실행하세요. 로그인 확인(서버 키)은 그때 봅니다."
+            if [ "${AI_CHAT_SERVER_ENABLED//[[:space:]]/}" = "false" ]; then
+              echo "::notice title=AI 상담 — 서버 쪽 스위치 꺼짐::Variable AI_CHAT_SERVER_ENABLED=false라 chat 함수가 503 ai_disabled로 답합니다(일부러 끈 상태). 다시 켜려면 Variable을 지우고 이 워크플로를 돌립니다."
+            else
+              echo "::warning title=AI 상담 — 서버 쪽 스위치가 켜지지 않음::스위치를 켠 값으로 돌렸는데 chat 함수가 503 ai_disabled로 답했습니다. Edge Functions → Secrets의 AI_CHAT_SERVER_ENABLED와 함수 Logs의 시작 줄 ai를 확인하세요."
+            fi
           elif [ "${status}" = "503" ] && [ "${code}" = "auth_unavailable" ]; then
             echo "chat=no_key" >> "$GITHUB_OUTPUT"
-            echo "::warning title=AI 상담 — 로그인 확인 불가::chat 함수가 로그인을 확인할 서버 키를 찾지 못했습니다(503 auth_unavailable). 이대로 AI 상담을 켜면 모든 질문이 실패합니다. 개발자에게 알리세요 — 함수가 읽는 SUPABASE_SECRET_KEYS(새 secret 키 default) 또는 예전 SUPABASE_SERVICE_ROLE_KEY가 없습니다. Edge Functions → chat → Logs의 missing_env도 확인 (docs/SUPABASE_SETUP.md B-4)."
+            echo "::warning title=AI 상담 — 로그인 확인 불가::chat 함수가 로그인을 확인할 서버 키를 찾지 못했습니다(503 auth_unavailable). 이대로면 모든 질문이 앱 안내로만 답합니다. 개발자에게 알리세요 — 함수가 읽는 SUPABASE_SECRET_KEYS(새 secret 키 default) 또는 예전 SUPABASE_SERVICE_ROLE_KEY가 없습니다. Edge Functions → chat → Logs의 missing_env도 확인 (docs/SUPABASE_SETUP.md B-4)."
           else
             echo "chat=unknown" >> "$GITHUB_OUTPUT"
             echo "::warning title=AI 상담 — 확인 못 함::chat 함수 응답이 예상과 다릅니다(HTTP ${status} ${code:-}). Supabase → Edge Functions → chat → Logs를 확인하세요."
@@ -369,16 +390,16 @@ jobs:
             if [ "${JOB_STATUS}" = "success" ]; then
               echo "- 테스트 · DB 표(supabase/migrations) · Edge Function 비밀값 · 함수(videos, chat, send-reminders) 배포를 마쳤습니다."
               echo "- 매일 리마인더는 Supabase SQL Editor에서 Vault \`reminder_cron_secret\`과 \`project_url\`(https://<ref>.supabase.co)을 넣어야 켜집니다(docs/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약이 함수를 부르지 않습니다."
-              echo "- 서버 쪽 AI 상담 스위치(Variables·함수 비밀값 AI_CHAT_SERVER_ENABLED)는 \"true\"일 때만 켜집니다 — 값이 없거나 다른 값이면 꺼짐(ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않음). 이 스위치가 처음 들어간 배포부터, 소유자가 5단계에서 true를 넣고 이 워크플로를 다시 돌리기 전까지 서버 AI는 꺼져 있습니다."
+              echo "- 서버 쪽 AI 상담 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)는 \"true\"일 때만 켜집니다. Variable이 없으면 저장소의 기본값(env ONMOM_AI_CHAT_SERVER_ENABLED)을 함수 배포 뒤에 넣습니다. 끄려면 Variable을 false로 두고 이 워크플로를 다시 돌립니다 — 서버 값만 지우면 다음 실행이 되살립니다."
               case "${CHAT_CHECK}" in
                 ok) echo "- AI 상담 함수의 로그인 확인: 정상(서버 쪽 AI 스위치 켜짐)" ;;
-                ai_off) echo "- **서버 쪽 AI 상담: 꺼짐** — chat 함수가 503 ai_disabled로 답합니다(AI_CHAT_SERVER_ENABLED가 \"true\"가 아님). ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않고, 웹은 앱 규칙 안내·약물 표 결과로 답합니다. 이 스위치가 들어간 배포부터 5단계에서 Variables에 AI_CHAT_SERVER_ENABLED=true를 넣고 이 워크플로를 다시 돌리기 전까지 계속 꺼져 있습니다(그때 로그인 확인도 합니다)." ;;
-                no_key) echo "- ⚠️ AI 상담 함수가 로그인을 확인할 서버 키를 찾지 못했습니다 — AI 상담을 켜기 전에 개발자에게(설정 안내 B-4)." ;;
+                ai_off) echo "- **서버 쪽 AI 상담: 꺼짐** — chat 함수가 503 ai_disabled로 답합니다(AI_CHAT_SERVER_ENABLED가 \"true\"가 아님). ANTHROPIC_API_KEY가 있어도 Anthropic을 부르지 않고, 웹은 앱 규칙 안내로 답합니다." ;;
+                no_key) echo "- ⚠️ AI 상담 함수가 로그인을 확인할 서버 키를 찾지 못했습니다 — 개발자에게(설정 안내 B-4)." ;;
                 *) echo "- ⚠️ AI 상담 함수의 로그인 확인을 하지 못했습니다 — Edge Functions → chat → Logs 확인." ;;
               esac
               # 이름:함수 기본값(supabase/functions/_shared/chat.ts) — 비어 있으면 서버에 이미 있던 값이 남고, 처음이면 기본값. 숫자만 적는다.
               limits=""
-              for pair in CHAT_HOURLY_LIMIT:30 CHAT_GUEST_HOURLY_LIMIT:5 CHAT_GLOBAL_HOURLY_LIMIT:60 CHAT_GLOBAL_DAILY_LIMIT:500; do
+              for pair in CHAT_HOURLY_LIMIT:10 CHAT_GUEST_HOURLY_LIMIT:5 CHAT_GLOBAL_HOURLY_LIMIT:60 CHAT_GLOBAL_DAILY_LIMIT:500; do
                 name="${pair%%:*}"
                 v="${!name:-}"
                 v="${v//[^0-9]/}"

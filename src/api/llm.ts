@@ -2,12 +2,13 @@
 //
 // 어디로 묻나
 // - Supabase가 설정된 빌드: Edge Function "chat"(`{functionsURL}/chat`) — AI 스위치(NEXT_PUBLIC_AI_CHAT_ENABLED)가 켜졌을 때만.
-//   Authorization = 이 브라우저의 Supabase 로그인 토큰(익명 게스트 포함), apikey = 공개 키. Anthropic 키는 함수 비밀에만 있다.
+//   Authorization = 이 브라우저의 Supabase 로그인 토큰, apikey = 공개 키, x-region = 함수를 서울에서 돌게 고정(LLM_FUNCTION_REGION). Anthropic 키는 함수 비밀에만 있다.
 //   보내는 것: preset · 대화(최근 20개, 각 2000자) · 컨텍스트 {week, delivery, breastfeeding}뿐(검수 #14 — BMI·목표·위험 신호 여부 없음).
+//   AI는 상담에만 쓴다(preset patient_edu뿐 — 약물 체크는 표만 본다). 시범 동안 익명 게스트는 함수가 403 ai_login_required로 답한다.
 //   시스템 프롬프트·모델·토큰 수는 함수가 정한다 — max_tokens도 보내지 않는다(함수가 모르는 필드는 거절한다).
 // - 설정이 없는 빌드(브라우저 전용): 예전처럼 NEXT_PUBLIC_LLM_URL의 POST /chat → { text } (비어 있으면 notConfigured).
 // - 서버 쪽 AI 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)가 꺼져 있으면 함수는 503 { code: "ai_disabled" }로 답한다 — 웹의 스위치가
-//   켜져 있어도 "AI 미설정"(notConfigured)과 똑같이 다루고(상담은 앱 규칙 안내, 약물은 표의 "정보 부족"), 그 함수에는 이 페이지에서
+//   켜져 있어도 "AI 미설정"(notConfigured)과 똑같이 다루고(앱 규칙 안내), 그 함수에는 이 페이지에서
 //   다시 묻지 않는다(serverAiOff — 질문마다 요청·배너가 되풀이되지 않게). 새로 고치면 다시 확인한다.
 //
 // LLM은 판정 경로 밖이다(원칙 2): 이 함수는 텍스트만 돌려주고, 실패 시 무엇을 보여줄지는 호출하는 화면이 정한다.
@@ -17,13 +18,12 @@
 import { getSupabaseClient } from "@/auth/client";
 import type { DeliveryMethod } from "@/domain/types";
 import { DELIVERY_TITLE } from "@/rules/exercise";
-import { SUBSTANCE_LLM_MAX_TOKENS } from "@/rules/substance";
-// 함수가 AI 국외 이전 동의 기록을 찾지 못했을 때의 코드(403) — 함수와 같은 값(가져오는 것이 없는 순수 모듈)
-import { AI_CONSENT_REQUIRED_CODE } from "../../supabase/functions/_shared/aiConsent";
+// 함수가 동의 기록을 찾지 못했을 때(403 ai_consent_required)·익명 게스트일 때(403 ai_login_required)의 코드 — 함수와 같은 값(가져오는 것이 없는 순수 모듈)
+import { AI_CONSENT_REQUIRED_CODE, AI_LOGIN_REQUIRED_CODE } from "../../supabase/functions/_shared/aiConsent";
 import { defaultBackendConfig, joinBackendUrl, requestJson, type BackendConfig } from "./http";
 
-/** 서버가 소유한 시스템 프롬프트 프리셋 */
-export type LLMPreset = "patient_edu" | "substance";
+/** 서버가 소유한 시스템 프롬프트 프리셋 — AI는 상담에만 쓴다 */
+export type LLMPreset = "patient_edu";
 
 export type LLMMessage = { role: "user" | "assistant"; content: string };
 
@@ -51,15 +51,14 @@ export const LLM_MESSAGES: Record<LLMFailureKind, string> = {
   empty: "응답이 비어 있어요.", // 원문: LLMClient.swift:36
 };
 
-/** 호출 지점별 iOS 값 — 챗봇은 LLMClient 기본값, 약물 조회는 SubstanceCheckView가 준 값(예전 NEXT_PUBLIC_LLM_URL 경로) */
+/** iOS 값 — 챗봇은 LLMClient 기본값(예전 NEXT_PUBLIC_LLM_URL 경로) */
 export const LLM_PRESET_DEFAULTS: Record<LLMPreset, { maxTokens: number; timeoutMs: number }> = {
   patient_edu: { maxTokens: 1024, timeoutMs: 40_000 }, // LLMClient.swift:27, :64
-  substance: { maxTokens: SUBSTANCE_LLM_MAX_TOKENS, timeoutMs: 25_000 }, // SubstanceCheckView.swift:121(rules/substance.ts), :125
 };
 
 /**
  * Edge Function을 거칠 때의 대기 — 함수가 Anthropic을 최대 50초 기다린다(LLM_DEADLINE_MS,
- * supabase/functions/_shared/prompts.ts). 생각(adaptive thinking)이 켜진 모델이라 iOS 값(40초·25초)보다 길다.
+ * supabase/functions/_shared/prompts.ts). 생각(adaptive thinking)이 켜진 모델이라 iOS 값(40초)보다 길다.
  */
 export const LLM_FUNCTION_TIMEOUT_MS = 60_000;
 /** 함수가 받는 대화 한도 — supabase/functions/_shared/chat.ts와 같은 값(edgeFunctions.test.ts가 비교) */
@@ -69,6 +68,11 @@ export const LLM_FUNCTION_MAX_MESSAGE_CHARS = 2000;
 export const LLM_FUNCTION_MAX_WEEK = 520;
 /** 서버 쪽 AI 스위치가 꺼졌을 때 함수가 보내는 실패 코드(503) — supabase/functions/_shared/chat.ts CHAT_AI_DISABLED_CODE와 같다 */
 export const LLM_AI_DISABLED_CODE = "ai_disabled";
+/**
+ * 함수를 돌릴 리전 — 대화가 온맘 서버(대한민국 서울)를 거친다는 처리방침 6절 ①·동의 카드의 글자를 지키게 고정한다(사전 검토 D-08, Supabase "Regional Invocations").
+ * 고정하면 그 리전이 멈췄을 때 다른 리전으로 돌지 않는다 — 요청은 실패하고 앱 안내로 답한다. 헤더 이름은 _shared/cors.ts ALLOWED_REQUEST_HEADERS에 있어야 한다.
+ */
+export const LLM_FUNCTION_REGION = "ap-northeast-2";
 
 /**
  * 서버 쪽 AI 스위치가 꺼져 있다고 답한 함수 주소들 — 이 페이지(탭)에 있는 동안은 그 주소로 다시 묻지 않고 notConfigured로 끝낸다.
@@ -107,11 +111,19 @@ const fail = (kind: LLMFailureKind, status?: number, code?: string): LLMResult =
 });
 
 /**
- * 함수가 "이 계정의 AI 국외 이전 동의 기록이 없다"고 답했는가(403 ai_consent_required — 서버 행 없음·예전 판).
+ * 함수가 "이 계정의 AI 답변 동의 기록이 없다"고 답했는가(403 ai_consent_required — 서버 행 없음·철회·예전 판·한쪽 동의만).
  * 화면은 이 계정의 동의를 지우고 동의 카드를 다시 띄운다(features/chat/aiConsent.ts revoke). 예전 NEXT_PUBLIC_LLM_URL 경로는 코드를 읽지 않는다.
  */
 export function isAiConsentRequired(result: LLMResult): boolean {
   return !result.ok && result.kind === "server" && result.status === 403 && result.code === AI_CONSENT_REQUIRED_CODE;
+}
+
+/**
+ * 함수가 "카카오 계정에서만 쓸 수 있다"고 답했는가(403 ai_login_required — 시범 동안 익명 게스트). 화면은 동의 카드 없이 앱 안내로 답하고 카카오 연결을 권한다.
+ * 보통은 화면이 게스트에게 먼저 묻지 않는다(features/chat/aiConsent.ts aiMode "login") — 이 답은 브라우저의 계정 표시가 서버와 어긋났을 때만 온다.
+ */
+export function isAiLoginRequired(result: LLMResult): boolean {
+  return !result.ok && result.kind === "server" && result.status === 403 && result.code === AI_LOGIN_REQUIRED_CODE;
 }
 
 /**
@@ -184,7 +196,7 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
   const context = functionContext(req.context);
   if (context !== null) body.context = context;
 
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}`, "x-region": LLM_FUNCTION_REGION };
   if (cfg.supabaseKey) headers.apikey = cfg.supabaseKey;
 
   const res = await requestJson(url.toString(), {
@@ -202,7 +214,7 @@ async function completeViaFunction(req: LLMRequest, cfg: BackendConfig, opts: LL
     serverAiOff.add(url.toString());
     return fail("notConfigured");
   }
-  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401, 동의 없음 403, 혼잡 503 …) → server(+ 실패 코드). 연결 실패·시간 초과 → network.
+  // 4xx·5xx(한도 429, 거절 422, 잘못된 요청 400, 로그인 401, 게스트·동의 없음 403, 혼잡 503 …) → server(+ 실패 코드). 연결 실패·시간 초과 → network.
   if (!res.ok) return res.kind === "status" ? fail("server", res.status, failureCode(res.data)) : fail("network");
   return parseFunctionReply(res.data);
 }
@@ -218,15 +230,11 @@ export function failureCode(data: unknown): string | undefined {
   return typeof code === "string" && FAILURE_CODE_PATTERN.test(code) ? code : undefined;
 }
 
-/**
- * 함수 응답 → LLMResult. { ok: true, text } 그대로, 약물 { ok: true, json }은 JSON 문자열로 바꿔
- * 예전 경로와 같은 모양(text 안의 JSON — rules/substance parseSubstanceAnswer)으로 넘긴다. 모양이 틀리면 network(iOS 디코딩 실패와 같게).
- */
+/** 함수 응답 → LLMResult. { ok: true, text } 그대로. 모양이 틀리면 network(iOS 디코딩 실패와 같게). */
 export function parseFunctionReply(data: unknown): LLMResult {
   if (typeof data !== "object" || data === null || (data as { ok?: unknown }).ok !== true) return fail("network");
-  const { text, json } = data as { text?: unknown; json?: unknown };
+  const { text } = data as { text?: unknown };
   if (typeof text === "string") return text.trim() === "" ? fail("empty") : { ok: true, text };
-  if (typeof json === "object" && json !== null && !Array.isArray(json)) return { ok: true, text: JSON.stringify(json) };
   return fail("network");
 }
 
