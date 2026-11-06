@@ -184,9 +184,9 @@ describe("fetchVideos — Supabase Edge Function videos(영상 서버에 CORS가
         jsonResponse(200, { count: 1, videos: [{ ...serverVideo, video_id: url.includes(mine) ? "vd_mine" : "vd_other", tags: [] }] }),
       );
       const res = await fetchVideos(mine, { config: supabaseTestConfig });
-      const urls = fetch.mock.calls.map(([u]) => u as string).sort();
-      expect(urls).toEqual(
-        VIDEO_ROUTE_TAGS.map((t) => `https://proj.supabase.test/functions/v1/videos?include=${t}&limit=500`).sort(),
+      // 순서까지 같다 — 내 라우트를 먼저 물으면 요청 순서로 분만 방식이 드러난다
+      expect(fetch.mock.calls.map(([u]) => u as string)).toEqual(
+        VIDEO_ROUTE_TAGS.map((t) => `https://proj.supabase.test/functions/v1/videos?include=${t}&limit=500`),
       );
       expect(res).toMatchObject({ ok: true, videos: [{ video_id: "vd_mine" }] });
     }

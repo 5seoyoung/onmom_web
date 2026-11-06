@@ -112,10 +112,10 @@ export async function fetchVideos(includeTag: string, opts: FetchVideosOptions =
       config: cfg,
     });
 
-  const pending = get(includeTag);
-  // 머리말 — 함수로 물을 때는 다른 라우트도 같이 묻는다(응답은 쓰지 않고, requestJson은 실패를 던지지 않는다)
-  if (proxy) for (const tag of VIDEO_ROUTE_TAGS) if (tag !== includeTag) void get(tag);
-  const res = await pending;
+  // 머리말 — 함수로 물을 때는 두 라우트를 늘 같은 순서로 묻고 내 라우트 응답만 쓴다(순서로도 분만 방식이 드러나지 않게. requestJson은 실패를 던지지 않는다)
+  const asked = proxy && VIDEO_ROUTE_TAGS.includes(includeTag) ? VIDEO_ROUTE_TAGS : [includeTag];
+  const responses = asked.map((tag) => get(tag));
+  const res = await responses[asked.indexOf(includeTag)];
   if (!res.ok) return res.kind === "status" ? fail("server", res.status) : fail("network");
   // iOS는 디코딩 실패도 unreachable로 묶는다(VideoDBClient.swift:66-67)
   const videos = parseVideoResponse(res.data);
