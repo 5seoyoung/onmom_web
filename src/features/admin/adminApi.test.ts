@@ -9,6 +9,7 @@ import {
   fetchAdmins,
   fetchAllUsers,
   fetchOverview,
+  fetchUsageStats,
   fetchUsersPage,
   findUser,
   logUsersExport,
@@ -111,6 +112,55 @@ describe("fetchOverview", () => {
     expect(await fetchOverview(forbidden.client, "v")).toEqual({ ok: false, failure: "forbidden" });
     const odd = fakeClient({ replies: { admin_overview: { data: { totals: {} }, error: null } } });
     expect(await fetchOverview(odd.client, "v")).toEqual({ ok: false, failure: "failed" });
+  });
+});
+
+describe("fetchUsageStats — 0011 이용 통계", () => {
+  const data = {
+    days: 30,
+    period: { from: "2026-10-06", to: "2026-11-04" },
+    k: 5,
+    suppressed: true,
+    totals: { consented_users: 1, active_users: 1 },
+    daily: null,
+    adoption: null,
+    return_rate: null,
+    distributions: null,
+  };
+
+  it("기간을 서버와 같은 규칙으로 맞춰 보내고 읽는다 — 보내는 것은 기간뿐이다", async () => {
+    const { client, calls } = fakeClient({ replies: { admin_usage_stats: { data, error: null } } });
+    const r = await fetchUsageStats(client, 30);
+    expect(r.ok && r.value).toMatchObject({ days: 30, suppressed: true, totals: { consentedUsers: 1, activeUsers: 1 } });
+    await fetchUsageStats(client, 3);
+    await fetchUsageStats(client, 1000);
+    await fetchUsageStats(client, Number.NaN);
+    expect(calls).toEqual([
+      { fn: "admin_usage_stats", args: { p_days: 30 } },
+      { fn: "admin_usage_stats", args: { p_days: 7 } },
+      { fn: "admin_usage_stats", args: { p_days: 90 } },
+      { fn: "admin_usage_stats", args: { p_days: 30 } },
+    ]);
+  });
+
+  it("0011이 아직 없는 서버는 설치 안내 갈래 — 함수를 못 찾은 코드(PGRST202·42883)", async () => {
+    for (const code of ["PGRST202", "42883"]) {
+      const missing = fakeClient({ replies: { admin_usage_stats: { data: null, error: { code } } } });
+      expect(await fetchUsageStats(missing.client, 30)).toEqual({ ok: false, failure: "setupMissing" });
+    }
+  });
+
+  it("관리자가 아니게 됐으면 forbidden, 모양이 다르거나 숨김 기준이 다르면 failed, 그 밖의 오류·예외도 failed", async () => {
+    const forbidden = fakeClient({ replies: { admin_usage_stats: { data: null, error: { code: "42501" } } } });
+    expect(await fetchUsageStats(forbidden.client, 30)).toEqual({ ok: false, failure: "forbidden" });
+    const odd = fakeClient({ replies: { admin_usage_stats: { data: { totals: {} }, error: null } } });
+    expect(await fetchUsageStats(odd.client, 30)).toEqual({ ok: false, failure: "failed" });
+    const weakerK = fakeClient({ replies: { admin_usage_stats: { data: { ...data, k: 2 }, error: null } } });
+    expect(await fetchUsageStats(weakerK.client, 30)).toEqual({ ok: false, failure: "failed" });
+    const timeout = fakeClient({ replies: { admin_usage_stats: { data: null, error: { code: "57014" } } } });
+    expect(await fetchUsageStats(timeout.client, 30)).toEqual({ ok: false, failure: "failed" });
+    const thrown = fakeClient({ replies: { admin_usage_stats: new Error("offline") } });
+    expect(await fetchUsageStats(thrown.client, 30)).toEqual({ ok: false, failure: "failed" });
   });
 });
 

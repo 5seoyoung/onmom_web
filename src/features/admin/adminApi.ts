@@ -1,14 +1,16 @@
-// 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql · 0009_admin_access_log.sql).
+// 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql · 0009_admin_access_log.sql ·
+// 0011_admin_usage_stats.sql).
 //
 //   is_admin()                          — 지금 로그인한 카카오 계정이 관리자 목록(public.admins)에 있는가
 //   admin_overview(p_consent_version)   — 집계(전체·게스트·카카오·서버 기록·현재 판 동의·최근 7일·30일 가입 — 0005 뒤에는 동의 판 분포·게스트/카카오 나누기)
+//   admin_usage_stats(p_days)           — 이용 통계(0011) — 통계 목적에 동의한 사용자의 건강 기록을 서버가 익명 집계로 바꾼 수만(5명 미만 칸은 null)
 //   admin_list_users(p_limit, p_offset) — 계정 메타데이터 목록(건강 기록·이메일 없음)
 //   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005)
 //   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
 //   admin_list_admins()                 — 관리자 목록(0005)
 //   admin_log_users_export(p_rows)      — CSV 내려받기를 admin_audit에 남긴다(0009). 파일을 만들기 전에 부르고, 실패하면 파일을 만들지 않는다
 //
-// 접근 기록(0009): 위 읽기 함수도 서버가 부를 때마다 admin_audit에 한 줄씩 남긴다(누가·언제·무엇을·몇 명) — 화면은 따로 할 일이 없다.
+// 접근 기록(0009·0011): 위 읽기 함수도 서버가 부를 때마다 admin_audit에 한 줄씩 남긴다(누가·언제·무엇을·몇 명) — 화면은 따로 할 일이 없다.
 // CSV는 브라우저가 만들어 서버가 모르므로 화면이 admin_log_users_export를 부른다(exportUsersCsv).
 // 권한은 서버가 지킨다: 모든 함수가 is_admin()이 아니면 오류(42501)를 낸다. 여기서 세션을 보는 것은 화면 안내용일 뿐이다.
 // 응답·오류를 콘솔에 남기지 않는다(계정 메타데이터도 개인정보).
@@ -18,8 +20,10 @@ import {
   ADMIN_LIST_MAX,
   ADMIN_PAGE_SIZE,
   CSV_MAX_ROWS,
+  clampUsageDays,
   parseAdminRows,
   parseOverview,
+  parseUsageStats,
   parseUserRows,
   splitPage,
   usersPageArgs,
@@ -27,6 +31,7 @@ import {
   type AdminOverview,
   type AdminUserRow,
   type DeleteFailure,
+  type UsageStats,
 } from "./adminModel";
 
 export interface AdminRpcError {
@@ -124,6 +129,21 @@ export async function fetchOverview(client: AdminClient, consentVersion: string)
     if (error !== null) return { ok: false, failure: failureOf(error) };
     const overview = parseOverview(data);
     return overview === null ? { ok: false, failure: "failed" } : { ok: true, value: overview };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/**
+ * 이용 통계(0011 admin_usage_stats) — 기간은 서버와 같은 규칙(7~90일)으로 맞춰 보낸다. 0011이 아직 없는 서버는 setupMissing
+ * (화면이 0011 설치 안내를 보인다). 모양이 다르거나 서버의 숨김 기준이 화면과 다르면 failed(parseUsageStats).
+ */
+export async function fetchUsageStats(client: AdminClient, days: number): Promise<AdminResult<UsageStats>> {
+  try {
+    const { data, error } = await client.rpc("admin_usage_stats", { p_days: clampUsageDays(days) });
+    if (error !== null) return { ok: false, failure: failureOf(error) };
+    const stats = parseUsageStats(data);
+    return stats === null ? { ok: false, failure: "failed" } : { ok: true, value: stats };
   } catch {
     return { ok: false, failure: "failed" };
   }
