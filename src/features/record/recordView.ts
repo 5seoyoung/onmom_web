@@ -1,13 +1,22 @@
 // 기록 탭(이상 증상 빠른 기록)의 화면 규칙 — iOS RecordFlowView.swift를 옮긴 것.
 // "무엇을 어떤 조건에서 보여주나"만 순수 함수로 둔다. 판정은 rules/record·rules/redflag, 기분 문항은 rules/mood가 한다.
 
+import { SOURCE_PREFIX } from "@/components/ui/evidence";
 import { formatMonthDayTime, postpartumDayCount } from "@/domain/date";
 import type { MoodAnswer, MoodCheckRecord, RiskSymptomKey, SymptomRecord, UserProfile } from "@/domain/types";
 import { STORAGE_REGION } from "@/features/privacy/dataItems";
 import { DELIVERY_TITLE } from "@/rules/exercise";
 import { MOOD_ANSWERS, moodAnswerLabel, questionForDay, todayMoodCheck, type MoodQuestion } from "@/rules/mood";
 import { buildSymptomRecord, showsLochiaInputs, type SymptomForm } from "@/rules/record";
-import { severityRank, type RedFlag, type RedFlagResult } from "@/rules/redflag";
+import { severityLabel } from "@/rules/recovery";
+import {
+  METRIC_STATUS_LABEL,
+  RED_FLAG_GUIDES,
+  severityRank,
+  type RedFlag,
+  type RedFlagGuide,
+  type RedFlagResult,
+} from "@/rules/redflag";
 import type { NewSymptomRecord } from "@/store/appStore";
 
 export type { RiskSymptomKey } from "@/domain/types";
@@ -36,8 +45,6 @@ export const RECORD_TEXT = {
   // 설정 없는 빌드(브라우저 전용)만 iOS 원문 그대로 — 서버 저장 빌드는 moodNoteFor가 바꾼다
   moodNote: "매일 한 가지씩 물어요. 답은 이 기기에만 남고, 진단이 아니에요.", // 원문: RecordFlowView.swift:98
   recentTitle: "최근 기록", // 원문: RecordFlowView.swift:110
-  recentNormal: "위험신호 없음", // 원문: RecordFlowView.swift:119
-  recentFlagged: "병원 신호", // 원문: RecordFlowView.swift:119
 } as const;
 
 /**
@@ -81,7 +88,65 @@ export const RECORD_WEB_TEXT = {
   harmThoughtsHint: "체크하면 바로 연락할 수 있는 상담 전화를 알려 드려요",
   // 웹 신규 문구 — CPO 확인 필요 (119 등급 결과 카드 안의 전화 버튼)
   call119: "119에 전화 걸기",
+  // 최근 기록·PDF 리포트의 결과 글자 — iOS 원문 "위험신호 없음"/"병원 신호"를 바꿈(판정처럼 읽히지 않게, 홈 라벨과 같은 글자. 법률 사전 검토 H5)
+  recentNormal: METRIC_STATUS_LABEL.normal,
+  recentFlagged: METRIC_STATUS_LABEL.alert,
+  // 웹 신규 문구 — CPO 확인 필요 (결과 화면에 늘 보이는 안내 목록의 제목·안내 — 입력과 상관없는 일반 안내임을 말한다. 법률 사전 검토 H5 D-17)
+  warningTitle: "바로 병원에 가야 하는 신호",
+  warningIntro:
+    "기록 결과와 상관없이 산후에 아래 신호가 있으면 안내대로 연락하거나 병원에 가세요. 목록에 없는 증상이라도 걱정되면 의료진에게 문의하세요.",
 } as const;
+
+/** 안내 목록의 등급별 할 일 — 등급 이름(severityLabel) 아래 한 줄. 규칙 문구(content.json red_flags)와 같은 내용을 짧게 쓴다. */
+const WARNING_ACTION: Readonly<Record<string, string>> = {
+  // 웹 신규 문구 — CPO 확인 필요
+  emergency: "지금 바로 119에 연락하세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  crisis: "혼자 견디지 말고 자살예방상담전화 109(24시간)나 정신건강위기상담전화 1577-0199에 연락하세요. 지금 위험하다면 119나 112에 연락하세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  immediate: "바로 병원에 가세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  urgent: "오늘 안에 진료를 받으세요.",
+};
+
+/** 안내 목록의 신호 하나 — 이름은 규칙의 첫 칩(근거 설명 칩), 출처는 "src:" 칩 그대로 */
+export interface WarningSign {
+  code: string;
+  name: string;
+  sources: string[];
+}
+
+/** 안내 목록의 등급 묶음 */
+export interface WarningSignGroup {
+  severity: string;
+  /** 등급 이름(119 연락·위기 상담 연락·즉시 내원 — rules/recovery severityLabel) */
+  label: string;
+  action: string;
+  signs: WarningSign[];
+}
+
+/**
+ * "바로 병원에 가야 하는 신호" 목록 — 모든 규칙을 등급 높은 순으로 묶는다(같은 등급 안은 평가 순서).
+ * 입력을 받지 않는다: 누구에게나 같은 일반 안내라, 결과가 개인 판정이 아니라 교육으로 읽히게 한다(법률 사전 검토 4-2 ①).
+ * 규칙을 더하면(content.json red_flags) 이 목록에도 저절로 들어간다.
+ */
+export function warningSignGroups(guides: readonly RedFlagGuide[] = RED_FLAG_GUIDES): WarningSignGroup[] {
+  const groups = new Map<string, WarningSignGroup>();
+  for (const guide of guides) {
+    const name = guide.chips.find((c) => !c.startsWith(SOURCE_PREFIX));
+    if (name === undefined) continue; // 이름 없는 규칙은 목록에 그리지 않는다(칩 형식은 redflag.test가 지킨다)
+    const group = groups.get(guide.severity) ?? {
+      severity: guide.severity,
+      label: severityLabel(guide.severity) ?? "",
+      action: WARNING_ACTION[guide.severity] ?? "",
+      signs: [],
+    };
+    group.signs.push({ code: guide.code, name, sources: guide.chips.filter((c) => c.startsWith(SOURCE_PREFIX)) });
+    groups.set(guide.severity, group);
+  }
+  // 안정 정렬 — 같은 높이(119·위기 상담)는 평가 순서대로
+  return [...groups.values()].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
+}
 
 /**
  * 위기 상담 카드(harm_thoughts)의 전화 — 병원 찾기 대신 바로 걸 수 있는 곳(임상 사전 검토 §3-2 T11).
@@ -306,7 +371,7 @@ export interface RecentRecordRow {
   signals: string[];
 }
 
-/** 최신순 기록에서 앞 5건 — 점 색과 함께 글자로도 "위험신호 없음"/"병원 신호"를 보여준다(색만으로 구분하지 않음). */
+/** 최신순 기록에서 앞 5건 — 점 색과 함께 글자로도 "해당 없음"/"병원 확인 신호"를 보여준다(색만으로 구분하지 않음). */
 export function recentRecordRows(history: readonly SymptomRecordWithRisk[]): RecentRecordRow[] {
   return history.slice(0, RECENT_RECORDS_LIMIT).map((r) => {
     const flagged = r.redFlagCode != null;
@@ -315,7 +380,7 @@ export function recentRecordRows(history: readonly SymptomRecordWithRisk[]): Rec
       iso: r.date,
       dateText: formatMonthDayTime(r.date),
       flagged,
-      label: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
+      label: flagged ? RECORD_WEB_TEXT.recentFlagged : RECORD_WEB_TEXT.recentNormal,
       signals: firedRiskLabels(r),
     };
   });

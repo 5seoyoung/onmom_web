@@ -144,8 +144,10 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
     expect(segs.filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "02-2276-2276"]);
   });
 
-  it("안전 연계 짧은 번호(109 · 119 · 1350)도 번호로 본다 — 앞뒤에 숫자·하이픈이 없을 때만", () => {
-    expect(SAFETY_SHORT_NUMBERS).toEqual(["109", "119", "1350"]);
+  it("안전 연계 짧은 번호(109 · 112 · 119 · 1350)도 번호로 본다 — 앞뒤에 숫자·하이픈이 없을 때만", () => {
+    expect(SAFETY_SHORT_NUMBERS).toEqual(["109", "112", "119", "1350"]);
+    expect(splitPhoneNumbers("지금 위험하다면 119나 112에 연락하세요.").filter((s) => s.phone).map((s) => s.text)).toEqual(["119", "112"]);
+    expect(splitPhoneNumbers("1120원").filter((s) => s.phone)).toEqual([]);
     const crisis = content.chat_fallback.replies.self_harm;
     expect(splitPhoneNumbers(crisis).filter((s) => s.phone).map((s) => s.text)).toEqual(["1577-0199", "109", "119"]);
     expect(splitPhoneNumbers("고용노동부 — 고객상담 1350").filter((s) => s.phone).map((s) => s.text)).toEqual(["1350"]);

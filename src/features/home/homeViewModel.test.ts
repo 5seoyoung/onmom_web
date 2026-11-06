@@ -7,6 +7,9 @@ import {
   HOME_CHAT_HREF,
   HOME_TEXT,
   MOOD_CALLS,
+  RECOVERY_CRISIS_DESCRIPTOR,
+  RECOVERY_DESCRIPTOR,
+  RECOVERY_STEPS,
   buildHomeViewModel,
   heroChips,
   homeDayCount,
@@ -131,13 +134,13 @@ describe("buildHomeViewModel — home_redflag.png (최근 기록에 레드플래
   });
   const vm = buildHomeViewModel(s, NOW);
 
-  it("상태 카드: 오늘의 회복 상태 · 확인 필요", () => {
+  it("기록 카드: 오늘의 회복 기록 · 병원 확인 신호", () => {
     expect(vm.recoveryState).toEqual({
       kind: "filled",
-      title: "오늘의 회복 상태",
-      label: "확인 필요",
+      title: "오늘의 회복 기록",
+      label: "병원 확인 신호",
       tone: "alert",
-      descriptor: "병원 확인이 필요할 수 있는 기록이 있어요. 기록 탭에서 확인하세요.",
+      descriptor: "기록에 '바로 병원에 가야 하는 신호'에 해당하는 항목이 있어요. 아직 병원에 가지 않았다면 바로 문의하세요.",
     });
   });
 
@@ -178,30 +181,59 @@ describe("buildHomeViewModel — home_redflag.png (최근 기록에 레드플래
     const vm2 = buildHomeViewModel({ ...s, symptomHistory: [later, redFlag] }, NOW);
     expect(vm2.stageCard?.kind).toBe("stage");
     expect(vm2.weightPlan).not.toBeNull();
-    expect(vm2.recoveryState).toMatchObject({ label: "양호", tone: "normal" });
+    expect(vm2.recoveryState).toMatchObject({ label: "해당 없음", tone: "normal" });
   });
 });
 
-describe("오늘의 회복 상태 카드", () => {
-  it("관찰 — 통증 4~7", () => {
+describe("오늘의 회복 기록 카드", () => {
+  it("살펴볼 신호 — 통증 4~7", () => {
     const card = recoveryStateCard({ symptomHistory: [record({ painNrs: 5 })] }, NOW);
     expect(card).toEqual({
       kind: "filled",
-      title: "오늘의 회복 상태",
-      label: "관찰",
+      title: "오늘의 회복 기록",
+      label: "살펴볼 신호",
       tone: "watch",
-      descriptor: "몇 가지 지표를 지켜보고 있어요.",
+      descriptor: "기록한 항목 중에 살펴볼 신호가 있어요. 회복 지표에서 어떤 항목인지 볼 수 있어요. 계속되거나 심해지면 의료진과 상담하세요.",
     });
   });
 
-  it("양호", () => {
+  it("해당 없음 — 회복이 좋다고 말하지 않고, 목록과 맞지 않았다는 사실과 상담 안내만", () => {
     const card = recoveryStateCard({ symptomHistory: [record()] }, NOW);
-    expect(card).toMatchObject({ label: "양호", tone: "normal", descriptor: "회복이 순조롭게 진행되고 있어요." });
+    expect(card).toMatchObject({
+      label: "해당 없음",
+      tone: "normal",
+      descriptor: "기록한 항목 중에는 살펴볼 신호나 병원 확인 신호에 해당하는 것이 없었어요. 증상이 계속되거나 걱정되면 의료진과 상담하세요.",
+    });
+  });
+
+  it("라벨·설명·제목에 건강 상태를 평가하는 말이 없다(법률 사전 검토 H5·4-3)", () => {
+    const texts = [
+      ...RECOVERY_STEPS.map((s) => s.label),
+      ...Object.values(RECOVERY_DESCRIPTOR),
+      RECOVERY_CRISIS_DESCRIPTOR,
+      HOME_TEXT.emptyStateTitle,
+      HOME_TEXT.emptyStateBody,
+    ];
+    for (const text of texts) {
+      for (const word of ["정상", "양호", "순조", "이상 없", "안전", "회복 상태", "상태를 알려"]) expect(text, word).not.toContain(word);
+    }
+  });
+
+  it("위기 상담 신호가 기록에 있으면 상담 전화를 말한다 — 어떤 생각이었는지는 적지 않는다", () => {
+    const crisis = record({ redFlagCode: "harm_thoughts", harmThoughts: true });
+    const card = recoveryStateCard({ symptomHistory: [crisis] }, NOW);
+    expect(card).toMatchObject({ label: "병원 확인 신호", tone: "alert", descriptor: RECOVERY_CRISIS_DESCRIPTOR });
+    for (const n of ["109", "1577-0199", "119", "112"]) expect(RECOVERY_CRISIS_DESCRIPTOR, n).toContain(n);
+    expect(RECOVERY_CRISIS_DESCRIPTOR).not.toContain("해칠");
+    // 대표 신호가 119여도 토글이 켜져 있으면 같다
+    expect(recoveryStateCard({ symptomHistory: [record({ redFlagCode: "seizure", harmThoughts: true })] }, NOW)).toMatchObject({
+      descriptor: RECOVERY_CRISIS_DESCRIPTOR,
+    });
   });
 
   it("오늘 기록이 아니면 제목에 기록 날짜를 붙인다(HomeView.swift:213-218)", () => {
     const old = record({ date: new Date(2026, 8, 20, 22, 0).toISOString() });
-    expect(recoveryStateCard({ symptomHistory: [old] }, NOW)).toMatchObject({ title: "최근 회복 상태 · 9월 20일 기록" });
+    expect(recoveryStateCard({ symptomHistory: [old] }, NOW)).toMatchObject({ title: "최근 회복 기록 · 9월 20일" });
   });
 
   it("산후 10일 전 기록은 오로 항목이 없다", () => {
@@ -224,10 +256,10 @@ describe("낡은 화면 시계 — 기록이 시계보다 늦을 때", () => {
     }
   });
 
-  it("자정 직후 기록을 자정 직전 시계로 그려도 \"오늘의 회복 상태\"", () => {
+  it("자정 직후 기록을 자정 직전 시계로 그려도 \"오늘의 회복 기록\"", () => {
     const beforeMidnight = new Date(2026, 8, 27, 23, 59, 30);
     const fresh = record({ date: new Date(2026, 8, 28, 0, 0, 10).toISOString() });
-    expect(recoveryStateCard({ symptomHistory: [fresh] }, beforeMidnight)).toMatchObject({ title: "오늘의 회복 상태" });
+    expect(recoveryStateCard({ symptomHistory: [fresh] }, beforeMidnight)).toMatchObject({ title: "오늘의 회복 기록" });
   });
 
   it("기준 시각 — 지금과 기록 중 늦은 쪽, 기록이 없거나 날짜가 틀리면 지금", () => {

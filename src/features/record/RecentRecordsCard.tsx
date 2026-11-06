@@ -2,9 +2,9 @@ import { useId } from "react";
 import { Card, SectionTitle } from "@/components/ui";
 import { RECORD_TEXT, type RecentRecordRow } from "./recordView";
 
-// 최근 기록 — RecordFlowView.swift:106-129. 최신 5건: 점(8) · 날짜 13 textSecondary · 오른쪽 "위험신호 없음"/"병원 신호" 13 semibold.
+// 최근 기록 — RecordFlowView.swift:106-129. 최신 5건: 점(8) · 날짜 13 textSecondary · 오른쪽 "해당 없음"/"병원 확인 신호" 13 semibold.
 // 점 색과 글자 색이 같고, 글자가 상태를 말하므로 색만으로 구분하지 않는다.
-// 웹 추가(04 §1 저장 권장, 검수 #46): 그 기록에서 켜져 있던 위험 증상 토글의 라벨을 줄 아래에 보인다(RECORD_TEXT 원문, 새 문구 없음).
+// 웹 추가(04 §1 저장 권장, 검수 #46): 그 기록에서 켜져 있던 위험 증상 토글의 라벨을 줄 아래에 보인다(RISK_TOGGLES 글자 그대로).
 // 옛 기록·필드가 없는 기록은 빈 배열이라 줄이 없다 — iOS와 같은 모양.
 export function RecentRecordsCard({ rows }: { rows: readonly RecentRecordRow[] }) {
   const titleId = useId();

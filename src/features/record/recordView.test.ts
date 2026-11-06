@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import content from "@/content";
 import { formatMonthDayTime } from "@/domain/date";
 import { RISK_SYMPTOM_KEYS, type MoodCheckRecord, type SymptomRecord } from "@/domain/types";
 import { questionForDay } from "@/rules/mood";
 import { RECORD_NORMAL_RESULT } from "@/rules/record";
+import { RED_FLAG_CODES } from "@/rules/redflag";
 import { RULES_VERSION } from "@/rules/version";
 import {
   CRISIS_CALLS,
@@ -26,6 +28,7 @@ import {
   resultCards,
   riskFlagsFromForm,
   submitSymptomCheck,
+  warningSignGroups,
 } from "./recordView";
 
 /** 위험 증상 토글이 모두 꺼진 기록 칸(rules-1.2부터 기록에 남는다) */
@@ -48,9 +51,9 @@ describe.skipIf(!HAS_SWIFT)("문구는 Swift 원문 그대로(원칙 5)", () => 
     expect(source).toContain(`"${answeredMoodText("\\(answered.answer.label)")}"`);
   });
 
-  it("위험 신호 없음 카드는 Swift 두 줄과 같다(content.json record_normal)", () => {
-    expect(source).toContain(`"${RECORD_NORMAL_RESULT.title}"`);
-    expect(source).toContain(`"${RECORD_NORMAL_RESULT.body}"`);
+  it("걸린 신호가 없을 때의 카드는 iOS 문구를 쓰지 않는다 — 웹 신규 문구로 바꿨다(content.json record_normal, 법률 사전 검토 H5)", () => {
+    expect(source).not.toContain(`"${RECORD_NORMAL_RESULT.title}"`);
+    expect(source).not.toContain(`"${RECORD_NORMAL_RESULT.body}"`);
   });
 });
 
@@ -122,8 +125,49 @@ describe("폼 초기값 · 위험 증상 순서", () => {
     expect(RECORD_WEB_TEXT.lochiaEarly).toContain("위험 증상");
   });
 
-  it("RECORD_TEXT에는 Swift 원문만 — 바꾼 문구(10일 전 오로 안내)는 RECORD_WEB_TEXT로 옮겼다", () => {
-    expect(Object.keys(RECORD_TEXT)).not.toContain("lochiaEarly");
+  it("RECORD_TEXT에는 Swift 원문만 — 바꾼 문구(10일 전 오로 안내·최근 기록 결과 글자)는 RECORD_WEB_TEXT로 옮겼다", () => {
+    for (const key of ["lochiaEarly", "recentNormal", "recentFlagged"]) expect(Object.keys(RECORD_TEXT)).not.toContain(key);
+  });
+});
+
+describe("바로 병원에 가야 하는 신호 목록 — 입력과 상관없는 일반 안내(법률 사전 검토 H5 D-17)", () => {
+  const groups = warningSignGroups();
+
+  it("등급 높은 순으로 묶는다 — 119 → 위기 상담 → 즉시 내원, 모든 규칙이 한 번씩", () => {
+    expect(groups.map((g) => [g.severity, g.label])).toEqual([
+      ["emergency", "119 연락"],
+      ["crisis", "위기 상담 연락"],
+      ["immediate", "즉시 내원"],
+    ]);
+    expect(groups.flatMap((g) => g.signs.map((s) => s.code)).sort()).toEqual([...RED_FLAG_CODES].sort());
+    expect(groups[0].signs.map((s) => s.code)).toEqual(["heavy_bleeding_dizzy", "seizure"]);
+    expect(groups[1].signs.map((s) => s.code)).toEqual(["harm_thoughts"]);
+  });
+
+  it("신호마다 이름과 출처 칩 — 이름은 첫 칩, 출처는 'src:' 칩 그대로", () => {
+    for (const sign of groups.flatMap((g) => g.signs)) {
+      const flag = content.red_flags.find((f) => f.code === sign.code)!;
+      expect(sign.name).toBe(flag.chips[0]);
+      expect(sign.sources.length, sign.code).toBeGreaterThan(0);
+      expect(sign.sources).toEqual(flag.chips.filter((c) => c.startsWith("src:")));
+    }
+  });
+
+  it("등급마다 할 일 한 줄 — 위기 상담은 109·1577-0199·119·112", () => {
+    for (const g of groups) expect(g.action, g.severity).not.toBe("");
+    for (const n of ["109", "1577-0199", "119", "112"]) expect(groups[1].action, n).toContain(n);
+  });
+
+  it("규칙 표를 넘기면 그 표로 만든다 — 이름 칩이 없는 규칙은 빼고, 모르는 등급은 글자를 지어내지 않는다", () => {
+    const made = warningSignGroups([
+      { code: "a", severity: "urgent", message: "m", chips: ["당일 신호", "src:자료"] },
+      { code: "b", severity: "urgent", message: "m", chips: ["src:자료"] },
+      { code: "c", severity: "later", message: "m", chips: ["다른 신호"] },
+    ]);
+    expect(made).toEqual([
+      { severity: "urgent", label: "당일 진료", action: "오늘 안에 진료를 받으세요.", signs: [{ code: "a", name: "당일 신호", sources: ["src:자료"] }] },
+      { severity: "later", label: "", action: "", signs: [{ code: "c", name: "다른 신호", sources: [] }] },
+    ]);
   });
 });
 
@@ -344,7 +388,7 @@ describe("열 배치 — 폰은 iOS처럼 결과가 폼 자리를, PC(lg)는 폼
   });
 });
 
-describe("최근 기록 — 최신 5건 · 날짜 · 위험신호 없음/병원 신호", () => {
+describe("최근 기록 — 최신 5건 · 날짜 · 해당 없음/병원 확인 신호", () => {
   const rec = (i: number, local: string, redFlagCode: string | null): SymptomRecord => ({
     id: `r${i}`,
     date: kst(local).toISOString(),
@@ -366,8 +410,8 @@ describe("최근 기록 — 최신 5건 · 날짜 · 위험신호 없음/병원 
 
   it("글자로도 상태를 말한다", () => {
     const rows = recentRecordRows([rec(1, "2026-09-23T15:05", "fever_infection"), rec(2, "2026-09-22T00:05", null)]);
-    expect(rows[0]).toMatchObject({ flagged: true, label: "병원 신호", dateText: "9월 23일 오후 3:05" });
-    expect(rows[1]).toMatchObject({ flagged: false, label: "위험신호 없음", dateText: "9월 22일 오전 12:05" });
+    expect(rows[0]).toMatchObject({ flagged: true, label: "병원 확인 신호", dateText: "9월 23일 오후 3:05" });
+    expect(rows[1]).toMatchObject({ flagged: false, label: "해당 없음", dateText: "9월 22일 오전 12:05" });
   });
 
   it("켜져 있던 위험 증상 토글이 기록에 있으면 줄 아래 신호 라벨 — 없는(옛) 기록은 빈 배열", () => {

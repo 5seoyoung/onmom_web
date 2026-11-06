@@ -224,21 +224,28 @@ export const RED_FLAG_GUIDES: readonly RedFlagGuide[] = RULES.map((r) => ({
 // MARK: 홈 회복 지표
 //
 // 레드플래그까지는 아니어도 "지켜볼 만한" 구간을 홈에서 보여준다. 임계값을 레드플래그와 같은 파일에 두는 이유:
-// iOS에서 한때 홈이 자체 임계값을 가져, 산후 10일 이내 붉은 오로를 기록 탭은 "정상", 홈은 "확인 필요"로 말했다.
+// iOS에서 한때 홈이 자체 임계값을 가져, 산후 10일 이내 붉은 오로를 기록 탭과 홈이 서로 다르게 말했다.
 // 근거: 오로 "10일 이후 선홍색 재발·양 증가"(임산부수첩 2023 p.60), 발열 38°C 이상, 통증 NRS 8 이상 = 즉시 내원 기준.
-// NRS 4~7의 "관찰"은 임상 판정이 아니라 중등도 통증을 눈에 띄게 하려는 표시 구간이다.
+// NRS 4~7의 "살펴볼 신호"는 임상 판정이 아니라 중등도 통증을 눈에 띄게 하려는 표시 구간이다.
 
 export interface RecoveryMetric {
   name: string;
   status: MetricStatus;
 }
 
-/** 지표 상태 라벨 — 웰니스 앱이라 "이상" 대신 "확인 필요". 원문: Models.swift:59-61 */
-export const METRIC_STATUS_LABEL: Record<MetricStatus, string> = {
-  normal: "정상",
-  watch: "관찰",
-  alert: "확인 필요",
-};
+/**
+ * 기록의 표시 라벨 — 건강 상태를 평가하지 않고, 기록한 값이 어떤 안내에 해당하는지만 말한다(의료기기 경계 — 법률 사전 검토 H5·4-3,
+ * 임상 사전 검토 질문 16). iOS 원문 "정상/관찰/확인 필요"(Models.swift:59-61)를 바꿨다. 홈 회복 지표 배지·기록 카드·최근 기록·PDF 리포트가
+ * 모두 이 세 글자를 쓴다. "기록 없음"은 쓰지 않는다 — 기록은 있고, 그 값이 목록에 해당하지 않을 뿐이다.
+ */
+export const METRIC_STATUS_LABEL = {
+  // 웹 신규 문구 — CPO 확인 필요
+  normal: "해당 없음",
+  // 웹 신규 문구 — CPO 확인 필요
+  watch: "살펴볼 신호",
+  // 웹 신규 문구 — CPO 확인 필요
+  alert: "병원 확인 신호",
+} as const satisfies Record<MetricStatus, string>;
 
 /**
  * 최근 기록 → 홈 회복 지표. 기록이 없으면 빈 배열(카드 숨김).

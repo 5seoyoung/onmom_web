@@ -5,7 +5,15 @@
 import content from "@/content";
 import { isSameLocalDay, postpartumDayCount } from "@/domain/date";
 import { RISK_SYMPTOM_KEYS, SYMPTOM_HISTORY_LIMIT, type LocalDateString, type RiskSymptomKey, type SymptomRecord } from "@/domain/types";
-import { checkRedFlags, LOCHIA_GATE_DAYS, metrics, type RedFlagResult, type SymptomInput } from "./redflag";
+import {
+  checkRedFlags,
+  LOCHIA_GATE_DAYS,
+  METRIC_STATUS_LABEL,
+  metrics,
+  redFlagSeverity,
+  type RedFlagResult,
+  type SymptomInput,
+} from "./redflag";
 
 // MARK: 기록 만들기
 
@@ -76,15 +84,19 @@ export function addSymptomRecord(history: readonly SymptomRecord[], record: Symp
   return [record, ...history].slice(0, SYMPTOM_HISTORY_LIMIT);
 }
 
-/** 판정 결과가 "신호 없음"일 때의 안내 — 제목·본문 두 줄(RecordFlowView.swift:290, :295, 감사 #53). */
+/**
+ * 걸린 신호가 없을 때의 안내 — 제목·본문 두 줄(RecordFlowView.swift:290, :295, 감사 #53).
+ * "위험 신호가 없다"고 판정하지 않고, 체크한 항목이 목록과 맞지 않았다는 사실만 말한다(법률 사전 검토 H5 D-17).
+ * 웹 신규 문구 — CPO 확인 필요 (content.json disclaimers.record_normal — iOS 원문 "즉시 내원이 필요한 위험 신호는 없어요"를 바꿈)
+ */
 export const RECORD_NORMAL_RESULT: { title: string; body: string } = (() => {
   const [title, body = ""] = content.disclaimers.record_normal.split(" / ");
   return { title, body };
 })();
 
-// MARK: 홈 회복 상태 — 전부 가장 최근 기록 하나에서 파생한다(기록이 없으면 지어내지 않는다)
+// MARK: 홈 회복 기록 — 전부 가장 최근 기록 하나에서 파생한다(기록이 없으면 지어내지 않는다)
 
-/** 가장 최근 증상 기록 — 홈 회복 상태의 유일한 근거(기록은 최신순). */
+/** 가장 최근 증상 기록 — 홈 회복 기록 카드의 유일한 근거(기록은 최신순). */
 export function latestRecord(history: readonly SymptomRecord[]): SymptomRecord | null {
   return history[0] ?? null;
 }
@@ -97,26 +109,41 @@ export function isRedFlagActive(history: readonly SymptomRecord[]): boolean {
   return history[0]?.redFlagCode != null;
 }
 
-export type RecoveryStateLabel = "양호" | "관찰" | "확인 필요";
+export type RecoveryStateLabel = (typeof METRIC_STATUS_LABEL)[keyof typeof METRIC_STATUS_LABEL];
 
-/** 홈 "회복 상태" 라벨. 기록이 없으면 null(기록 유도 카드). 원문: AppStore.swift:69-73 */
+/**
+ * 홈 기록 카드의 라벨 — 지표 배지와 같은 세 글자(METRIC_STATUS_LABEL). 기록이 없으면 null(기록 유도 카드). 규칙은 AppStore.swift:69-73 그대로.
+ * 회복이 좋다·나쁘다를 말하지 않는다 — 가장 최근 기록의 값이 어떤 안내에 해당하는지만 말한다.
+ */
 export function recoveryStateLabel(latest: SymptomRecord | null | undefined): RecoveryStateLabel | null {
   if (!latest) return null;
-  if (latest.redFlagCode != null) return "확인 필요";
-  return metrics(latest).some((m) => m.status !== "normal") ? "관찰" : "양호";
+  if (latest.redFlagCode != null) return METRIC_STATUS_LABEL.alert;
+  return metrics(latest).some((m) => m.status !== "normal") ? METRIC_STATUS_LABEL.watch : METRIC_STATUS_LABEL.normal;
+}
+
+/** 가장 최근 기록에 위기 상담 신호(나·아기를 해칠 것 같은 생각)가 있는가 — 대표 신호가 119여도 토글 칸으로 본다(rules-1.2) */
+export function recordHasCrisisSignal(latest: SymptomRecord | null | undefined): boolean {
+  if (!latest) return false;
+  return latest.harmThoughts === true || redFlagSeverity(latest.redFlagCode) === "crisis";
 }
 
 /**
- * 상태 카드 제목. 최근 기록이 오늘 것이 아니면 기록 날짜를 붙여 오래된 상태를 오늘 것처럼 보이지 않게 한다
- * (HomeView.swift:213-218, 감사 #10). 기록이 없을 때의 기록 유도 카드 제목도 "오늘의 회복 상태"다.
+ * 웹 신규 문구 — CPO 확인 필요 (홈 기록 카드 제목. iOS 원문 "오늘의 회복 상태"·"최근 회복 상태 · …"를 바꿈 — "상태"는 회복을 평가하는
+ * 말로 읽힌다. 법률 사전 검토 H5)
+ */
+export const RECOVERY_RECORD_TITLE = "오늘의 회복 기록";
+
+/**
+ * 기록 카드 제목. 최근 기록이 오늘 것이 아니면 기록 날짜를 붙여 오래된 기록을 오늘 것처럼 보이지 않게 한다
+ * (HomeView.swift:213-218, 감사 #10). 기록이 없을 때의 기록 유도 카드 제목도 같다.
  */
 export function recoveryStateTitle(latest: SymptomRecord | null | undefined, now: Date): string {
   const d = latest ? new Date(latest.date) : null;
   if (!d || Number.isNaN(d.getTime()) || isSameLocalDay(d, now)) {
-    return "오늘의 회복 상태"; // 원문: HomeView.swift:215
+    return RECOVERY_RECORD_TITLE;
   }
   // iOS `.dateTime.month().day()` (ko_KR) = "9월 23일" — 연도는 붙이지 않는다
-  return `최근 회복 상태 · ${d.getMonth() + 1}월 ${d.getDate()}일 기록`; // 원문: HomeView.swift:217
+  return `최근 회복 기록 · ${d.getMonth() + 1}월 ${d.getDate()}일`; // 웹 신규 문구 — CPO 확인 필요 (위 제목과 같은 까닭)
 }
 
 // MARK: 지표 카드의 기록 시각 — "3시간 전", "어제", "지난주"

@@ -24,7 +24,7 @@ import { formatMonthDayTime, parseLocalDate, toLocalDateString } from "@/domain/
 import { SYMPTOM_HISTORY_LIMIT, type CommunityPost, type MoodCheckRecord, type PersistedState } from "@/domain/types";
 import { JOURNAL_TEXT, commentCountLabel } from "@/features/journal/journalView";
 import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, maternityFlags, postpartumLine } from "@/features/profile/profileView";
-import { RECORD_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/features/record/recordView";
+import { RECORD_TEXT, RECORD_WEB_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/features/record/recordView";
 import { PROFILE_EDIT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { MOOD_QUESTIONS, moodAnswerLabel, normalizeMoodAnswer } from "@/rules/mood";
 import { showsLochiaInputs } from "@/rules/record";
@@ -64,7 +64,7 @@ export interface ReportSymptomRow {
   /** "3/10" */
   pain: string;
   flagged: boolean;
-  /** "위험신호 없음" / "병원 신호" */
+  /** "해당 없음" / "병원 확인 신호" */
   result: string;
   /** 그 기록에서 켜져 있던 위험 증상 라벨(firedRiskLabels — 필드가 없는 기록은 빈 배열). 다량 출혈은 따로 칸이 있어 뺀다 */
   signals: string[];
@@ -230,7 +230,7 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
         fever: yesNo(r.feverEvent),
         pain: formatNrs(r.painNrs),
         flagged,
-        result: flagged ? RECORD_TEXT.recentFlagged : RECORD_TEXT.recentNormal,
+        result: flagged ? RECORD_WEB_TEXT.recentFlagged : RECORD_WEB_TEXT.recentNormal,
         // 다량 출혈은 위 칸에 있으니 신호 줄에서는 뺀다(같은 말을 두 번 보이지 않게)
         signals: firedRiskLabels(r, ["bleedingHeavy"]),
         rulesVersionText: versionText(REPORT_TEXT.recordRulesVersion, r.rulesVersion),

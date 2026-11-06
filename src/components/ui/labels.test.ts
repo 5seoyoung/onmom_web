@@ -3,8 +3,11 @@ import content from "@/content";
 import { METRIC_STATUS_LABEL, severityLabel, splitFirstSentence } from "./labels";
 
 describe("METRIC_STATUS_LABEL", () => {
-  it("Models.swift:57-63 원문과 같다", () => {
-    expect(METRIC_STATUS_LABEL).toEqual({ normal: "정상", watch: "관찰", alert: "확인 필요" });
+  it("iOS 원문(정상/관찰/확인 필요)을 바꾼 중립 라벨 — 건강 상태를 평가하는 말이 없다(법률 사전 검토 H5)", () => {
+    expect(METRIC_STATUS_LABEL).toEqual({ normal: "해당 없음", watch: "살펴볼 신호", alert: "병원 확인 신호" });
+    for (const label of Object.values(METRIC_STATUS_LABEL)) {
+      for (const word of ["정상", "양호", "이상 없", "안전"]) expect(label).not.toContain(word);
+    }
   });
 });
 

@@ -5,8 +5,9 @@ import { describe, expect, it } from "vitest";
 import type { SymptomRecord } from "@/domain/types";
 import { MoodQuestionCard } from "./MoodQuestionCard";
 import { RecentRecordsCard } from "./RecentRecordsCard";
-import { NormalResultCard, RecordResult } from "./RecordResult";
+import { NoMatchResultCard, RecordResult } from "./RecordResult";
 import { RecordScreen } from "./RecordScreen";
+import { WarningSignsCard } from "./WarningSignsCard";
 import {
   INITIAL_SYMPTOM_FORM,
   RECORD_TEXT,
@@ -149,7 +150,7 @@ describe("결과", () => {
     expect(html).toContain('<span class="sr-only">출처: </span>');
     expect(html).toContain("임산부수첩 2023");
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
-    expect(html).not.toContain('href="tel:119"');
+    expect(html).not.toContain(`>${RECORD_WEB_TEXT.call119}</span>`); // 119 등급 카드에만
   });
 
   it("예전에 출처 칩이 없던 신호(흉통)도 임상 사전 검토에서 확인한 출처 칩(AWHONN 2018)", () => {
@@ -169,7 +170,7 @@ describe("결과", () => {
     expect(html).toContain(">119 연락</p>");
     expect(html).toContain("경련(발작)은 지금 바로 119에 연락해야 하는 신호예요.");
     expect(html).toContain('href="tel:119"');
-    expect(html).toContain(RECORD_WEB_TEXT.call119);
+    expect(html).toContain(`>${RECORD_WEB_TEXT.call119}</span>`);
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
   });
 
@@ -196,12 +197,41 @@ describe("결과", () => {
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
   });
 
-  it("신호 없음: 제목·본문 두 줄, 산부인과 목록 없음", () => {
+  it("신호 없음: 정보 안내 두 줄 + 전체 신호 목록, 가까운 산부인과 없음 — 위험이 없다고 말하지 않는다", () => {
     const html = renderToStaticMarkup(h(RecordResult, { cards: [], showsClinics: false, neighborhood: "회기동", onNeighborhoodChange: noop }));
-    expect(html).toBe(renderToStaticMarkup(h(NormalResultCard)));
-    expect(html).toContain("즉시 내원이 필요한 위험 신호는 없어요");
-    expect(html).toContain("증상이 계속되거나 심해지면 의료진과 상담하세요. 이 결과는 진단이 아닙니다.");
-    expect(html).not.toContain("산부인과를 찾아");
+    expect(html).toContain(renderToStaticMarkup(h(NoMatchResultCard)));
+    expect(html).toContain("체크한 항목 중에는 &#x27;바로 병원에 가야 하는 신호&#x27;에 해당하는 것이 없었어요");
+    expect(html).toContain("증상이 계속되거나 걱정되면 의료진과 상담하세요.");
+    expect(html).not.toContain("위험 신호는 없어요");
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain("가까운 산부인과");
+    // 초록 방패가 아니라 중립 정보 아이콘
+    expect(renderToStaticMarkup(h(NoMatchResultCard))).not.toContain("fill-state-normal");
+  });
+
+  it("전체 신호 목록은 입력과 상관없이 늘 맨 아래에, 같은 모양으로 — 개인 판정이 아니라 일반 안내", () => {
+    // useId 값은 그리는 자리마다 달라 빼고 비교한다
+    const withoutIds = (markup: string) => markup.replace(/ (?:id|aria-labelledby)="[^"]*"/g, "");
+    const list = withoutIds(renderToStaticMarkup(h(WarningSignsCard)));
+    for (const over of [{}, { feverEvent: true }, { seizure: true }, { harmThoughts: true }, { bleedingHeavy: true, dizzinessFainting: true }]) {
+      const html = withoutIds(resultHtml(over));
+      expect(count(html, list), JSON.stringify(over)).toBe(1);
+      expect(html.endsWith(`${list}</div>`), JSON.stringify(over)).toBe(true);
+    }
+  });
+
+  it("전체 신호 목록: 제목·안내, 등급 묶음(h3), 신호마다 출처 칩, 할 일의 전화번호는 tel: 링크", () => {
+    const list = renderToStaticMarkup(h(WarningSignsCard));
+    expect(list).toContain(`>${RECORD_WEB_TEXT.warningTitle}</h2>`);
+    expect(list).toContain(RECORD_WEB_TEXT.warningIntro);
+    expect([...list.matchAll(/<h3 [^>]*>([^<]+)<\/h3>/g)].map((m) => m[1])).toEqual(["119 연락", "위기 상담 연락", "즉시 내원"]);
+    expect(count(list, "<li class=\"flex flex-col gap-1\">")).toBe(13);
+    for (const name of ["경련(발작)", "나·아기를 해칠 것 같은 생각", "심한 두통·시야 이상", "전신 고열 38°C+"]) expect(list, name).toContain(name);
+    for (const source of ["AWHONN 2018", "CDC Hear Her 2024", "NICE NG194", "NICE NG133", "임산부수첩 2023"]) {
+      expect(list, source).toContain(`<span class="sr-only">출처: </span>${source}`);
+    }
+    for (const tel of ["tel:119", "tel:109", "tel:15770199", "tel:112"]) expect(list, tel).toContain(`href="${tel}"`);
+    expect(list).not.toContain('role="alert"');
   });
 });
 
@@ -250,8 +280,8 @@ describe("최근 기록 카드", () => {
     expect(count(html, "<li")).toBe(2);
     expect(html).toContain(`<time dateTime="${rec.date}"`);
     expect(html).toContain("9월 23일 오후 3:05");
-    expect(html).toContain("병원 신호");
-    expect(html).toContain("위험신호 없음");
+    expect(html).toContain("병원 확인 신호");
+    expect(html).toContain("해당 없음");
     // 위험 증상 필드가 없는 기록(옛 기록·iOS 기록)에는 신호 줄이 없다
     expect(html).not.toContain(RECORD_TEXT.dizziness);
   });
@@ -275,7 +305,7 @@ describe("최근 기록 카드", () => {
     const html = renderToStaticMarkup(h(RecentRecordsCard, { rows }));
     expect(count(html, RECORD_TEXT.dizziness)).toBe(1);
     expect(html).not.toContain(RECORD_TEXT.woundPain);
-    expect(html).toContain("병원 신호");
-    expect(html).toContain("위험신호 없음");
+    expect(html).toContain("병원 확인 신호");
+    expect(html).toContain("해당 없음");
   });
 });

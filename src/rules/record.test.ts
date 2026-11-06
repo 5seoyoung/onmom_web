@@ -8,6 +8,7 @@ import {
   buildSymptomRecord,
   isRedFlagActive,
   latestRecord,
+  recordHasCrisisSignal,
   recoveryStateLabel,
   recoveryStateTitle,
   relativeRecordTime,
@@ -111,7 +112,7 @@ describe("buildSymptomRecord", () => {
     const stored = { ...r, id: "x" }; // 스토어가 id를 붙여 저장한 기록
     // 지표(오로·발열·통증)에는 어지러움 칸이 없다 — 지표는 모두 normal이고, 상태는 기록의 신호(redFlagCode)를 따른다
     expect(metrics(stored).every((m) => m.status === "normal")).toBe(true);
-    expect(recoveryStateLabel(stored)).toBe("확인 필요");
+    expect(recoveryStateLabel(stored)).toBe("병원 확인 신호");
   });
 
   it("통증은 0~10 정수(iOS Int(pain))", () => {
@@ -165,39 +166,56 @@ describe("recoveryStateLabel", () => {
   it("기록이 없으면 null", () => {
     expect(recoveryStateLabel(null)).toBeNull();
   });
-  it("레드플래그 → 확인 필요 · 관찰 지표 → 관찰 · 전부 정상 → 양호", () => {
-    expect(recoveryStateLabel(record({ redFlagCode: "severe_pain", painNrs: 9 }))).toBe("확인 필요");
-    expect(recoveryStateLabel(record({ painNrs: 4 }))).toBe("관찰");
-    expect(recoveryStateLabel(record({ painNrs: 3 }))).toBe("양호");
+  it("레드플래그 → 병원 확인 신호 · 살펴볼 지표 → 살펴볼 신호 · 그 밖 → 해당 없음", () => {
+    expect(recoveryStateLabel(record({ redFlagCode: "severe_pain", painNrs: 9 }))).toBe("병원 확인 신호");
+    expect(recoveryStateLabel(record({ painNrs: 4 }))).toBe("살펴볼 신호");
+    expect(recoveryStateLabel(record({ painNrs: 3 }))).toBe("해당 없음");
   });
-  it("02 §11: 12일 · 증가만 · NRS 5 → 관찰 / 3일 · 증가+붉음 → 양호", () => {
-    expect(recoveryStateLabel(record({ postpartumDays: 12, lochiaIncreased: true, painNrs: 5 }))).toBe("관찰");
-    expect(recoveryStateLabel(record({ postpartumDays: 3, lochiaIncreased: true, lochiaRed: true }))).toBe("양호");
+  it("02 §11: 12일 · 증가만 · NRS 5 → 살펴볼 신호 / 3일 · 증가+붉음 → 해당 없음", () => {
+    expect(recoveryStateLabel(record({ postpartumDays: 12, lochiaIncreased: true, painNrs: 5 }))).toBe("살펴볼 신호");
+    expect(recoveryStateLabel(record({ postpartumDays: 3, lochiaIncreased: true, lochiaRed: true }))).toBe("해당 없음");
   });
-  it("일수 없는 구버전 기록의 붉은 오로는 판정 보류라 양호", () => {
-    expect(recoveryStateLabel(record({ postpartumDays: null, lochiaIncreased: true, lochiaRed: true }))).toBe("양호");
+  it("일수 없는 구버전 기록의 붉은 오로는 판정 보류라 해당 없음", () => {
+    expect(recoveryStateLabel(record({ postpartumDays: null, lochiaIncreased: true, lochiaRed: true }))).toBe("해당 없음");
   });
 });
 
 describe("recoveryStateTitle (감사 #10)", () => {
   const now = at("2026-09-23T23:00:00+09:00");
-  it("기록이 없거나 오늘 기록이면 '오늘의 회복 상태'", () => {
-    expect(recoveryStateTitle(null, now)).toBe("오늘의 회복 상태");
+  it("기록이 없거나 오늘 기록이면 '오늘의 회복 기록'", () => {
+    expect(recoveryStateTitle(null, now)).toBe("오늘의 회복 기록");
     // 한국 00:30 = UTC 전날 15:30 — 로컬 날짜로 본다
-    expect(recoveryStateTitle(record({ date: "2026-09-22T15:30:00.000Z" }), now)).toBe("오늘의 회복 상태");
+    expect(recoveryStateTitle(record({ date: "2026-09-22T15:30:00.000Z" }), now)).toBe("오늘의 회복 기록");
   });
   it("오늘 기록이 아니면 날짜를 붙인다", () => {
-    expect(recoveryStateTitle(record({ date: "2026-09-22T14:59:00.000Z" }), now)).toBe("최근 회복 상태 · 9월 22일 기록");
-    expect(recoveryStateTitle(record({ date: "2025-12-31T23:00:00.000Z" }), now)).toBe("최근 회복 상태 · 1월 1일 기록");
+    expect(recoveryStateTitle(record({ date: "2026-09-22T14:59:00.000Z" }), now)).toBe("최근 회복 기록 · 9월 22일");
+    expect(recoveryStateTitle(record({ date: "2025-12-31T23:00:00.000Z" }), now)).toBe("최근 회복 기록 · 1월 1일");
   });
 });
 
-describe("RECORD_NORMAL_RESULT — 신호 없음 안내(RecordFlowView.swift:290, :295)", () => {
-  it("제목과 본문 두 줄, ' / ' 없이", () => {
+describe("RECORD_NORMAL_RESULT — 걸린 신호가 없을 때의 안내", () => {
+  it("제목과 본문 두 줄, ' / ' 없이 — 체크한 항목이 목록과 맞지 않았다는 사실만 말한다", () => {
     expect(RECORD_NORMAL_RESULT).toEqual({
-      title: "즉시 내원이 필요한 위험 신호는 없어요",
-      body: "증상이 계속되거나 심해지면 의료진과 상담하세요. 이 결과는 진단이 아닙니다.",
+      title: "체크한 항목 중에는 '바로 병원에 가야 하는 신호'에 해당하는 것이 없었어요",
+      body: "증상이 계속되거나 걱정되면 의료진과 상담하세요. 아래 목록에 없는 증상이라도 걱정되면 병원에 문의하세요. 이 안내는 진단이 아니에요.",
     });
+  });
+
+  it("위험이 없다고 판정하지 않는다(법률 사전 검토 4-3 '위험 없음을 말하지 않습니다')", () => {
+    for (const text of [RECORD_NORMAL_RESULT.title, RECORD_NORMAL_RESULT.body]) {
+      for (const word of ["위험 신호는 없", "위험신호 없음", "이상 없", "정상", "양호", "안전"]) expect(text, word).not.toContain(word);
+    }
+  });
+});
+
+describe("recordHasCrisisSignal — 가장 최근 기록의 위기 상담 신호(rules-1.2)", () => {
+  it("대표 신호이거나, 대표 신호가 119여도 토글 칸이 켜져 있으면 — 옛 기록·다른 신호는 아니다", () => {
+    expect(recordHasCrisisSignal(record({ redFlagCode: "harm_thoughts" }))).toBe(true);
+    expect(recordHasCrisisSignal(record({ redFlagCode: "seizure", harmThoughts: true }))).toBe(true);
+    expect(recordHasCrisisSignal(record({ redFlagCode: "seizure", harmThoughts: false }))).toBe(false);
+    expect(recordHasCrisisSignal(record({ redFlagCode: "fever_infection" }))).toBe(false);
+    expect(recordHasCrisisSignal(record())).toBe(false);
+    expect(recordHasCrisisSignal(null)).toBe(false);
   });
 });
 

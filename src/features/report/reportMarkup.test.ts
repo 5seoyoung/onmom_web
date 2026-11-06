@@ -106,7 +106,7 @@ describe("리포트 본문", () => {
     const blocks = /<div class="@xl:hidden print:hidden"><ul [^>]*>([\s\S]*?)<\/ul><\/div>/.exec(html)?.[1] ?? "";
     // 기록 2건, 최신순, 시각·결과 + 표의 나머지 열 이름(산후 일수·많은 출혈·오로 늘어남·붉은 오로·발열·통증)
     expect(count(blocks, /<li /)).toBe(2);
-    expect(blocks.indexOf("병원 신호")).toBeLessThan(blocks.indexOf("위험신호 없음"));
+    expect(blocks.indexOf("병원 확인 신호")).toBeLessThan(blocks.indexOf("해당 없음"));
     for (const label of ["산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)"]) {
       expect(count(blocks, `<dt class="text-text-secondary">${label}</dt>`)).toBe(2);
     }
@@ -122,8 +122,8 @@ describe("리포트 본문", () => {
   });
 
   it("결과는 글자로(색만이 아님), 값 없는 칸은 '-'(낭독 제외) + 범례", () => {
-    expect(html).toContain("병원 신호");
-    expect(html).toContain("위험신호 없음");
+    expect(html).toContain("병원 확인 신호");
+    expect(html).toContain("해당 없음");
     expect(html).toContain('<span aria-hidden="true">-</span>');
     expect(html).toContain(REPORT_TEXT.noValueNote);
   });
@@ -140,7 +140,7 @@ describe("리포트 본문", () => {
     const tableRows = table.split("<tr ").slice(1); // 머리 줄은 <tr>(속성 없음), 본문 줄만
     expect(tableRows).toHaveLength(2);
     expect(tableRows[0]).toContain("2026-10-14T01:00:00.000Z");
-    expect(tableRows[0]).toMatch(new RegExp(`병원 신호</span>${escape(rulesNote)}</td>`));
+    expect(tableRows[0]).toMatch(new RegExp(`병원 확인 신호</span>${escape(rulesNote)}</td>`));
     expect(tableRows[1]).toContain("2026-09-07T01:00:00.000Z");
     expect(tableRows[1]).not.toContain(REPORT_TEXT.recordRulesVersion);
     // 좁은 폭 덩어리에도 같은 한 줄(결과 아래)

@@ -264,7 +264,7 @@ test("서버 흐름: 게스트(익명 계정) → 서버 저장 동의 → 기�
     await nav.getByRole("link", { name: "홈", exact: true }).click();
     await expect(page).toHaveURL(/\/home\/$/);
     const needsCheck = () =>
-      page.getByRole("region", { name: "오늘의 회복 상태" }).getByRole("paragraph").filter({ hasText: /^확인 필요$/ });
+      page.getByRole("region", { name: "오늘의 회복 기록" }).getByRole("paragraph").filter({ hasText: /^병원 확인 신호$/ });
     await expect(needsCheck()).toBeVisible();
     await page.reload();
     await expect(page).toHaveURL(/\/home\/$/);

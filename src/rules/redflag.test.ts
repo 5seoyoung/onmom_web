@@ -382,7 +382,7 @@ describe("metrics — 홈 회복 지표", () => {
     expect(metrics(record({ feverEvent: true })).find((m) => m.name === "발열")?.status).toBe("alert");
   });
 
-  it("상태 라벨", () => {
-    expect(METRIC_STATUS_LABEL).toEqual({ normal: "정상", watch: "관찰", alert: "확인 필요" });
+  it("상태 라벨 — 평가가 아니라 기록이 어떤 안내에 해당하는지(의료기기 경계)", () => {
+    expect(METRIC_STATUS_LABEL).toEqual({ normal: "해당 없음", watch: "살펴볼 신호", alert: "병원 확인 신호" });
   });
 });

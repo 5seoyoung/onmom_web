@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import content from "@/content";
 import type { MoodCheckRecord, PersistedState, SymptomRecord } from "@/domain/types";
-import { RECORD_TEXT } from "@/features/record/recordView";
+import { RECORD_TEXT, RECORD_WEB_TEXT } from "@/features/record/recordView";
 import { MOOD_QUESTIONS } from "@/rules/mood";
 import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { bmi, formatOneDecimal, retainedWeightKg } from "@/rules/weight";
@@ -211,7 +211,7 @@ describe("증상 기록", () => {
       fever: "아니요",
       pain: "3/10",
       flagged: true,
-      result: RECORD_TEXT.recentFlagged,
+      result: RECORD_WEB_TEXT.recentFlagged,
       signals: [],
       rulesVersionText: `규칙 버전 ${RULES_VERSION}`,
     });
@@ -232,13 +232,13 @@ describe("증상 기록", () => {
     ]);
   });
 
-  it("결과: 신호 없음 = '위험신호 없음', 위험 증상 토글이 실린 기록은 그 라벨까지", () => {
+  it("결과: 신호 없음 = '해당 없음', 위험 증상 토글이 실린 기록은 그 라벨까지", () => {
     let s = addSymptomRecord(onboarded(), symptom("n", "2026-10-13T01:00:00.000Z"));
     s = addSymptomRecord(s, { ...symptom("f", "2026-10-14T01:00:00.000Z", { redFlagCode: "neuro_flag" }), dizzinessFainting: true } as SymptomRecord);
     const rows = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "symptoms").rows;
     expect(rows.map((r) => [r.id, r.result, r.signals])).toEqual([
-      ["f", "병원 신호", ["어지러움·실신·균형장애"]],
-      ["n", "위험신호 없음", []],
+      ["f", "병원 확인 신호", ["어지러움·실신·균형장애"]],
+      ["n", "해당 없음", []],
     ]);
   });
 

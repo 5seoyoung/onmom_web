@@ -5,8 +5,8 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { HomeStageCard } from "@/rules/exercise";
-import { HeroCard, StageCard } from "./HomeCards";
-import { HOME_TEXT } from "./homeViewModel";
+import { HeroCard, RecoveryStateCard, StageCard } from "./HomeCards";
+import { HOME_TEXT, RECOVERY_CRISIS_DESCRIPTOR, type RecoveryStateCard as RecoveryStateCardModel } from "./homeViewModel";
 
 describe("HeroCard — 칩 목록", () => {
   const html = renderToStaticMarkup(h(HeroCard, { dayCount: 40, chips: ["자연분만", "전업"] }));
@@ -21,6 +21,23 @@ describe("HeroCard — 칩 목록", () => {
   it("카드 영역 이름은 그대로 제목(산후 회복)", () => {
     expect(html).toContain('aria-labelledby="home-hero-title"');
     expect(html).toMatch(/<h2 id="home-hero-title"[^>]*>산후 회복<\/h2>/);
+  });
+});
+
+describe("RecoveryStateCard — 오늘의 회복 기록", () => {
+  const render = (model: RecoveryStateCardModel) => renderToStaticMarkup(h(RecoveryStateCard, { model }));
+
+  it("3단계 줄의 글자는 지표 배지와 같고, 해당 없음에 인증 도장 아이콘을 쓰지 않는다", () => {
+    const html = render({ kind: "filled", title: "오늘의 회복 기록", label: "해당 없음", tone: "normal", descriptor: "설명" });
+    for (const label of ["해당 없음", "살펴볼 신호", "병원 확인 신호"]) expect(html, label).toContain(label);
+    expect(html).toContain("lucide-clipboard-list");
+    expect(html).not.toContain("lucide-badge-check");
+  });
+
+  it("위기 상담 설명의 전화번호는 눌러서 걸 수 있다(tel:) — 번호가 없는 설명에는 링크가 없다", () => {
+    const crisis = render({ kind: "filled", title: "t", label: "병원 확인 신호", tone: "alert", descriptor: RECOVERY_CRISIS_DESCRIPTOR });
+    for (const tel of ["tel:109", "tel:15770199", "tel:119", "tel:112"]) expect(crisis, tel).toContain(`href="${tel}"`);
+    expect(render({ kind: "filled", title: "t", label: "해당 없음", tone: "normal", descriptor: "설명" })).not.toContain("href=");
   });
 });
 

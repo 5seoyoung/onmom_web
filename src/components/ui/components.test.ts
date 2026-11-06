@@ -66,14 +66,14 @@ describe("EvidenceChip", () => {
 
 describe("StatusBadge", () => {
   it("색만이 아니라 글자로 상태를 알린다", () => {
-    expect(visibleText(render(h(StatusBadge, { status: "normal" })))).toBe("정상");
-    expect(visibleText(render(h(StatusBadge, { status: "watch" })))).toBe("관찰");
-    expect(visibleText(render(h(StatusBadge, { status: "alert" })))).toBe("확인 필요");
+    expect(visibleText(render(h(StatusBadge, { status: "normal" })))).toBe("해당 없음");
+    expect(visibleText(render(h(StatusBadge, { status: "watch" })))).toBe("살펴볼 신호");
+    expect(visibleText(render(h(StatusBadge, { status: "alert" })))).toBe("병원 확인 신호");
   });
 
   it("빈 라벨·공백 라벨이면 기본 라벨로 — 빈 색 캡슐이 되지 않는다", () => {
-    expect(visibleText(render(h(StatusBadge, { status: "alert", label: "" })))).toBe("확인 필요");
-    expect(visibleText(render(h(StatusBadge, { status: "normal", label: "   ", variant: "exercise" })))).toBe("정상");
+    expect(visibleText(render(h(StatusBadge, { status: "alert", label: "" })))).toBe("병원 확인 신호");
+    expect(visibleText(render(h(StatusBadge, { status: "normal", label: "   ", variant: "exercise" })))).toBe("해당 없음");
     expect(visibleText(render(h(StatusBadge, { status: "watch", label: "라벨", variant: "exercise" })))).toBe("라벨");
   });
 

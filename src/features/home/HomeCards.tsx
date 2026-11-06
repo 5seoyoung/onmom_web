@@ -4,9 +4,9 @@
 import Link from "next/link";
 import type { Ref } from "react";
 import {
-  BadgeCheck,
   ChevronRight,
   CirclePlus,
+  ClipboardList,
   Eye,
   Footprints,
   Heart,
@@ -21,6 +21,7 @@ import { Card, EvidenceChipList, StatusBadge, cx } from "@/components/ui";
 import { telHref } from "@/domain/phone";
 // exclamationmark.octagon.fill — 운동·분석 화면과 같은 아이콘(한 곳에서 그린다)
 import { FilledOctagonAlert } from "@/features/exercise/FilledOctagonAlert";
+import { PhoneLinks } from "@/features/guide/PhoneLinks";
 import type { HomeStageCard } from "@/rules/exercise";
 import type { RecoveryMetric } from "@/rules/redflag";
 import type { WeightPlan } from "@/rules/weight";
@@ -52,7 +53,8 @@ const TONE_BAR: Record<StateTone, string> = {
   alert: "bg-state-alert",
 };
 const STATE_ICON: Record<StateTone, LucideIcon> = {
-  normal: BadgeCheck, // checkmark.seal.fill
+  // iOS는 checkmark.seal.fill(인증 도장) — 괜찮다는 판정처럼 보여 기록 모양으로 바꿨다(법률 사전 검토 H5)
+  normal: ClipboardList,
   watch: Eye, // eye.fill
   alert: TriangleAlert, // exclamationmark.triangle.fill
 };
@@ -119,7 +121,7 @@ export function HeroCard({ dayCount, chips }: { dayCount: number | null; chips: 
   );
 }
 
-// MARK: 오늘의 회복 상태 (HomeView.swift:176-262)
+// MARK: 오늘의 회복 기록 (HomeView.swift:176-262)
 export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) {
   if (model.kind === "empty") {
     // 기록이 없으면 상태를 지어내지 않고 기록을 권한다 — 탭하면 기록 화면(iOS는 기록 시트)
@@ -154,7 +156,10 @@ export function RecoveryStateCard({ model }: { model: RecoveryStateCardModel }) 
           <p className="text-[1.75rem] font-bold leading-tight text-text-primary">{model.label}</p>
         </div>
       </div>
-      <p className="text-base text-text-secondary">{model.descriptor}</p>
+      {/* 앱이 정한 글자만 온다 — 위기 상담 설명의 전화번호는 눌러서 걸 수 있게 */}
+      <p className="text-base text-text-secondary">
+        <PhoneLinks text={model.descriptor} />
+      </p>
       {/* 3단계 인디케이터 — 현재 상태만 색. 상태는 위 글자로 이미 전하므로 스크린리더에는 숨긴다. */}
       <div aria-hidden className="grid grid-cols-3 gap-1.5 pt-0.5">
         {RECOVERY_STEPS.map((step) => {
