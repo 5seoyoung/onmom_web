@@ -5,6 +5,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import content from "@/content";
+import { GUEST_ACCOUNT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { PRIVACY_POLICY_SECTIONS } from "@/features/privacy/policyText";
 import { OPERATOR_NAME, WEB_POLICY_DRAFT_LABEL, webPolicySections } from "@/features/privacy/webPolicyText";
 import { CONTACT_EMAIL, CONTACT_TEXT, extractContactEmail, mailtoHref } from "./contact";
@@ -59,11 +60,11 @@ describe("이용약관 초안 — 내용", () => {
   const sections = termsSections();
   const all = sections.map((s) => `${s.title}\n${s.body}`).join("\n");
 
-  it("상태 표시는 웹 개인정보처리방침과 같은 글자('시범 운영 중'), 시행일 2026년 11월 4일, 부칙에 변경 이력", () => {
+  it("상태 표시는 웹 개인정보처리방침과 같은 글자('시범 운영 중'), 시행일 2026년 11월 6일, 부칙에 변경 이력", () => {
     const doc = termsDocument();
     expect(doc.draftLabel).toBe(WEB_POLICY_DRAFT_LABEL);
     expect(doc.draftLabel).toBe("시범 운영 중");
-    expect(doc.effective).toBe("시행일: 2026년 11월 4일");
+    expect(doc.effective).toBe("시행일: 2026년 11월 6일");
     expect(doc.title).toBe(TERMS_TEXT.title);
     expect(hasTermsText()).toBe(true);
     // 시행 중인 약관이다 — 초안·"법률 검토"를 말하지 않는다(변경 이력의 "초안 게시"만 예외)
@@ -72,9 +73,9 @@ describe("이용약관 초안 — 내용", () => {
       expect(t).not.toMatch(/초안(?! 게시)/);
     }
     const rider = sections.find((s) => s.title === "부칙")!.body;
-    expect(rider).toContain("이 약관은 2026년 11월 4일부터 시행합니다.");
+    expect(rider).toContain("이 약관은 2026년 11월 6일부터 시행합니다.");
     expect(rider).toContain("• 2026년 10월 24일: 시범 운영 시작(초안 게시)");
-    expect(rider).toContain("• 2026년 11월 4일: 시행(이 판)");
+    expect(rider).toContain("• 2026년 11월 6일: 시행(이 판)");
   });
 
   it("다뤄야 할 항목이 모두 있다 — 서비스 성질·계정·이용자 의무·금지 행위·변경/중단·종료·책임 제한·준거법·문의·변경 고지", () => {
@@ -125,6 +126,13 @@ describe("이용약관 초안 — 내용", () => {
     expect(sections.find((s) => s.title.startsWith("10. "))!.body).toContain(
       "서비스 제공(저장·표시·이용자 요청 처리)과 개인을 알아볼 수 없는 서비스 개선 통계(개인정보처리방침의 처리 목적) 외의 목적으로 이용하지 않습니다.",
     );
+  });
+
+  it("계정 삭제 안내 — 약관에서 처음 나오는 곳(4조)에 게스트 버튼 이름도 적는다, 실제 버튼 이름과 같다", () => {
+    const first = sections.find((s) => s.body.includes("설정 > 계정 삭제"))!;
+    expect(first.title).toBe("4. 계정");
+    expect(first.body).toContain(`설정 > ${SETTINGS_TEXT.deleteAccount}(게스트 화면의 이름은 [${GUEST_ACCOUNT_TEXT.deleteAccount}]입니다. 아래에서도 같습니다)`);
+    expect(all).not.toContain("이 기기에서 기록 지우기");
   });
 
   it("만 14세 미만인 것이 확인되면 삭제(4조)", () => {

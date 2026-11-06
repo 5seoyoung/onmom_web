@@ -122,7 +122,7 @@ describe("서버 저장 빌드 동의 문구 — 법정 고지 항목", () => {
     expect(ALL_SERVER_TEXT).not.toMatch(/진단합|점수|등급|위험도/);
   });
 
-  it("안내 셋째 줄은 안내만 한다 — 앱이 위험을 '확인'하는 말이 아니라, 이용자가 체크한 증상에 맞는 연락처 안내(2026-11-04 판)", () => {
+  it("안내 셋째 줄은 안내만 한다 — 앱이 위험을 '확인'하는 말이 아니라, 이용자가 체크한 증상에 맞는 연락처 안내(2026-11-06 판)", () => {
     const third = SERVER_CONSENT_TEXT.lines[2];
     expect(third).toBe("바로 도움이 필요한 증상을 체크하면 병원·119 등 연락할 곳 안내");
     expect(ALL_SERVER_TEXT).not.toMatch(/확인되면 의료진|위험 신호가 확인/);
@@ -298,12 +298,12 @@ describe("ConsentStep — 설정 없는 빌드는 iOS 원문 그대로", () => {
  * 뱃지·버튼·"자세히" 같은 화면 글자(SERVER_CONSENT_TEXT의 나머지)와 (d) AI 안내(동의는 AI 기능이 처음 쓸 때 따로 — 판 AI_CONSENT_VERSION)는 넣지 않는다.
  * - web-2026-09-28: 서버 저장 빌드를 켜기 전(아직 이 판에 동의한 이용자가 없음)에 확정한 지문. 시범 안내 줄이 생기기 전이라
  *   [부제, 안내 3줄, (a)~(c)]로 만든 값이다.
- * - web-2026-11-04: 시범 운영 시행판(이 판부터 시범 안내 줄도 지문에 든다 — [부제, 시범 안내 줄, 안내 3줄, (a)~(c)]). 판을 올릴 때 실제
+ * - web-2026-11-06: 시범 운영 시행판(이 판부터 시범 안내 줄도 지문에 든다 — [부제, 시범 안내 줄, 안내 3줄, (a)~(c)]). 판을 올릴 때 실제
  *   이용자는 운영자 본인 1명(초대 0명)이었다.
  */
 const CONSENT_TEXT_FINGERPRINTS: Readonly<Record<string, string>> = {
   "web-2026-09-28": "ceef90399e94d16b2e87e428cf6e6b49c32ef72b6e05541e7ee21427bd46f369",
-  "web-2026-11-04": "5035bf1493b50bd7fdecfea39c62a65e5ce0ef09b40062e4b6ad551523245635",
+  "web-2026-11-06": "66cbe7846e9fdda19d7cda3839ae82788410b7458f34b27dadfca4ac29aa9f71",
 };
 
 describe("동의 판 — 문구를 바꾸면 판을 올린다", () => {
@@ -326,7 +326,7 @@ describe("동의 판 — 문구를 바꾸면 판을 올린다", () => {
 const ONBOARDING_SWIFT = fileURLToPath(new URL("../../../web/reference/swift/OnboardingFlowView.swift", import.meta.url));
 
 describe("원문 대조", () => {
-  it.skipIf(!existsSync(ONBOARDING_SWIFT))("서버 저장 빌드에서도 그대로 쓰는 iOS 문구(안내 셋째 줄은 2026-11-04 판부터 웹 신규 문구라 뺐다)", () => {
+  it.skipIf(!existsSync(ONBOARDING_SWIFT))("서버 저장 빌드에서도 그대로 쓰는 iOS 문구(안내 셋째 줄은 2026-11-06 판부터 웹 신규 문구라 뺐다)", () => {
     const src = readFileSync(ONBOARDING_SWIFT, "utf8");
     for (const text of [ONBOARDING_TEXT.consentTitle, ONBOARDING_TEXT.consentPolicyLink]) {
       expect(src, text).toContain(`"${text}"`);

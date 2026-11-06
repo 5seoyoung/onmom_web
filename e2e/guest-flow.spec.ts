@@ -98,7 +98,7 @@ test("이용약관이 열린다", async ({ page }) => {
   await page.goto("./terms/");
   await expect(page.getByRole("heading", { level: 1, name: "온맘 이용약관" })).toBeVisible();
   await expect(page.getByText("시범 운영 중").first()).toBeVisible();
-  await expect(page.getByText("시행일: 2026년 11월 4일").first()).toBeVisible();
+  await expect(page.getByText("시행일: 2026년 11월 6일").first()).toBeVisible();
 });
 
 test("게스트 흐름: 온보딩 → 위험 신호 → 계정 삭제", async ({ page, guard, baseURL }) => {

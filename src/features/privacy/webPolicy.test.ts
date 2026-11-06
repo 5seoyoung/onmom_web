@@ -8,6 +8,8 @@ import { SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { LLM_FUNCTION_MAX_MESSAGES } from "@/api/llm";
 import { PUSH_SERVICE_HOSTS } from "@/features/pwa/reminderModel";
 import { CHAT_MAX_MESSAGES } from "../../../supabase/functions/_shared/chat";
+import { VIDEO_ROUTE_TAGS } from "@/api/video";
+import { GUEST_ACCOUNT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { CONTACT_EMAIL } from "@/features/terms/contact";
 import {
   ACCESS_LOG_ITEMS,
@@ -50,11 +52,11 @@ describe("어느 방침을 보이나", () => {
     expect(ios.effective).toBe("시행일: 2026년 9월 7일");
   });
 
-  it("설정이 있는 빌드 — 2026-11-04 시행 중인 웹 방침, '시범 운영 중'을 먼저 보인다(초안·법률 검토 표시 없음)", () => {
+  it("설정이 있는 빌드 — 2026-11-06 시행 중인 웹 방침, '시범 운영 중'을 먼저 보인다(초안·법률 검토 표시 없음)", () => {
     expect(web.kind).toBe("webDraft");
     expect(web.draftLabel).toBe("시범 운영 중");
     expect(web.title).toBe(ios.title);
-    expect(web.effective).toBe("시행일: 2026년 11월 4일");
+    expect(web.effective).toBe("시행일: 2026년 11월 6일");
     const note = renderToStaticMarkup(h(PolicyWebNote, { policy: web }));
     expect(textOf(note).startsWith(WEB_POLICY_DRAFT_LABEL)).toBe(true);
     // 시행 중인 방침이다 — 초안·"법률 검토"를 말하지 않는다(대표 결정 2026-11-04: 바깥 법률 검토 없이 시행)
@@ -70,7 +72,7 @@ describe("어느 방침을 보이나", () => {
     const change = section("방침의 변경");
     expect(change).toContain("시행 7일 전에 이 화면에 알립니다");
     expect(change).toContain("• 2026년 10월 24일: 시범 운영 시작(초안 게시)");
-    expect(change).toContain("• 2026년 11월 4일: 시행(이 판)");
+    expect(change).toContain("• 2026년 11월 6일: 시행(이 판)");
     expect(change).toContain("이전 판은");
     // 이전 판 안내가 가리키는 연락처 절 번호가 실제 "보호책임자와 문의처" 절이다
     const contactNo = web.sections.find((s) => s.title.includes("문의처"))!.title.match(/^(\d+)\./)![1];
@@ -253,7 +255,7 @@ describe("웹 초안 — 매일 리마인더(웹 푸시)를 켤 수 있는 빌�
 
 });
 
-describe("웹 방침 — 2026-11-04 시행판에서 사실에 맞춘 것", () => {
+describe("웹 방침 — 2026-11-06 시행판에서 사실에 맞춘 것", () => {
   it("운영 주체와 서비스 주소(1절) — 개인 이름 없이 '온맘 운영자'", () => {
     expect(OPERATOR_NAME).toBe("온맘 운영자");
     expect(SERVICE_URL).toBe("https://onmomcare.app");
@@ -354,6 +356,22 @@ describe("웹 방침 — 2026-11-04 시행판에서 사실에 맞춘 것", () =>
     expect(rights).toContain("이의를 제기할 수 있습니다");
   });
 
+  it("운동 영상 — 서버 함수가 두 분만 경로를 늘 함께 묻는 것과 같게 적는다(방침 6절 Render·동의 안내 둘째 줄)", () => {
+    expect(VIDEO_ROUTE_TAGS).toHaveLength(2);
+    const render = section("국외 이전").split("\n\n").find((b) => b.includes("Render (미국)"))!;
+    expect(render).toContain("두 분만 방식의 값을 늘 함께 보내며, 이용자를 알아볼 수 있는 정보는 보내지 않습니다");
+    expect(render).not.toContain("분만 방식에 따른");
+    expect(SERVER_CONSENT_TEXT.lines[1]).toBe("운동 영상은 두 분만 방식의 목록을 함께 받음 · 영상 서버로 내 정보를 보내지 않음");
+  });
+
+  it("계정 삭제 안내 — 방침에서 처음 나오는 곳(4절)에 게스트 버튼 이름도 적는다, 실제 버튼 이름과 같다", () => {
+    expect(SETTINGS_TEXT.deleteAccount).toBe("계정 삭제");
+    const first = web.sections.find((s) => s.body.includes("설정 > 계정 삭제"))!;
+    expect(first.title).toContain("동의를 받는 방법");
+    expect(first.body).toContain(`설정 > ${SETTINGS_TEXT.deleteAccount}(게스트 화면의 이름은 [${GUEST_ACCOUNT_TEXT.deleteAccount}]입니다. 아래에서도 같습니다)`);
+    expect(WEB_TEXT).not.toContain("이 기기에서 기록 지우기");
+  });
+
   it("만 14세 미만(10절) — 알게 되면 지체 없이 삭제", () => {
     expect(section("만 14세")).toContain("만 14세 미만인 것을 알게 되면 그 계정과 기록을 지체 없이 삭제합니다.");
   });
@@ -424,7 +442,7 @@ describe("문구의 숫자 = 서버 동작", () => {
 const POLICY_SWIFT = fileURLToPath(new URL("../../../web/reference/swift/PrivacyPolicyView.swift", import.meta.url));
 
 describe("원문 대조", () => {
-  it.skipIf(!existsSync(POLICY_SWIFT))("웹 방침 16절의 연락처 = iOS 방침 원문 문의처의 주소(2026-11-04부터 문의처·의료 고지의 나머지 글자는 웹 신규 문구)", () => {
+  it.skipIf(!existsSync(POLICY_SWIFT))("웹 방침 16절의 연락처 = iOS 방침 원문 문의처의 주소(2026-11-06부터 문의처·의료 고지의 나머지 글자는 웹 신규 문구)", () => {
     const src = readFileSync(POLICY_SWIFT, "utf8");
     expect(src).toContain(`개인정보 관련 문의: ${CONTACT_EMAIL}`);
     expect(section("보호책임자")).toContain(`• 연락처: ${CONTACT_EMAIL}`);
