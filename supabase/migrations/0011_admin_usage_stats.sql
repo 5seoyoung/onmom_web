@@ -29,6 +29,8 @@
 --   예외: 답이 비어 있다는 칸(unknown — 출산일 없음·미설정)은 5명 미만이면 숨기지만, 그 칸만 숨겨졌을 때는 다른 칸을 더 숨기지 않는다. 건강 정보가
 --   아니라 답이 없다는 뜻이라 뺄셈으로 알아내도 드러나는 것이 없고, 온보딩을 마친 사람은 거의 다 답해 이 칸이 늘 0에 가깝다 — 이 칸 때문에 매번
 --   둘째로 큰 칸까지 숨기면 분만 방식·목표 분포는 한 칸밖에 보이지 않는다. 다른 칸이 함께 숨겨지면 앞의 규칙이 그대로다("모두가 한 칸에 있다"도 숨는다).
+-- - 기록 분포(기분 답·병원 안내)는 수 대신 반올림한 비율(%)만 준다. 기간의 기록 합계나 칸의 수를 주면 날짜별 칸의 합과 빼서 숨긴 날의 값을
+--   되살릴 수 있다(합계 848 − 보이는 날 합계 847 = 숨긴 날 1건). 비율만 주면 합계가 나가지 않고, 기간끼리·날마다 값을 빼 보기도 어려워진다.
 -- - 병원 안내: 증상 기록에 남은 결과(redFlagCode — rules/record.ts buildSymptomRecord가 즉시 병원 신호의 코드를 남긴다)가 비어 있지 않은
 --   글자이면 병원 안내가 나온 기록으로 센다. 오늘의 코드 목록을 적지 않는다 — 규칙(RULES_VERSION)이 새 경고 신호를 더해도 그대로 센다.
 -- - 기분 답: yes·unsure·no(화면 "네·글쎄요·아니요"). 모르는 값은 앱(rules/mood.ts normalizeMoodAnswer)처럼 unsure로 센다.
@@ -45,7 +47,7 @@
 --     "daily": [ { "day", "symptom_records", "mood_answers", "journal_posts" } × days ]                    -- 규칙 A, 오래된 날 → 오늘
 --     "adoption": { "symptom_records", "mood_answers", "journal_posts" }                                   -- 규칙 A, 기간 안에 1건 이상 남긴 사람 수
 --     "return_rate": { "recording_users", "returning_users" }                                             -- 규칙 A, 기록한 사람 · 서로 다른 이틀 이상 기록한 사람
---     "distributions": {                                                                                  -- 규칙 B, 분포마다 { "total", "counts" } 또는 null
+--     "distributions": {                                                                                  -- 규칙 B, 사람 분포는 { "total", "counts" }, 기록 분포는 { "percents" }(0~100 정수), 모두 숨기면 null
 --       "postpartum_weeks": 통계에 동의한 사람 기준·오늘 기준 { weeks_0_1, weeks_2_5, weeks_6_11, weeks_12_plus, unknown(출산일 없음) },
 --       "delivery_method": 통계에 동의한 사람 기준 { vaginal, cesarean, unknown },  "goal": 통계에 동의한 사람 기준 { homemaker, returning_to_work, unknown },
 --       "mood_answers": 기간 안 답 기준 { yes, unsure, no },  "red_flag": 기간 안 증상 기록 기준 { red_flag, other } } }
@@ -58,7 +60,7 @@
 --   아니면 42501. 공개 키(anon)로는 부를 수 없다. 기록을 쓰므로 volatile — 웹은 supabase.rpc(POST)로 부른다(0009 머리말).
 -- 성능: user_states를 한 번 읽고 사람마다 상태 JSON을 한 번만 풀며(base), 기록 시각은 기록마다 한 번만 바꾼다(period_events).
 --   사람마다 증상 기록 최대 50건·기분 답 최대 60건(domain/types.ts). 로컬 시험(Postgres 17, 5,000명이 모두 최대치 + 기록장 글 10개)에서
---   7·30·90일이 1.2·2.1·3.6초 — Supabase의 로그인 사용자 요청 제한(8초) 안이다. 사람이 크게 늘면 이 수치를 다시 잰다.
+--   7일은 약 1초, 90일은 약 3초 — Supabase의 로그인 사용자 요청 제한(8초) 안이다. 사람이 크게 늘면 이 수치를 다시 잰다.
 
 -- 0) 먼저 있어야 하는 것 확인 ------------------------------------------------------------------------------
 
@@ -335,16 +337,23 @@ begin
       left join extra_hidden x on x.dist = f.dist
     ),
     dist_json as (
-      -- 분포 하나 → { total, counts }. 숨긴 칸은 null, 모든 칸이 숨겨지면 분포 전체가 null.
+      -- 분포 하나 — 숨긴 칸은 null, 모든 칸이 숨겨지면 분포 전체가 null.
+      -- 사람 분포는 { total, counts }. 기록 분포(기분 답·병원 안내)는 { percents }만 — 합계·칸의 수를 내보내지 않는다(머리말).
       select b.dist,
         case
           when fh.mask = fh.all_mask then null
+          when b.dist in ('mood_answers', 'red_flag') then jsonb_build_object(
+            'percents', jsonb_object_agg(
+              b.key,
+              case when (fh.mask & (1 << (b.bucket - 1))) <> 0 then null else round(100.0 * b.n / nullif(b.dist_n, 0))::integer end
+            )
+          )
           else jsonb_build_object(
             'total', sum(b.n),
             'counts', jsonb_object_agg(b.key, case when (fh.mask & (1 << (b.bucket - 1))) <> 0 then null else b.n end)
           )
         end as value
-      from buckets b
+      from (select x.dist, x.bucket, x.key, x.n, sum(x.n) over (partition by x.dist) as dist_n from buckets x) b
       join final_hidden fh on fh.dist = b.dist
       group by b.dist, fh.mask, fh.all_mask
     )

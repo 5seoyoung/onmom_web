@@ -894,14 +894,15 @@ export interface UsageDay {
 
 /**
  * 분포와 칸 — 서버 이름(field)과 칸 순서가 SQL의 dist_keys와 같아야 한다(adminUsageStatsSql.test.ts).
- * 산후 주차·분만 방식·목표는 동의한 사용자 기준(사람 수, 산후 주차는 오늘 기준), 기분 답·병원 안내는 기간 안의 기록 기준(기록 수).
+ * 산후 주차·분만 방식·목표는 동의한 사용자 기준(사람 수, 산후 주차는 오늘 기준), 기분 답·병원 안내는 기간 안의 기록 기준(비율만 —
+ * 기간의 기록 합계나 칸의 수가 있으면 날짜별 칸에서 빼서 숨긴 날을 되살릴 수 있어 서버가 주지 않는다).
  */
 export const USAGE_DISTRIBUTIONS = {
   postpartumWeeks: { field: "postpartum_weeks", unit: "people", buckets: ["weeks_0_1", "weeks_2_5", "weeks_6_11", "weeks_12_plus", "unknown"] },
   deliveryMethod: { field: "delivery_method", unit: "people", buckets: ["vaginal", "cesarean", "unknown"] },
   goal: { field: "goal", unit: "people", buckets: ["homemaker", "returning_to_work", "unknown"] },
-  moodAnswers: { field: "mood_answers", unit: "records", buckets: ["yes", "unsure", "no"] },
-  redFlag: { field: "red_flag", unit: "records", buckets: ["red_flag", "other"] },
+  moodAnswers: { field: "mood_answers", unit: "percent", buckets: ["yes", "unsure", "no"] },
+  redFlag: { field: "red_flag", unit: "percent", buckets: ["red_flag", "other"] },
 } as const;
 
 export type UsageDistributionId = keyof typeof USAGE_DISTRIBUTIONS;
@@ -909,13 +910,13 @@ export const USAGE_DISTRIBUTION_IDS = Object.keys(USAGE_DISTRIBUTIONS) as UsageD
 
 export interface UsageBucket {
   key: string;
-  /** null = 숨김 */
+  /** 사람 분포는 사람 수, 기록 분포는 비율(0~100) — null = 숨김 */
   value: number | null;
 }
 
 export interface UsageDistribution {
-  /** 기준 수 — 산후 주차·분만 방식·목표는 동의한 사용자 수, 기분 답·병원 안내는 기간 안 기록 수 */
-  total: number;
+  /** 기준 수 — 사람 분포(산후 주차·분만 방식·목표)는 동의한 사용자 수, 기록 분포(기분 답·병원 안내)는 null(서버가 주지 않는다) */
+  total: number | null;
   /** USAGE_DISTRIBUTIONS의 칸 순서 */
   buckets: UsageBucket[];
 }
@@ -951,11 +952,31 @@ function activityCell(v: unknown): number | null | undefined {
   return n > 0 && n < USAGE_K ? null : n;
 }
 
+/** 기록 분포 하나 — 비율(0~100)만 읽는다(합계·칸의 수가 함께 와도 옮기지 않는다). 모든 칸이 숨김이면 null, 모양이 다르면 undefined. */
+function parsePercentDistribution(v: unknown, buckets: readonly string[]): UsageDistribution | null | undefined {
+  if (v === undefined || v === null) return null;
+  if (!isRecord(v) || !isRecord(v.percents)) return undefined;
+  const parsed: UsageBucket[] = [];
+  for (const key of buckets) {
+    const raw = v.percents[key];
+    if (raw === undefined || raw === null) {
+      parsed.push({ key, value: null });
+      continue;
+    }
+    const n = parseCount(raw);
+    if (n === null || n > 100) return undefined;
+    parsed.push({ key, value: n });
+  }
+  // 칸마다 반올림하므로 합이 100을 조금 넘을 수 있다(칸 수까지)
+  if (parsed.reduce((s, b) => s + (b.value ?? 0), 0) > 100 + buckets.length) return undefined;
+  return parsed.every((b) => b.value === null) ? null : { total: null, buckets: parsed };
+}
+
 /**
- * 분포 하나 — 모든 칸이 숨김이면 null, 모양이 다르면 undefined.
+ * 사람 분포 하나 — 모든 칸이 숨김이면 null, 모양이 다르면 undefined.
  * 보이는 칸에 0~4가 오면(서버가 숨겼어야 할 값) 분포 전체를 숨긴다 — 그 칸만 숨기면 합계에서 빼서 되살릴 수 있다.
  */
-function parseDistribution(v: unknown, buckets: readonly string[]): UsageDistribution | null | undefined {
+function parseCountDistribution(v: unknown, buckets: readonly string[]): UsageDistribution | null | undefined {
   if (v === undefined || v === null) return null;
   if (!isRecord(v) || !isRecord(v.counts)) return undefined;
   const total = parseCount(v.total);
@@ -1043,7 +1064,8 @@ export function parseUsageStats(data: unknown): UsageStats | null {
     if (!isRecord(data.distributions)) return null;
     for (const id of USAGE_DISTRIBUTION_IDS) {
       const spec = USAGE_DISTRIBUTIONS[id];
-      const parsed = parseDistribution(data.distributions[spec.field], spec.buckets);
+      const raw = data.distributions[spec.field];
+      const parsed = spec.unit === "percent" ? parsePercentDistribution(raw, spec.buckets) : parseCountDistribution(raw, spec.buckets);
       if (parsed === undefined) return null;
       distributions[id] = parsed;
     }
@@ -1280,9 +1302,9 @@ function distributionBasis(id: UsageDistributionId, total: number | null): strin
     case "goal":
       return total === null ? "통계에 동의한 사용자 기준" : `통계에 동의한 사용자 ${formatPeople(total)} 기준`;
     case "moodAnswers":
-      return total === null ? "기간 안의 답 기준" : `기간 안의 답 ${formatRecords(total)} 기준`;
+      return "기간 안의 답 기준";
     case "redFlag":
-      return total === null ? "기간 안의 증상 기록 기준" : `기간 안의 증상 기록 ${formatRecords(total)} 기준`;
+      return "기간 안의 증상 기록 기준";
   }
 }
 
@@ -1296,6 +1318,12 @@ function barRow(key: string, label: string, value: number | null, total: number,
     valueLabel: share === null ? unit(value) : `${unit(value)} · ${share}`,
     widthPct: total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0,
   };
+}
+
+/** 비율만 있는 줄(기록 분포) — "60%" */
+function percentRow(key: string, label: string, value: number | null): UsageBarRow {
+  if (value === null) return { key, label, value: null, valueLabel: ADMIN_TEXT.usageHiddenShort, widthPct: 0 };
+  return { key, label, value, valueLabel: `${value}%`, widthPct: Math.min(100, value) };
 }
 
 /** 기능별 이용 — 기간 안에 그 기능을 한 번 이상 쓴 사람, 동의한 사용자 대비 */
@@ -1316,16 +1344,18 @@ export function usageAdoptionView(stats: UsageStats): UsageBarsView {
 
 /** 분포 하나(산후 주차·분만 방식·목표·기분 살피기 답) — 칸 순서는 서버와 같다 */
 export function usageDistributionView(stats: UsageStats, id: UsageDistributionId): UsageBarsView {
-  const spec = USAGE_DISTRIBUTIONS[id];
   const dist = stats.distributions[id];
   const title = DISTRIBUTION_TITLE[id];
   if (dist === null) return { id, title, basis: distributionBasis(id, null), rows: [], hidden: true, note: null };
-  const unit = spec.unit === "people" ? formatPeople : formatRecords;
-  const rows = dist.buckets.map((b) => barRow(b.key, USAGE_BUCKET_LABEL[id][b.key] ?? b.key, b.value, dist.total, unit));
+  const { total } = dist;
+  const rows = dist.buckets.map((b) => {
+    const label = USAGE_BUCKET_LABEL[id][b.key] ?? b.key;
+    return total === null ? percentRow(b.key, label, b.value) : barRow(b.key, label, b.value, total, formatPeople);
+  });
   return {
     id,
     title,
-    basis: distributionBasis(id, dist.total),
+    basis: distributionBasis(id, total),
     rows,
     hidden: false,
     note: rows.some((r) => r.value === null) ? ADMIN_TEXT.usageComplementNote : null,
@@ -1339,23 +1369,12 @@ export interface UsageRedFlagView {
   /** "12%" — 숨김이면 null */
   share: string | null;
   widthPct: number;
-  /** "증상 기록 120건 중 14건" — 숨김이면 null */
-  caption: string | null;
 }
 
-/** 병원 안내가 나온 증상 기록의 비율 — 하나의 비율이라 막대 줄 대신 큰 수와 미터로 */
+/** 병원 안내가 나온 증상 기록의 비율 — 하나의 비율이라 막대 줄 대신 큰 수와 미터로. 건수는 서버가 주지 않는다(USAGE_DISTRIBUTIONS). */
 export function usageRedFlagView(stats: UsageStats): UsageRedFlagView {
-  const dist = stats.distributions.redFlag;
-  const title = ADMIN_TEXT.usageRedFlagTitle;
-  const flagged = dist?.buckets.find((b) => b.key === "red_flag")?.value ?? null;
-  if (dist === null || flagged === null) return { title, basis: distributionBasis("redFlag", null), hidden: true, share: null, widthPct: 0, caption: null };
-  return {
-    title,
-    basis: distributionBasis("redFlag", dist.total),
-    hidden: false,
-    share: sharePercent(flagged, dist.total),
-    widthPct: dist.total > 0 ? Math.min(100, (flagged / dist.total) * 100) : 0,
-    // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 병원 안내 비율의 보조 줄)
-    caption: `증상 기록 ${formatRecords(dist.total)} 중 ${formatRecords(flagged)}`,
-  };
+  const flagged = stats.distributions.redFlag?.buckets.find((b) => b.key === "red_flag")?.value ?? null;
+  const head = { title: ADMIN_TEXT.usageRedFlagTitle, basis: distributionBasis("redFlag", null) };
+  if (flagged === null) return { ...head, hidden: true, share: null, widthPct: 0 };
+  return { ...head, hidden: false, share: `${flagged}%`, widthPct: Math.min(100, flagged) };
 }

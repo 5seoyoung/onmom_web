@@ -715,8 +715,8 @@ const USAGE_JSON = {
     postpartum_weeks: { total: 42, counts: { weeks_0_1: 6, weeks_2_5: 11, weeks_6_11: null, weeks_12_plus: null, unknown: 7 } },
     delivery_method: { total: 42, counts: { vaginal: 20, cesarean: 15, unknown: 7 } },
     goal: null,
-    mood_answers: { total: 71, counts: { yes: 40, unsure: null, no: null } },
-    red_flag: { total: 120, counts: { red_flag: 14, other: 106 } },
+    mood_answers: { percents: { yes: 56, unsure: null, no: null } },
+    red_flag: { percents: { red_flag: 12, other: 88 } },
   },
 };
 
@@ -842,6 +842,28 @@ describe("parseUsageStats — 서버 응답 읽기", () => {
     expect(withDelivery({ vaginal: 37, cesarean: 5, unknown: null })?.buckets.map((b) => b.value)).toEqual([37, 5, null]);
   });
 
+  it("기록 분포는 비율만 읽는다 — 합계·칸의 수가 함께 와도 화면 값에 없다(날짜별 칸에서 빼서 숨긴 날을 되살리지 못하게)", () => {
+    const s = shownUsage();
+    expect(s.distributions.moodAnswers).toEqual({
+      total: null,
+      buckets: [
+        { key: "yes", value: 56 },
+        { key: "unsure", value: null },
+        { key: "no", value: null },
+      ],
+    });
+    expect(s.distributions.redFlag?.total).toBeNull();
+    const withCounts = usage({
+      distributions: { ...USAGE_JSON.distributions, red_flag: { total: 848, counts: { red_flag: 125, other: 723 }, percents: { red_flag: 15, other: 85 } } },
+    })!;
+    expect(withCounts.distributions.redFlag).toEqual({ total: null, buckets: [{ key: "red_flag", value: 15 }, { key: "other", value: 85 }] });
+    expect(JSON.stringify(withCounts.distributions.redFlag)).not.toMatch(/848|125|723/);
+    // 비율은 5보다 작아도 된다(사람 수가 아니다 — 5명 미만 숨김은 서버가 칸의 사람 수로 정한다)
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, red_flag: { percents: { red_flag: 3, other: 97 } } } })!.distributions.redFlag?.buckets[0].value).toBe(3);
+    // 칸마다 반올림해 합이 100을 조금 넘는 것은 정상이다
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, mood_answers: { percents: { yes: 34, unsure: 34, no: 33 } } } })).not.toBeNull();
+  });
+
   it("칸이 빠지면 숨김, 모든 칸이 숨김이면 분포 전체가 null, 분포 묶음이 없으면 모두 null", () => {
     const withDelivery = (v: unknown) => usage({ distributions: { ...USAGE_JSON.distributions, delivery_method: v } })!.distributions.deliveryMethod;
     expect(withDelivery({ total: 42, counts: { vaginal: 20 } })?.buckets.map((b) => b.value)).toEqual([20, null, null]);
@@ -890,6 +912,10 @@ describe("parseUsageStats — 서버 응답 읽기", () => {
     expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 42 } } })).toBeNull();
     expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 42, counts: { homemaker: "많음" } } } })).toBeNull();
     expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 10, counts: { homemaker: 6, returning_to_work: 6 } } } })).toBeNull(); // 칸의 합이 전체보다 크다
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, mood_answers: { total: 71, counts: { yes: 40 } } } })).toBeNull(); // 기록 분포는 비율로만 온다
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, mood_answers: { percents: { yes: 101 } } } })).toBeNull();
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, mood_answers: { percents: { yes: 60, unsure: 60 } } } })).toBeNull(); // 합이 100을 크게 넘는다
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, mood_answers: { percents: { yes: "많음" } } } })).toBeNull();
   });
 
   it("집계 시각이 없어도 나머지는 읽는다", () => {
@@ -1068,7 +1094,7 @@ describe("이용 통계 — 기능별 이용 · 분포", () => {
     expect(v.note).toBeNull();
   });
 
-  it("분포 — 칸 순서 그대로, 사람 분포는 명, 기록 분포는 건, 비율은 기준 수 대비", () => {
+  it("분포 — 칸 순서 그대로, 사람 분포는 명과 기준 수 대비 비율, 기록 분포는 비율만", () => {
     const weeks = usageDistributionView(shownUsage(), "postpartumWeeks");
     expect(weeks.title).toBe("산후 주차");
     expect(weeks.basis).toBe("통계에 동의한 사용자 42명 · 오늘 기준");
@@ -1081,12 +1107,13 @@ describe("이용 통계 — 기능별 이용 · 분포", () => {
     ]);
     expect(weeks.note).toBe(ADMIN_TEXT.usageComplementNote);
     const mood = usageDistributionView(shownUsage(), "moodAnswers");
-    expect(mood.basis).toBe("기간 안의 답 71건 기준");
+    expect(mood.basis).toBe("기간 안의 답 기준");
     expect(mood.rows.map((r) => [r.label, r.valueLabel])).toEqual([
-      ["네", "40건 · 56%"],
+      ["네", "56%"],
       ["글쎄요", "숨김"],
       ["아니요", "숨김"],
     ]);
+    expect(mood.rows[0].widthPct).toBe(56);
     const delivery = usageDistributionView(shownUsage(), "deliveryMethod");
     expect(delivery.basis).toBe("통계에 동의한 사용자 42명 기준");
     expect(delivery.rows.map((r) => r.label)).toEqual(["자연분만", "제왕절개", "미설정"]);
@@ -1104,13 +1131,10 @@ describe("이용 통계 — 기능별 이용 · 분포", () => {
     });
   });
 
-  it("병원 안내 — 하나의 비율, 숨기면 수도 비율도 없다", () => {
-    const shown = usageRedFlagView(shownUsage());
-    expect(shown).toMatchObject({ title: "병원 안내가 나온 증상 기록", hidden: false, share: "12%", caption: "증상 기록 120건 중 14건" });
-    expect(shown.basis).toBe("기간 안의 증상 기록 120건 기준");
-    expect(shown.widthPct).toBeCloseTo((14 / 120) * 100);
+  it("병원 안내 — 하나의 비율만(건수 없음), 숨기면 비율도 없다", () => {
+    expect(usageRedFlagView(shownUsage())).toEqual({ title: "병원 안내가 나온 증상 기록", basis: "기간 안의 증상 기록 기준", hidden: false, share: "12%", widthPct: 12 });
     const hidden = usageRedFlagView(usage({ distributions: { ...USAGE_JSON.distributions, red_flag: null } })!);
-    expect(hidden).toEqual({ title: "병원 안내가 나온 증상 기록", basis: "기간 안의 증상 기록 기준", hidden: true, share: null, widthPct: 0, caption: null });
+    expect(hidden).toEqual({ title: "병원 안내가 나온 증상 기록", basis: "기간 안의 증상 기록 기준", hidden: true, share: null, widthPct: 0 });
   });
 
   it("suppressed — 기능별 이용·모든 분포가 숨김", () => {

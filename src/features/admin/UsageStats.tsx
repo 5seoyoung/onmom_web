@@ -404,7 +404,6 @@ export function UsageRedFlagCard({ view }: { view: UsageRedFlagView }) {
               <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${view.widthPct}%`, backgroundColor: BAR_COLOR }} />
             ) : null}
           </span>
-          <p className="text-[0.8125rem] text-text-secondary tabular-nums">{view.caption}</p>
         </div>
       )}
     </Card>

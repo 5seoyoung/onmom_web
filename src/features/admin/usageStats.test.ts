@@ -39,8 +39,8 @@ const SHOWN_JSON = {
     postpartum_weeks: { total: 42, counts: { weeks_0_1: 6, weeks_2_5: 11, weeks_6_11: null, weeks_12_plus: null, unknown: 7 } },
     delivery_method: { total: 42, counts: { vaginal: 20, cesarean: 15, unknown: 7 } },
     goal: null,
-    mood_answers: { total: 71, counts: { yes: 40, unsure: null, no: null } },
-    red_flag: { total: 120, counts: { red_flag: 14, other: 106 } },
+    mood_answers: { percents: { yes: 56, unsure: null, no: null } },
+    red_flag: { percents: { red_flag: 12, other: 88 } },
   },
 };
 const SHOWN = parseUsageStats(SHOWN_JSON) as UsageStats;
@@ -156,9 +156,13 @@ describe("이용 통계 묶음 — 값이 있을 때", () => {
     expect(count(markup, /<section /g)).toBe(8); // 이름 없는 section이 없다
     expect(markup).toContain("12명 · 29%");
     expect(markup).toContain("20명 · 48%");
-    expect(markup).toContain("40건 · 56%");
-    expect(markup).toContain("증상 기록 120건 중 14건");
+    expect(markup).toContain(">56%<");
     expect(markup).toContain(">12%<");
+  });
+
+  it("기록 분포의 합계·건수는 어디에도 없다 — 날짜별 합계에서 빼서 숨긴 날을 되살릴 수 없다", () => {
+    expect(markup).not.toMatch(/기간 안의 (답|증상 기록) [\d,]+건/);
+    expect(markup).not.toMatch(/건 중 /);
   });
 
   it("숨긴 칸은 수가 아니라 '숨김' — 까닭을 적고, 모두 숨긴 분포는 한 줄로", () => {
@@ -246,10 +250,9 @@ describe("분포 카드 · 병원 안내 카드", () => {
     expect(markup).not.toContain("background-color");
   });
 
-  it("병원 안내 — 비율·건수가 글자로, 숨기면 수가 없다", () => {
+  it("병원 안내 — 비율이 글자로, 숨기면 수가 없다", () => {
     const shown = renderToStaticMarkup(h(UsageRedFlagCard, { view: usageRedFlagView(SHOWN) }));
     expect(shown).toContain(">12%<");
-    expect(shown).toContain("증상 기록 120건 중 14건");
     const hidden = renderToStaticMarkup(h(UsageRedFlagCard, { view: usageRedFlagView(ONE_USER) }));
     expect(hidden).toContain(ADMIN_TEXT.usageHidden);
     expect(hidden).not.toMatch(/\d+%/);

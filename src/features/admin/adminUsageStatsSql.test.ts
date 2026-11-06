@@ -280,8 +280,24 @@ describe(`0011 — 숨김(k = ${USAGE_K})`, () => {
 
   it("규칙 B — 결과의 칸 값은 숨김을 거친 것뿐이고, 모든 칸이 숨겨지면 분포 전체가 null", () => {
     expect(BODY).toContain("jsonb_object_agg(b.key, case when (fh.mask & (1 << (b.bucket - 1))) <> 0 then null else b.n end)");
-    expect(BODY).toContain("case when fh.mask = fh.all_mask then null else jsonb_build_object(");
+    expect(BODY).toContain("jsonb_object_agg( b.key, case when (fh.mask & (1 << (b.bucket - 1))) <> 0 then null else round(100.0 * b.n / nullif(b.dist_n, 0))::integer end )");
+    expect(BODY).toContain("case when fh.mask = fh.all_mask then null when b.dist in ('mood_answers', 'red_flag') then jsonb_build_object(");
     expect(BODY).toContain("(1 << (count(*)::integer)) - 1 as all_mask");
+  });
+
+  it("기록 분포는 비율만 — 합계·칸의 수를 주면 날짜별 칸에서 숨긴 날을 뺄셈으로 되살린다", () => {
+    const percents = buildObjectCalls(BODY).filter((args) => args[0] === "'percents'");
+    expect(percents).toHaveLength(1);
+    expect(percents[0]).toHaveLength(2); // 'percents' + 값 — total·counts를 함께 싣지 않는다
+    // 합계를 싣는 쪽은 사람 분포(else)뿐이다 — 기분 답·병원 안내는 그 앞 갈래에서 끝난다
+    const record = BODY.indexOf("when b.dist in ('mood_answers', 'red_flag')");
+    expect(record).toBeLessThan(BODY.indexOf("'total', sum(b.n)"));
+    expect(BODY.slice(record, BODY.indexOf("'total', sum(b.n)")).trimEnd().endsWith("else jsonb_build_object(")).toBe(true);
+    expect(BODY.match(/'total'/g)).toHaveLength(1);
+    // 사람 분포로 남긴 것은 기간과 상관없는 프로필 칸뿐이고, 기록 분포 이름은 화면과 같다
+    const recordFields = Object.values(USAGE_DISTRIBUTIONS).filter((d) => d.unit === "percent").map((d) => d.field).sort();
+    expect(recordFields).toEqual(["mood_answers", "red_flag"]);
+    expect(RAW).toContain("합계 848 − 보이는 날 합계 847");
   });
 });
 
@@ -305,6 +321,7 @@ describe("0011 — 사람별 값·자유 글 없음", () => {
         "'journal_posts'",
         "'k'",
         "'mood_answers'",
+        "'percents'",
         "'period'",
         "'recording_users'",
         "'return_rate'",
@@ -327,7 +344,7 @@ describe("0011 — 사람별 값·자유 글 없음", () => {
     for (const source of output.matchAll(/\bfrom (\w+) \w+/g)) expect(["daily", "activity", "dist_json"], source[1]).toContain(source[1]);
     expect(BODY).not.toMatch(/\b(array_agg|to_jsonb|row_to_json|json_agg|string_agg)\b/);
     expect(BODY.match(/\bjsonb_agg\(/g)).toHaveLength(1);
-    expect(BODY.match(/\bjsonb_object_agg\(/g)).toHaveLength(2);
+    expect(BODY.match(/\bjsonb_object_agg\(/g)).toHaveLength(3);
   });
 
   it("상태 JSON에서 읽는 칸은 정해진 것뿐이다 — 기록장 제목·본문·댓글·이름·내 동네·체중·산모수첩은 읽지 않는다", () => {
