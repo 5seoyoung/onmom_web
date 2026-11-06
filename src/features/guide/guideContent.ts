@@ -1,5 +1,6 @@
 // 회복 가이드 화면의 보기 모델 — iOS GuideView.swift.
 // 위험 신호 5줄·카드 8장은 content.json(guide_red_flags · guide_cards)에서 읽는다(재입력 금지).
+// 웹 신규 문구 — CPO 확인 필요 (content.json guide_cards "산후 정신건강"의 넷째 요점 — 임상 사전 검토 B3: 109·1577-0199·119. 출처에 CDC Hear Her 2024 더함)
 // 화면 문구 중 content.json에 없는 것만 Swift 원문을 글자 그대로 옮긴다.
 import content from "@/content";
 import { SOURCE_PREFIX } from "@/components/ui/evidence";

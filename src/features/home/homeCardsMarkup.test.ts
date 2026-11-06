@@ -5,7 +5,7 @@ import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { HomeStageCard } from "@/rules/exercise";
-import { HeroCard, RecoveryStateCard, StageCard } from "./HomeCards";
+import { HeroCard, MoodSupportCard, RecoveryStateCard, StageCard } from "./HomeCards";
 import { HOME_TEXT, RECOVERY_CRISIS_DESCRIPTOR, type RecoveryStateCard as RecoveryStateCardModel } from "./homeViewModel";
 
 describe("HeroCard — 칩 목록", () => {
@@ -38,6 +38,14 @@ describe("RecoveryStateCard — 오늘의 회복 기록", () => {
     const crisis = render({ kind: "filled", title: "t", label: "병원 확인 신호", tone: "alert", descriptor: RECOVERY_CRISIS_DESCRIPTOR });
     for (const tel of ["tel:109", "tel:15770199", "tel:119", "tel:112"]) expect(crisis, tel).toContain(`href="${tel}"`);
     expect(render({ kind: "filled", title: "t", label: "해당 없음", tone: "normal", descriptor: "설명" })).not.toContain("href=");
+  });
+});
+
+describe("MoodSupportCard — 위기 연락처(임상 사전 검토 B3)", () => {
+  it("1577-0199·02-2276-2276에 더해 자살예방상담전화 109와 위급할 때 119가 눌러서 걸 수 있는 줄로 나온다", () => {
+    const html = renderToStaticMarkup(h(MoodSupportCard, { onSnooze: () => {} }));
+    for (const tel of ["tel:15770199", "tel:109", "tel:0222762276", "tel:119"]) expect(html, tel).toContain(`href="${tel}"`);
+    expect(html).toContain("자살예방상담전화 (24시간)");
   });
 });
 

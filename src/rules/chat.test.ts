@@ -28,6 +28,11 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
     expect(replyTo("자해하고 피가 나요")).toBe(replies.self_harm);
   });
 
+  it("위기 번호 — 위기 답은 1577-0199·109·119, 기분 답에도 109·119(임상 사전 검토 B3)", () => {
+    for (const n of ["1577-0199", "109", "119"]) expect(replies.self_harm, n).toContain(n);
+    for (const n of ["1577-0199", "109", "119"]) expect(replies.mood, n).toContain(n);
+  });
+
   it("기분이 출혈보다 먼저", () => {
     expect(replyTo("우울하고 피가 나요")).toBe(replies.mood);
     expect(replyTo("수유 자세가 힘들어요")).toBe(replies.mood);

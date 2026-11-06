@@ -346,8 +346,9 @@ describe("마음 연계 카드 — home_mood_card.png", () => {
     expect(buildHomeViewModel(expired, NOW).showMoodCard).toBe(true);
   });
 
-  it("전화 링크는 숫자만", () => {
-    expect(MOOD_CALLS.map((c) => telHref(c.number))).toEqual(["tel:15770199", "tel:0222762276"]);
+  it("전화 링크는 숫자만 — 원문 두 번호는 그대로 두고 자살예방상담전화 109·위급할 때 119를 더했다(임상 사전 검토 B3)", () => {
+    expect(MOOD_CALLS.map((c) => telHref(c.number))).toEqual(["tel:15770199", "tel:109", "tel:0222762276", "tel:119"]);
+    expect(MOOD_CALLS.find((c) => c.number === "109")?.name).toBe("자살예방상담전화 (24시간)");
   });
 });
 

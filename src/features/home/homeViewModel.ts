@@ -53,10 +53,17 @@ export const HOME_TEXT = {
  */
 export const HOME_CHAT_HREF = `${ROUTES.chat}?from=home`;
 
-/** 마음 연계 카드의 전화 두 줄 — 원문: HomeView.swift:282-283 */
+/**
+ * 마음 연계 카드의 전화 — 1577-0199·02-2276-2276은 원문(HomeView.swift:282-283). 02-2276-2276은 예약 상담 기관이라 위기 연락처가 아니므로
+ * 자살예방상담전화 109와 위급할 때 119를 더했다(임상 사전 검토 M-CARD·B3, K3·K7 — 2026-11-04 대표 결정으로 "목록 변경 금지"를 이 갱신에 한해 풀었다).
+ */
 export const MOOD_CALLS: readonly { name: string; number: string }[] = [
   { name: "정신건강복지센터", number: "1577-0199" },
+  // 웹 신규 문구 — CPO 확인 필요
+  { name: "자살예방상담전화 (24시간)", number: "109" },
   { name: "중앙난임·우울증상담센터", number: "02-2276-2276" },
+  // 웹 신규 문구 — CPO 확인 필요
+  { name: "위급할 때", number: "119" },
 ];
 
 /** 분만 방식을 고르지 않았을 때의 히어로 칩 — 원문: HomeView.swift:99 `?? "분만"` */
