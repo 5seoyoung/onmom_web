@@ -94,7 +94,8 @@ export const ONBOARDING_TEXT = {
   deliveryDatePicked: "회복 주차 계산에 사용돼요",
   deliveryDateNotPicked: "날짜를 눌러 선택해주세요",
   breastfeedingLabel: "모유수유 중이에요",
-  breastfeedingDescription: "약·음식 안전 분류가 수유 기준으로 바뀌어요",
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "약·음식 안전 분류가 수유 기준으로 바뀌어요"를 바꿈 — 개인에게 안전을 판정해 주는 말로 읽히지 않게. 법률 사전 검토 H5)
+  breastfeedingDescription: "약·음식 일반 정보가 수유 기준으로 바뀌어요",
   // 목표(OnboardingFlowView.swift:208-209, 231, 235-236, 273)
   goalTitle: "목표를 설정해주세요",
   goalSubtitle: "AI 상담과 홈 화면이 내 상황을 참고해요.",
