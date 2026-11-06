@@ -100,11 +100,58 @@ export function normalizeForSafety(text: string): string {
 
 const KEYWORDS: readonly string[] = [...CONTENT_SELF_HARM_KEYWORDS, ...EXTRA_SELF_HARM_KEYWORDS].map(normalizeForSafety);
 
-/** 자해·자살 의도 표현이 있는가 — 무해한 구절(SELF_HARM_BENIGN_PHRASES)을 지운 뒤 키워드를 찾는다 */
+/**
+ * 공백을 지워서 생긴 두 글자 키워드 오탐을 가리는 규칙 — "피자 살"(자살)·"초보자 해도"(자해)·"전복죽 고기"(죽고).
+ * 키워드가 띄어쓰기를 넘고, 앞 낱말의 끝 글자에서 시작하면 세지 않는다. 다만 뒤가 이 꼴이면 위기 표현이 띄어쓰기로 갈라진 것일 수 있어 그대로 센다.
+ * 놓치지 않는 것이 먼저다:
+ * - "자 살"·"자 해"처럼 첫 글자가 홀로 떨어진 꼴은 앞 낱말의 끝이 아니라서 그대로 걸린다(띄어 써서 피하는 입력).
+ * - 띄어쓰기를 넘지 않는 자리("피자살"처럼 붙여 쓴 꼴)는 그대로 걸린다(잘못 걸리는 쪽이 낫다).
+ * - 세 글자 이상 키워드("살기싫"·"목을매")는 이 규칙을 쓰지 않는다 — "이제그만 살고 싶어"처럼 앞말이 붙어도 놓치지 않게.
+ *   그래서 "목을 매일 스트레칭"은 그대로 걸린다(위기 안내가 한 번 나올 뿐).
+ * 낱말 목록으로 가리지 않는다 — "과자살"을 가리면 "우울증과 자살 생각"(우울증과자살…)까지 지워진다.
+ * 웹 서버 신규 — 임상 자문 확인 필요. 바꾸면 src/api/edgeFunctions.test.ts의 예문도 함께 본다.
+ */
+const CROSS_WORD_KEYWORD_CRISIS_AFTER: Readonly<Record<string, RegExp>> = {
+  죽고: /^(?:싶|파|프|만싶)/,
+  자살: /^(?:하|시도|충동|생각|했|할)/,
+  자해: /^(?:하|를|충동|생각|했|할)/,
+};
+
+/** 비교용 글자(normalizeForSafety와 같은 글자) + 글자마다 원문의 몇 번째 낱말인지·그 낱말의 첫 글자인지 */
+function joinWords(text: string): { joined: string; wordOf: number[]; startsWord: boolean[] } {
+  let joined = "";
+  const wordOf: number[] = [];
+  const startsWord: boolean[] = [];
+  text
+    .normalize("NFC")
+    .split(/\s+/)
+    .forEach((word, index) => {
+      const part = normalizeForSafety(word);
+      for (let i = 0; i < part.length; i++) {
+        wordOf.push(index);
+        startsWord.push(i === 0);
+      }
+      joined += part;
+    });
+  return { joined, wordOf, startsWord };
+}
+
+/** 자해·자살 의도 표현이 있는가 — 무해한 구절(SELF_HARM_BENIGN_PHRASES)을 가린 뒤 키워드를 찾는다 */
 export function isSelfHarmMessage(text: string): boolean {
-  const t = withoutSelfHarmBenign(normalizeForSafety(text));
+  const { joined, wordOf, startsWord } = joinWords(text);
+  // 가린 자리는 같은 길이의 공백 — 글자 자리가 그대로라 아래에서 원문의 낱말 경계를 볼 수 있다
+  const t = joined.replace(SELF_HARM_BENIGN_PATTERN, (phrase) => " ".repeat(phrase.length));
   if (t.trim() === "") return false;
-  return KEYWORDS.some((k) => k !== "" && t.includes(k));
+  return KEYWORDS.some((k) => {
+    if (k === "") return false;
+    const crisisAfter = CROSS_WORD_KEYWORD_CRISIS_AFTER[k];
+    for (let at = t.indexOf(k); at !== -1; at = t.indexOf(k, at + 1)) {
+      const end = at + k.length;
+      const tailOfPreviousWord = wordOf[at] !== wordOf[end - 1] && !startsWord[at];
+      if (crisisAfter === undefined || !tailOfPreviousWord || crisisAfter.test(t.slice(end))) return true;
+    }
+    return false;
+  });
 }
 
 // MARK: 오탐 줄이기 — 무해한 낱말·구절을 지운 뒤 원래 키워드로 찾는다
@@ -140,6 +187,8 @@ export const SELF_HARM_BENIGN_PHRASES: readonly BenignPhrase[] = [
   "자국이 사라지",
   "흉터가 사라지",
   "오로가 사라지",
+  "오로가 다 사라지",
+  "튼살이 사라지",
   "젖몸살이 사라지",
 ].map((phrase) => ({ phrase }));
 
@@ -147,10 +196,11 @@ export const SELF_HARM_BENIGN_PHRASES: readonly BenignPhrase[] = [
 const BLOOD_AFTER = "가|를|도|만|이|랑|와|하고|나|났|난|좀|계속|많|너무|안|멈|섞|묻|비|덩|흘";
 
 /**
- * 출혈 키워드 "피"(content.json chat_fallback.bleeding_keywords)를 품은 다른 낱말 — 앱 규칙 폴백(src/rules/chat.ts)만 쓴다
+ * 출혈 키워드 "피"·"오로"(content.json chat_fallback.bleeding_keywords)를 품은 다른 낱말 — 앱 규칙 폴백(src/rules/chat.ts)만 쓴다
  * (함수에는 출혈 분기가 없다. 목록을 한곳에서 검토하도록 여기 함께 둔다).
  * 뒤 꼴을 보는 낱말: 피로(피+로 "피로 젖었어요"), 커피(커피색·커피빛 — 분비물 색), 피부(피 부족·피 부터), 피자(피 자국·자꾸·자주), 피하(피 하고·하루·하혈·하나),
- * 해피(어떡해+피가), 피난(피 난다), 피드·피크·피동·피의자(피 드디어·크게·동반·자국) — 띄어 쓰지 않은 꼴은 피(血)일 수 있다.
+ * 해피(어떡해+피가), 피난(피 난다), 피드·피크·피동·피의자(피 드디어·크게·동반·자국), 오로지(오로 지금·지속·지나서) — 띄어 쓰지 않은 꼴은 피(血)·오로일 수 있다.
+ * 뜻이 확실한 낱말만 더한다 — "기피"·"도피"·"회피"는 붙여 쓴 "아기 피"·"오늘도 피"·"3회 피"를 지울 수 있어 넣지 않았다.
  */
 export const BLEEDING_BENIGN_WORDS: readonly BenignPhrase[] = [
   { phrase: "피곤" },
@@ -189,6 +239,15 @@ export const BLEEDING_BENIGN_WORDS: readonly BenignPhrase[] = [
   { phrase: "피동", keepIfFollowedBy: "반" },
   { phrase: "피의자", keepIfFollowedBy: "국" },
   { phrase: "피어나" },
+  { phrase: "레시피" },
+  { phrase: "테라피" },
+  { phrase: "에피소드" },
+  { phrase: "오피스" },
+  { phrase: "스피닝" },
+  { phrase: "피스타치오" },
+  { phrase: "피톤치드" },
+  { phrase: "오로지", keepIfFollowedBy: "금|속|나|난|날" },
+  { phrase: "오로라" },
 ];
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

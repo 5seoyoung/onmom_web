@@ -9,6 +9,9 @@
 // 지우고, 남은 글자에서 content.json 키워드를 그대로 찾는다(supabase/functions/_shared/safety.ts — 웹 선필터·Edge Function과 같은 목록).
 // 무해한 낱말 밖에 키워드가 하나라도 있으면 예전처럼 걸린다("커피 마셨는데 피가 나요" → 출혈 안내).
 // 웹 신규 문구 — CPO 확인 필요 (content.json chat_fallback.replies.mood의 ③ — 임상 사전 검토 B3: 위기 번호 109·119)
+// 웹 신규 문구 — CPO 확인 필요 (content.json chat_fallback.replies.bleeding — 기록 탭 다량 출혈 신호와 같은 양 기준·119, 임상 사전 검토 CH1)
+// 출혈 키워드(2026-11-04, 임상 사전 검토 M8·질문 18): 놓치던 하혈·핏덩이·핏덩어리·핏물·혈괴·선홍·오로를 더했다. "오로는 언제까지 나오나요?"도
+// 출혈 안내를 받는다 — 놓치는 것보다 낫고, 그 답에 회복 가이드의 오로 변화를 가리키는 말을 넣었다.
 
 import content from "@/content";
 // 무해한 낱말 목록 — 가져오는 것이 없는 순수 모듈(웹 번들에도 그대로 들어간다)

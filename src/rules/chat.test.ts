@@ -56,7 +56,7 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
   });
 
   it("그 외는 이해한 척하지 않는 기본 안내", () => {
-    expect(replyTo("오로는 언제까지 나오나요?")).toBe(replies.default);
+    expect(replyTo("산후 검진은 언제 받아야 하나요?")).toBe(replies.default);
     expect(replyTo("안녕")).toBe(replies.default);
     expect(replyTo("")).toBe(replies.default);
   });
@@ -66,7 +66,7 @@ describe("규칙 폴백 — 분기 순서 (02 §9)", () => {
       { role: "assistant", text: "자살 피 운동" },
       { role: "user", text: "우울해요" },
       { role: "assistant", text: "자살" },
-      { role: "user", text: "오로는 언제까지 나오나요?" },
+      { role: "user", text: "산후 검진은 언제 받나요?" },
       { role: "assistant", text: "피" },
     ];
     expect(chatReply(history)).toEqual({ role: "assistant", text: replies.default });
@@ -78,20 +78,63 @@ describe("오탐 줄이기 — 무해한 낱말을 지운 뒤 원래 키워드�
   /** 예전 규칙(iOS 그대로) — 지우지 않고 키워드만 */
   const oldHas = (text: string, keywords: readonly string[]) => keywords.some((k) => text.includes(k));
 
-  it("목록은 정한 낱말 그대로 — 출혈 '피' 27개, 위기 '사라지' 10개", () => {
+  it("목록은 정한 낱말 그대로 — 출혈 '피'·'오로' 36개, 위기 '사라지' 12개", () => {
     expect(BLEEDING_BENIGN_WORDS.map((b) => b.phrase)).toEqual([
       "피곤", "피로", "커피", "피부", "피임", "피자", "피아노", "피해", "피하", "피드", "피크", "피트니스", "피클", "피망",
       "피규어", "피어싱", "스피커", "해피", "슬리피", "피칭", "피날레", "피라미드", "피서", "피난", "피동", "피의자", "피어나",
+      "레시피", "테라피", "에피소드", "오피스", "스피닝", "피스타치오", "피톤치드", "오로지", "오로라",
     ]);
     expect(SELF_HARM_BENIGN_PHRASES.map((b) => b.phrase)).toEqual([
       "붓기가 사라지", "부기가 사라지", "통증이 사라지", "증상이 사라지", "열이 사라지",
-      "멍이 사라지", "자국이 사라지", "흉터가 사라지", "오로가 사라지", "젖몸살이 사라지",
+      "멍이 사라지", "자국이 사라지", "흉터가 사라지", "오로가 사라지", "오로가 다 사라지", "튼살이 사라지", "젖몸살이 사라지",
     ]);
     // 모두 원래 키워드를 품은 낱말이다(그래서 예전에는 걸렸다)
-    for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(phrase).toContain("피");
+    for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(/피|오로/.test(phrase), phrase).toBe(true);
     for (const { phrase } of SELF_HARM_BENIGN_PHRASES) expect(phrase).toContain("사라지");
-    expect(content.chat_fallback.bleeding_keywords).toEqual(["출혈", "피"]);
+    expect(content.chat_fallback.bleeding_keywords).toEqual(["출혈", "피", "하혈", "핏덩이", "핏덩어리", "핏물", "혈괴", "선홍", "오로"]);
     expect(content.chat_fallback.self_harm_keywords).toContain("사라지고");
+  });
+
+  it.each([
+    "하혈이 있어요",
+    "핏덩이가 나왔어요",
+    "핏덩어리가 나와요",
+    "핏물이 비쳐요",
+    "혈괴가 나왔어요",
+    "선홍색 오로가 다시 나와요",
+    "선홍빛이 돌아요",
+    "오로가 갑자기 늘었어요",
+    "오로 양이 많아요",
+    "오로는 언제까지 나오나요?",
+    "오로지금도 많이 나와요",
+    "오로지속되고 있어요",
+  ])("놓치던 출혈 표현은 출혈 안내(임상 사전 검토 질문 18): %s", (text) => {
+    expect(replyTo(text)).toBe(replies.bleeding);
+  });
+
+  it.each([
+    "미역국 레시피 알려주세요",
+    "아로마테라피 해도 되나요?",
+    "웃긴 에피소드가 있어요",
+    "오피스 복귀를 준비해요",
+    "스피닝 수업",
+    "피스타치오 먹어도 되나요?",
+    "피톤치드 산책",
+    "오로지 모유만 먹여요",
+    "오로라 보러 가고 싶어요",
+  ])("뜻이 확실한 낱말은 출혈 안내가 아니다: %s", (text) => {
+    expect(replyTo(text)).not.toBe(replies.bleeding);
+  });
+
+  it.each(["아기피가 나요", "오늘도피가 나요", "하루 3회피가 비쳐요", "레시피 보다가 피가 나요", "오로지 피가 나요"])(
+    "뜻이 확실하지 않은 낱말은 넣지 않았다 — 붙여 쓴 피를 놓치지 않는다: %s",
+    (text) => {
+      expect(replyTo(text)).toBe(replies.bleeding);
+    },
+  );
+
+  it("출혈 답은 기록 탭의 다량 출혈 신호와 같은 기준 — 양 기준·날짜 무관·119, 회복 가이드의 오로 변화", () => {
+    for (const phrase of ["1시간 안에 패드 1장", "달걀만 한 핏덩이", "날짜와 상관없이", "119", "회복 가이드"]) expect(replies.bleeding, phrase).toContain(phrase);
   });
 
   it.each([
