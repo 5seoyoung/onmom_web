@@ -96,13 +96,15 @@ export function DeleteUserDialog({ target, busy, error, onConfirm, onClose }: De
           </p>
         </div>
 
-        {/* 대상 — 계정 ID 전체(앞 8자리 굵게)·유형·가입일. 건강 기록은 없다. */}
+        {/* 대상 — 계정 ID 전체(앞 8자리 굵게)·이메일·유형·가입일. 메일로 온 요청과 같은 계정인지 여기서 맞춰 본다. 건강 기록은 없다. */}
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-chip bg-background px-3 py-2 text-[0.8125rem]">
           <dt className="text-text-secondary">{ADMIN_TEXT.colAccountId}</dt>
           <dd className="break-all font-mono text-text-primary">
             <strong className="font-bold">{target.shortId}</strong>
             {target.id.slice(target.shortId.length)}
           </dd>
+          <dt className="text-text-secondary">{ADMIN_TEXT.colEmail}</dt>
+          <dd className="break-all text-text-primary">{target.email}</dd>
           <dt className="text-text-secondary">{ADMIN_TEXT.colKind}</dt>
           <dd className="text-text-primary">{target.kindLabel}</dd>
           <dt className="text-text-secondary">{ADMIN_TEXT.colCreated}</dt>

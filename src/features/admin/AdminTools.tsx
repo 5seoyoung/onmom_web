@@ -1,7 +1,7 @@
 "use client";
 
 // 관리자 도구 카드(0005_admin_tools.sql) — 동의 버전 분포 · 관리자 목록 · 계정 찾기(이용자의 삭제 요청 처리).
-// 모두 메타데이터만: 계정 ID·시각·유형·동의 판·기록 유무. 건강 기록·이메일·닉네임은 서버 함수가 돌려주지 않는다.
+// 모두 메타데이터만: 계정 ID·로그인 이메일·시각·유형·동의 판·기록 유무. 건강 기록·닉네임은 서버 함수가 돌려주지 않는다.
 // 데이터 상태(불러오는 중·실패)는 AdminScreen이 들고 있고, 여기는 그리기만 한다.
 
 import type { ReactNode } from "react";
@@ -206,6 +206,8 @@ export function UserSearch({ inputId, query, onQueryChange, onSubmit, state, onD
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8125rem]">
             <dt className="text-text-secondary">{ADMIN_TEXT.colAccountId}</dt>
             <dd className="break-all font-mono text-text-primary">{state.row.id}</dd>
+            <dt className="text-text-secondary">{ADMIN_TEXT.colEmail}</dt>
+            <dd className="break-all text-text-primary">{state.row.email}</dd>
             <dt className="text-text-secondary">{ADMIN_TEXT.colKind}</dt>
             <dd className="text-text-primary">{state.row.kindLabel}</dd>
             <dt className="text-text-secondary">{ADMIN_TEXT.colCreated}</dt>

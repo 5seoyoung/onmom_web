@@ -1,9 +1,10 @@
 "use client";
 
-// 사용자 목록 — 계정 메타데이터만(짧은 ID, 가입일, 최근 접속, 게스트/카카오, 동의 판, 서버 기록 유무).
-// 건강 기록·이메일·닉네임은 서버 함수가 돌려주지 않으므로 여기 올 수 없다.
-// - 폰(md 미만): 한 사람 = 한 줄 묶음(정의 목록, 구분선으로 나눔 — 카드 안에 상자를 겹치지 않는다). 표를 가로로 밀지 않게.
-// - PC(md 이상): 표. 숫자·날짜 칸은 자리 맞춤(tabular-nums).
+// 사용자 목록 — 계정 메타데이터만(짧은 ID, 로그인 이메일, 가입일, 최근 접속, 게스트/카카오, 동의 판, 서버 기록 유무).
+// 건강 기록·닉네임은 서버 함수가 돌려주지 않으므로 여기 올 수 없다.
+// - 폰·태블릿(lg 미만): 한 사람 = 한 줄 묶음(정의 목록, 구분선으로 나눔 — 카드 안에 상자를 겹치지 않는다). 표를 가로로 밀지 않게.
+//   태블릿도 묶음이다: 이메일까지 넣으면 768px의 표는 날짜·ID가 글자 중간에서 잘린다(직접 봤다).
+// - PC(lg 이상): 표. 이메일은 길이가 제각각이라 ID와 한 칸에 쌓아 남는 폭을 모두 주고, 나머지 칸은 줄을 바꾸지 않는다. 숫자·날짜 칸은 자리 맞춤(tabular-nums).
 // - 다시 불러오는 동안 이전 목록을 흐리게 남긴다(자리가 튀지 않게).
 // - onDelete가 있으면 행마다 [계정 삭제](0005_admin_tools.sql — 이용자의 삭제 요청 처리, 확인 창은 부모가 띄운다).
 
@@ -83,8 +84,8 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
           <p className="py-8 text-center text-[0.9375rem] text-text-secondary">{ADMIN_TEXT.empty}</p>
         ) : (
           <>
-            {/* 폰 — 한 사람씩 */}
-            <ul className="flex flex-col divide-y divide-divider border-y border-divider md:hidden">
+            {/* 폰·태블릿 — 한 사람씩 */}
+            <ul className="flex flex-col divide-y divide-divider border-y border-divider lg:hidden">
               {rows.map((r) => (
                 <li key={r.id} className="py-3">
                   <div className="flex items-center justify-between gap-2">
@@ -94,6 +95,8 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
                     <KindBadge row={r} />
                   </div>
                   <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.8125rem]">
+                    <dt className="text-text-secondary">{ADMIN_TEXT.colEmail}</dt>
+                    <dd className="break-all text-text-primary">{r.email}</dd>
                     <dt className="text-text-secondary">{ADMIN_TEXT.colCreated}</dt>
                     <dd className="text-text-primary tabular-nums">{r.created}</dd>
                     <dt className="text-text-secondary">{ADMIN_TEXT.colLastSignIn}</dt>
@@ -117,12 +120,12 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
             </ul>
 
             {/* PC — 표 */}
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <table aria-labelledby={titleId} className="w-full text-left text-[0.875rem]">
                 <thead>
                   <tr className="border-b border-divider text-[0.8125rem] text-text-secondary">
                     <th scope="col" className="py-2 pr-4 font-medium">
-                      {ADMIN_TEXT.colId}
+                      {ADMIN_TEXT.colAccount}
                     </th>
                     <th scope="col" className="py-2 pr-4 font-medium">
                       {ADMIN_TEXT.colCreated}
@@ -149,22 +152,23 @@ export function UserList({ titleId, rows, label, loading, hasPrev, hasNext, onPr
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id} className="border-b border-divider last:border-b-0">
-                      <th scope="row" className="py-3 pr-4 font-mono font-normal text-text-primary" title={r.id}>
-                        {r.shortId}
+                      <th scope="row" className="py-3 pr-4 font-normal text-text-primary" title={r.id}>
+                        {r.email !== ADMIN_TEXT.none ? <span className="block break-all">{r.email}</span> : null}
+                        <span className={cx("block font-mono", r.email !== ADMIN_TEXT.none && "text-[0.8125rem] text-text-secondary")}>{r.shortId}</span>
                       </th>
-                      <td className="py-3 pr-4 text-text-primary tabular-nums">{r.created}</td>
-                      <td className="py-3 pr-4 text-text-primary tabular-nums">{r.lastSignIn}</td>
-                      <td className="py-3 pr-4">
+                      <td className="whitespace-nowrap py-3 pr-4 text-text-primary tabular-nums">{r.created}</td>
+                      <td className="whitespace-nowrap py-3 pr-4 text-text-primary tabular-nums">{r.lastSignIn}</td>
+                      <td className="whitespace-nowrap py-3 pr-4">
                         <KindBadge row={r} />
                       </td>
-                      <td className="py-3 pr-4">
+                      <td className="whitespace-nowrap py-3 pr-4">
                         <Consent row={r} />
                       </td>
-                      <td className={cx("py-3", canDelete && "pr-4")}>
+                      <td className={cx("whitespace-nowrap py-3", canDelete && "pr-4")}>
                         <StateCell row={r} />
                       </td>
                       {canDelete ? (
-                        <td className="py-1.5 text-right">
+                        <td className="whitespace-nowrap py-1.5 text-right">
                           <DeleteButton row={r} onDelete={onDelete} disabled={deleting || loading} />
                         </td>
                       ) : null}

@@ -1,11 +1,11 @@
 // 관리자 화면의 서버 호출 — Supabase RPC만 부른다(supabase/migrations/0002_admin.sql · 0005_admin_tools.sql · 0009_admin_access_log.sql ·
-// 0011_admin_usage_stats.sql).
+// 0011_admin_usage_stats.sql · 0013_admin_user_email.sql).
 //
 //   is_admin()                          — 지금 로그인한 카카오 계정이 관리자 목록(public.admins)에 있는가
 //   admin_overview(p_consent_version)   — 집계(전체·게스트·카카오·서버 기록·현재 판 동의·최근 7일·30일 가입 — 0005 뒤에는 동의 판 분포·게스트/카카오 나누기)
 //   admin_usage_stats(p_days)           — 이용 통계(0011) — 통계 목적에 동의한 사용자의 건강 기록을 서버가 익명 집계로 바꾼 수만(5명 미만 칸은 null)
-//   admin_list_users(p_limit, p_offset) — 계정 메타데이터 목록(건강 기록·이메일 없음)
-//   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005)
+//   admin_list_users(p_limit, p_offset) — 계정 메타데이터 목록(로그인 이메일 포함 — 0013, 건강 기록 없음)
+//   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005, 이메일은 0013)
 //   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
 //   admin_list_admins()                 — 관리자 목록(0005)
 //   admin_log_users_export(p_rows)      — CSV 내려받기를 admin_audit에 남긴다(0009). 파일을 만들기 전에 부르고, 실패하면 파일을 만들지 않는다

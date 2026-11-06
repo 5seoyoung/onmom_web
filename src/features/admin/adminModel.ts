@@ -1,7 +1,8 @@
 // 관리자 화면(/admin/) 보기 규칙 — 서버 응답 읽기, 숫자·날짜 표시, 30일 막대 눈금, 쪽 나누기, 이용 통계(집계). 순수 함수(adminModel.test.ts).
 //
 // 건강 기록은 여기 오지 않는다. 서버 함수(supabase/migrations/0002_admin.sql)가 집계와 계정 메타데이터
-// (계정 ID, 가입·접속 시각, 게스트/카카오, 동의 판, 서버 기록 유무와 마지막 저장 시각)만 돌려준다. 이메일·닉네임도 받지 않는다.
+// (계정 ID, 가입·접속 시각, 게스트/카카오, 로그인 이메일(0013), 동의 판, 서버 기록 유무와 마지막 저장 시각)만 돌려준다. 닉네임도 받지 않는다.
+// 이메일은 메일로 온 삭제·문의 요청의 계정을 확인하고 답하는 데 쓴다 — 게스트나 카카오에서 제공에 동의하지 않은 사람은 없고, CSV에는 넣지 않는다.
 // 이용 통계(0011_admin_usage_stats.sql)도 서버가 건강 기록을 서버 안에서 익명 집계로 바꾼 수만 준다(사람별 값·계정 ID·자유 글 없음,
 // 5명 미만인 칸은 null) — 아래 "이용 통계" 묶음.
 // 화면 아래 안내(ADMIN_TEXT.privacyNote)는 이 목록과 같아야 한다 — 칸을 늘리거나 줄이면 함께 고친다.
@@ -47,7 +48,7 @@ export const ADMIN_TEXT = {
   loadFailedBody: "잠시 후 다시 시도해주세요.",
   setupHint: "Supabase SQL Editor에서 supabase/migrations/0002_admin.sql을 실행했는지 확인해 주세요.",
   // 웹 신규 문구 — CPO 확인 필요 (개인정보 안내 — 이용 통계(0011)가 생기며 "익명 집계만·5명 미만 숨김"을 더함. 계정마다 보이는 칸 목록은 그대로)
-  privacyNote: `개인의 건강 기록 내용은 이 화면에 나오지 않아요. 건강 기록은 통계에 동의한 사람의 익명 집계(사람 수·기록 수)로만 보이고, ${USAGE_K}명 미만인 칸은 숨겨요. 계정마다 보이는 것은 계정 ID, 가입·접속 시각, 계정 유형, 동의 버전, 기록 저장 여부와 마지막 저장일뿐이에요.`,
+  privacyNote: `개인의 건강 기록 내용은 이 화면에 나오지 않아요. 건강 기록은 통계에 동의한 사람의 익명 집계(사람 수·기록 수)로만 보이고, ${USAGE_K}명 미만인 칸은 숨겨요. 계정마다 보이는 것은 계정 ID, 가입·접속 시각, 계정 유형, 로그인 이메일(있는 경우), 동의 버전, 기록 저장 여부와 마지막 저장일뿐이에요. 이메일은 계정 확인과 문의 답변에만 써요.`,
   refresh: "새로고침",
   kpiUsers: "전체 사용자",
   kpiKakao: "카카오",
@@ -59,10 +60,13 @@ export const ADMIN_TEXT = {
   colDay: "날짜",
   colNewUsers: "신규 가입",
   usersTitle: "사용자 목록",
-  colId: "ID",
+  // 웹 신규 문구 — CPO 확인 필요 (PC 표의 첫 칸 — 로그인 이메일과 짧은 계정 ID를 한 칸에 쌓는다)
+  colAccount: "계정",
   colCreated: "가입일",
   colLastSignIn: "최근 접속",
   colKind: "유형",
+  // 웹 신규 문구 — CPO 확인 필요 (로그인 이메일 칸 — 0013_admin_user_email.sql)
+  colEmail: "이메일",
   colConsent: "동의 버전",
   colState: "기록 저장",
   stateYes: "있음",
@@ -115,7 +119,8 @@ export const ADMIN_TEXT = {
   csvExport: "CSV 내려받기",
   csvExporting: "내려받는 중",
   csvFailed: "CSV를 만들지 못했어요. 잠시 후 다시 시도해주세요.",
-  csvNote: "표에 보이는 칸만(건강 기록·이메일·닉네임 없음), 최대 5,000명.",
+  // 웹 신규 문구 — CPO 확인 필요 (이메일이 표에는 보이지만 파일에는 들어가지 않는다 — 0013_admin_user_email.sql)
+  csvNote: "계정 메타데이터만(건강 기록·이메일·닉네임 없음), 최대 5,000명.",
   csvYes: "예",
   csvNo: "아니요",
   colAccountId: "계정 ID",
@@ -231,6 +236,8 @@ export interface AdminUserRow {
   isAnonymous: boolean;
   /** "kakao" | "anonymous" | 그 밖의 공급자 이름 */
   provider: string | null;
+  /** 로그인 이메일(0013) — 게스트·카카오 제공 미동의·0013 전 서버는 null */
+  email: string | null;
   hasState: boolean;
   consentVersion: string | null;
   stateUpdatedAt: string | null;
@@ -363,6 +370,7 @@ export function parseUserRows(data: unknown): AdminUserRow[] | null {
       lastSignInAt: parseIso(r.last_sign_in_at),
       isAnonymous: r.is_anonymous === true,
       provider: parseText(r.provider),
+      email: parseText(r.email),
       hasState: r.has_state === true,
       consentVersion: parseText(r.consent_version),
       stateUpdatedAt: parseIso(r.state_updated_at),
@@ -639,6 +647,8 @@ export interface UserRowView {
   lastSignIn: string;
   kind: AccountKind;
   kindLabel: string;
+  /** 로그인 이메일 — 없으면 ADMIN_TEXT.none */
+  email: string;
   consent: string;
   /** 동의 판이 지금 판인가(아니면 옛 판이거나 없음) */
   consentCurrent: boolean;
@@ -657,6 +667,7 @@ export function userRowView(row: AdminUserRow, currentConsentVersion: string): U
     lastSignIn: formatSeoulDateTime(row.lastSignInAt),
     kind,
     kindLabel: ACCOUNT_KIND_LABEL[kind],
+    email: row.email ?? ADMIN_TEXT.none,
     consent: row.consentVersion ?? ADMIN_TEXT.none,
     consentCurrent: row.consentVersion !== null && row.consentVersion === currentConsentVersion,
     hasState: row.hasState,
@@ -775,7 +786,7 @@ export function adminRowView(row: AdminListRow): AdminRowView {
 }
 
 // ── CSV 내려받기(메타데이터만) ───────────────────────────────────────────────
-// 표에 보이는 칸만 — 건강 기록·이메일·닉네임은 서버 응답에 없어 여기 올 수 없다. 파일은 관리자의 기기로만 간다(요청 없음).
+// 계정 메타데이터만 — 건강 기록·닉네임은 서버 응답에 없어 여기 올 수 없고, 이메일은 서버가 주어도 파일에 쓰지 않는다(내려받은 파일은 서버의 접근 통제를 벗어난다 — 0013). 파일은 관리자의 기기로만 간다(요청 없음).
 
 /** 한 번에 내려받는 최대 행 수 — 서버 함수를 100명씩 여러 번 불러 모은다(adminApi fetchAllUsers) */
 export const CSV_MAX_ROWS = 5000;

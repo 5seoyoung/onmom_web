@@ -91,7 +91,7 @@ describe("0011 — 먼저 있어야 하는 것 · 적용", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
     const numbers = files.map((f) => Number(/^(\d{4})_/.exec(f)?.[1]));
     expect(new Set(numbers).size).toBe(files.length);
-    expect(files.at(-1)).toBe(FILE);
+    expect(files.indexOf(FILE)).toBeGreaterThan(files.indexOf("0010_ai_consents.sql"));
     const others = files.filter((f) => f !== FILE && readFileSync(`${MIGRATIONS}${f}`, "utf8").includes("admin_usage_stats"));
     expect(others).toEqual([]);
   });

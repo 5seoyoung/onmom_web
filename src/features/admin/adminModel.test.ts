@@ -157,7 +157,7 @@ const ROW_JSON = {
 
 describe("parseUserRows", () => {
   it("계정 메타데이터만 읽는다 — 다른 칸이 와도 옮기지 않는다", () => {
-    const rows = parseUserRows([{ ...ROW_JSON, email: "a@b.c", state: { symptoms: [] } }]);
+    const rows = parseUserRows([{ ...ROW_JSON, email: "a@b.c", nickname: "엄마", state: { symptoms: [] } }]);
     expect(rows).toEqual([
       {
         id: ROW_JSON.id,
@@ -165,13 +165,22 @@ describe("parseUserRows", () => {
         lastSignInAt: ROW_JSON.last_sign_in_at,
         isAnonymous: false,
         provider: "kakao",
+        email: "a@b.c",
         hasState: true,
         consentVersion: VERSION,
         stateUpdatedAt: ROW_JSON.state_updated_at,
       },
     ]);
-    expect(Object.keys(rows![0])).not.toContain("email");
+    expect(Object.keys(rows![0])).not.toContain("nickname");
     expect(Object.keys(rows![0])).not.toContain("state");
+  });
+
+  it("이메일이 없거나(게스트·0013 전 서버) 비었으면 null — 화면은 '-'", () => {
+    expect(parseUserRows([ROW_JSON])![0].email).toBeNull();
+    expect(parseUserRows([{ ...ROW_JSON, email: null }])![0].email).toBeNull();
+    expect(parseUserRows([{ ...ROW_JSON, email: "" }])![0].email).toBeNull();
+    expect(userRowView(parseUserRows([ROW_JSON])![0], VERSION).email).toBe(ADMIN_TEXT.none);
+    expect(userRowView(parseUserRows([{ ...ROW_JSON, email: "a@b.c" }])![0], VERSION).email).toBe("a@b.c");
   });
 
   it("비어 있을 수 있는 칸은 null, 참/거짓은 true일 때만 참", () => {
@@ -329,6 +338,7 @@ describe("사용자 목록 행", () => {
     lastSignInAt: null,
     isAnonymous: true,
     provider: "anonymous",
+    email: null,
     hasState: false,
     consentVersion: null,
     stateUpdatedAt: null,
@@ -354,6 +364,7 @@ describe("사용자 목록 행", () => {
       lastSignIn: "-",
       kind: "guest",
       kindLabel: "게스트",
+      email: "-",
       consent: "-",
       consentCurrent: false,
       hasState: false,
@@ -378,6 +389,7 @@ describe("사용자 목록 행", () => {
       lastSignIn: "접속 시각",
       kind: "계정 유형",
       kindLabel: "계정 유형",
+      email: "로그인 이메일",
       consent: "동의 버전",
       consentCurrent: "동의 버전",
       hasState: "기록 저장 여부",
@@ -636,6 +648,7 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     lastSignInAt: "2026-09-28T01:02:00+00:00",
     isAnonymous: false,
     provider: "kakao",
+    email: null,
     hasState: true,
     consentVersion: VERSION,
     stateUpdatedAt: "2026-09-28T01:05:00+00:00",
@@ -655,8 +668,8 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(csvCell("--1")).toBe("'--1");
   });
 
-  it("첫 줄은 칸 이름, UTF-8 BOM + CRLF, 표에 보이는 칸만(이메일·닉네임·건강 기록 없음)", () => {
-    const text = usersCsv([kakao, guest], VERSION);
+  it("첫 줄은 칸 이름, UTF-8 BOM + CRLF, 계정 메타데이터만 — 행에 이메일이 있어도 파일에 쓰지 않는다(닉네임·건강 기록도 없음)", () => {
+    const text = usersCsv([{ ...kakao, email: "mom@example.com" }, guest], VERSION);
     expect(text.startsWith("\uFEFF")).toBe(true);
     const lines = text.slice(1).split("\r\n");
     expect(lines).toHaveLength(4); // 머리 + 2행 + 끝 줄바꿈 뒤 빈 줄
@@ -664,7 +677,8 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(lines[0]).toBe("계정 ID,가입일,최근 접속,유형,동의 버전,현재 판 동의,기록 저장,마지막 저장일");
     expect(lines[1]).toBe(`${kakao.id},2026.09.28 00:30,2026.09.28 10:02,카카오,${VERSION},예,있음,2026.09.28`);
     expect(lines[2]).toBe(`${guest.id},2026.09.28 00:30,-,게스트,,아니요,없음,`);
-    expect(text).not.toMatch(/email|이메일|닉네임|state\b/);
+    expect(text).not.toMatch(/email|이메일|닉네임|state\b|mom@example\.com/);
+    expect(ADMIN_TEXT.csvNote).toContain("이메일");
     expect(usersCsv([], VERSION).slice(1).split("\r\n")).toEqual([lines[0], ""]);
   });
 

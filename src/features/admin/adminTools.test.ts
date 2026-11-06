@@ -27,6 +27,7 @@ const KAKAO: AdminUserRow = {
   lastSignInAt: "2026-09-28T01:02:00+00:00",
   isAnonymous: false,
   provider: "kakao",
+  email: null,
   hasState: true,
   consentVersion: VERSION,
   stateUpdatedAt: "2026-09-28T01:05:00+00:00",
@@ -98,12 +99,13 @@ describe("계정 찾기", () => {
   });
 
   it("찾으면 메타데이터 목록과 [계정 삭제], 지웠으면 '삭제됐어요'만(단추 없음)", () => {
-    const found = render({ kind: "found", row: row(KAKAO) });
+    const found = render({ kind: "found", row: row({ ...KAKAO, email: "mom@example.com" }) });
     expect(found).toContain(KAKAO.id);
+    expect(found).toContain("mom@example.com");
     expect(found).toContain(ADMIN_TEXT.kindKakao);
     expect(found).toContain("2026.09.28 10:02");
     expect(count(found, new RegExp(`>${ADMIN_TEXT.deleteUser}<`, "g"))).toBe(1);
-    expect(found).not.toMatch(/email|state"|nickname/);
+    expect(found).not.toMatch(/state"|nickname/);
     const deleted = render({ kind: "deleted", row: row(KAKAO) });
     expect(deleted).toContain(ADMIN_TEXT.searchDeleted);
     expect(deleted).not.toContain(`>${ADMIN_TEXT.deleteUser}<`);
