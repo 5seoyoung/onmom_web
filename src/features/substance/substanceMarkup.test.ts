@@ -4,7 +4,26 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import content from "@/content";
 import { lookupSubstance, type SubstanceResult } from "@/rules/substance";
-import { AI_SOURCE_SR_PREFIX, SubstanceResultCard } from "./SubstanceCheckScreen";
+import { substanceHeader } from "@/rules/substance";
+import { AI_SOURCE_SR_PREFIX, SubstanceIntro, SubstanceResultCard } from "./SubstanceCheckScreen";
+import { SUBSTANCE_TEXT } from "./substanceModel";
+
+describe("머리 안내 — 일반 정보이고 복용 전 상담이 필요하다고 늘 말한다(임상 사전 검토 B4, 법률 사전 검토 4-2)", () => {
+  const ids = { leadId: "l", noteId: "n", generalId: "g" };
+
+  it("문구는 일반 정보·의사·약사 상담을 말하고, 안전 분류를 해 준다고 말하지 않는다", () => {
+    expect(SUBSTANCE_TEXT.generalNote).toBe("공개 자료를 정리한 일반 정보예요. 약이나 음식을 먹기 전에 의사·약사와 상담하세요.");
+    for (const isBreastfeeding of [true, false]) expect(substanceHeader(isBreastfeeding).lead).not.toContain("안전");
+  });
+
+  it("수유 여부와 상관없이 늘 그려진다", () => {
+    for (const isBreastfeeding of [true, false]) {
+      const html = renderToStaticMarkup(h(SubstanceIntro, { header: substanceHeader(isBreastfeeding), ...ids }));
+      expect(html).toContain(`id="g"`);
+      expect(html).toContain(SUBSTANCE_TEXT.generalNote);
+    }
+  });
+});
 
 const AI_ANSWER: SubstanceResult = {
   query: "모르는약",

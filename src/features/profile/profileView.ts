@@ -93,7 +93,8 @@ export interface ProfileMenuItem {
 export const PROFILE_MENU: readonly ProfileMenuItem[] = [
   { key: "support", title: "지원사업 추천", subtitle: "내 상황에 맞는 산모 지원사업", href: ROUTES.support }, // 원문: ProfileView.swift:19
   { key: "lifestyle", title: "생활 권고", subtitle: "수면·영양·정신건강", href: ROUTES.lifestyle }, // 원문: ProfileView.swift:20
-  { key: "substance", title: "약물·음식 체크", subtitle: "수유 중 안전 분류", href: ROUTES.substance }, // 원문: ProfileView.swift:21
+  // 웹 신규 문구 — CPO 확인 필요 (부제 — iOS 원문 "수유 중 안전 분류"를 바꿈. 일반 정보 화면이다 — rules/substance substanceHeader)
+  { key: "substance", title: "약물·음식 체크", subtitle: "수유 중 일반 정보", href: ROUTES.substance },
   { key: "chat", title: "AI 상담", subtitle: "산후 회복 질문하기", href: ROUTES.chat }, // 원문: ProfileView.swift:22
   { key: "region", title: "지역 연계", subtitle: "내 동네 가까운 산부인과 찾기", href: ROUTES.region }, // 원문: ProfileView.swift:23
   { key: "guide", title: "회복 가이드", subtitle: "검증된 가이드라인", href: ROUTES.guide }, // 원문: ProfileView.swift:24
