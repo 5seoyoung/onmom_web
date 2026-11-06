@@ -8,6 +8,7 @@ import {
   CHAT_DECLINED_BANNER,
   CHAT_DECLINED_DEFAULT_REPLY,
   CHAT_ORIGIN_CAPTION,
+  canReachAi,
   canSendChat,
   chatBackHref,
   chatBannerText,
@@ -34,6 +35,52 @@ describe("첫 화면", () => {
   });
   it("배너 문구는 content.json disclaimers.chat_banner", () => {
     expect(CHAT_FALLBACK_BANNER).toBe(content.disclaimers.chat_banner);
+  });
+});
+
+describe("게스트 — 시범 동안 AI는 카카오 계정만(aiMode login)", () => {
+  const history = (text: string) => [...initialChatMessages(), { id: 1, role: "user" as const, text }];
+
+  it("서버에도 동의 카드에도 가지 않고 앱 안내로 답한다", () => {
+    expect(chatSendAction("login", "오로가 언제까지 나오나요?")).toBe("rules");
+    expect(canReachAi("login")).toBe(false);
+    expect(canReachAi("off")).toBe(false);
+    expect(canReachAi("ask")).toBe(true);
+    expect(canReachAi("on")).toBe(true);
+  });
+
+  it("첫 화면부터 배너가 있고 FAQ는 없다", () => {
+    expect(chatScreenState({ mode: "login", messageCount: 1, thinking: false, lastReplyFromFallback: null })).toEqual({ showBanner: true, showFaq: false });
+  });
+
+  it("기본 답의 첫머리는 '카카오 계정에서만', 서버를 부르지 않는다", async () => {
+    const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
+    const r = await requestChatReply(history("오로 색이 궁금해요"), { llmConfigured: false, complete, context: null, loginRequired: true });
+    expect(r).toMatchObject({ fromFallback: true, crisis: false, origin: "rules", fallbackReason: "loginRequired" });
+    expect(r.text).toContain("AI 상담은 카카오 계정에서만 쓸 수 있어");
+    expect(r.text).not.toContain("연결되지 않아");
+    expect(complete).not.toHaveBeenCalled();
+  });
+
+  it("규칙 답(출혈 등)은 그대로, 위기 표현은 위기 안내 그대로", async () => {
+    const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
+    const bleeding = await requestChatReply(history("출혈이 많아요"), { llmConfigured: false, complete, context: null, loginRequired: true });
+    expect(bleeding.text).toBe(content.chat_fallback.replies.bleeding);
+    const crisis = await requestChatReply(history("요즘 죽고 싶어요"), { llmConfigured: false, complete, context: null, loginRequired: true });
+    expect(crisis).toEqual({ text: content.chat_fallback.replies.self_harm, fromFallback: true, crisis: true, origin: "rules", fallbackReason: null });
+  });
+
+  it("서버가 403 ai_login_required로 답해도 같은 이유 — 동의를 다시 묻지 않는다", async () => {
+    const complete = vi.fn(
+      async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status: 403, code: "ai_login_required" }),
+    );
+    const r = await requestChatReply(history("오로 색이 궁금해요"), { llmConfigured: true, complete, context: null });
+    expect(r).toMatchObject({ fallbackReason: "loginRequired", origin: "rules" });
+    expect(r).not.toHaveProperty("consentRequired");
+  });
+
+  it("chatReplyOnError — 예상하지 못한 오류에서도 같은 첫머리", () => {
+    expect(chatReplyOnError(history("오로 색이 궁금해요"), false, true)).toMatchObject({ fallbackReason: "loginRequired" });
   });
 });
 
@@ -282,7 +329,7 @@ describe("위기 선필터 오탐 줄이기 — 몸의 증상이 '사라지고'�
     "붓기가 사라지고 있지만 자살 생각이 들어요",
   ])("위기 표현은 그대로 → AI에 보내지 않고 위기 안내: %s", async (text) => {
     expect(isCrisisMessage(text)).toBe(true);
-    for (const mode of ["ask", "off", "on"] as const) expect(chatSendAction(mode, text)).toBe("rules");
+    for (const mode of ["ask", "off", "login", "on"] as const) expect(chatSendAction(mode, text)).toBe("rules");
     const complete = vi.fn(async (): Promise<LLMResult> => ({ ok: true, text: "x" }));
     const r = await requestChatReply([...initialChatMessages(), { id: 1, role: "user", text }], { llmConfigured: true, complete, context: null });
     expect(r).toMatchObject({ text: content.chat_fallback.replies.self_harm, crisis: true });
@@ -323,7 +370,7 @@ describe("위기 표현 — AI 방식(ask·off·on)과 상관없이 AI에 보내
     }
   });
 
-  it.each(["ask", "off", "on"] as const)("%s — 동의 카드도 AI도 거치지 않는다(rules)", (mode) => {
+  it.each(["ask", "off", "login", "on"] as const)("%s — 동의 카드도 AI도 거치지 않는다(rules)", (mode) => {
     for (const text of [...SERVER_ONLY_CRISIS, "사라지고만 싶어요", "요즘 죽고 싶어요"]) expect(chatSendAction(mode, text)).toBe("rules");
   });
 
@@ -420,6 +467,11 @@ describe("앱 안내로 답한 이유 — 서버 함수의 한도·혼잡·거�
   const history = [...initialChatMessages(), { id: 1, role: "user" as const, text: "오로가 언제까지 나오나요?" }];
   const serverFail = (status: number) => vi.fn(async (): Promise<LLMResult> => ({ ok: false, kind: "server", message: "", status }));
 
+  it("chatFallbackReasonFor — 403 ai_login_required는 카카오 계정만(다른 403은 연결되지 않아)", () => {
+    expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 403, code: "ai_login_required" })).toBe("loginRequired");
+    expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 403, code: "origin_not_allowed" })).toBe("notConnected");
+  });
+
   it("chatFallbackReasonFor — 429 한도 · 503 혼잡/이용 불가 · 422 거절, 그 밖은 연결되지 않아", () => {
     expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 429 })).toBe("rateLimited");
     expect(chatFallbackReasonFor({ ok: false, kind: "server", message: "", status: 503 })).toBe("busy");
@@ -441,10 +493,11 @@ describe("앱 안내로 답한 이유 — 서버 함수의 한도·혼잡·거�
     expect(chatBannerText("rateLimited")).toBe(`AI 상담 이용 횟수가 잠시 한도에 닿아${bannerTail}`);
     expect(chatBannerText("busy")).toBe(`지금은 AI 서버를 잠시 이용할 수 없어${bannerTail}`);
     expect(chatBannerText("refused")).toBe(`AI가 이 질문에는 답하지 않아${bannerTail}`);
+    expect(chatBannerText("loginRequired")).toBe(`AI 상담은 카카오 계정에서만 쓸 수 있어${bannerTail}`);
     expect(chatDefaultReplyText("rateLimited")).toBe(`AI 상담 이용 횟수가 잠시 한도에 닿아${replyTail}`);
     expect(chatDefaultReplyText("busy")).toBe(`지금은 AI 서버를 잠시 이용할 수 없어${replyTail}`);
     expect(chatDefaultReplyText("refused")).toBe(`AI가 이 질문에는 답하지 않아${replyTail}`);
-    for (const reason of ["declined", "rateLimited", "busy", "refused"] as const) {
+    for (const reason of ["declined", "loginRequired", "rateLimited", "busy", "refused"] as const) {
       expect(chatBannerText(reason)).not.toContain("연결되지 않아");
       expect(chatDefaultReplyText(reason)).not.toContain("연결되지 않아");
     }
@@ -514,7 +567,7 @@ describe("예상하지 못한 오류 — '생각 중'이 남지 않고 앱 안�
     const src = readFileSync(fileURLToPath(new URL("./ChatScreen.tsx", import.meta.url)), "utf8");
     const chain = src.slice(src.indexOf("void Promise.resolve()"), src.indexOf("function onAcceptAi"));
     expect(chain).toContain("requestChatReply(history");
-    expect(chain).toContain(".catch(() => chatReplyOnError(history, declinedNow))");
+    expect(chain).toContain('.catch(() => chatReplyOnError(history, declinedNow, mode === "login"))');
     expect(chain).toMatch(/\.finally\(\(\) => \{[\s\S]*setThinking\(false\);/);
   });
 });
