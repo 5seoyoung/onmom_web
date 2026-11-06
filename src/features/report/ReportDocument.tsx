@@ -272,6 +272,7 @@ function SectionBody({ section }: { section: ReportSection }) {
             </div>
           </div>
           {section.showsNoValueNote ? <p className="text-xs text-text-secondary">{REPORT_TEXT.noValueNote}</p> : null}
+          <p className="text-xs text-text-secondary">{REPORT_TEXT.crisisOmittedNote}</p>
         </>
       );
     case "moods":

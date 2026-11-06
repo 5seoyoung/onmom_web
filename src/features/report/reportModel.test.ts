@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import content from "@/content";
 import type { MoodCheckRecord, PersistedState, SymptomRecord } from "@/domain/types";
-import { RECORD_TEXT, RECORD_WEB_TEXT } from "@/features/record/recordView";
+import { RECORD_TEXT, RECORD_WEB_TEXT, RISK_TOGGLES } from "@/features/record/recordView";
 import { MOOD_QUESTIONS } from "@/rules/mood";
 import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { bmi, formatOneDecimal, retainedWeightKg } from "@/rules/weight";
@@ -182,6 +182,54 @@ describe("증상 기록", () => {
     expect(byId.no.bleedingHeavy).toBe("아니요");
     expect(byId.yes.bleedingHeavy).toBe("예");
     expect(byId.yes.signals).toEqual(["어지러움·실신·균형장애"]);
+  });
+
+  describe("해칠 것 같은 생각은 리포트에 넣지 않는다(2026-11-06 대표 결정)", () => {
+    const RISK_LABEL = (key: string) => RISK_TOGGLES.find((t) => t.key === key)?.label;
+    const rowOf = (over: Partial<SymptomRecord>) => {
+      const history = [symptom("h", "2026-10-14T06:05:00.000Z", { harmThoughts: true, redFlagCode: "harm_thoughts", ...over })];
+      return section(buildReport({ ...onboarded(), symptomHistory: history }, GUEST, NOW, { includeJournal: false }), "symptoms").rows[0];
+    };
+
+    it("이것만 체크한 기록 — 신호 줄도 결과도 다른 기록과 똑같아 무언가 있었다는 것이 드러나지 않는다", () => {
+      const plain = section(
+        buildReport({ ...onboarded(), symptomHistory: [symptom("p", "2026-10-14T06:05:00.000Z")] }, GUEST, NOW, { includeJournal: false }),
+        "symptoms",
+      ).rows[0];
+      const row = rowOf({});
+      expect(row.signals).toEqual([]);
+      expect(row.flagged).toBe(false);
+      expect(row.result).toBe(plain.result);
+    });
+
+    it("함께 체크한 토글은 그대로 보인다 — 대표 신호가 위기 상담이어도", () => {
+      const row = rowOf({ chestPainBreathing: true });
+      expect(row.flagged).toBe(true);
+      expect(row.result).toBe(RECORD_WEB_TEXT.recentFlagged);
+      expect(row.signals).toEqual([RISK_LABEL("chestPainBreathing")]);
+    });
+
+    it("토글이 아닌 신호(고열·심한 통증)도 가려지지 않는다 — 규칙을 다시 돌려 본다", () => {
+      expect(rowOf({ feverEvent: true }).flagged).toBe(true);
+      expect(rowOf({ painNrs: 9 }).flagged).toBe(true);
+    });
+
+    it("대표 신호가 119여도 그 신호는 남고 해칠 것 같은 생각은 빠진다", () => {
+      const row = rowOf({ seizure: true, redFlagCode: "seizure" });
+      expect(row.flagged).toBe(true);
+      expect(row.signals).toEqual([RISK_LABEL("seizure")]);
+    });
+
+    it("리포트 어디에도 그 문구가 없다", () => {
+      const report = buildReport(
+        { ...onboarded(), symptomHistory: [symptom("h", "2026-10-14T06:05:00.000Z", { harmThoughts: true, redFlagCode: "harm_thoughts" })] },
+        GUEST,
+        NOW,
+        { includeJournal: true },
+      );
+      expect(JSON.stringify(report)).not.toContain(RECORD_WEB_TEXT.harmThoughts);
+      expect(JSON.stringify(report)).not.toContain("harm_thoughts");
+    });
   });
 
   it("최대 50건(저장 한도) — 51건이 들어와도 최신 50건", () => {

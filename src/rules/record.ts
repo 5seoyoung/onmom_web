@@ -128,6 +128,26 @@ export function recordHasCrisisSignal(latest: SymptomRecord | null | undefined):
 }
 
 /**
+ * 위기 상담 신호(나·아기를 해칠 것 같은 생각)를 빼도 이 기록에 다른 병원 신호가 남는가 — PDF 리포트가 그 항목을 넣지 않을 때 쓴다.
+ * 저장되는 redFlagCode는 대표 신호 하나뿐이다. 대표 신호가 위기 상담이면 그 아래 등급의 신호(출혈·고열 등)가 가려져 있을 수 있어
+ * 저장된 칸으로 규칙을 다시 돌려 본다. 대표 신호가 위기 상담이 아니면 다른 규칙이 걸린 것이라 그대로다.
+ */
+export function hasSignalBesidesCrisis(record: SymptomRecord): boolean {
+  if (redFlagSeverity(record.redFlagCode) !== "crisis") return record.redFlagCode != null;
+  const toggles = Object.fromEntries(RISK_SYMPTOM_KEYS.map((key) => [key, record[key] === true])) as Record<RiskSymptomKey, boolean>;
+  const { hospitalSignal } = checkRedFlags({
+    ...toggles,
+    harmThoughts: false,
+    postpartumDays: record.postpartumDays ?? 0,
+    lochiaIncreased: record.lochiaIncreased,
+    lochiaRed: record.lochiaRed,
+    feverEvent: record.feverEvent,
+    painNrs: record.painNrs,
+  });
+  return hospitalSignal !== null;
+}
+
+/**
  * 웹 신규 문구 — CPO 확인 필요 (홈 기록 카드 제목. iOS 원문 "오늘의 회복 상태"·"최근 회복 상태 · …"를 바꿈 — "상태"는 회복을 평가하는
  * 말로 읽힌다. 법률 사전 검토 H5)
  */

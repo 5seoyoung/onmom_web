@@ -13,6 +13,7 @@ import {
   recoveryStateTitle,
   relativeRecordTime,
   showsLochiaInputs,
+  hasSignalBesidesCrisis,
   type SymptomForm,
 } from "./record";
 
@@ -254,5 +255,44 @@ describe("relativeRecordTime — 지표 카드의 기록 시각", () => {
 
   it("잘못된 날짜는 빈 문자열", () => {
     expect(relativeRecordTime("not-a-date", now)).toBe("");
+  });
+});
+
+describe("hasSignalBesidesCrisis — PDF 리포트가 위기 체크를 넣지 않을 때", () => {
+  const recordOf = (over: Partial<SymptomForm> = {}): SymptomRecord => ({
+    ...buildSymptomRecord(form(over), "2026-09-01", new Date("2026-10-14T06:05:00.000Z")).record,
+    id: "x",
+  });
+  const base = recordOf();
+
+  it("신호가 없는 기록은 거짓", () => {
+    expect(hasSignalBesidesCrisis(base)).toBe(false);
+  });
+
+  it("위기 상담 신호만 있으면 거짓", () => {
+    const r = recordOf({ harmThoughts: true });
+    expect(r.redFlagCode).toBe("harm_thoughts");
+    expect(hasSignalBesidesCrisis(r)).toBe(false);
+  });
+
+  it.each<[string, Partial<SymptomForm>]>([
+    ["토글", { chestPainBreathing: true }],
+    ["많은 출혈", { bleedingHeavy: true }],
+    ["고열", { feverEvent: true }],
+    ["심한 통증", { painNrs: 8 }],
+    ["오로", { lochiaIncreased: true, lochiaRed: true }],
+  ])("대표 신호에 가려진 %s도 찾는다", (_, over) => {
+    const r = recordOf({ harmThoughts: true, ...over });
+    expect(r.redFlagCode).toBe("harm_thoughts");
+    expect(hasSignalBesidesCrisis(r)).toBe(true);
+  });
+
+  it("대표 신호가 119이거나 다른 신호면 참", () => {
+    expect(hasSignalBesidesCrisis(recordOf({ harmThoughts: true, seizure: true }))).toBe(true);
+    expect(hasSignalBesidesCrisis(recordOf({ feverEvent: true }))).toBe(true);
+  });
+
+  it("모르는 코드(다른 판의 기록)는 참 — 신호를 지우지 않는다", () => {
+    expect(hasSignalBesidesCrisis({ ...base, redFlagCode: "from_the_future" })).toBe(true);
   });
 });

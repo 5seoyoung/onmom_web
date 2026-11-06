@@ -128,6 +128,10 @@ describe("리포트 본문", () => {
     expect(html).toContain(REPORT_TEXT.noValueNote);
   });
 
+  it("위기 체크를 넣지 않는다는 안내는 체크 여부와 상관없이 표 아래에 늘 있다(기록이 있을 때)", () => {
+    expect(html).toContain(REPORT_TEXT.crisisOmittedNote);
+  });
+
   it("모르는 기분 문항은 빈 칸, 답은 그대로", () => {
     expect(html).toMatch(/<time dateTime="2026-10-13T00:30:00.000Z">2026-10-13<\/time><\/th><td [^>]*><\/td><td [^>]*>아니요<\/td>/);
   });
@@ -188,6 +192,7 @@ describe("빈 상태", () => {
     expect(html).toContain(`>${REPORT_TEXT.maternityEmpty}</p>`);
     expect(html).not.toContain("<table");
     expect(html).not.toContain(REPORT_TEXT.noValueNote);
+    expect(html).not.toContain(REPORT_TEXT.crisisOmittedNote);
   });
 });
 

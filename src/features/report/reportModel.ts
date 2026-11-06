@@ -15,6 +15,10 @@
 // - 지어내지 않음: 산후 10일 전에는 오로를 묻지 않으므로(rules/record showsLochiaInputs) "아니요" 대신 값 없음(null — 화면은 "-").
 //   산후 일수가 없는 옛 기록·모르는 기분 문항도 null. 지금과 다른 질문 버전으로 답한 기록의 문항도 null — 같은 번호라도 그 버전의
 //   질문이 지금 질문과 같다고 할 수 없다(답과 그 버전은 그대로 보인다). 버전이 없는 옛 기록은 지금처럼 지금 질문으로 보인다.
+// - 넣지 않는 항목: 증상 기록의 "나 자신이나 아기를 해칠 것 같은 생각"(2026-11-06 대표 결정). 리포트는 병원·가족 등 다른 사람에게 건네기 쉬운 문서다.
+//   신호 줄에서 빼는 것만으로는 그 기록이 "병원 확인 신호"로 남아 무언가 있었다는 것이 드러나므로, 결과도 다른 신호가 남을 때만 표시한다
+//   (rules/record hasSignalBesidesCrisis — 함께 체크한 출혈·고열 같은 신호는 그대로 보인다). 앱의 기록 화면·홈 안내·내 데이터 내려받기에는 그대로 있다.
+//   표 아래 안내(REPORT_TEXT.crisisOmittedNote)는 체크 여부와 상관없이 늘 같은 글자다 — 있고 없음으로 체크 여부가 드러나지 않게.
 // - 기록이 없는 섹션도 제목은 남긴다(화면이 "기록이 없어요." 한 줄을 그린다). 기록장은 고르지 않으면 섹션 자체가 없다.
 
 import content from "@/content";
@@ -27,7 +31,7 @@ import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, maternityFlags, postpartu
 import { RECORD_TEXT, RECORD_WEB_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/features/record/recordView";
 import { PROFILE_EDIT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
 import { MOOD_QUESTIONS, moodAnswerLabel, normalizeMoodAnswer } from "@/rules/mood";
-import { showsLochiaInputs } from "@/rules/record";
+import { hasSignalBesidesCrisis, showsLochiaInputs } from "@/rules/record";
 import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { displayName, type Account } from "@/store/account";
 import { REPORT_TEXT } from "./reportText";
@@ -216,7 +220,7 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
   return newestFirst(history)
     .slice(0, SYMPTOM_HISTORY_LIMIT)
     .map((r) => {
-      const flagged = r.redFlagCode != null;
+      const flagged = hasSignalBesidesCrisis(r);
       const days = typeof r.postpartumDays === "number" && Number.isFinite(r.postpartumDays) ? r.postpartumDays : null;
       return {
         id: r.id,
@@ -231,8 +235,8 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
         pain: formatNrs(r.painNrs),
         flagged,
         result: flagged ? RECORD_WEB_TEXT.recentFlagged : RECORD_WEB_TEXT.recentNormal,
-        // 다량 출혈은 위 칸에 있으니 신호 줄에서는 뺀다(같은 말을 두 번 보이지 않게)
-        signals: firedRiskLabels(r, ["bleedingHeavy"]),
+        // 다량 출혈은 위 칸에 있으니 신호 줄에서는 뺀다(같은 말을 두 번 보이지 않게). 해칠 것 같은 생각은 리포트에 넣지 않는다(머리 주석)
+        signals: firedRiskLabels(r, ["bleedingHeavy", "harmThoughts"]),
         rulesVersionText: versionText(REPORT_TEXT.recordRulesVersion, r.rulesVersion),
       };
     });
