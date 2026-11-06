@@ -3,8 +3,10 @@
 // 관리자 화면(/admin/) — 운영자가 가입·이용 규모를 보고, 이용자의 삭제 요청을 처리하는 곳. 메뉴에 링크하지 않는다.
 //
 // 보이는 것: 집계(전체·게스트·카카오·현재 판 동의·최근 7일 활성), 30일 신규 가입 막대(0005 뒤에는 게스트·카카오 나눔),
+//   이용 통계(집계)(0011_admin_usage_stats.sql — 익명 집계만, 5명 미만인 칸은 숨김),
 //   동의 버전 분포·관리자 목록·계정 찾기(0005_admin_tools.sql), 계정 메타데이터 목록(+ 행마다 [계정 삭제] · CSV 내려받기).
-// 보이지 않는 것: 건강 기록(state)·이메일·닉네임 — 서버 함수가 애초에 돌려주지 않는다(supabase/migrations/0002_admin.sql·0005_admin_tools.sql).
+// 보이지 않는 것: 사람별 건강 기록(state)·이메일·닉네임 — 서버 함수가 애초에 돌려주지 않는다(supabase/migrations/0002_admin.sql·0005_admin_tools.sql).
+//   건강 기록은 0011이 서버 안에서 익명 집계로 바꾼 수로만 온다. 사람을 골라 펼쳐 보는 길은 없다.
 //
 // 누가 보나: Supabase 설정이 있는 빌드 + 카카오로 로그인한(게스트 아님) + public.admins에 있는 계정.
 //   - 설정 없음 → "권한이 없어요"(설정 없는 빌드 안내). Supabase로 요청하지 않는다.
@@ -19,6 +21,8 @@
 // 접근 기록(0009_admin_access_log.sql): 이 화면이 부르는 조회·찾기는 서버가 admin_audit에 남긴다(화면이 할 일 없음). CSV 내려받기는
 //   화면이 파일을 만들기 전에 admin_log_users_export로 남기고, 남기지 못하면 파일을 만들지 않는다 — 0009가 아직 없는 서버에서는
 //   "0009_admin_access_log.sql을 실행했는지 확인" 안내만 보인다(조회·찾기·삭제는 0009 없이도 그대로 된다).
+// 이용 통계(0011_admin_usage_stats.sql): 서버가 볼 때마다 admin_audit에 남긴다. 0011이 아직 없는 서버에서는 그 묶음만
+//   "0011_admin_usage_stats.sql을 실행했는지 확인" 안내를 보이고, 다른 카드는 그대로 된다.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -38,6 +42,7 @@ import {
   exportUsersCsv,
   fetchAdmins,
   fetchOverview,
+  fetchUsageStats,
   fetchUsersPage,
   findUser,
   type AdminClient,
@@ -47,9 +52,11 @@ import {
 import {
   ADMIN_PAGE_SIZE,
   ADMIN_TEXT,
+  USAGE_DEFAULT_DAYS,
   adminRowView,
   chartBars,
   chartSummary,
+  clampUsageDays,
   consentVersionRows,
   csvFileName,
   deleteFailureMessage,
@@ -62,11 +69,13 @@ import {
   usersCsv,
   type AdminListRow,
   type AdminOverview,
+  type UsageStats,
   type UserRowView,
 } from "./adminModel";
 import { AdminsTable, ConsentVersionsTable, TOOL_BUTTON_CLASS, ToolCard, UserSearch, type SearchState } from "./AdminTools";
 import { DeleteUserDialog } from "./DeleteUserDialog";
 import { NewUsersChart } from "./NewUsersChart";
+import { UsageStatsSection } from "./UsageStats";
 import { UserList, UserListCard } from "./UserList";
 
 type Screen =
@@ -194,6 +203,9 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   const [overview, setOverview] = useState<Loadable<AdminOverview>>({ status: "loading", last: null });
   const [users, setUsers] = useState<Loadable<UsersPage>>({ status: "loading", last: null });
   const [admins, setAdmins] = useState<Loadable<AdminListRow[]>>({ status: "loading", last: null });
+  // 이용 통계(집계) — 고른 기간과 값(0011). 기간을 바꾸면 그 기간으로 다시 부른다(서버가 부를 때마다 admin_audit에 남긴다).
+  const [usageDays, setUsageDays] = useState<number>(USAGE_DEFAULT_DAYS);
+  const [usage, setUsage] = useState<Loadable<UsageStats>>({ status: "loading", last: null });
   // 계정 찾기(이용자가 보낸 UUID)
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<SearchState>({ kind: "idle" });
@@ -210,6 +222,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   const pendingFocusRef = useRef<"trigger" | "notice" | null>(null);
   // CSV 내려받기(메타데이터만) — logSetupMissing: 접근 기록 함수(0009)가 서버에 없어 파일을 만들지 않았다
   const [csv, setCsv] = useState<"idle" | "busy" | "failed" | "logSetupMissing">("idle");
+  const usageTitleId = useId();
   const usersTitleId = useId();
   const consentTitleId = useId();
   const adminsTitleId = useId();
@@ -247,6 +260,19 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
 
   useEffect(() => {
     let cancelled = false;
+    void fetchUsageStats(client, usageDays).then((r) => {
+      if (cancelled) return;
+      if (r.ok) setUsage({ status: "ok", value: r.value });
+      else if (r.failure === "forbidden") onForbidden();
+      else setUsage({ status: "failed", failure: r.failure });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [client, usageDays, reloadKey, onForbidden]);
+
+  useEffect(() => {
+    let cancelled = false;
     void fetchUsersPage(client, page, ADMIN_PAGE_SIZE).then((r) => {
       if (cancelled) return;
       if (r.ok) setUsers({ status: "ok", value: r.value });
@@ -274,6 +300,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   // 다시 불러오는 동안 이전 값을 흐리게 남긴다(자리가 튀지 않게)
   const reload = () => {
     setOverview((o) => ({ status: "loading", last: lastOf(o) }));
+    setUsage((u) => ({ status: "loading", last: lastOf(u) }));
     setUsers((u) => ({ status: "loading", last: lastOf(u) }));
     setAdmins((a) => ({ status: "loading", last: lastOf(a) }));
     setReloadKey((k) => k + 1);
@@ -281,6 +308,10 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   const goToPage = (next: number) => {
     setUsers((u) => ({ status: "loading", last: lastOf(u) }));
     setPage(Math.max(0, next));
+  };
+  const changeUsageDays = (next: number) => {
+    setUsage((u) => ({ status: "loading", last: lastOf(u) }));
+    setUsageDays(clampUsageDays(next));
   };
 
   /** 계정 찾기 — 형식이 아니면 서버에 묻지 않는다 */
@@ -356,6 +387,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   }
 
   const shownOverview = lastOf(overview);
+  const shownUsage = lastOf(usage);
   const shownUsers = lastOf(users);
   const shownAdmins = lastOf(admins);
   const generated = shownOverview === null ? null : generatedAtLabel(shownOverview.generatedAt);
@@ -377,7 +409,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   );
   const adminRows = useMemo(() => (shownAdmins === null ? [] : shownAdmins.map(adminRowView)), [shownAdmins]);
 
-  const busy = overview.status === "loading" || users.status === "loading" || admins.status === "loading";
+  const busy = overview.status === "loading" || usage.status === "loading" || users.status === "loading" || admins.status === "loading";
   const deleting = deleteTarget !== null;
 
   return (
@@ -447,6 +479,22 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
             <NewUsersChart bars={chart.bars} scale={chart.scale} summary={chart.summary} />
           </div>
         )}
+
+        {/* 이용 통계(집계) — 익명 집계만(0011). 0011이 없는 서버는 이 묶음만 설치 안내. */}
+        <UsageStatsSection
+          titleId={usageTitleId}
+          days={usageDays}
+          onDaysChange={changeUsageDays}
+          stats={shownUsage}
+          loading={usage.status === "loading"}
+          placeholder={
+            usage.status === "failed" ? (
+              <LoadFailed failure={usage.failure} onRetry={reload} setupHint={ADMIN_TEXT.usageSetupHint} />
+            ) : shownUsage === null ? (
+              <LoadingBlock />
+            ) : null
+          }
+        />
 
         {/* 동의 버전 분포(0005 뒤에만 — 응답에 칸이 있을 때) · 관리자 목록. 둘 다 있으면 PC는 두 열, 하나면 전체 폭. */}
         <div className={cx("grid gap-4 md:gap-5 lg:gap-4", consentRows !== null && "lg:grid-cols-2")}>
