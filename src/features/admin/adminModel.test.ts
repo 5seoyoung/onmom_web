@@ -6,12 +6,21 @@ import {
   ADMIN_PAGE_SIZE,
   CSV_MAX_ROWS,
   DELETE_REASON_MAX,
+  USAGE_BUCKET_LABEL,
+  USAGE_DAYS_MAX,
+  USAGE_DAYS_MIN,
+  USAGE_DEFAULT_DAYS,
+  USAGE_DISTRIBUTIONS,
+  USAGE_DISTRIBUTION_IDS,
+  USAGE_K,
+  USAGE_PERIODS,
   accountKind,
   adminRowView,
   barReadout,
   chartBars,
   chartSegmentKinds,
   chartSummary,
+  clampUsageDays,
   consentVersionRows,
   csvCell,
   csvFileName,
@@ -22,6 +31,7 @@ import {
   deleteReasonProblem,
   formatCount,
   formatPeople,
+  formatRecords,
   formatSeoulDate,
   formatSeoulDateTime,
   generatedAtLabel,
@@ -34,11 +44,22 @@ import {
   parseAdminRows,
   parseCount,
   parseOverview,
+  parseUsageStats,
   parseUserRows,
   segmentUsers,
   sharePercent,
   shortId,
   splitPage,
+  usageAdoptionView,
+  usageDailyView,
+  usageDayReadout,
+  usageDistributionView,
+  usageKpis,
+  usagePeriodOptions,
+  usagePeriodText,
+  usageRedFlagView,
+  usageTickStep,
+  usageValueText,
   userRowView,
   usersCsv,
   usersPageArgs,
@@ -46,6 +67,8 @@ import {
   type AdminUserRow,
   type DayCount,
   type DeleteFailure,
+  type UsageDay,
+  type UsageStats,
 } from "./adminModel";
 
 const VERSION = "web-2026-09-28";
@@ -647,7 +670,7 @@ describe("CSV 내려받기 — 메타데이터만", () => {
 
   it("접근 기록 안내 — 조회·내려받기가 admin_audit에 보존 기간(0009 정리와 같은 2년) 동안 남는다, 기록 함수가 없으면 파일을 만들지 않았다고 말한다", () => {
     expect(ADMIN_AUDIT_RETENTION_YEARS).toBe(2);
-    expect(ADMIN_TEXT.accessLogNote).toBe("이 화면에서 조회하거나 내려받으면 누가 언제 했는지 admin_audit 표에 2년 동안 남아요.");
+    expect(ADMIN_TEXT.accessLogNote).toBe("이 화면에서 조회하거나(이용 통계 포함) 내려받으면 누가 언제 했는지 admin_audit 표에 2년 동안 남아요.");
     expect(ADMIN_TEXT.auditSetupHint).toContain("CSV를 만들지 않았어요");
     expect(ADMIN_TEXT.auditSetupHint).toContain("supabase/migrations/0009_admin_access_log.sql");
     // 화면 문구 규칙 — 하이픈만(em dash 없음, emDash.test.ts), 진단·판정 같은 말 없음
@@ -658,5 +681,442 @@ describe("CSV 내려받기 — 메타데이터만", () => {
     expect(CSV_MAX_ROWS).toBe(5000);
     expect(ADMIN_TEXT.csvNote).toContain("5,000");
     expect(csvFileName(new Date(2026, 8, 28, 23, 40))).toBe("온맘-관리자-사용자-2026-09-28.csv");
+  });
+});
+
+// ── 0011_admin_usage_stats.sql ───────────────────────────────────────────────
+
+/** days칸 — 끝이 2026-11-04(오늘) */
+function usageDailyJson(days: number, cell: (i: number) => { s?: unknown; m?: unknown; j?: unknown } = () => ({})) {
+  const end = Date.UTC(2026, 10, 4);
+  return Array.from({ length: days }, (_, i) => {
+    const c = cell(i);
+    return {
+      day: new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10),
+      symptom_records: c.s === undefined ? 0 : c.s,
+      mood_answers: c.m === undefined ? 0 : c.m,
+      journal_posts: c.j === undefined ? 0 : c.j,
+    };
+  });
+}
+
+/** 서버가 돌려주는 모양 — 동의한 사용자 42명, 30일 */
+const USAGE_JSON = {
+  generated_at: "2026-11-04T08:14:35.630004+00:00",
+  days: 30,
+  period: { from: "2026-10-06", to: "2026-11-04" },
+  k: 5,
+  suppressed: false,
+  totals: { consented_users: 42, active_users: 17 },
+  daily: usageDailyJson(30, (i) => (i === 29 ? { s: 12, m: null, j: 0 } : i === 10 ? { s: 20, m: 7, j: null } : {})),
+  adoption: { symptom_records: 12, mood_answers: 21, journal_posts: null },
+  return_rate: { recording_users: 25, returning_users: 10 },
+  distributions: {
+    postpartum_weeks: { total: 42, counts: { weeks_0_1: 6, weeks_2_5: 11, weeks_6_11: null, weeks_12_plus: null, unknown: 7 } },
+    delivery_method: { total: 42, counts: { vaginal: 20, cesarean: 15, unknown: 7 } },
+    goal: null,
+    mood_answers: { total: 71, counts: { yes: 40, unsure: null, no: null } },
+    red_flag: { total: 120, counts: { red_flag: 14, other: 106 } },
+  },
+};
+
+/** 동의한 사용자가 5명 미만일 때의 응답 */
+const USAGE_SUPPRESSED_JSON = {
+  ...USAGE_JSON,
+  suppressed: true,
+  totals: { consented_users: 1, active_users: 1 },
+  daily: null,
+  adoption: null,
+  return_rate: null,
+  distributions: null,
+};
+
+const usage = (patch: Record<string, unknown> = {}) => parseUsageStats({ ...USAGE_JSON, ...patch });
+const shownUsage = () => usage() as UsageStats;
+
+describe("이용 통계 — 기간", () => {
+  it("서버와 같은 규칙으로 7~90일 — 소수는 버리고, 숫자가 아니면 기본 30일", () => {
+    expect([USAGE_DAYS_MIN, USAGE_DEFAULT_DAYS, USAGE_DAYS_MAX]).toEqual([7, 30, 90]);
+    expect(clampUsageDays(7)).toBe(7);
+    expect(clampUsageDays(90)).toBe(90);
+    expect(clampUsageDays(3)).toBe(7);
+    expect(clampUsageDays(-5)).toBe(7);
+    expect(clampUsageDays(0)).toBe(7);
+    expect(clampUsageDays(1000)).toBe(90);
+    expect(clampUsageDays(30.9)).toBe(30);
+    expect(clampUsageDays(Number.NaN)).toBe(30);
+    expect(clampUsageDays(Number.POSITIVE_INFINITY)).toBe(30);
+  });
+
+  it("단추는 7·30·90일 — 고른 기간만 켜지고, 맞추기를 거쳐도 그대로다", () => {
+    expect(USAGE_PERIODS).toEqual([7, 30, 90]);
+    for (const days of USAGE_PERIODS) expect(clampUsageDays(days)).toBe(days);
+    expect(usagePeriodOptions(30)).toEqual([
+      { days: 7, label: "7일", selected: false },
+      { days: 30, label: "30일", selected: true },
+      { days: 90, label: "90일", selected: false },
+    ]);
+    expect(usagePeriodOptions(14).every((o) => !o.selected)).toBe(true);
+  });
+
+  it("기간 표시 — 한국 날짜와 일수", () => {
+    expect(usagePeriodText(shownUsage())).toBe("2026.10.06 ~ 2026.11.04(30일)");
+  });
+});
+
+describe("parseUsageStats — 서버 응답 읽기", () => {
+  it("칸을 화면 값으로 — 숨김(null)은 null, 0은 0, 날짜 순으로 정렬", () => {
+    const s = parseUsageStats({ ...USAGE_JSON, daily: [...USAGE_JSON.daily].reverse() })!;
+    expect(s.suppressed).toBe(false);
+    expect(s.days).toBe(30);
+    expect(s.period).toEqual({ from: "2026-10-06", to: "2026-11-04" });
+    expect(s.totals).toEqual({ consentedUsers: 42, activeUsers: 17 });
+    expect(s.generatedAt).toBe(USAGE_JSON.generated_at);
+    expect(s.daily).toHaveLength(30);
+    expect(s.daily![0].day).toBe("2026-10-06");
+    expect(s.daily![29]).toEqual({ day: "2026-11-04", counts: { symptom: 12, mood: null, journal: 0 } });
+    expect(s.adoption).toEqual({ symptom: 12, mood: 21, journal: null });
+    expect(s.returnRate).toEqual({ recordingUsers: 25, returningUsers: 10 });
+    expect(s.distributions.deliveryMethod).toEqual({
+      total: 42,
+      buckets: [
+        { key: "vaginal", value: 20 },
+        { key: "cesarean", value: 15 },
+        { key: "unknown", value: 7 },
+      ],
+    });
+    expect(s.distributions.goal).toBeNull();
+    expect(s.distributions.postpartumWeeks?.buckets.map((b) => b.value)).toEqual([6, 11, null, null, 7]);
+  });
+
+  it("다른 칸이 와도 옮기지 않는다 — 계정 ID·자유 글이 섞여 와도 화면 값에 없다", () => {
+    const leaked = {
+      ...USAGE_JSON,
+      user_ids: ["3f0f9b2e-0000-4000-8000-000000000001"],
+      adoption: { ...USAGE_JSON.adoption, user_id: "3f0f9b2e-0000-4000-8000-000000000001" },
+      daily: USAGE_JSON.daily.map((d) => ({ ...d, title: "비밀 글" })),
+      distributions: {
+        ...USAGE_JSON.distributions,
+        delivery_method: { total: 42, counts: { vaginal: 20, cesarean: 15, unknown: 7, "비밀 글": 9 } },
+      },
+    };
+    const text = JSON.stringify(parseUsageStats(leaked));
+    expect(text).not.toContain("3f0f9b2e");
+    expect(text).not.toContain("비밀 글");
+    expect(text).not.toContain("user_id");
+  });
+
+  it("suppressed이면 건강 기록에서 나온 값을 모두 버린다 — 서버가 값을 함께 보내도 화면 값에 없다", () => {
+    const empty = { daily: null, adoption: null, returnRate: null };
+    const none = { postpartumWeeks: null, deliveryMethod: null, goal: null, moodAnswers: null, redFlag: null };
+    expect(parseUsageStats(USAGE_SUPPRESSED_JSON)).toMatchObject({ suppressed: true, totals: { consentedUsers: 1, activeUsers: 1 }, ...empty, distributions: none });
+    expect(parseUsageStats({ ...USAGE_JSON, suppressed: true })).toMatchObject({ suppressed: true, ...empty, distributions: none });
+  });
+
+  it(`동의한 사용자가 ${USAGE_K}명 미만이면 서버가 suppressed를 빠뜨려도 화면이 숨긴다, ${USAGE_K}명부터는 보인다`, () => {
+    const four = usage({ totals: { consented_users: 4, active_users: 4 } });
+    expect(four).toMatchObject({ suppressed: true, daily: null, adoption: null, returnRate: null });
+    expect(four!.distributions.deliveryMethod).toBeNull();
+    const five = usage({ totals: { consented_users: 5, active_users: 4 }, adoption: null, return_rate: null, distributions: null });
+    expect(five!.suppressed).toBe(false);
+    expect(five!.daily).toHaveLength(30);
+  });
+
+  it("이용 수의 1~4는 서버가 숨겼어야 할 값 — 그 칸만 숨긴다(0과 5는 그대로)", () => {
+    const s = usage({
+      daily: usageDailyJson(30, (i) => (i === 0 ? { s: 1, m: 4, j: 5 } : {})),
+      adoption: { symptom_records: 3, mood_answers: 0, journal_posts: 5 },
+      return_rate: { recording_users: 5, returning_users: 2 },
+    })!;
+    expect(s.daily![0].counts).toEqual({ symptom: null, mood: null, journal: 5 });
+    expect(s.daily![1].counts).toEqual({ symptom: 0, mood: 0, journal: 0 });
+    expect(s.adoption).toEqual({ symptom: null, mood: 0, journal: 5 });
+    expect(s.returnRate).toEqual({ recordingUsers: 5, returningUsers: null });
+  });
+
+  it("분포의 보이는 칸에 0~4가 오면 그 분포 전체를 숨긴다 — 그 칸만 숨기면 합계에서 빼서 되살릴 수 있다", () => {
+    const withDelivery = (counts: Record<string, unknown>) =>
+      usage({ distributions: { ...USAGE_JSON.distributions, delivery_method: { total: 42, counts } } })!.distributions.deliveryMethod;
+    expect(withDelivery({ vaginal: 30, cesarean: 4, unknown: 8 })).toBeNull();
+    expect(withDelivery({ vaginal: 42, cesarean: 0, unknown: 0 })).toBeNull();
+    expect(withDelivery({ vaginal: 37, cesarean: 5, unknown: null })?.buckets.map((b) => b.value)).toEqual([37, 5, null]);
+  });
+
+  it("칸이 빠지면 숨김, 모든 칸이 숨김이면 분포 전체가 null, 분포 묶음이 없으면 모두 null", () => {
+    const withDelivery = (v: unknown) => usage({ distributions: { ...USAGE_JSON.distributions, delivery_method: v } })!.distributions.deliveryMethod;
+    expect(withDelivery({ total: 42, counts: { vaginal: 20 } })?.buckets.map((b) => b.value)).toEqual([20, null, null]);
+    expect(withDelivery({ total: 42, counts: { vaginal: null, cesarean: null, unknown: null } })).toBeNull();
+    expect(withDelivery(null)).toBeNull();
+    const none = usage({ distributions: null })!;
+    for (const id of USAGE_DISTRIBUTION_IDS) expect(none.distributions[id]).toBeNull();
+    expect(usage({ daily: null, adoption: null, return_rate: null })).toMatchObject({ daily: null, adoption: null, returnRate: null });
+  });
+
+  it("bigint가 문자열로 와도 읽는다", () => {
+    const s = usage({ totals: { consented_users: "42", active_users: "17" }, daily: usageDailyJson(30, () => ({ s: "12" })) })!;
+    expect(s.totals.consentedUsers).toBe(42);
+    expect(s.daily![0].counts.symptom).toBe(12);
+  });
+
+  it("서버의 숨김 기준이 화면과 다르면 읽지 않는다(k 3이면 '5명 미만' 문구가 거짓이 된다)", () => {
+    expect(USAGE_K).toBe(5);
+    expect(usage({ k: 3 })).toBeNull();
+    expect(usage({ k: 10 })).toBeNull();
+    expect(usage({ k: undefined })).toBeNull();
+  });
+
+  it("모양이 다르면 0으로 꾸미지 않고 null", () => {
+    expect(parseUsageStats(null)).toBeNull();
+    expect(parseUsageStats([])).toBeNull();
+    expect(usage({ totals: undefined })).toBeNull();
+    expect(usage({ totals: { consented_users: -1, active_users: 0 } })).toBeNull();
+    expect(usage({ totals: { consented_users: 10, active_users: 11 } })).toBeNull(); // 활성은 동의한 사람의 일부다
+    expect(usage({ days: 6 })).toBeNull();
+    expect(usage({ days: 91 })).toBeNull();
+    expect(usage({ period: { from: "10/06", to: "2026-11-04" } })).toBeNull();
+    expect(usage({ period: { from: "2026-11-05", to: "2026-11-04" } })).toBeNull();
+    expect(usage({ suppressed: "false" })).toBeNull();
+    expect(usage({ suppressed: undefined })).toBeNull();
+    expect(usage({ daily: "x" })).toBeNull();
+    expect(usage({ daily: [{ day: "11/04", symptom_records: 0 }] })).toBeNull();
+    expect(usage({ daily: usageDailyJson(30, () => ({ s: -1 })) })).toBeNull();
+    expect(usage({ daily: usageDailyJson(30, () => ({ m: "많음" })) })).toBeNull();
+    expect(usage({ adoption: "x" })).toBeNull();
+    expect(usage({ adoption: { symptom_records: 43, mood_answers: 0, journal_posts: 0 } })).toBeNull(); // 동의한 사람보다 많을 수 없다
+    expect(usage({ return_rate: { recording_users: 10, returning_users: 11 } })).toBeNull();
+    expect(usage({ return_rate: { recording_users: 43, returning_users: null } })).toBeNull();
+    expect(usage({ distributions: "x" })).toBeNull();
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: "많음", counts: {} } } })).toBeNull();
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 42 } } })).toBeNull();
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 42, counts: { homemaker: "많음" } } } })).toBeNull();
+    expect(usage({ distributions: { ...USAGE_JSON.distributions, goal: { total: 10, counts: { homemaker: 6, returning_to_work: 6 } } } })).toBeNull(); // 칸의 합이 전체보다 크다
+  });
+
+  it("집계 시각이 없어도 나머지는 읽는다", () => {
+    expect(usage({ generated_at: null })?.generatedAt).toBeNull();
+  });
+});
+
+describe("이용 통계 — 문구", () => {
+  it(`숨김 문구는 k(${USAGE_K}명)를 말하고, 0011 설치 안내는 파일 이름을 말한다`, () => {
+    expect(ADMIN_TEXT.usageTitle).toBe("이용 통계(집계)");
+    expect(ADMIN_TEXT.usageHidden).toBe("5명 미만이라 숨겼어요");
+    expect(ADMIN_TEXT.usageHiddenShort).toBe("숨김");
+    expect(ADMIN_TEXT.usageHiddenDayLegend).toBe("5명 미만이라 숨긴 날");
+    expect(ADMIN_TEXT.usageSetupHint).toContain("0011_admin_usage_stats.sql");
+    expect(ADMIN_TEXT.usageSetupHint).toContain("실행했는지 확인");
+    expect(ADMIN_TEXT.usageSuppressedBody).toContain("통계에 동의한 사용자가 5명 미만");
+  });
+
+  it("통계는 통계 목적에 동의한 사람을 센다고 말한다 — 묶음 머리·안내·수를 세는 칸·기준 줄·화면 위 개인정보 안내 모두", () => {
+    expect(ADMIN_TEXT.usageSubtitle).toContain("서비스 개선 통계에 동의한 사용자");
+    expect(ADMIN_TEXT.usageNote).toContain("서비스 개선 통계에 동의한 사람만");
+    expect(ADMIN_TEXT.usageKpiConsented).toBe("통계에 동의한 사용자");
+    expect(ADMIN_TEXT.usageAdoptionSubtitle).toContain("통계에 동의한 사용자");
+    expect(ADMIN_TEXT.privacyNote).toContain("통계에 동의한 사람의 익명 집계");
+    for (const id of ["postpartumWeeks", "deliveryMethod", "goal"] as const) {
+      expect(usageDistributionView(shownUsage(), id).basis, id).toContain("통계에 동의한 사용자");
+    }
+  });
+
+  it("칸 이름 — 분만 방식·목표·기분 답은 앱의 원문 그대로, 모든 칸에 이름이 있다", () => {
+    expect(USAGE_BUCKET_LABEL.deliveryMethod).toEqual({ vaginal: "자연분만", cesarean: "제왕절개", unknown: "미설정" });
+    expect(USAGE_BUCKET_LABEL.goal).toEqual({ homemaker: "전업", returning_to_work: "복직 예정", unknown: "미설정" });
+    expect(USAGE_BUCKET_LABEL.moodAnswers).toEqual({ yes: "네", unsure: "글쎄요", no: "아니요" });
+    expect(Object.values(USAGE_BUCKET_LABEL.postpartumWeeks)).toEqual(["0~1주차", "2~5주차", "6~11주차", "12주차 이상", "출산일 없음"]);
+    for (const id of USAGE_DISTRIBUTION_IDS) {
+      expect(Object.keys(USAGE_BUCKET_LABEL[id])).toEqual([...USAGE_DISTRIBUTIONS[id].buckets]);
+    }
+  });
+
+  it("개인정보 안내 — 개인의 건강 기록은 안 보이고, 건강 기록은 익명 집계로만, 5명 미만인 칸은 숨긴다. 통계를 본 것도 남는다", () => {
+    expect(ADMIN_TEXT.privacyNote).toContain("개인의 건강 기록 내용은 이 화면에 나오지 않아요");
+    expect(ADMIN_TEXT.privacyNote).toContain("익명 집계");
+    expect(ADMIN_TEXT.privacyNote).toContain("5명 미만인 칸은 숨겨요");
+    expect(ADMIN_TEXT.accessLogNote).toContain("이용 통계 포함");
+    expect(ADMIN_TEXT.accessLogNote).toContain("admin_audit");
+    expect(ADMIN_TEXT.usageNote).toContain("admin_audit");
+  });
+
+  it("화면 문구 규칙 — 하이픈만(em dash 없음), 진단·판정 같은 말 없음", () => {
+    const usageText = Object.entries(ADMIN_TEXT).filter(([key]) => key.startsWith("usage") || key === "privacyNote" || key === "accessLogNote");
+    expect(usageText.length).toBeGreaterThan(30);
+    for (const [key, text] of usageText) expect(text, key).not.toMatch(/—|판정|진단/);
+  });
+});
+
+describe("이용 통계 — 한눈에 보기", () => {
+  it("네 칸 — 동의한 사용자·기간 중 기록 저장·기록한 사람·재방문", () => {
+    expect(usageKpis(shownUsage()).map((k) => [k.id, k.label, k.value, k.caption])).toEqual([
+      ["consented", "통계에 동의한 사용자", "42", "관리자 계정 제외"],
+      ["active", "기간 중 기록 저장", "17", "서버 저장 시각 기준 · 전체의 40%"],
+      ["recording", "기록한 사람", "25", "기록 시각 기준"],
+      ["returning", "재방문", "40%", "이틀 이상 기록 10명"],
+    ]);
+  });
+
+  it("숨긴 칸은 숫자 대신 '숨김' — 재방문은 두 수 중 하나라도 숨겨지면 숨김", () => {
+    const hidden = usage({ return_rate: { recording_users: 25, returning_users: null } })!;
+    expect(usageKpis(hidden).slice(2).map((k) => [k.value, k.caption])).toEqual([
+      ["25", "기록 시각 기준"],
+      ["숨김", "5명 미만이라 숨겼어요"],
+    ]);
+  });
+
+  it("suppressed — 계정 수만 보이고 나머지는 숨김. 1명만 있어도 건강 기록에서 나온 수는 없다", () => {
+    const k = usageKpis(parseUsageStats(USAGE_SUPPRESSED_JSON)!);
+    expect(k.map((c) => c.value)).toEqual(["1", "1", "숨김", "숨김"]);
+    expect(k[2].caption).toBe("5명 미만이라 숨겼어요");
+  });
+
+  it("기록한 사람이 0명이면 재방문 비율은 없다(0으로 나누지 않는다), 동의한 사람이 0명이면 비율 줄을 뺀다", () => {
+    const none = usage({ return_rate: { recording_users: 0, returning_users: 0 } })!;
+    expect(usageKpis(none)[3]).toMatchObject({ value: "-", caption: "이틀 이상 기록 0명" });
+    const empty = parseUsageStats({ ...USAGE_SUPPRESSED_JSON, totals: { consented_users: 0, active_users: 0 } })!;
+    expect(usageKpis(empty)[1].caption).toBe("서버 저장 시각 기준");
+  });
+});
+
+describe("이용 통계 — 날짜별 기록", () => {
+  const dayCounts = (n: number, f: (i: number) => Partial<UsageDay["counts"]> = () => ({})): UsageDay[] =>
+    parseUsageStats({ ...USAGE_JSON, days: n, daily: usageDailyJson(n) })!.daily!.map((d, i) => ({ ...d, counts: { ...d.counts, ...f(i) } }));
+
+  it("갈래 셋 — 증상 기록·기분 살피기 답·기록장 글, 갈래마다 세로축이 따로다", () => {
+    const view = usageDailyView(shownUsage().daily!);
+    expect(view.series.map((s) => [s.activity, s.title])).toEqual([
+      ["symptom", "증상 기록"],
+      ["mood", "기분 살피기 답"],
+      ["journal", "기록장 글"],
+    ]);
+    expect(view.series[0].scale.max).toBeGreaterThanOrEqual(20);
+    expect(view.series[1].scale.max).toBeGreaterThanOrEqual(7);
+    expect(view.series[1].scale.max).toBeLessThan(view.series[0].scale.max);
+  });
+
+  it("숨긴 날은 값 없이(0으로 꾸미지 않는다) 막대도 없고, 합계·꼭대기에서 뺀다", () => {
+    const view = usageDailyView(dayCounts(30, (i) => (i === 3 ? { symptom: null } : i === 4 ? { symptom: 10 } : i === 5 ? { symptom: 5 } : {})));
+    const s = view.series[0];
+    expect(s.bars[3]).toMatchObject({ value: null, heightPct: 0 });
+    expect(s.bars[4].value).toBe(10);
+    expect(s.bars[4].heightPct).toBeGreaterThan(0);
+    expect(s.bars[0]).toMatchObject({ value: 0, heightPct: 0 });
+    expect(s.visibleTotal).toBe(15);
+    expect(s.hiddenDays).toBe(1);
+    expect(s.caption).toBe("보이는 날 합계 15건 · 가장 많은 날 10월 10일 10건 · 숨긴 날 1일");
+  });
+
+  it("보이는 값이 없으면 합계만, 모두 숨겨져도 그림이 깨지지 않는다", () => {
+    const zero = usageDailyView(dayCounts(7));
+    expect(zero.series[0].caption).toBe("보이는 날 합계 0건");
+    expect(zero.series[0].scale).toEqual({ max: 1, ticks: [0, 1] });
+    const hidden = usageDailyView(dayCounts(7, () => ({ mood: null })));
+    expect(hidden.series[1].caption).toBe("보이는 날 합계 0건 · 숨긴 날 7일");
+    expect(hidden.series[1].bars.every((b) => b.value === null && b.heightPct === 0)).toBe(true);
+  });
+
+  it("막대는 꼭대기를 넘지 않는다", () => {
+    const view = usageDailyView(dayCounts(30, (i) => ({ symptom: i * 37 })));
+    for (const b of view.series[0].bars) {
+      expect(b.heightPct).toBeGreaterThanOrEqual(0);
+      expect(b.heightPct).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it("가로축 — 7일은 날마다, 30일은 7일마다, 90일은 14일마다, 늘 오늘 포함", () => {
+    expect([usageTickStep(7), usageTickStep(30), usageTickStep(90)]).toEqual([1, 7, 14]);
+    const ticks = (n: number) => usageDailyView(dayCounts(n)).days.filter((d) => d.tick !== null);
+    expect(ticks(7)).toHaveLength(7);
+    expect(ticks(30)).toHaveLength(5);
+    expect(ticks(90)).toHaveLength(7);
+    for (const n of USAGE_PERIODS) expect(ticks(n).at(-1)?.tick).toBe("11.4");
+    expect(usageDailyView(dayCounts(30)).dense).toBe(false);
+    expect(usageDailyView(dayCounts(90)).dense).toBe(true);
+  });
+
+  it("글자 대안 — 그림 전체 요약과 가리킨 날의 값(숨김도 말한다)", () => {
+    const view = usageDailyView(shownUsage().daily!);
+    expect(view.summary).toBe(
+      "최근 30일 날짜별 기록(보이는 날 합계): 증상 기록 32건, 기분 살피기 답 7건, 기록장 글 0건. 5명 미만이라 숨긴 날: 기분 살피기 답 1일, 기록장 글 1일.",
+    );
+    expect(usageDayReadout(view, 29)).toBe("11월 4일 · 증상 기록 12건 · 기분 살피기 답 숨김 · 기록장 글 0건");
+    expect(usageDayReadout(view, 99)).toBe("");
+    expect(usageDailyView(dayCounts(7)).summary).toBe("최근 7일 날짜별 기록(보이는 날 합계): 증상 기록 0건, 기분 살피기 답 0건, 기록장 글 0건.");
+    expect(usageValueText(null)).toBe("숨김");
+    expect(usageValueText(1284)).toBe("1,284건");
+    expect(formatRecords(0)).toBe("0건");
+  });
+});
+
+describe("이용 통계 — 기능별 이용 · 분포", () => {
+  it("기능별 이용 — 동의한 사용자 대비 수와 비율, 숨긴 기능은 까닭을 적는다", () => {
+    const v = usageAdoptionView(shownUsage());
+    expect(v.title).toBe("기능별 이용");
+    expect(v.rows.map((r) => [r.label, r.valueLabel])).toEqual([
+      ["증상 기록", "12명 · 29%"],
+      ["기분 살피기", "21명 · 50%"],
+      ["기록장", "숨김"],
+    ]);
+    expect(v.rows[1].widthPct).toBeCloseTo(50);
+    expect(v.rows[2]).toMatchObject({ value: null, widthPct: 0 });
+    expect(v.note).toBe("숨김: 그 기능을 쓴 사람이 5명 미만이에요.");
+    expect(v.hidden).toBe(false);
+  });
+
+  it("아무도 쓰지 않은 기능은 0명으로 보인다(숨김과 다르다), 숨긴 줄이 없으면 까닭도 없다", () => {
+    const v = usageAdoptionView(usage({ adoption: { symptom_records: 12, mood_answers: 0, journal_posts: 5 } })!);
+    expect(v.rows[1]).toMatchObject({ value: 0, valueLabel: "0명 · 0%", widthPct: 0 });
+    expect(v.note).toBeNull();
+  });
+
+  it("분포 — 칸 순서 그대로, 사람 분포는 명, 기록 분포는 건, 비율은 기준 수 대비", () => {
+    const weeks = usageDistributionView(shownUsage(), "postpartumWeeks");
+    expect(weeks.title).toBe("산후 주차");
+    expect(weeks.basis).toBe("통계에 동의한 사용자 42명 · 오늘 기준");
+    expect(weeks.rows.map((r) => [r.label, r.valueLabel])).toEqual([
+      ["0~1주차", "6명 · 14%"],
+      ["2~5주차", "11명 · 26%"],
+      ["6~11주차", "숨김"],
+      ["12주차 이상", "숨김"],
+      ["출산일 없음", "7명 · 17%"],
+    ]);
+    expect(weeks.note).toBe(ADMIN_TEXT.usageComplementNote);
+    const mood = usageDistributionView(shownUsage(), "moodAnswers");
+    expect(mood.basis).toBe("기간 안의 답 71건 기준");
+    expect(mood.rows.map((r) => [r.label, r.valueLabel])).toEqual([
+      ["네", "40건 · 56%"],
+      ["글쎄요", "숨김"],
+      ["아니요", "숨김"],
+    ]);
+    const delivery = usageDistributionView(shownUsage(), "deliveryMethod");
+    expect(delivery.basis).toBe("통계에 동의한 사용자 42명 기준");
+    expect(delivery.rows.map((r) => r.label)).toEqual(["자연분만", "제왕절개", "미설정"]);
+    expect(delivery.note).toBeNull();
+  });
+
+  it("모든 칸이 숨겨지면 줄 없이 전체 숨김 — 기준 수도 말하지 않는다", () => {
+    expect(usageDistributionView(shownUsage(), "goal")).toEqual({
+      id: "goal",
+      title: "목표",
+      basis: "통계에 동의한 사용자 기준",
+      rows: [],
+      hidden: true,
+      note: null,
+    });
+  });
+
+  it("병원 안내 — 하나의 비율, 숨기면 수도 비율도 없다", () => {
+    const shown = usageRedFlagView(shownUsage());
+    expect(shown).toMatchObject({ title: "병원 안내가 나온 증상 기록", hidden: false, share: "12%", caption: "증상 기록 120건 중 14건" });
+    expect(shown.basis).toBe("기간 안의 증상 기록 120건 기준");
+    expect(shown.widthPct).toBeCloseTo((14 / 120) * 100);
+    const hidden = usageRedFlagView(usage({ distributions: { ...USAGE_JSON.distributions, red_flag: null } })!);
+    expect(hidden).toEqual({ title: "병원 안내가 나온 증상 기록", basis: "기간 안의 증상 기록 기준", hidden: true, share: null, widthPct: 0, caption: null });
+  });
+
+  it("suppressed — 기능별 이용·모든 분포가 숨김", () => {
+    const s = parseUsageStats(USAGE_SUPPRESSED_JSON)!;
+    expect(usageAdoptionView(s)).toMatchObject({ hidden: true, note: null });
+    for (const id of USAGE_DISTRIBUTION_IDS) expect(usageDistributionView(s, id).hidden).toBe(true);
+    expect(usageRedFlagView(s).hidden).toBe(true);
   });
 });

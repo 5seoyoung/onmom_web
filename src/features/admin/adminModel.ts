@@ -1,17 +1,36 @@
-// 관리자 화면(/admin/) 보기 규칙 — 서버 응답 읽기, 숫자·날짜 표시, 30일 막대 눈금, 쪽 나누기. 순수 함수(adminModel.test.ts).
+// 관리자 화면(/admin/) 보기 규칙 — 서버 응답 읽기, 숫자·날짜 표시, 30일 막대 눈금, 쪽 나누기, 이용 통계(집계). 순수 함수(adminModel.test.ts).
 //
 // 건강 기록은 여기 오지 않는다. 서버 함수(supabase/migrations/0002_admin.sql)가 집계와 계정 메타데이터
 // (계정 ID, 가입·접속 시각, 게스트/카카오, 동의 판, 서버 기록 유무와 마지막 저장 시각)만 돌려준다. 이메일·닉네임도 받지 않는다.
+// 이용 통계(0011_admin_usage_stats.sql)도 서버가 건강 기록을 서버 안에서 익명 집계로 바꾼 수만 준다(사람별 값·계정 ID·자유 글 없음,
+// 5명 미만인 칸은 null) — 아래 "이용 통계" 묶음.
 // 화면 아래 안내(ADMIN_TEXT.privacyNote)는 이 목록과 같아야 한다 — 칸을 늘리거나 줄이면 함께 고친다.
 // 날짜·시각은 한국 시간(Asia/Seoul)으로 보인다 — 서버가 "하루"를 한국 자정 기준으로 나누는 것과 맞춘다.
-// 관리자가 이 화면에서 보고 하는 일(집계·목록·계정 찾기·관리자 목록·계정 삭제·CSV 내려받기)은 모두 admin_audit에 한 줄씩 남는다
-// (삭제는 0005, 나머지는 0009 — 접근 기록). 권한 확인(is_admin)만은 남지 않는다.
+// 관리자가 이 화면에서 보고 하는 일(집계·이용 통계·목록·계정 찾기·관리자 목록·계정 삭제·CSV 내려받기)은 모두 admin_audit에 한 줄씩 남는다
+// (삭제는 0005, 이용 통계는 0011, 나머지는 0009 — 접근 기록). 권한 확인(is_admin)만은 남지 않는다.
+
+import { DELIVERY_TITLE, GOAL_TITLE } from "@/rules/exercise";
+import { moodAnswerLabel } from "@/rules/mood";
+import { PROFILE_TEXT } from "@/features/profile/profileView";
 
 /**
  * 관리자 행동·접근 기록(admin_audit)의 보존 기간(년) — supabase/migrations/0009_admin_access_log.sql 정리 함수의
  * `interval '2 years'`와 같아야 한다(adminAccessLogSql.test.ts). 안전성 확보조치 기준 제8조(민감정보 처리 시스템은 2년 이상) — 법률 확인 전.
  */
 export const ADMIN_AUDIT_RETENTION_YEARS = 2;
+
+/**
+ * 이용 통계의 숨김 기준 k — 한 칸에 든(기여한) 서로 다른 사람이 이보다 적으면 그 칸은 보이지 않는다.
+ * supabase/migrations/0011_admin_usage_stats.sql의 `k_min constant integer := 5`와 같아야 한다(adminUsageStatsSql.test.ts).
+ */
+export const USAGE_K = 5;
+
+/**
+ * 이용 통계에 드는 동의 판의 시작 — "서비스 개선 통계" 목적은 이 판의 동의 문구부터 있어서, 이 판 이상에 동의한 사람만 센다.
+ * supabase/migrations/0011_admin_usage_stats.sql의 `stats_consent_from`과 같아야 한다(adminUsageStatsSql.test.ts).
+ * 판 이름이 web-YYYY-MM-DD라 글자 비교로 시간 순서가 맞다.
+ */
+export const USAGE_CONSENT_FROM = "web-2026-11-06";
 
 export const ADMIN_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (관리자 화면 전체 — 메뉴에 링크하지 않는 운영자용 화면)
@@ -25,7 +44,8 @@ export const ADMIN_TEXT = {
   loadFailedTitle: "불러오지 못했어요",
   loadFailedBody: "잠시 후 다시 시도해주세요.",
   setupHint: "Supabase SQL Editor에서 supabase/migrations/0002_admin.sql을 실행했는지 확인해 주세요.",
-  privacyNote: "건강 기록 내용은 이 화면에 나오지 않아요. 계정 ID, 가입·접속 시각, 계정 유형, 동의 버전, 기록 저장 여부와 마지막 저장일만 보여요.",
+  // 웹 신규 문구 — CPO 확인 필요 (개인정보 안내 — 이용 통계(0011)가 생기며 "익명 집계만·5명 미만 숨김"을 더함. 계정마다 보이는 칸 목록은 그대로)
+  privacyNote: `개인의 건강 기록 내용은 이 화면에 나오지 않아요. 건강 기록은 통계에 동의한 사람의 익명 집계(사람 수·기록 수)로만 보이고, ${USAGE_K}명 미만인 칸은 숨겨요. 계정마다 보이는 것은 계정 ID, 가입·접속 시각, 계정 유형, 동의 버전, 기록 저장 여부와 마지막 저장일뿐이에요.`,
   refresh: "새로고침",
   kpiUsers: "전체 사용자",
   kpiKakao: "카카오",
@@ -114,10 +134,51 @@ export const ADMIN_TEXT = {
   me: "나",
 
   // ── 접근 기록(supabase/migrations/0009_admin_access_log.sql) ──
-  // 웹 신규 문구 — CPO 확인 필요 (화면 위 개인정보 안내 뒤에 이어지는 문장 — 이 화면의 조회·내려받기가 감사 기록에 남는다는 것과 보존 기간)
-  accessLogNote: `이 화면에서 조회하거나 내려받으면 누가 언제 했는지 admin_audit 표에 ${ADMIN_AUDIT_RETENTION_YEARS}년 동안 남아요.`,
+  // 웹 신규 문구 — CPO 확인 필요 (화면 위 개인정보 안내 뒤에 이어지는 문장 — 이 화면의 조회(이용 통계 포함)·내려받기가 감사 기록에 남는다는 것과 보존 기간)
+  accessLogNote: `이 화면에서 조회하거나(이용 통계 포함) 내려받으면 누가 언제 했는지 admin_audit 표에 ${ADMIN_AUDIT_RETENTION_YEARS}년 동안 남아요.`,
   // 웹 신규 문구 — CPO 확인 필요 (CSV 내려받기 기록 함수가 서버에 없을 때 — 기록 없이 파일을 만들지 않는다)
   auditSetupHint: "CSV를 만들지 않았어요. Supabase SQL Editor에서 supabase/migrations/0009_admin_access_log.sql을 실행했는지 확인해 주세요.",
+
+  // ── 이용 통계(집계)(supabase/migrations/0011_admin_usage_stats.sql) — 모두 웹 신규 문구 — CPO 확인 필요 (운영자용 화면) ──
+  // 분만 방식·목표·기분 답의 칸 이름은 앱의 원문(DELIVERY_TITLE·GOAL_TITLE·content.json mood_check.answers·PROFILE_TEXT.unset)을 쓴다 — USAGE_BUCKET_LABEL.
+  usageTitle: "이용 통계(집계)",
+  usageSubtitle: "서비스 개선 통계에 동의한 사용자 기준 · 관리자 계정 제외 · 한국 시간",
+  usagePeriodGroup: "기간",
+  usageNote: `서비스 개선 통계에 동의한 사람만 세요. 개인의 건강 기록은 보이지 않고 사람 수와 기록 수만 보이며, ${USAGE_K}명 미만인 칸은 숨겨요. 이 통계를 볼 때마다 admin_audit 표에 남아요.`,
+  usageHidden: `${USAGE_K}명 미만이라 숨겼어요`,
+  usageHiddenShort: "숨김",
+  usageComplementNote: `숨김: ${USAGE_K}명 미만인 칸, 또는 숨긴 칸을 뺄셈으로 알아낼 수 없게 함께 숨긴 칸이에요.`,
+  usageSuppressedBody: `통계에 동의한 사용자가 ${USAGE_K}명 미만이라 건강 기록에서 나온 통계(날짜별 기록·기능별 이용·재방문·분포)는 모두 숨겼어요. ${USAGE_K}명 이상이 되면 보여요.`,
+  usageSetupHint: "Supabase SQL Editor에서 supabase/migrations/0011_admin_usage_stats.sql을 실행했는지 확인해 주세요.",
+  usageKpiConsented: "통계에 동의한 사용자",
+  usageKpiConsentedCaption: "관리자 계정 제외",
+  usageKpiActive: "기간 중 기록 저장",
+  usageKpiRecording: "기록한 사람",
+  usageKpiRecordingCaption: "기록 시각 기준",
+  usageKpiReturning: "재방문",
+  usageDailyTitle: "날짜별 기록",
+  usageDailySubtitle: `하루 단위 · 한국 시간 · 그날 그 기록을 남긴 사람이 ${USAGE_K}명 미만이면 숨겨요`,
+  usageHiddenDayLegend: `${USAGE_K}명 미만이라 숨긴 날`,
+  usageSeriesSymptom: "증상 기록",
+  usageSeriesMood: "기분 살피기 답",
+  usageSeriesJournal: "기록장 글",
+  usageAdoptionTitle: "기능별 이용",
+  usageAdoptionSubtitle: "기간 안에 한 번 이상 쓴 사람 · 통계에 동의한 사용자 대비",
+  usageFeatureSymptom: "증상 기록",
+  usageFeatureMood: "기분 살피기",
+  usageFeatureJournal: "기록장",
+  usageWeeksTitle: "산후 주차",
+  usageDeliveryTitle: "분만 방식",
+  usageGoalTitle: "목표",
+  usageMoodTitle: "기분 살피기 답",
+  usageRedFlagTitle: "병원 안내가 나온 증상 기록",
+  usageWeeks0to1: "0~1주차",
+  usageWeeks2to5: "2~5주차",
+  usageWeeks6to11: "6~11주차",
+  usageWeeks12plus: "12주차 이상",
+  usageNoDeliveryDate: "출산일 없음",
+  usageRedFlagYes: "병원 안내 있음",
+  usageRedFlagNo: "병원 안내 없음",
 } as const;
 
 /** 한 쪽에 보이는 사용자 수. 서버에는 하나 더 달라고 해 다음 쪽이 있는지 안다. */
@@ -791,4 +852,510 @@ export function pageLabel(page: number, pageSize: number, shown: number, total: 
   const range = `${formatCount(from)}–${formatCount(to)}`;
   // 웹 신규 문구 — CPO 확인 필요 (관리자 사용자 목록 쪽 표시)
   return total === null ? range : `${range} / 전체 ${formatPeople(total)}`;
+}
+
+// ── 이용 통계(집계) — supabase/migrations/0011_admin_usage_stats.sql ─────────────────────
+// 서버가 서비스 개선 통계에 동의한 사용자(동의 판 USAGE_CONSENT_FROM 이상, 관리자 제외)의 건강 기록을 서버 안에서만 익명 집계로 바꿔 수만 준다 —
+// 사람별 값·계정 ID·자유 글은 오지 않는다. 아래 "동의한 사용자"는 모두 이 사람들이다(consentedUsers 포함).
+// 숨김(null)은 서버가 정한다(k = USAGE_K — 규칙 A·B·C는 그 SQL 머리말). 화면은 한 번 더 막는다(parseUsageStats):
+//   - suppressed이거나 동의한 사용자가 USAGE_K명 미만이면 건강 기록에서 나온 값을 모두 버린다.
+//   - 서버가 숨겼어야 할 값이 오면 보이지 않는다 — 이용 수의 1~4는 그 칸만 숨김, 분포의 0~4는 그 분포 전체를 숨김
+//     (한 칸만 숨기면 합계에서 빼서 되살릴 수 있다). 보이는 칸은 늘 5명 이상에서 나온 수다.
+//   - 서버의 숨김 기준(k)이 USAGE_K와 다르면 읽지 않는다(화면 문구 "5명 미만"이 틀리게 되므로).
+
+/** 기간 — 7·30·90일 단추. 서버도 같은 규칙으로 7~90에 맞춘다(SQL `least(greatest(coalesce(p_days, 30), 7), 90)`). */
+export const USAGE_DAYS_MIN = 7;
+export const USAGE_DAYS_MAX = 90;
+export const USAGE_DEFAULT_DAYS = 30;
+export const USAGE_PERIODS: readonly number[] = [7, 30, 90];
+
+/** 서버와 같은 규칙으로 기간을 맞춘다 — 소수는 버리고, 숫자가 아니면 기본 30일 */
+export function clampUsageDays(days: number): number {
+  if (!Number.isFinite(days)) return USAGE_DEFAULT_DAYS;
+  return Math.min(USAGE_DAYS_MAX, Math.max(USAGE_DAYS_MIN, Math.trunc(days)));
+}
+
+export type UsageActivity = "symptom" | "mood" | "journal";
+export const USAGE_ACTIVITIES: readonly UsageActivity[] = ["symptom", "mood", "journal"];
+
+/** 서버 칸 이름(daily·adoption) */
+const ACTIVITY_FIELD: Readonly<Record<UsageActivity, string>> = {
+  symptom: "symptom_records",
+  mood: "mood_answers",
+  journal: "journal_posts",
+};
+
+export interface UsageDay {
+  /** 한국 날짜 "YYYY-MM-DD" */
+  day: string;
+  /** 그날 종류별 기록 수 — null = 숨김(그날 그 기록을 남긴 사람이 1~4명) */
+  counts: Record<UsageActivity, number | null>;
+}
+
+/**
+ * 분포와 칸 — 서버 이름(field)과 칸 순서가 SQL의 dist_keys와 같아야 한다(adminUsageStatsSql.test.ts).
+ * 산후 주차·분만 방식·목표는 동의한 사용자 기준(사람 수, 산후 주차는 오늘 기준), 기분 답·병원 안내는 기간 안의 기록 기준(기록 수).
+ */
+export const USAGE_DISTRIBUTIONS = {
+  postpartumWeeks: { field: "postpartum_weeks", unit: "people", buckets: ["weeks_0_1", "weeks_2_5", "weeks_6_11", "weeks_12_plus", "unknown"] },
+  deliveryMethod: { field: "delivery_method", unit: "people", buckets: ["vaginal", "cesarean", "unknown"] },
+  goal: { field: "goal", unit: "people", buckets: ["homemaker", "returning_to_work", "unknown"] },
+  moodAnswers: { field: "mood_answers", unit: "records", buckets: ["yes", "unsure", "no"] },
+  redFlag: { field: "red_flag", unit: "records", buckets: ["red_flag", "other"] },
+} as const;
+
+export type UsageDistributionId = keyof typeof USAGE_DISTRIBUTIONS;
+export const USAGE_DISTRIBUTION_IDS = Object.keys(USAGE_DISTRIBUTIONS) as UsageDistributionId[];
+
+export interface UsageBucket {
+  key: string;
+  /** null = 숨김 */
+  value: number | null;
+}
+
+export interface UsageDistribution {
+  /** 기준 수 — 산후 주차·분만 방식·목표는 동의한 사용자 수, 기분 답·병원 안내는 기간 안 기록 수 */
+  total: number;
+  /** USAGE_DISTRIBUTIONS의 칸 순서 */
+  buckets: UsageBucket[];
+}
+
+export interface UsageStats {
+  generatedAt: string | null;
+  /** 서버가 맞춘 기간(7~90일) */
+  days: number;
+  /** 한국 날짜 — 첫날·오늘 */
+  period: { from: string; to: string };
+  /** 동의한 사용자가 USAGE_K명 미만 — 건강 기록에서 나온 값(daily·adoption·returnRate·distributions)은 모두 비어 있다 */
+  suppressed: boolean;
+  /** 계정 수(표의 칸에서 센다 — 한눈에 보기와 같은 수준이라 숨기지 않는다). 관리자 계정은 빠진다. */
+  totals: { consentedUsers: number; activeUsers: number };
+  daily: UsageDay[] | null;
+  /** 기간 안에 1건 이상 남긴 사람 수 — null = 숨김 */
+  adoption: Record<UsageActivity, number | null> | null;
+  /** 기간 안에 기록한 사람 · 서로 다른 이틀 이상 기록한 사람 — null = 숨김 */
+  returnRate: { recordingUsers: number | null; returningUsers: number | null } | null;
+  /** 분포마다 — null = 모든 칸이 숨겨짐(또는 suppressed) */
+  distributions: Record<UsageDistributionId, UsageDistribution | null>;
+}
+
+function noDistributions(): Record<UsageDistributionId, UsageDistribution | null> {
+  return { postpartumWeeks: null, deliveryMethod: null, goal: null, moodAnswers: null, redFlag: null };
+}
+
+/** 이용 수 칸(daily·adoption·return_rate) — 없음·null은 숨김, 0은 0, 1~4는 숨김(서버가 숨겼어야 할 값). 수가 아니면 undefined(모양 오류). */
+function activityCell(v: unknown): number | null | undefined {
+  if (v === undefined || v === null) return null;
+  const n = parseCount(v);
+  if (n === null) return undefined;
+  return n > 0 && n < USAGE_K ? null : n;
+}
+
+/**
+ * 분포 하나 — 모든 칸이 숨김이면 null, 모양이 다르면 undefined.
+ * 보이는 칸에 0~4가 오면(서버가 숨겼어야 할 값) 분포 전체를 숨긴다 — 그 칸만 숨기면 합계에서 빼서 되살릴 수 있다.
+ */
+function parseDistribution(v: unknown, buckets: readonly string[]): UsageDistribution | null | undefined {
+  if (v === undefined || v === null) return null;
+  if (!isRecord(v) || !isRecord(v.counts)) return undefined;
+  const total = parseCount(v.total);
+  if (total === null) return undefined;
+  const parsed: UsageBucket[] = [];
+  let tooSmall = false;
+  for (const key of buckets) {
+    const raw = v.counts[key];
+    if (raw === undefined || raw === null) {
+      parsed.push({ key, value: null });
+      continue;
+    }
+    const n = parseCount(raw);
+    if (n === null) return undefined;
+    if (n < USAGE_K) tooSmall = true;
+    parsed.push({ key, value: n });
+  }
+  if (parsed.reduce((s, b) => s + (b.value ?? 0), 0) > total) return undefined;
+  if (tooSmall || parsed.every((b) => b.value === null)) return null;
+  return { total, buckets: parsed };
+}
+
+/**
+ * admin_usage_stats(p_days) 응답 → 화면 값. 모양이 다르면 null(없는 값을 0으로 꾸미지 않는다 — parseOverview와 같다).
+ * 다른 칸이 와도 옮기지 않는다(정해진 칸만 읽는다).
+ */
+export function parseUsageStats(data: unknown): UsageStats | null {
+  if (!isRecord(data) || !isRecord(data.totals) || !isRecord(data.period)) return null;
+  if (parseCount(data.k) !== USAGE_K) return null;
+  const days = parseCount(data.days);
+  if (days === null || days < USAGE_DAYS_MIN || days > USAGE_DAYS_MAX) return null;
+  const { from, to } = data.period;
+  if (typeof from !== "string" || !DAY_RE.test(from) || typeof to !== "string" || !DAY_RE.test(to) || from > to) return null;
+  const consentedUsers = parseCount(data.totals.consented_users);
+  const activeUsers = parseCount(data.totals.active_users);
+  if (consentedUsers === null || activeUsers === null || activeUsers > consentedUsers) return null;
+  if (typeof data.suppressed !== "boolean") return null;
+
+  const head = { generatedAt: parseIso(data.generated_at), days, period: { from, to }, totals: { consentedUsers, activeUsers } };
+  if (data.suppressed || consentedUsers < USAGE_K) {
+    return { ...head, suppressed: true, daily: null, adoption: null, returnRate: null, distributions: noDistributions() };
+  }
+
+  let daily: UsageDay[] | null = null;
+  if (data.daily != null) {
+    if (!Array.isArray(data.daily)) return null;
+    daily = [];
+    for (const d of data.daily) {
+      if (!isRecord(d) || typeof d.day !== "string" || !DAY_RE.test(d.day)) return null;
+      const counts = { symptom: null, mood: null, journal: null } as Record<UsageActivity, number | null>;
+      for (const a of USAGE_ACTIVITIES) {
+        const n = activityCell(d[ACTIVITY_FIELD[a]]);
+        if (n === undefined) return null;
+        counts[a] = n;
+      }
+      daily.push({ day: d.day, counts });
+    }
+    daily.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+  }
+
+  let adoption: Record<UsageActivity, number | null> | null = null;
+  if (data.adoption != null) {
+    if (!isRecord(data.adoption)) return null;
+    const out = { symptom: null, mood: null, journal: null } as Record<UsageActivity, number | null>;
+    for (const a of USAGE_ACTIVITIES) {
+      const n = activityCell(data.adoption[ACTIVITY_FIELD[a]]);
+      if (n === undefined || (n !== null && n > consentedUsers)) return null;
+      out[a] = n;
+    }
+    adoption = out;
+  }
+
+  let returnRate: UsageStats["returnRate"] = null;
+  if (data.return_rate != null) {
+    if (!isRecord(data.return_rate)) return null;
+    const recordingUsers = activityCell(data.return_rate.recording_users);
+    const returningUsers = activityCell(data.return_rate.returning_users);
+    if (recordingUsers === undefined || returningUsers === undefined) return null;
+    if (recordingUsers !== null && (recordingUsers > consentedUsers || (returningUsers !== null && returningUsers > recordingUsers))) return null;
+    returnRate = { recordingUsers, returningUsers };
+  }
+
+  const distributions = noDistributions();
+  if (data.distributions != null) {
+    if (!isRecord(data.distributions)) return null;
+    for (const id of USAGE_DISTRIBUTION_IDS) {
+      const spec = USAGE_DISTRIBUTIONS[id];
+      const parsed = parseDistribution(data.distributions[spec.field], spec.buckets);
+      if (parsed === undefined) return null;
+      distributions[id] = parsed;
+    }
+  }
+
+  return { ...head, suppressed: false, daily, adoption, returnRate, distributions };
+}
+
+// ── 이용 통계 — 보기 ─────────────────────────────────────────────────────────
+
+export interface UsagePeriodOption {
+  days: number;
+  label: string;
+  selected: boolean;
+}
+
+/** 기간 단추 — "7일"·"30일"·"90일" */
+export function usagePeriodOptions(selected: number): UsagePeriodOption[] {
+  // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 기간 단추)
+  return USAGE_PERIODS.map((days) => ({ days, label: `${days}일`, selected: days === selected }));
+}
+
+/** "2026-10-06" → "2026.10.06" */
+function dotDay(day: string): string {
+  const m = DAY_RE.exec(day);
+  return m === null ? day : `${m[1]}.${m[2]}.${m[3]}`;
+}
+
+/** 묶음 부제 끝의 기간 — "2026.10.06 ~ 2026.11.04(30일)" */
+export function usagePeriodText(stats: Pick<UsageStats, "period" | "days">): string {
+  // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 기간 표시)
+  return `${dotDay(stats.period.from)} ~ ${dotDay(stats.period.to)}(${stats.days}일)`;
+}
+
+/** 1284 → "1,284건" */
+export function formatRecords(n: number): string {
+  // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 기록 수 단위)
+  return `${formatCount(n)}건`;
+}
+
+/** 숨김이면 "숨김", 아니면 "12건" */
+export function usageValueText(v: number | null): string {
+  return v === null ? ADMIN_TEXT.usageHiddenShort : formatRecords(v);
+}
+
+export interface UsageKpi {
+  id: "consented" | "active" | "recording" | "returning";
+  label: string;
+  value: string;
+  caption: string;
+}
+
+/** 묶음 맨 위 네 칸 — 동의한 사용자, 기간 중 기록 저장(서버 저장 시각), 기록한 사람(기록 시각), 재방문(이틀 이상 기록한 비율) */
+export function usageKpis(stats: UsageStats): UsageKpi[] {
+  const { consentedUsers, activeUsers } = stats.totals;
+  const activeShare = sharePercent(activeUsers, consentedUsers);
+  const recording = stats.returnRate?.recordingUsers ?? null;
+  const returning = stats.returnRate?.returningUsers ?? null;
+  const returnHidden = recording === null || returning === null;
+  return [
+    { id: "consented", label: ADMIN_TEXT.usageKpiConsented, value: formatCount(consentedUsers), caption: ADMIN_TEXT.usageKpiConsentedCaption },
+    {
+      id: "active",
+      label: ADMIN_TEXT.usageKpiActive,
+      value: formatCount(activeUsers),
+      // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 보조 줄 — "기록 저장"이 서버 저장 시각(updated_at) 기준임을 밝힘)
+      caption: activeShare === null ? "서버 저장 시각 기준" : `서버 저장 시각 기준 · 전체의 ${activeShare}`,
+    },
+    {
+      id: "recording",
+      label: ADMIN_TEXT.usageKpiRecording,
+      value: recording === null ? ADMIN_TEXT.usageHiddenShort : formatCount(recording),
+      caption: recording === null ? ADMIN_TEXT.usageHidden : ADMIN_TEXT.usageKpiRecordingCaption,
+    },
+    {
+      id: "returning",
+      label: ADMIN_TEXT.usageKpiReturning,
+      value: returnHidden ? ADMIN_TEXT.usageHiddenShort : (sharePercent(returning, recording) ?? ADMIN_TEXT.none),
+      // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 보조 줄 — 재방문 = 기간 안에 서로 다른 이틀 이상 기록)
+      caption: returnHidden ? ADMIN_TEXT.usageHidden : `이틀 이상 기록 ${formatPeople(returning)}`,
+    },
+  ];
+}
+
+// ── 날짜별 기록(작은 막대 셋 — 증상 기록·기분 살피기 답·기록장 글) ──
+
+const ACTIVITY_SERIES_TITLE: Readonly<Record<UsageActivity, string>> = {
+  symptom: ADMIN_TEXT.usageSeriesSymptom,
+  mood: ADMIN_TEXT.usageSeriesMood,
+  journal: ADMIN_TEXT.usageSeriesJournal,
+};
+
+export interface UsageDailyBar {
+  day: string;
+  /** null = 숨김 */
+  value: number | null;
+  /** 막대 높이 — 그 갈래 세로축 꼭대기 대비 %(숨김·0은 0) */
+  heightPct: number;
+}
+
+export interface UsageDailySeries {
+  activity: UsageActivity;
+  title: string;
+  scale: ChartScale;
+  bars: UsageDailyBar[];
+  /** 보이는 날만 더한 수 */
+  visibleTotal: number;
+  hiddenDays: number;
+  /** "보이는 날 합계 120건 · 가장 많은 날 11월 3일 12건 · 숨긴 날 3일" */
+  caption: string;
+}
+
+export interface UsageDailyView {
+  days: { day: string; tick: string | null; longLabel: string }[];
+  series: UsageDailySeries[];
+  /** 그림 전체를 한 줄로 — 막대를 못 보는 사람에게 먼저 읽힌다(자세한 값은 표) */
+  summary: string;
+  /** 31일보다 길면 막대 사이를 1px로(90일은 폰에서 막대가 2~3px) */
+  dense: boolean;
+}
+
+/** 가로축 눈금 간격(일) — 7일은 날마다, 30일은 7일마다, 90일은 14일마다(오늘부터 거꾸로) */
+export function usageTickStep(days: number): number {
+  return days <= 7 ? 1 : days <= 31 ? 7 : 14;
+}
+
+export function usageDailyView(daily: readonly UsageDay[]): UsageDailyView {
+  const last = daily.length - 1;
+  const step = usageTickStep(daily.length);
+  const days = daily.map((d, i) => ({ day: d.day, tick: (last - i) % step === 0 ? dayTick(d.day) : null, longLabel: dayLong(d.day) }));
+  const series = USAGE_ACTIVITIES.map((activity): UsageDailySeries => {
+    const values = daily.map((d) => d.counts[activity]);
+    const visible = values.filter((v): v is number => v !== null);
+    const scale = niceScale(Math.max(0, ...visible), 2);
+    const pct = (n: number) => (scale.max > 0 ? Math.min(100, Math.max(0, (n / scale.max) * 100)) : 0);
+    let peak = -1;
+    values.forEach((v, i) => {
+      if (v !== null && v > 0 && (peak === -1 || v > (values[peak] ?? 0))) peak = i;
+    });
+    const visibleTotal = visible.reduce((s, v) => s + v, 0);
+    const hiddenDays = values.length - visible.length;
+    // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 날짜별 기록 — 갈래마다 보조 줄)
+    const parts = [`보이는 날 합계 ${formatRecords(visibleTotal)}`];
+    if (peak !== -1) parts.push(`가장 많은 날 ${dayLong(daily[peak].day)} ${formatRecords(values[peak] ?? 0)}`);
+    if (hiddenDays > 0) parts.push(`숨긴 날 ${hiddenDays}일`);
+    return {
+      activity,
+      title: ACTIVITY_SERIES_TITLE[activity],
+      scale,
+      bars: daily.map((d, i) => {
+        const v = values[i];
+        return { day: d.day, value: v, heightPct: v === null ? 0 : pct(v) };
+      }),
+      visibleTotal,
+      hiddenDays,
+      caption: parts.join(" · "),
+    };
+  });
+  // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 날짜별 기록 낭독 요약)
+  const head = `최근 ${daily.length}일 날짜별 기록(보이는 날 합계): ${series.map((s) => `${s.title} ${formatRecords(s.visibleTotal)}`).join(", ")}.`;
+  const hidden = series.filter((s) => s.hiddenDays > 0);
+  const summary = hidden.length === 0 ? head : `${head} ${ADMIN_TEXT.usageHiddenDayLegend}: ${hidden.map((s) => `${s.title} ${s.hiddenDays}일`).join(", ")}.`;
+  return { days, series, summary, dense: daily.length > 31 };
+}
+
+/** 가리킨 날의 알림 — "11월 3일 · 증상 기록 12건 · 기분 살피기 답 숨김 · 기록장 글 0건" */
+export function usageDayReadout(view: UsageDailyView, index: number): string {
+  const d = view.days[index];
+  if (d === undefined) return "";
+  return [d.longLabel, ...view.series.map((s) => `${s.title} ${usageValueText(s.bars[index]?.value ?? null)}`)].join(" · ");
+}
+
+// ── 기능별 이용 · 분포(가로 막대 줄) · 병원 안내 비율 ──
+
+export interface UsageBarRow {
+  key: string;
+  label: string;
+  /** null = 숨김 */
+  value: number | null;
+  /** "12명 · 29%" · "숨김" */
+  valueLabel: string;
+  /** 기준 수 대비 % (0~100) */
+  widthPct: number;
+}
+
+export interface UsageBarsView {
+  id: "adoption" | UsageDistributionId;
+  title: string;
+  /** 무엇을 기준으로 셌는가 */
+  basis: string;
+  rows: UsageBarRow[];
+  /** 전체가 숨겨짐 — 줄 대신 "5명 미만이라 숨겼어요" */
+  hidden: boolean;
+  /** 숨긴 줄이 있으면 그 까닭(없으면 null) */
+  note: string | null;
+}
+
+const FEATURE_LABEL: Readonly<Record<UsageActivity, string>> = {
+  symptom: ADMIN_TEXT.usageFeatureSymptom,
+  mood: ADMIN_TEXT.usageFeatureMood,
+  journal: ADMIN_TEXT.usageFeatureJournal,
+};
+
+/** 분포 칸 이름 — 분만 방식·목표·기분 답은 앱의 원문을 그대로 쓴다(rules/exercise·content.json·profileView) */
+export const USAGE_BUCKET_LABEL: Readonly<Record<UsageDistributionId, Readonly<Record<string, string>>>> = {
+  postpartumWeeks: {
+    weeks_0_1: ADMIN_TEXT.usageWeeks0to1,
+    weeks_2_5: ADMIN_TEXT.usageWeeks2to5,
+    weeks_6_11: ADMIN_TEXT.usageWeeks6to11,
+    weeks_12_plus: ADMIN_TEXT.usageWeeks12plus,
+    unknown: ADMIN_TEXT.usageNoDeliveryDate,
+  },
+  deliveryMethod: { vaginal: DELIVERY_TITLE.vaginal, cesarean: DELIVERY_TITLE.cesarean, unknown: PROFILE_TEXT.unset },
+  goal: { homemaker: GOAL_TITLE.homemaker, returning_to_work: GOAL_TITLE.returningToWork, unknown: PROFILE_TEXT.unset },
+  moodAnswers: { yes: moodAnswerLabel("yes"), unsure: moodAnswerLabel("unsure"), no: moodAnswerLabel("no") },
+  redFlag: { red_flag: ADMIN_TEXT.usageRedFlagYes, other: ADMIN_TEXT.usageRedFlagNo },
+};
+
+const DISTRIBUTION_TITLE: Readonly<Record<UsageDistributionId, string>> = {
+  postpartumWeeks: ADMIN_TEXT.usageWeeksTitle,
+  deliveryMethod: ADMIN_TEXT.usageDeliveryTitle,
+  goal: ADMIN_TEXT.usageGoalTitle,
+  moodAnswers: ADMIN_TEXT.usageMoodTitle,
+  redFlag: ADMIN_TEXT.usageRedFlagTitle,
+};
+
+/** 분포의 기준 줄 — 숨긴 분포는 수 없이 */
+function distributionBasis(id: UsageDistributionId, total: number | null): string {
+  // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 분포의 기준)
+  switch (id) {
+    case "postpartumWeeks":
+      return total === null ? "통계에 동의한 사용자 · 오늘 기준" : `통계에 동의한 사용자 ${formatPeople(total)} · 오늘 기준`;
+    case "deliveryMethod":
+    case "goal":
+      return total === null ? "통계에 동의한 사용자 기준" : `통계에 동의한 사용자 ${formatPeople(total)} 기준`;
+    case "moodAnswers":
+      return total === null ? "기간 안의 답 기준" : `기간 안의 답 ${formatRecords(total)} 기준`;
+    case "redFlag":
+      return total === null ? "기간 안의 증상 기록 기준" : `기간 안의 증상 기록 ${formatRecords(total)} 기준`;
+  }
+}
+
+function barRow(key: string, label: string, value: number | null, total: number, unit: (n: number) => string): UsageBarRow {
+  if (value === null) return { key, label, value: null, valueLabel: ADMIN_TEXT.usageHiddenShort, widthPct: 0 };
+  const share = sharePercent(value, total);
+  return {
+    key,
+    label,
+    value,
+    valueLabel: share === null ? unit(value) : `${unit(value)} · ${share}`,
+    widthPct: total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0,
+  };
+}
+
+/** 기능별 이용 — 기간 안에 그 기능을 한 번 이상 쓴 사람, 동의한 사용자 대비 */
+export function usageAdoptionView(stats: UsageStats): UsageBarsView {
+  const total = stats.totals.consentedUsers;
+  const adoption = stats.adoption;
+  const rows = USAGE_ACTIVITIES.map((a) => barRow(a, FEATURE_LABEL[a], adoption?.[a] ?? null, total, formatPeople));
+  return {
+    id: "adoption",
+    title: ADMIN_TEXT.usageAdoptionTitle,
+    basis: ADMIN_TEXT.usageAdoptionSubtitle,
+    rows,
+    hidden: adoption === null,
+    // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 기능별 이용 — 숨긴 줄의 까닭)
+    note: adoption !== null && rows.some((r) => r.value === null) ? `숨김: 그 기능을 쓴 사람이 ${USAGE_K}명 미만이에요.` : null,
+  };
+}
+
+/** 분포 하나(산후 주차·분만 방식·목표·기분 살피기 답) — 칸 순서는 서버와 같다 */
+export function usageDistributionView(stats: UsageStats, id: UsageDistributionId): UsageBarsView {
+  const spec = USAGE_DISTRIBUTIONS[id];
+  const dist = stats.distributions[id];
+  const title = DISTRIBUTION_TITLE[id];
+  if (dist === null) return { id, title, basis: distributionBasis(id, null), rows: [], hidden: true, note: null };
+  const unit = spec.unit === "people" ? formatPeople : formatRecords;
+  const rows = dist.buckets.map((b) => barRow(b.key, USAGE_BUCKET_LABEL[id][b.key] ?? b.key, b.value, dist.total, unit));
+  return {
+    id,
+    title,
+    basis: distributionBasis(id, dist.total),
+    rows,
+    hidden: false,
+    note: rows.some((r) => r.value === null) ? ADMIN_TEXT.usageComplementNote : null,
+  };
+}
+
+export interface UsageRedFlagView {
+  title: string;
+  basis: string;
+  hidden: boolean;
+  /** "12%" — 숨김이면 null */
+  share: string | null;
+  widthPct: number;
+  /** "증상 기록 120건 중 14건" — 숨김이면 null */
+  caption: string | null;
+}
+
+/** 병원 안내가 나온 증상 기록의 비율 — 하나의 비율이라 막대 줄 대신 큰 수와 미터로 */
+export function usageRedFlagView(stats: UsageStats): UsageRedFlagView {
+  const dist = stats.distributions.redFlag;
+  const title = ADMIN_TEXT.usageRedFlagTitle;
+  const flagged = dist?.buckets.find((b) => b.key === "red_flag")?.value ?? null;
+  if (dist === null || flagged === null) return { title, basis: distributionBasis("redFlag", null), hidden: true, share: null, widthPct: 0, caption: null };
+  return {
+    title,
+    basis: distributionBasis("redFlag", dist.total),
+    hidden: false,
+    share: sharePercent(flagged, dist.total),
+    widthPct: dist.total > 0 ? Math.min(100, (flagged / dist.total) * 100) : 0,
+    // 웹 신규 문구 — CPO 확인 필요 (관리자 이용 통계 병원 안내 비율의 보조 줄)
+    caption: `증상 기록 ${formatRecords(dist.total)} 중 ${formatRecords(flagged)}`,
+  };
 }
