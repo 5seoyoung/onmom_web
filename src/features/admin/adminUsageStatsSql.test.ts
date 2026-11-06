@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import { weekFromDayCount } from "@/domain/date";
 import { MOOD_ANSWERS } from "@/rules/mood";
 import { RED_FLAG_CODES } from "@/rules/redflag";
+import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
+import { STATS_MIN_GROUP_SIZE } from "@/features/privacy/dataItems";
 import { USAGE_CONSENT_FROM, USAGE_DAYS_MAX, USAGE_DAYS_MIN, USAGE_DEFAULT_DAYS, USAGE_DISTRIBUTIONS, USAGE_K, USAGE_PERIODS } from "./adminModel";
 
 const MIGRATIONS = fileURLToPath(new URL("../../../supabase/migrations/", import.meta.url));
@@ -159,6 +161,8 @@ describe("0011 — 누구를 세나 · 기간", () => {
   it(`통계 목적에 동의한 사람만(동의 판 ${USAGE_CONSENT_FROM} 이상) — 판의 시작은 화면(USAGE_CONSENT_FROM)과 같다`, () => {
     expect(USAGE_CONSENT_FROM).toBe("web-2026-11-06");
     expect(BODY).toContain(`stats_consent_from constant text := '${USAGE_CONSENT_FROM}';`);
+    // 지금 동의 판이 통계의 시작보다 앞서면 새로 동의한 사람도 세지 않아 통계가 비고, 문구와 통계가 어긋난다
+    expect(CURRENT_CONSENT_VERSION >= USAGE_CONSENT_FROM).toBe(true);
     // 판 이름이 박힌 곳은 그 한 줄뿐이다 — 조건마다 따로 적으면 한쪽만 바뀔 수 있다
     expect(BODY.match(/'web-\d{4}-\d{2}-\d{2}/g)).toHaveLength(1);
   });
@@ -216,6 +220,7 @@ describe("0011 — 누구를 세나 · 기간", () => {
 describe(`0011 — 숨김(k = ${USAGE_K})`, () => {
   it(`k는 화면(USAGE_K = ${USAGE_K})과 같고, 결과에도 싣는다`, () => {
     expect(USAGE_K).toBe(5);
+    expect(USAGE_K).toBe(STATS_MIN_GROUP_SIZE);
     expect(BODY).toContain(`k_min constant integer := ${USAGE_K};`);
     expect(BODY).toContain("'k', k_min");
     // 사람 수를 k_min 대신 숫자와 견주는 곳이 없다(기준이 한 곳에만 있다)

@@ -12,6 +12,7 @@
 import { DELIVERY_TITLE, GOAL_TITLE } from "@/rules/exercise";
 import { moodAnswerLabel } from "@/rules/mood";
 import { PROFILE_TEXT } from "@/features/profile/profileView";
+import { STATS_MIN_GROUP_SIZE } from "@/features/privacy/dataItems";
 
 /**
  * 관리자 행동·접근 기록(admin_audit)의 보존 기간(년) — supabase/migrations/0009_admin_access_log.sql 정리 함수의
@@ -21,9 +22,10 @@ export const ADMIN_AUDIT_RETENTION_YEARS = 2;
 
 /**
  * 이용 통계의 숨김 기준 k — 한 칸에 든(기여한) 서로 다른 사람이 이보다 적으면 그 칸은 보이지 않는다.
+ * 처리방침 3절·동의 (b)의 "5명 미만인 칸은 숨김"과 같은 값을 쓴다(privacy/dataItems.ts STATS_MIN_GROUP_SIZE) — 약속과 화면이 갈라지지 않게.
  * supabase/migrations/0011_admin_usage_stats.sql의 `k_min constant integer := 5`와 같아야 한다(adminUsageStatsSql.test.ts).
  */
-export const USAGE_K = 5;
+export const USAGE_K = STATS_MIN_GROUP_SIZE;
 
 /**
  * 이용 통계에 드는 동의 판의 시작 — "서비스 개선 통계" 목적은 이 판의 동의 문구부터 있어서, 이 판 이상에 동의한 사람만 센다.
