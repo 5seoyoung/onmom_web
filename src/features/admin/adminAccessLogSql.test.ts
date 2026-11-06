@@ -298,10 +298,10 @@ describe("0009 — 개인정보 최소화 · 적용 순서", () => {
     expect(CODE).not.toMatch(/delete from public\.admins/);
   });
 
-  it("모든 마이그레이션의 기록 행동 — 계정 삭제(0005) + 접근 기록(0009), 표의 길이 제약(64자) 안", () => {
+  it("모든 마이그레이션의 기록 행동 — 계정 삭제(0005) + 접근 기록(0009) + 이용 통계(0011), 표의 길이 제약(64자) 안", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
     const actions = new Set(files.flatMap((f) => functionsOf(codeOf(f)).flatMap((x) => auditInserts(x.body).map((r) => /'(\w+)'/.exec(r.values)?.[1]))));
-    expect([...actions].sort()).toEqual(["delete_user", "export_users_csv", "find_user", "list_admins", "list_users", "overview"]);
+    expect([...actions].sort()).toEqual(["delete_user", "export_users_csv", "find_user", "list_admins", "list_users", "overview", "usage_stats"]);
     for (const a of actions) expect(a!.length).toBeLessThanOrEqual(64);
   });
 
