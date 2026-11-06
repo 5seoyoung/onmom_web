@@ -18,9 +18,10 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
     expect(DOC).toContain(CURRENT_CONSENT_VERSION);
   });
 
-  it("온보딩 동의 단계 — 머리·안내·버튼·필수 셋·AI 국외 이전 안내", () => {
+  it("온보딩 동의 단계 — 머리·시범 안내·안내·버튼·필수 셋·AI 국외 이전 안내", () => {
     const texts = [
       SERVER_CONSENT_TEXT.subtitle,
+      SERVER_CONSENT_TEXT.trialNote,
       ...SERVER_CONSENT_TEXT.lines,
       SERVER_CONSENT_TEXT.reconsentNote,
       SERVER_CONSENT_TEXT.reconsentButton,
@@ -32,11 +33,13 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
     expect(DOC).toContain(`${SERVER_CONSENT_TEXT.requiredBadge} / ${SERVER_CONSENT_TEXT.noticeBadge} / ${SERVER_CONSENT_TEXT.more}`);
   });
 
-  it("강조(중요한 내용) 줄이 문서 표에서도 ● — 코드의 emphasis와 같다", () => {
+  it("강조(중요한 내용) 줄이 문서 표에서도 ● — 코드의 emphasis와 같다, 강조한 요약은 문서에도 '강조'로", () => {
     for (const c of [...REQUIRED_CONSENTS, AI_TRANSFER_NOTICE]) {
       for (const d of c.details) {
         if (d.emphasis === true) expect(DOC, `${c.title} ${d.term}`).toContain(`| ${d.term} | ${d.text} | ● |`);
       }
+      const summaryLine = c.summaryEmphasis === true ? `- **요약(늘 보임 · 강조)**: ${c.summary}` : `- **요약(늘 보임)**: ${c.summary}`;
+      expect(DOC, `${c.title} 요약`).toContain(summaryLine);
     }
   });
 

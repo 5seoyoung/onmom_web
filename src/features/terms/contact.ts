@@ -1,6 +1,7 @@
 // 문의처 — 개인정보처리방침 원문(PrivacyPolicyView.swift:64 → features/privacy/policyText.ts "7. 문의처")의 이메일을 그대로 쓴다.
 // 주소를 여기 따로 적지 않는다: 방침의 문의처가 바뀌면 설정·로그인 화면·이용약관의 문의 링크가 함께 바뀌어야 하므로,
-// 방침 본문에서 이메일을 읽어 온다(terms.test.ts "문의처"가 방침 원문·웹 초안 15절과 같은 주소인지 확인한다).
+// 방침 본문에서 이메일을 읽어 온다. 웹 개인정보처리방침(서버 저장 빌드)의 16절 연락처도 이 값을 쓴다(features/privacy/webPolicyText.ts) —
+// 주소가 적힌 곳은 iOS 방침 원문 한 곳뿐이다(terms.test.ts "문의처"가 확인한다). 주소를 바꾸려면 policyText.ts "7. 문의처"만 고친다.
 // 방침에서 이메일을 찾지 못하면 null — 화면은 문의 링크를 그리지 않는다(지어낸 주소를 보이지 않는다).
 
 import { PRIVACY_POLICY_SECTIONS, type PolicySection } from "@/features/privacy/policyText";
@@ -14,7 +15,7 @@ export function extractContactEmail(sections: readonly PolicySection[]): string 
   return m === null ? null : m[0];
 }
 
-/** 이 빌드의 문의 이메일 — iOS 방침 원문의 문의처(웹 초안 15절도 같은 주소) */
+/** 이 빌드의 문의 이메일 — iOS 방침 원문의 문의처(웹 방침 16절도 이 값을 쓴다) */
 export const CONTACT_EMAIL: string | null = extractContactEmail(PRIVACY_POLICY_SECTIONS);
 
 export const CONTACT_TEXT = {

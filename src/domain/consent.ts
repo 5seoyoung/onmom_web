@@ -8,8 +8,13 @@
 
 import type { UserProfile } from "./types";
 
-/** 지금 동의 문구의 판 */
-export const CURRENT_CONSENT_VERSION = "web-2026-09-28";
+/**
+ * 지금 동의 문구의 판 — 문구(features/onboarding/consentText.ts의 부제·시범 안내 줄·안내 3줄·(a)~(c))의 지문은 consentStep.test.ts에 판마다 있다.
+ * - web-2026-09-28: 서버 저장 빌드의 첫 동의 문구(2026-10-24 시범 공개부터)
+ * - web-2026-11-06: 시범 운영 시행판 — 시범 안내 줄, 안내 둘째 줄(운동 영상은 두 분만 방식 목록을 함께 받음), 안내 셋째 줄을 안내만 하는 말로, 민감정보 항목·보유 기간을 늘 보이는 요약에,
+ *   증상 기록을 "위험 증상 체크 항목"으로 묶음, 서비스 개선 통계 목적, 동의 전에 만들어지는 정보, 백업 7일, 열람 제한·AI 줄, 14세 미만 확인 시 삭제
+ */
+export const CURRENT_CONSENT_VERSION = "web-2026-11-06";
 
 /** 지금 판의 동의를 받았는가 — 동의(consentAccepted)와 판이 모두 맞아야 한다. */
 export function hasCurrentConsent(profile: Pick<UserProfile, "consentAccepted" | "consentVersion">): boolean {

@@ -14,7 +14,7 @@ export function TermsTitleBlock({ terms }: { terms: TermsDocument }) {
   );
 }
 
-/** 본문 위 안내 — 굵은 "초안 — 법률 검토 전" + 안내. 웹 처리방침 초안과 같은 모양(코랄 옅은 바탕, 짙은 글자). */
+/** 본문 위 안내 — 굵은 상태 표시("시범 운영 중") + 안내. 웹 개인정보처리방침과 같은 모양(코랄 옅은 바탕, 짙은 글자). */
 export function TermsNote({ terms }: { terms: TermsDocument }) {
   return (
     <div className="flex flex-col gap-1 rounded-chip bg-coral-tint px-4 py-3 text-[0.8125rem]">

@@ -16,8 +16,8 @@ export function PolicyTitleBlock({ policy }: { policy: PolicyDocument }) {
 }
 
 /**
- * 본문 위 안내 — iOS 원문이면 "iOS 기준" 안내, 웹 초안이면 굵은 "초안 — 법률 검토 전" + 안내(CPO 확인 필요).
- * 초안 표시는 눈에 띄게 코랄 옅은 바탕에 둔다(글자는 짙은 색 — 대비).
+ * 본문 위 안내 — iOS 원문이면 "iOS 기준" 안내, 웹 방침이면 굵은 상태 표시("시범 운영 중") + 안내(CPO 확인 필요).
+ * 상태 표시는 눈에 띄게 코랄 옅은 바탕에 둔다(글자는 짙은 색 — 대비).
  */
 export function PolicyWebNote({ policy }: { policy: PolicyDocument }) {
   if (policy.draftLabel === null) {
