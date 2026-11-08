@@ -74,7 +74,8 @@ export function HomeTopBar() {
     <header className="flex items-center justify-between gap-2 py-1 lg:justify-end lg:py-0">
       {/* "온맘" 제목(HomeView.swift:63 — 링크 아님. 이 화면이 앱 홈이다). PC는 사이드 메뉴에 로고가 있어 글자를 숨기고
           제목만 스크린 리더에 남긴다. */}
-      <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">{HOME_TEXT.brand}</h1>
+      {/* data-logotype: 로고 글자(워드마크)라 글자 대비 요구에서 빠진다(WCAG 1.4.3) — 접근성 자동 검사(e2e/support/axe.ts)가 이 표시로 뺀다 */}
+      <h1 data-logotype className="text-[1.375rem] font-bold text-primary lg:hidden">{HOME_TEXT.brand}</h1>
       <h1 className="hidden lg:block lg:sr-only">{HOME_TEXT.brand}</h1>
       <Link
         href={HOME_CHAT_HREF}

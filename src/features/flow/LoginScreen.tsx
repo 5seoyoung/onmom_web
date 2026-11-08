@@ -78,7 +78,8 @@ export function LoginScreen() {
     <main className="flex flex-1 flex-col gap-6 bg-background">
       <div aria-hidden className="flex-1" />
       <div className="flex flex-col items-center gap-2 px-6 text-center">
-        <h1 className="flex flex-col items-center gap-2 text-[2.125rem] leading-tight font-bold text-primary">
+        {/* data-logotype: 로고 + 로고 글자(워드마크)라 글자 대비 요구에서 빠진다(WCAG 1.4.3) — 접근성 자동 검사(e2e/support/axe.ts)가 이 표시로 뺀다 */}
+        <h1 data-logotype className="flex flex-col items-center gap-2 text-[2.125rem] leading-tight font-bold text-primary">
           <BrandLogo size="login" />
           {LOGIN_TEXT.brand}
         </h1>
