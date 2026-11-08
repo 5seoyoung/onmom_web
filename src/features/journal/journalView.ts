@@ -5,6 +5,7 @@ import { formatMonthDayTime } from "@/domain/date";
 import type { CommunityComment, CommunityPost } from "@/domain/types";
 import { STORAGE_REGION } from "@/features/privacy/dataItems";
 import { ROUTES } from "@/routes";
+import { canSubmitPost } from "@/store/state";
 
 export const JOURNAL_TEXT = {
   title: "기록장", // 원문: CommunityView.swift:29
@@ -26,6 +27,35 @@ export const JOURNAL_TEXT = {
   deleted: "삭제된 글이에요.", // 원문: CommunityView.swift:206
   commentPlaceholder: "댓글을 입력하세요", // 원문: CommunityView.swift:218
   commentSubmit: "댓글 등록", // 원문: CommunityView.swift:231
+} as const;
+
+/**
+ * 글 수정·삭제, 댓글 삭제 — 웹 전용(iOS 기록장에는 없다. LAUNCH_CHECKLIST 7-4). 지운 글·댓글은 삭제 표시(id·시각만)를 남겨
+ * 다른 탭·서버 사본이 되살리지 않는다(store/tombstones). 저장 규칙(제목 필수·trim)은 store/state.ts updatePost.
+ */
+export const JOURNAL_EDIT_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요 (글 상세의 버튼)
+  edit: "수정",
+  // 웹 신규 문구 — CPO 확인 필요
+  delete: "삭제",
+  // 웹 신규 문구 — CPO 확인 필요 (글 수정 화면 제목·머리의 저장 버튼 — [취소]는 글쓰기와 같은 원문)
+  editTitle: "글 수정",
+  // 웹 신규 문구 — CPO 확인 필요
+  save: "저장",
+  // 웹 신규 문구 — CPO 확인 필요 (고친 적이 있는 글의 시각 옆 표시)
+  edited: "수정됨",
+  // 웹 신규 문구 — CPO 확인 필요 (글 삭제 확인 창)
+  deletePostTitle: "이 글을 삭제할까요?",
+  // 웹 신규 문구 — CPO 확인 필요
+  deletePostMessage: "글과 댓글이 모두 삭제되고 되돌릴 수 없어요.",
+  // 웹 신규 문구 — CPO 확인 필요 (댓글 삭제 확인 창)
+  deleteCommentTitle: "이 댓글을 삭제할까요?",
+  // 웹 신규 문구 — CPO 확인 필요
+  deleteCommentMessage: "삭제한 댓글은 되돌릴 수 없어요.",
+  // 웹 신규 문구 — CPO 확인 필요 (댓글마다의 삭제 버튼 낭독 이름 — 어느 댓글인지는 댓글 글자를 설명으로 잇는다)
+  deleteComment: "댓글 삭제",
+  // 웹 신규 문구 — CPO 확인 필요 (댓글을 삭제한 뒤 화면 낭독기에만 들리는 알림)
+  commentDeleted: "댓글을 삭제했어요.",
 } as const;
 
 /**
@@ -56,6 +86,16 @@ export const JOURNAL_LIMITS = {
 
 export const JOURNAL_HREF = ROUTES.journal;
 export const JOURNAL_WRITE_HREF = ROUTES.journalWrite;
+
+/** 글 수정 주소 — 상세와 같이 쿼리로 넘긴다 */
+export function postEditHref(id: string): string {
+  return `${ROUTES.journalEdit}?id=${encodeURIComponent(id)}`;
+}
+
+/** 글 수정 [저장]을 켤지 — 제목이 있고(글쓰기와 같은 규칙) 앞뒤 공백을 뺀 제목·본문이 전과 다를 때 */
+export function canSavePostEdit(post: Pick<CommunityPost, "title" | "body">, title: string, body: string): boolean {
+  return canSubmitPost(title) && (post.title !== title.trim() || post.body !== body.trim());
+}
 
 /**
  * 글 상세 주소. 정적 export라 글마다 경로를 미리 만들 수 없어(글은 브라우저에만 있다) 쿼리로 넘긴다.

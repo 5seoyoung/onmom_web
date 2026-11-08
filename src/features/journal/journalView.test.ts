@@ -91,10 +91,12 @@ describe("입력 길이 상한(maxLength) — 웹 보강, 보이는 문구 없�
     expect(JOURNAL_LIMITS).toEqual({ title: 100, body: 5000, comment: 1000 });
   });
 
-  it("글쓰기의 제목·내용 칸과 상세의 댓글 칸이 상한을 건다", () => {
-    const write = read("./JournalWriteScreen.tsx");
-    expect(write).toContain("maxLength={JOURNAL_LIMITS.title}");
-    expect(write).toContain("maxLength={JOURNAL_LIMITS.body}");
+  it("글쓰기·글 수정의 제목·내용 칸과 상세의 댓글 칸이 상한을 건다", () => {
+    // 제목·내용 칸은 글쓰기와 글 수정이 같이 쓰는 PostFields 하나
+    const fields = read("./PostFields.tsx");
+    expect(fields).toContain("maxLength={JOURNAL_LIMITS.title}");
+    expect(fields).toContain("maxLength={JOURNAL_LIMITS.body}");
+    for (const screen of ["./JournalWriteScreen.tsx", "./JournalEditScreen.tsx"]) expect(read(screen), screen).toContain("<PostFields ");
     expect(read("./JournalPostScreen.tsx")).toContain("maxLength={JOURNAL_LIMITS.comment}");
   });
 });

@@ -33,6 +33,8 @@ export const ROUTES = {
   journalWrite: "/journal/write/",
   /** 글 상세 — `${ROUTES.journalPost}?id=…` */
   journalPost: "/journal/post/",
+  /** 글 수정 — `${ROUTES.journalEdit}?id=…` */
+  journalEdit: "/journal/edit/",
   profile: "/profile/",
   analyze: "/analyze/",
   guide: "/guide/",
