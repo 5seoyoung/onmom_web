@@ -44,11 +44,10 @@ export interface ChatDeps {
   llmComplete?: (request: ChatLlmRequest) => Promise<string>;
 }
 
-// 원문: ChatView.swift:13
-export const CHAT_GREETING =
-  "안녕하세요, 온맘이에요. 산후 회복에 대해 궁금한 점을 편하게 물어보세요. (제공되는 답변은 정보 안내이며 진단·처방이 아닙니다.)";
-// 원문: ChatView.swift:123
-export const CHAT_FAQ_TITLE = "자주 묻는 질문";
+// content.json ui.chat — 원문: ChatView.swift:13
+export const CHAT_GREETING = content.ui.chat.greeting;
+// content.json ui.chat — 원문: ChatView.swift:123
+export const CHAT_FAQ_TITLE = content.ui.chat.faq_title;
 /** 질문 목록만 큐레이션이고, 답은 서버 LLM이 한다 */
 export const CHAT_FAQ: readonly string[] = content.chat_faq;
 /** 서버 대신 규칙으로 답하고 있음을 알리는 배너 */
