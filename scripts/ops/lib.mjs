@@ -1,8 +1,9 @@
-// 운영 도구 공용 모듈 — health-check.mjs(매일 점검 워크플로 .github/workflows/health-check.yml)·status.mjs·auth-switch.mjs가 쓴다.
+// 운영 도구 공용 모듈 — health-check.mjs(매일 점검 워크플로 .github/workflows/health-check.yml)·status.mjs·auth-switch.mjs·daily.mjs가 쓴다.
 // 의존성 없음(Node 22+ 내장 fetch). 읽기 위주 — 운영 프로젝트를 바꾸는 요청은 auth-switch.mjs의 PATCH 하나뿐이다.
 //
 // 비밀값: SUPABASE_ACCESS_TOKEN은 환경 변수에서만 읽는다(파일은 읽지 않는다 — docs/private/·~/.supabase 포함).
-//   요청 헤더로만 보내고 출력·오류 메시지·요약에 싣지 않는다. 사용자 데이터(건강 기록·계정)는 읽지 않는다 — DB는 예약 작업 기록의 개수만.
+//   요청 헤더로만 보내고 출력·오류 메시지·요약에 싣지 않는다. 사용자 데이터(건강 기록·계정)는 읽지 않는다 — DB는 예약 작업 기록의 개수만
+//   (daily.mjs는 계정·동의·AI 사용의 개수만 — 사람별 값은 묻지 않는다).
 
 /** 운영 프로젝트(공개값 — supabase/config.toml project_id, docs/SUPABASE_SETUP.md 0-2). 다른 프로젝트는 SUPABASE_PROJECT_REF로. */
 export const DEFAULT_PROJECT_REF = "movrwmoniopgetdmagon";
@@ -116,6 +117,17 @@ export function createManagementApi({ token, ref, base = MANAGEMENT_API }) {
     functions: () => call("GET", "/functions", undefined, 3),
     /** 읽기 전용 SQL — DB 사용자 supabase_read_only_user로 돈다(서버가 쓰기를 막는다) */
     readOnlyQuery: (sql) => call("POST", "/database/query/read-only", { query: sql }, 2),
+    /**
+     * 로그 조회(통합 logs 표 — source로 갈래를 고른다). 한 번에 24시간까지(Supabase 제한). daily.mjs만 쓴다 —
+     * 부르는 쪽이 개수·상태만 묻는 SQL을 넘긴다(2026-11 logs.all이 없어지고 이 주소로 바뀜).
+     */
+    logs: (sql, start, end) =>
+      call(
+        "GET",
+        `/analytics/endpoints/logs?${new URLSearchParams({ sql, iso_timestamp_start: start.toISOString(), iso_timestamp_end: end.toISOString() })}`,
+        undefined,
+        2,
+      ),
   };
 }
 
