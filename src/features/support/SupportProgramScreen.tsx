@@ -24,6 +24,7 @@ import {
   type SupportSolution,
 } from "@/rules/support";
 import { supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
+import { RegionalProgramsSection } from "./RegionalProgramsSection";
 import { ROUTES } from "@/routes";
 
 // 웹 신규 문구 — CPO 확인 필요: 새 탭으로 열리는 링크임을 스크린리더에 알리는 숨은 글자(화면에는 안 보임)
@@ -103,6 +104,9 @@ export function SupportProgramScreen() {
           </div>
         ) : null}
       </div>
+
+      {/* 우리 지역 지원사업(웹 신규) — 수집한 목록이 있는 빌드에서만 보인다. 고른 지역은 저장하지 않는다(RegionalProgramsSection 머리말) */}
+      <RegionalProgramsSection />
 
       <p className="text-[0.6875rem] text-text-subtle-aa">{SUPPORT_TEXT.footer}</p>
     </main>
