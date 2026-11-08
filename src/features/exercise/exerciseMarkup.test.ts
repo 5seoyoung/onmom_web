@@ -69,8 +69,9 @@ describe("영상 목록(프록시 살아 있음) — 실제 영상 카드", () =
     expect(html).toContain(R_PELVIC);
     // 설명이 있는 카드만 설명 줄
     expect(html).toContain("호흡과 걷기");
-    // 잠긴 카드는 흐리게
-    expect(count(html, "opacity-70")).toBe(2);
+    // 잠긴 카드는 표시만(data-dimmed) — 카드 전체를 흐리게 하지 않는다(글자 대비 AA, 2026-11-08)
+    expect(count(html, "data-dimmed")).toBe(2);
+    expect(html).not.toContain("opacity-70");
   });
 
   it("단계명은 규칙의 단계 제목 그대로", () => {

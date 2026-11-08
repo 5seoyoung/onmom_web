@@ -116,15 +116,17 @@ function PlanSection({ title, count, cards }: { title: string; count: number; ca
 function VideoCard({ card }: { card: VideoCardModel }) {
   const titleId = useId();
   return (
-    <Card as="article" aria-labelledby={titleId} className={cx("flex flex-col gap-2 lg:h-full", card.dimmed && "opacity-70")}>
+    // 잠긴 카드(iOS opacity 0.7)는 카드 전체를 흐리게 하지 않는다 — 글자 대비가 AA 아래로 떨어진다(2026-11-08 axe: 2.84~3.49:1).
+    // 잠김은 배지("N주에 열림"·"지금은 권장 안 함")와 아래 사유 줄이 글자로 알리고, 모양은 제목을 보조 글자색으로·아이콘만 흐리게 한다.
+    <Card as="article" aria-labelledby={titleId} data-dimmed={card.dimmed ? "" : undefined} className="flex flex-col gap-2 lg:h-full">
       <div className="flex items-center justify-between gap-2">
-        <h3 id={titleId} className="min-w-0 text-base font-semibold text-text-primary">
+        <h3 id={titleId} className={cx("min-w-0 text-base font-semibold", card.dimmed ? "text-text-secondary" : "text-text-primary")}>
           {card.title}
         </h3>
         <StatusBadge variant="exercise" status={card.badge.tone} label={card.badge.text} />
       </div>
       <p className="flex items-center gap-1.5 text-[0.8125rem] text-text-secondary">
-        <PersonStanding aria-hidden className="size-4 shrink-0" />
+        <PersonStanding aria-hidden className={cx("size-4 shrink-0", card.dimmed && "opacity-50")} />
         {card.bucketTitle}
       </p>
       {card.description !== null ? <p className="text-[0.8125rem] text-text-secondary">{card.description}</p> : null}
