@@ -12,10 +12,18 @@
 
 import type { PersistedState } from "@/domain/types";
 import type { Account } from "./account";
+import { hasDeletions } from "./tombstones";
 
 /** 이 접두의 키는 eraseAll이 전부 지운다 — 개인 데이터를 브라우저에 두는 모듈은 반드시 이 접두를 쓸 것. */
 export const STORAGE_PREFIX = "onmom.web.";
 export const STATE_KEY = "onmom.web.state.v1";
+/**
+ * 삭제 표시(store/tombstones)의 따로 둔 사본 — 상태(STATE_KEY)의 deleted 칸과 같은 내용이다. 예전 판의 웹(서비스 워커가 캐시한 번들,
+ * 업데이트 전에 열어 둔 탭)은 deleted 칸을 모르고 상태를 다시 쓰면서 떨어뜨린다. 그 웹은 이 키를 모르니 건드리지 않는다(지우는 것은 계정 삭제·
+ * 다른 사람의 계정 전환 — STORAGE_PREFIX라 상태와 함께 지운다). 이 웹은 읽을 때 두 곳의 표시를 합쳐 적용하므로(appStore.load), 예전 웹이
+ * 되살린 기록도 다시 빠지고 표시도 서버까지 이어진다. 지운 기록이 없으면 키를 두지 않는다(형식 1의 브라우저 저장소는 그대로).
+ */
+export const DELETED_KEY = "onmom.web.deleted.v1";
 export const GUEST_ID_KEY = "onmom.web.account.guestID";
 export const ACCOUNT_KEY = "onmom.web.account.current";
 /** 쓰기 가능 여부 확인용 — 다른 탭 변경 알림에서는 무시한다(무시하지 않으면 탭끼리 서로 다시 읽기를 반복한다). */
@@ -54,8 +62,10 @@ export interface PersistenceAdapter {
   /** 지금 쓰기가 되는가(사생활 보호 모드·차단이면 false) */
   isAvailable(): boolean;
   loadState(): unknown;
-  /** false = 저장 실패(메모리에서만 유지됨) */
+  /** false = 저장 실패(메모리에서만 유지됨). 지운 기록이 있으면 삭제 표시의 사본(DELETED_KEY)도 쓴다. */
   saveState(state: PersistedState): boolean;
+  /** 삭제 표시의 따로 둔 사본(파싱된 JSON, 해석은 decode decodeDeleted) — 없으면 null. 없으면(테스트용 어댑터) 상태의 deleted 칸만 쓴다. */
+  loadDeleted?(): unknown;
   loadAccount(): unknown;
   /** null이면 키를 지운다(로그아웃) */
   saveAccount(account: Account | null): boolean;
@@ -114,7 +124,14 @@ export function createStoragePersistence(getStorage: () => StorageLike | null): 
   return {
     isAvailable: () => write(PROBE_KEY, "1") && write(PROBE_KEY, null),
     loadState: () => readJSON(STATE_KEY),
-    saveState: (state) => write(STATE_KEY, JSON.stringify(state)),
+    saveState(state) {
+      // 사본 먼저 — 둘 사이에 탭이 닫혀도 표시가 남아 있으면 다음에 읽을 때 지운 기록이 다시 빠진다.
+      // 사본을 못 써도(용량) 상태의 deleted 칸에 표시가 있어 결과는 상태 저장으로 정한다.
+      const deleted = (state as Partial<PersistedState>).deleted;
+      write(DELETED_KEY, deleted !== undefined && hasDeletions(deleted) ? JSON.stringify(deleted) : null);
+      return write(STATE_KEY, JSON.stringify(state));
+    },
+    loadDeleted: () => readJSON(DELETED_KEY),
     loadAccount: () => readJSON(ACCOUNT_KEY),
     saveAccount: (account) => write(ACCOUNT_KEY, account === null ? null : JSON.stringify(account)),
     loadGuestID: () => read(GUEST_ID_KEY),
@@ -138,10 +155,11 @@ export function createStoragePersistence(getStorage: () => StorageLike | null): 
     },
     stateToken() {
       // 저장된 글자 그대로 — 판 번호를 따로 두지 않아 저장 형식(04 PersistedState JSON)이 바뀌지 않는다. 같은 글자면 바뀐 것이 없다.
+      // 삭제 표시의 사본도 본다 — 다른 탭이 지운 것도 "바뀜"이다.
       try {
         const s = getStorage();
         if (!s) return null;
-        return `${s.getItem(STATE_KEY) ?? ""}\u0000${s.getItem(ACCOUNT_KEY) ?? ""}`;
+        return `${s.getItem(STATE_KEY) ?? ""}\u0000${s.getItem(ACCOUNT_KEY) ?? ""}\u0000${s.getItem(DELETED_KEY) ?? ""}`;
       } catch {
         return null;
       }

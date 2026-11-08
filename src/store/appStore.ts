@@ -9,6 +9,7 @@ import {
   pickRiskFlags,
   type IsoDateTimeString,
   type MaternityRecord,
+  type MoodAnswer,
   type MoodCheckRecord,
   type PersistedState,
   type SymptomRecord,
@@ -18,11 +19,12 @@ import { CURRENT_CONSENT_VERSION, hasCurrentConsent } from "@/domain/consent";
 import { isSupabaseConfigured } from "@/config";
 import { MOOD_VERSION } from "@/rules/version";
 import { decodeAccount, displayName, isGuestID, makeGuestID, type Account } from "./account";
-import { decodePersisted } from "./decode";
+import { decodeDeleted, decodePersisted } from "./decode";
 import { initialState } from "./defaults";
 import type { EraseOptions, PersistenceAdapter } from "./persistence";
 import * as S from "./state";
 import { rebaseOnStored } from "./tabRebase";
+import { withExtraDeleted } from "./tombstones";
 
 export interface AppSnapshot {
   /** 브라우저 저장소를 읽었는가. false인 동안(서버 렌더링·첫 페인트) state는 초기값이다. */
@@ -79,6 +81,18 @@ export interface AppActions {
   addPost(input: { title: string; body: string }): string | null;
   /** 댓글 등록 — 빈 댓글·없는 글이면 false */
   addComment(postId: string, text: string): boolean;
+  // 고치기·지우기(웹 전용 — 고친 시각·삭제 표시를 남겨 여러 탭·서버 합치기가 되살리지 않게, store/tombstones). 없는 기록이면 false.
+  /** 증상 기록 고치기 — 값은 rules/record rebuildSymptomRecord가 고친 답으로 다시 계산한 것. 바뀐 것이 없어도 false. */
+  updateSymptomRecord(id: string, values: S.SymptomRecordPatch): boolean;
+  deleteSymptomRecord(id: string): boolean;
+  /** 기분 답 고치기 — 같은 답이어도 false */
+  updateMoodAnswer(id: string, answer: MoodAnswer): boolean;
+  deleteMoodCheck(id: string): boolean;
+  /** 글 고치기 — 제목이 비었거나 바뀐 것이 없어도 false */
+  updatePost(postId: string, input: { title: string; body: string }): boolean;
+  /** 글 지우기(댓글도 함께) */
+  deletePost(postId: string): boolean;
+  deleteComment(postId: string, commentId: string): boolean;
 }
 
 export interface AppStore {
@@ -218,6 +232,9 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
     guestIDCache = null;
     storageOk = persistence.isAvailable();
     let state = decodePersisted(persistence.loadState(), { now: now(), newId });
+    // 삭제 표시의 따로 둔 사본(persistence DELETED_KEY)을 더한다 — 예전 판의 웹이 상태를 다시 쓰며 표시를 떨어뜨리고 지운 기록을 되살렸어도 다시 뺀다.
+    // 계정에 묶기 전에(이 사본은 지금 저장된 상태와 같은 사람의 것이다 — 다른 사람으로 바뀔 때는 둘 다 지운다)
+    if (persistence.loadDeleted) state = withExtraDeleted(state, decodeDeleted(persistence.loadDeleted()));
     const account = decodeAccount(persistence.loadAccount());
     // 앱을 열 때마다 로그인 계정에 데이터를 묶는다 — 주인 없는 구버전 데이터는 귀속, 어긋난 주인은 삭제.
     if (account) state = bindAndSave(state, account, false);
@@ -375,7 +392,27 @@ export function createAppStore(deps: AppStoreDeps): AppStore {
       commit(next);
       return true;
     },
+    updateSymptomRecord: (id, values) => change((s) => S.updateSymptomRecord(s, id, values, now())),
+    deleteSymptomRecord: (id) => change((s) => S.deleteSymptomRecord(s, id, now())),
+    updateMoodAnswer: (id, answer) => change((s) => S.updateMoodAnswer(s, id, answer, now())),
+    deleteMoodCheck: (id) => change((s) => S.deleteMoodCheck(s, id, now())),
+    updatePost: (postId, input) => change((s) => S.updatePost(s, postId, input, now())),
+    deletePost: (postId) => change((s) => S.deletePost(s, postId, now())),
+    deleteComment: (postId, commentId) => change((s) => S.deleteComment(s, postId, commentId, now())),
   };
+
+  /**
+   * 고치기·지우기 — 다른 탭이 그사이 저장했으면 commit이 다시 읽어 합친다(tabRebase): 고친 기록은 고친 시각으로, 지운 기록은 삭제 표시로
+   * 다른 탭의 기록과 섞이고, 다른 탭이 이미 지운 기록을 이 탭이 고쳤으면 지운 채로 남는다. 다른 탭이 로그아웃·계정 삭제를 했으면 버린다.
+   * 먼저 다시 읽지 않는다 — 읽으면 계정이 바뀐 것을 commit이 보지 못해 로그아웃된 저장소에 쓰게 된다.
+   */
+  function change(transition: (s: PersistedState) => PersistedState): boolean {
+    ensureLoaded();
+    const next = transition(snapshot.state);
+    if (next === snapshot.state) return false;
+    commit(next);
+    return true;
+  }
 
   return {
     subscribe(listener) {
