@@ -178,6 +178,8 @@ test("게스트 흐름: 온보딩 → 위험 신호 → 계정 삭제", async ({
   await nav.getByRole("link", { name: "운동", exact: true }).click();
   await expect(page).toHaveURL(/\/exercise\/$/);
   await expect(page.getByRole("heading", { name: "운동 영상 추천을 멈췄어요" })).toBeVisible();
+  // 오늘의 체조 카드도 멈춤 블록으로 대신한다(features/exercise/todayRoutine.ts)
+  await expect(page.getByRole("region", { name: "오늘의 체조" })).toHaveCount(0);
 
   // 없는 주소 — 온보딩을 마친 사람에게는 한국어 404
   const unknown = new URL("./no-such-page/", baseURL).href;

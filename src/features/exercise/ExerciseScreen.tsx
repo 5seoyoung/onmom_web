@@ -17,6 +17,8 @@ import { youtubeSection } from "@/features/youtube/youtubePlan";
 import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
 import { ExerciseBodyView, NeedsProfileBlock, RedFlagBlock } from "./ExerciseBlocks";
+import { TodayRoutineCard } from "./TodayRoutineCard";
+import { todayRoutine } from "./todayRoutine";
 import { COLD_START_NOTICE_MS, fetchVideosWithRetry } from "./videoLoad";
 import { YouTubeSection } from "./YouTubeSection";
 import {
@@ -52,11 +54,14 @@ function ExerciseContent({ state }: { state: PersistedState }) {
   // 유튜브 추천 영상 — 플랜일 때만, 큐레이션 목록과 같은 주차 게이팅·산모수첩 차단(레드플래그면 null). 허용 목록이 비었거나
   // Supabase가 없는 빌드(iOS 처리방침 — Google 없음)면 목록이 비어 늘 null(features/youtube/catalog.ts YOUTUBE_SHOWN_VIDEOS).
   const youtube = youtubeSection(YOUTUBE_SHOWN_VIDEOS, gate, delivery, week, state.maternity);
+  // 오늘의 체조 — 플랜일 때만 맨 위에. 레드플래그면 "stopped"라 그리지 않고, 같은 자리의 멈춤 블록(RedFlagBlock)이 대신 보인다(todayRoutine.ts).
+  const routine = todayRoutine(gate, delivery, week, state.maternity, today);
 
   return (
     <>
       <ScreenHeader title={EXERCISE_TEXT.headerTitle} subtitle={subtitle ?? undefined} />
       <StorageWarning />
+      {routine.kind === "routine" ? <TodayRoutineCard routine={routine} /> : null}
       {gate === "needsDelivery" ? (
         <NeedsProfileBlock title={EXERCISE_TEXT.needsDeliveryTitle} body={EXERCISE_TEXT.needsDeliveryBody} />
       ) : gate === "redFlag" ? (
