@@ -17,9 +17,11 @@
 //     weight_plan.loss·recovery.chips의 첫 칩(자리표시 글자 "BMI x.x 또는 임신 전 +x.xkg"·"BMI x.x")을 빼고 계산값 칩의 틀을
 //     chip_templates({bmi}·{kg} — content/template.ts)로 뒀다(쓰는 곳 rules/weight, 감사 #53).
 //     ui 묶음을 더했다 — 코드에 손으로 옮겨 두었던 Swift 화면 문구(감사 #5·#25·#27). 원본 사본에는 없는 키다. 글자는 Swift 원문
-//     그대로이고(화면의 "—"만 1번대로 "-"), 원문 위치(`// 원문: File.swift:LINE`)는 키를 쓰는 줄에 둔다. "{이름}"은 계산값 자리
+//     그대로이고(화면의 "—"만 1번대로 "-"), 원문 위치(Swift 파일·줄 표시)는 키를 쓰는 줄에 둔다. "{이름}"은 계산값 자리
 //     (content/template.ts가 모듈 로드 때 확인). 웹 신규 문구("CPO 확인 필요" 표시)는 옮기지 않고 코드에 둔다.
-//     화면 글자가 그대로인지는 content/uiCopy.test.ts가 옮기기 전 글자와 대조한다.
+//     화면 글자가 그대로인지는 content/uiCopy.test.ts가 옮기기 전 글자와 대조한다. 쓰는 곳: ui.home.metric_names → rules/redflag,
+//     ui.exercise·ui.profile → rules/exercise, ui.analyze → rules/recovery, ui.substance → rules/substance·features/substance/substanceModel,
+//     ui.chat → rules/chat, ui.support → rules/support.
 import content from "./content.json";
 
 export type Content = typeof content;
