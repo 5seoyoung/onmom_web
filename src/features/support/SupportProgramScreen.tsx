@@ -150,7 +150,7 @@ export function SolutionCard({
 }) {
   return (
     <Card className={cx("flex flex-col gap-2", className)}>
-      <SectionTitle id={headingId} tabIndex={headingId ? -1 : undefined} className="rounded-chip">
+      <SectionTitle id={headingId} tabIndex={headingId ? -1 : undefined}>
         {title}
       </SectionTitle>
       <ul className="flex flex-col gap-2">

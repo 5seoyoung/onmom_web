@@ -91,6 +91,14 @@ body {
     outline-color: var(--color-surface);
   }
 
+  /* 초점만 옮겨 받는 상자(tabIndex -1 — 화면 전환 뒤 본문 묶음(RouteFocus), 온보딩 단계·오류 화면·결과 제목, 알림 줄)에는 링을 그리지 않는다.
+     Tab으로 닿지 않는 곳이라 "지금 누를 수 있다"는 링이 맞지 않고, 스크린리더는 링 없이도 그 자리부터 읽는다.
+     크롬은 키보드로 누른 뒤 스크립트가 옮긴 초점도 :focus-visible로 보아, 화면마다 focus:outline-none을 잊으면 링이 생겼다(온보딩 h1).
+     여기 한 곳에서 모두 끈다. Tab으로 닿는 컨트롤(버튼·링크·입력·tabindex 0)의 링은 위 규칙 그대로다. */
+  [tabindex="-1"]:focus-visible {
+    outline: none;
+  }
+
   /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 기본값이 이미 AA(docs/DEV_NOTES.md §3 CPO 12)라 그대로. */
   @media (prefers-contrast: more) {
     :focus-visible {
