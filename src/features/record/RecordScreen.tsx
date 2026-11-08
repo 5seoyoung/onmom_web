@@ -15,13 +15,15 @@
 // 결과가 뜨면 맨 위로 올리고 결과로 초점을 옮긴다 — PC에서도 결과가 오른쪽 열 맨 위라 스크롤 없이 보인다.
 // 저장 실패(storageAvailable=false) 안내는 머리 아래(features/home/StorageWarning) — [확인하기]는 막지 않는다(iOS처럼 메모리에서 동작).
 // 오늘의 질문 각주는 저장 위치에 맞게(서버 저장 빌드면 "동의를 받은 뒤 온맘 서버에" — recordView moodNoteFor).
+// 웹 추가: 증상 기록이나 답이 하나라도 있으면 최근 기록 아래 [전체 기록 보기](/record/history/ — 전부 보기·수정·삭제).
 // 내 동네 입력은 글자마다 저장하지 않는다(store/useDraftField) — 입력이 멈추면 한 번, 칸을 떠나거나 검색하거나 [확인하기]를 누르거나
 // 화면을 떠나면 바로 저장한다(글자마다 상태 전체를 localStorage에 쓰고 서버 동기화를 예약하지 않게). 보이는 것은 그대로다.
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { useLocalDay } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
-import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton, cx } from "@/components/ui";
+import { DisclaimerBanner, PrimaryButton, ScreenHeader, SecondaryButton, cx, secondaryButtonClass } from "@/components/ui";
 import { isSupabaseConfigured } from "@/config";
 import type { MoodAnswer } from "@/domain/types";
 import { StorageWarning } from "@/features/home/StorageWarning";
@@ -32,6 +34,8 @@ import { useDraftField } from "@/store/useDraftField";
 import { MoodQuestionCard } from "./MoodQuestionCard";
 import { RecentRecordsCard } from "./RecentRecordsCard";
 import { RecordResult } from "./RecordResult";
+import { RECORD_HISTORY_TEXT, showsHistoryLink } from "./recordHistoryView";
+import { ROUTES } from "@/routes";
 import {
   INITIAL_SYMPTOM_FORM,
   RECORD_TEXT,
@@ -137,6 +141,11 @@ export function RecordScreen() {
               onAnswer={answerMood}
             />
             {layout.showsRecent ? <RecentRecordsCard rows={recentRecordRows(state.symptomHistory)} /> : null}
+            {showsHistoryLink(state) ? (
+              <Link href={ROUTES.recordHistory} className={secondaryButtonClass}>
+                {RECORD_HISTORY_TEXT.openHistory}
+              </Link>
+            ) : null}
           </div>
         </div>
       </div>

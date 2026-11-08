@@ -29,10 +29,16 @@ export const ROUTES = {
   home: "/home/",
   exercise: "/exercise/",
   record: "/record/",
+  /** 기록 탭 > 전체 기록(증상 기록·오늘의 질문 답 모두, 수정·삭제) */
+  recordHistory: "/record/history/",
+  /** 증상 기록 수정 — `${ROUTES.recordEdit}?id=…` */
+  recordEdit: "/record/edit/",
   journal: "/journal/",
   journalWrite: "/journal/write/",
   /** 글 상세 — `${ROUTES.journalPost}?id=…` */
   journalPost: "/journal/post/",
+  /** 글 수정 — `${ROUTES.journalEdit}?id=…` */
+  journalEdit: "/journal/edit/",
   profile: "/profile/",
   analyze: "/analyze/",
   guide: "/guide/",

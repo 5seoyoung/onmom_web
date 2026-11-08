@@ -30,7 +30,7 @@ import { JOURNAL_TEXT, commentCountLabel } from "@/features/journal/journalView"
 import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, maternityFlags, postpartumLine } from "@/features/profile/profileView";
 import { RECORD_TEXT, RECORD_WEB_TEXT, firedRiskLabels, type SymptomRecordWithRisk } from "@/features/record/recordView";
 import { PROFILE_EDIT_TEXT, SETTINGS_TEXT } from "@/features/settings/settingsView";
-import { MOOD_QUESTIONS, moodAnswerLabel, normalizeMoodAnswer } from "@/rules/mood";
+import { moodAnswerLabel, normalizeMoodAnswer, questionOfCheck } from "@/rules/mood";
 import { hasSignalBesidesCrisis, showsLochiaInputs } from "@/rules/record";
 import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { displayName, type Account } from "@/store/account";
@@ -242,11 +242,6 @@ function symptomRows(history: readonly SymptomRecordWithRisk[]): ReportSymptomRo
     });
 }
 
-/** 지금 질문표(MOOD_QUESTIONS)로 그 답의 질문을 찾아도 되는가 — 버전이 같거나, 버전이 없는 옛 기록(지금까지와 같게) */
-function asksCurrentQuestions(check: MoodCheckRecord): boolean {
-  return typeof check.moodVersion !== "string" || check.moodVersion === MOOD_VERSION;
-}
-
 function moodRows(checks: readonly MoodCheckRecord[]): ReportMoodRow[] {
   return newestFirst(checks).map((c) => {
     const t = timeOf(c.date);
@@ -254,7 +249,8 @@ function moodRows(checks: readonly MoodCheckRecord[]): ReportMoodRow[] {
       id: c.id,
       iso: c.date,
       dateText: t === null ? "" : toLocalDateString(new Date(t)),
-      question: asksCurrentQuestions(c) ? (MOOD_QUESTIONS.find((q) => q.id === c.questionID)?.text ?? null) : null,
+      // 지금 질문표로 찾아도 될 때만(버전이 같거나 버전 없는 옛 기록 — rules/mood questionOfCheck)
+      question: questionOfCheck(c, MOOD_VERSION)?.text ?? null,
       answer: moodAnswerLabel(normalizeMoodAnswer(c.answer)),
       moodVersionText: versionText(REPORT_TEXT.recordMoodVersion, c.moodVersion),
     };

@@ -8,6 +8,10 @@
 // decodeProfile·decodeMaternity는 fallback을 받는다: 저장 JSON을 읽을 때는 기본값,
 // action(updateProfile 등)이 쓸 때는 이전 값 — 잘못된 입력 하나가 이미 입력한 값을 기본값으로 지우지 않게.
 //
+// 지운 기록·고친 기록(웹 전용, 저장 형식 2 — store/sync/remote STATE_SCHEMA_VERSION): 삭제 표시(deleted)는 id·지운 시각을 읽을 수 있는 것만
+// 남기고, 표시가 있는 기록은 목록에서 뺀다(store/tombstones applyDeleted — 목록에는 지운 기록이 없다). 고친 시각(updatedAt)은 읽을 수 있을 때만
+// 칸을 둔다 — 형식 1의 기록(칸 없음)은 읽은 뒤에도 모양이 그대로다.
+//
 // 날짜(감사 #23): iOS JSONEncoder 기본값(.deferredToDate)은 Date를 2001-01-01 UTC 기준 초(Double)로 저장했다.
 // 값이 숫자면 그 기준으로 시각을 만들고, 달력 날짜 필드(출산일·복직일)는 그 시각의 "로컬" 날짜로 바꾼다.
 // 문자열은 ISO 8601 시각 또는 "YYYY-MM-DD"를 받는다. 그 밖의 값은 기본값.
@@ -21,15 +25,18 @@ import {
   RECOVERY_GOALS,
   type CommunityComment,
   type CommunityPost,
+  type DeletedEntries,
   type IsoDateTimeString,
   type LocalDateString,
   type MaternityRecord,
   type MoodCheckRecord,
   type PersistedState,
   type SymptomRecord,
+  type Tombstone,
   type UserProfile,
 } from "@/domain/types";
 import { defaultMaternity, defaultProfile, initialState } from "./defaults";
+import { applyDeleted, emptyDeleted, unionTombstones } from "./tombstones";
 
 /** 기록에 id·날짜가 없을 때 채울 값. iOS는 UUID()·Date()를 썼다 — 순수 함수로 두려고 주입받는다. */
 export interface DecodeDeps {
@@ -159,6 +166,12 @@ export function decodeOwner(v: unknown): string | null {
   return v === null || v === undefined ? null : "";
 }
 
+/** 고친 시각 — 읽을 수 있는 시각일 때만 칸을 둔다(없거나 못 읽으면 칸 없음 = 고치기 전). */
+function editStamp(v: unknown): { updatedAt?: IsoDateTimeString } {
+  const at = decodeInstant(v);
+  return at === null ? {} : { updatedAt: at };
+}
+
 function decodeSymptomRecord(raw: Json, deps: DecodeDeps): SymptomRecord {
   return {
     id: nonEmptyString(raw.id) ?? deps.newId(),
@@ -176,6 +189,7 @@ function decodeSymptomRecord(raw: Json, deps: DecodeDeps): SymptomRecord {
     rulesVersion: recordVersion(raw.rulesVersion),
     // 위험 증상 토글 — true/false인 칸만(domain/types pickRiskFlags). rules-1.2 전의 기록에는 칸이 없다 — false로 지어내지 않는다
     ...pickRiskFlags(raw),
+    ...editStamp(raw.updatedAt),
   };
 }
 
@@ -188,6 +202,7 @@ function decodeMoodCheck(raw: Json, deps: DecodeDeps): MoodCheckRecord {
     answer: normalizeMoodAnswer(raw.answer),
     // 답할 때의 기분 문항·기준 버전 — 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없다(null)
     moodVersion: recordVersion(raw.moodVersion),
+    ...editStamp(raw.updatedAt),
   };
 }
 
@@ -208,6 +223,7 @@ function decodePost(raw: Json, deps: DecodeDeps): CommunityPost {
     authorName: str(raw.authorName, ""),
     date: decodeInstant(raw.date) ?? deps.now.toISOString(),
     comments: decodeList(raw.comments, (c) => decodeComment(c, deps)),
+    ...editStamp(raw.updatedAt),
   };
 }
 
@@ -216,10 +232,37 @@ function decodeList<T>(v: unknown, decodeItem: (raw: Json) => T): T[] {
   return Array.isArray(v) ? v.filter(isRecord).map(decodeItem) : [];
 }
 
-/** 저장 루트(파싱된 JSON) → PersistedState. 어떤 입력에도 throw하지 않는다. */
+/** 삭제 표시 하나 — id(빈 글자 아님)와 읽을 수 있는 지운 시각이 둘 다 있어야 한다. 못 읽으면 버린다(지어낸 id·시각으로 기록을 지우지 않게). */
+function decodeTombstone(raw: Json): Tombstone | null {
+  const id = nonEmptyString(raw.id);
+  const deletedAt = decodeInstant(raw.deletedAt);
+  return id === null || deletedAt === null ? null : { id, deletedAt };
+}
+
+function decodeTombstones(v: unknown): Tombstone[] {
+  if (!Array.isArray(v)) return [];
+  const list = v.filter(isRecord).map(decodeTombstone).filter((t): t is Tombstone => t !== null);
+  return unionTombstones(list); // 같은 id 하나·최근 것부터·개수 상한
+}
+
+/**
+ * 삭제 표시 묶음 — 없거나(형식 1·iOS) 못 읽으면 빈 묶음. 저장 상태의 deleted 칸과 이 브라우저에 따로 둔 사본(persistence DELETED_KEY)이 같은 모양이다.
+ * 칸마다 따로 읽는다 — 한 칸이 깨져도 다른 칸의 표시는 남는다.
+ */
+export function decodeDeleted(raw: unknown): DeletedEntries {
+  if (!isRecord(raw)) return emptyDeleted();
+  return {
+    symptomHistory: decodeTombstones(raw.symptomHistory),
+    moodChecks: decodeTombstones(raw.moodChecks),
+    communityPosts: decodeTombstones(raw.communityPosts),
+    comments: decodeTombstones(raw.comments),
+  };
+}
+
+/** 저장 루트(파싱된 JSON) → PersistedState. 어떤 입력에도 throw하지 않는다. 표시가 있는 기록은 목록에서 뺀다(applyDeleted). */
 export function decodePersisted(raw: unknown, deps: DecodeDeps): PersistedState {
   if (!isRecord(raw)) return initialState();
-  return {
+  return applyDeleted({
     hasOnboarded: bool(raw.hasOnboarded, false),
     profile: decodeProfile(raw.profile),
     symptomHistory: decodeList(raw.symptomHistory, (r) => decodeSymptomRecord(r, deps)),
@@ -228,5 +271,6 @@ export function decodePersisted(raw: unknown, deps: DecodeDeps): PersistedState 
     ownerAccountID: decodeOwner(raw.ownerAccountID),
     moodChecks: decodeList(raw.moodChecks, (r) => decodeMoodCheck(r, deps)),
     moodCardSnoozedUntil: decodeInstant(raw.moodCardSnoozedUntil),
-  };
+    deleted: decodeDeleted(raw.deleted),
+  });
 }

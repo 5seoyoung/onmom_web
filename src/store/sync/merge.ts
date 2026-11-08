@@ -1,11 +1,15 @@
 // 서버 상태와 이 브라우저 상태 합치기 — 순수 함수(시각·id·네트워크 없음).
 //
 // 원칙
-// - 기록은 지우지 않는다: 증상 기록·기분 답·기록장 글(과 댓글)은 id로 합친다(합집합). 앱에 개별 삭제가 없어서
-//   합집합이 곧 "양쪽에서 쓴 것 전부"다. 같은 id가 양쪽에 있으면 서버 쪽을 쓴다(기록은 쓴 뒤 바뀌지 않는다).
-//   다만 증상 기록의 규칙 버전(rulesVersion)·기분 답의 문항 버전(moodVersion)이 서버 쪽에만 없으면(null) 다른 쪽 값을 남긴다 —
+// - 기록은 id로 합친다(합집합): 증상 기록·기분 답·기록장 글(과 댓글). 합집합이 곧 "양쪽에서 쓴 것 전부"다.
+//   · 지운 기록: 양쪽의 삭제 표시(deleted — id·지운 시각만, store/tombstones)를 합치고, 표시가 있는 id는 어느 쪽에 있든 버린다.
+//     지우기가 고치기보다 이긴다(지운 뒤 다른 쪽에서 고친 사본이 와도 지운 채로). 표시는 목록마다 최근 TOMBSTONE_LIMIT개까지.
+//   · 고친 기록: 같은 id가 양쪽에 있으면 고친 시각(updatedAt)이 늦은 쪽을 쓴다(칸이 없으면 고치기 전 — 고친 쪽이 이긴다).
+//     시각이 같으면(둘 다 고치기 전이 대부분) 지금까지처럼 서버 쪽을 쓴다 — 어느 기기에서 합쳐도 같은 결과.
+//   다만 시각이 같을 때, 증상 기록의 규칙 버전(rulesVersion)·기분 답의 문항 버전(moodVersion)이 서버 쪽에만 없으면(null) 다른 쪽 값을 남긴다 —
 //   그 칸을 모르는 옛 웹(칸이 생기기 전에 열어 둔 탭)이 기록을 읽고 다시 저장하며 떨어뜨린 것이라, 감사용 버전을 잃지 않게(keepVersion).
 //   증상 기록의 위험 증상 토글 칸(rules-1.2 — domain/types RISK_SYMPTOM_KEYS)도 같다: 서버 쪽에 없는 칸은 이 브라우저 쪽 값으로 채운다.
+//   (고친 시각이 다르면 이긴 쪽 그대로 — 고친 기록은 이 웹이 모든 칸을 다시 쓴 것이다.)
 // - 순서는 날짜(최신순, 댓글은 오래된 순), 같은 시각이면 id — 어느 기기에서 합쳐도 같은 순서가 나와
 //   기기끼리 순서만 바꿔 서로 덮어쓰는 일이 없다. 개수 제한은 저장 규칙과 같다(기록 50·기분 60, domain/types).
 // - 프로필·산모수첩·온보딩 완료: 서버가 온보딩을 마친 상태면 서버, 아니면 이 브라우저(첫 합치기 규칙).
@@ -25,6 +29,7 @@ import {
   pickRiskFlags,
   type CommunityComment,
   type CommunityPost,
+  type EditStamp,
   type IsoDateTimeString,
   type MaternityRecord,
   type MoodCheckRecord,
@@ -32,6 +37,7 @@ import {
   type SymptomRecord,
   type UserProfile,
 } from "@/domain/types";
+import { applyDeleted, compareEditStamps, deletedIds, mergeDeleted } from "../tombstones";
 
 export interface MergeOptions {
   /** 로그인한 계정 id("kakao-…") — 합친 상태의 주인 */
@@ -47,21 +53,34 @@ export interface MergeOptions {
 export function mergeStates(server: PersistedState, local: PersistedState, opts: MergeOptions): PersistedState {
   const base = opts.base ?? null;
   const personal = base === null ? firstMergePersonal(server, local) : threeWayPersonal(server, local, base);
+  const deleted = mergeDeleted(server.deleted, local.deleted);
   const keepRulesVersion = keepVersion("rulesVersion");
-  const symptomHistory = mergeById<SymptomRecord>(server.symptomHistory, local.symptomHistory, newestFirst, (s, l) =>
-    keepRiskFlags(keepRulesVersion(s, l), l),
+  const symptomHistory = mergeById<SymptomRecord>(
+    server.symptomHistory,
+    local.symptomHistory,
+    newestFirst,
+    deletedIds(deleted.symptomHistory),
+    (s, l) => keepRiskFlags(keepRulesVersion(s, l), l),
   );
-  const moodChecks = mergeById<MoodCheckRecord>(server.moodChecks, local.moodChecks, newestFirst, keepVersion("moodVersion"));
-  return {
+  const moodChecks = mergeById<MoodCheckRecord>(
+    server.moodChecks,
+    local.moodChecks,
+    newestFirst,
+    deletedIds(deleted.moodChecks),
+    keepVersion("moodVersion"),
+  );
+  // 합친 목록에는 지운 기록이 없다 — 한쪽에만 표시가 있던 기록도 위에서 걸렀다. applyDeleted는 불변식을 한 번 더 맞출 뿐이다.
+  return applyDeleted({
     hasOnboarded: server.hasOnboarded || local.hasOnboarded,
     profile: withCurrentConsent(personal.profile, server.profile, local.profile),
     symptomHistory: symptomHistory.slice(0, SYMPTOM_HISTORY_LIMIT),
-    communityPosts: mergePosts(server.communityPosts, local.communityPosts),
+    communityPosts: mergePosts(server.communityPosts, local.communityPosts, deletedIds(deleted.communityPosts), deletedIds(deleted.comments)),
     maternity: personal.maternity,
     ownerAccountID: opts.accountId,
     moodChecks: moodChecks.slice(0, MOOD_CHECKS_LIMIT),
     moodCardSnoozedUntil: laterInstant(server.moodCardSnoozedUntil, local.moodCardSnoozedUntil),
-  };
+    deleted,
+  });
 }
 
 // MARK: 프로필·산모수첩
@@ -134,26 +153,39 @@ function oldestFirst(a: Dated, b: Dated): number {
   return time(a.date) - time(b.date) || byId(a, b);
 }
 
-/** id 합집합 — 같은 id면 서버 쪽(same이 있으면 same(서버 쪽, 이 브라우저 쪽)의 결과). 정렬해서 돌려준다. */
-function mergeById<T extends Dated>(
+/**
+ * id 합집합 — 지운 id(gone)는 빼고, 같은 id면 고친 시각이 늦은 쪽(pickNewer). 시각이 같으면 서버 쪽
+ * (same이 있으면 same(서버 쪽, 이 브라우저 쪽)의 결과). 정렬해서 돌려준다.
+ */
+function mergeById<T extends Dated & EditStamp>(
   server: readonly T[],
   local: readonly T[],
   order: (a: T, b: T) => number,
+  gone: ReadonlySet<string>,
   same?: (serverItem: T, localItem: T) => T,
 ): T[] {
   const localById = new Map<string, T>();
-  for (const item of local) localById.set(item.id, item);
+  for (const item of local) if (!gone.has(item.id)) localById.set(item.id, item);
   const map = new Map(localById);
   for (const item of server) {
+    if (gone.has(item.id)) continue;
     const mine = localById.get(item.id);
-    map.set(item.id, mine !== undefined && same !== undefined ? same(item, mine) : item);
+    map.set(item.id, mine === undefined ? item : pickNewer(item, mine, same));
   }
   return [...map.values()].sort(order);
 }
 
+/** 같은 id의 두 사본 — 나중에 고친 쪽. 고친 시각이 같으면 서버 쪽(same이 있으면 그 결과 — 빠진 칸 채우기). */
+function pickNewer<T extends EditStamp>(serverItem: T, localItem: T, same?: (serverItem: T, localItem: T) => T): T {
+  const c = compareEditStamps(serverItem.updatedAt, localItem.updatedAt);
+  if (c > 0) return serverItem;
+  if (c < 0) return localItem;
+  return same === undefined ? serverItem : same(serverItem, localItem);
+}
+
 /**
- * 같은 기록이 양쪽에 있을 때 — 서버 쪽을 쓰되, 서버 쪽에 없는(null) 버전 칸은 이 브라우저 쪽 값으로 채운다(머리 주석).
- * 기록은 쓴 뒤 바뀌지 않으므로 둘 다 있으면 같아야 하고, 그때는 서버 쪽 그대로다(어느 기기에서 합쳐도 같은 결과).
+ * 같은 기록이 양쪽에 있고 고친 시각도 같을 때(pickNewer) — 서버 쪽을 쓰되, 서버 쪽에 없는(null) 버전 칸은 이 브라우저 쪽 값으로 채운다(머리 주석).
+ * 같은 판의 기록이라 둘 다 있으면 같아야 하고, 그때는 서버 쪽 그대로다(어느 기기에서 합쳐도 같은 결과).
  */
 function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
   return <T extends Dated & Record<K, string | null>>(serverItem: T, localItem: T): T =>
@@ -161,8 +193,8 @@ function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
 }
 
 /**
- * 같은 증상 기록 — 서버 쪽에 없는(칸이 없거나 true/false가 아닌) 위험 증상 토글 칸은 이 브라우저 쪽 값으로 채운다(머리 주석, keepVersion과 같은 까닭).
- * 서버 쪽에 값이 있으면 그대로 — 기록은 쓴 뒤 바뀌지 않는다. 채울 것이 없으면 서버 쪽 객체 그대로(같은 결과를 같은 모양으로).
+ * 같은 증상 기록(고친 시각도 같음) — 서버 쪽에 없는(칸이 없거나 true/false가 아닌) 위험 증상 토글 칸은 이 브라우저 쪽 값으로 채운다
+ * (머리 주석, keepVersion과 같은 까닭). 서버 쪽에 값이 있으면 그대로. 채울 것이 없으면 서버 쪽 객체 그대로(같은 결과를 같은 모양으로).
  */
 function keepRiskFlags(serverItem: SymptomRecord, localItem: SymptomRecord): SymptomRecord {
   const mine = pickRiskFlags(localItem);
@@ -174,15 +206,34 @@ function keepRiskFlags(serverItem: SymptomRecord, localItem: SymptomRecord): Sym
   return filled;
 }
 
-/** 글은 id로 합치고(같은 글이면 서버의 제목·본문), 댓글은 양쪽 댓글을 id로 합친다. */
-function mergePosts(server: readonly CommunityPost[], local: readonly CommunityPost[]): CommunityPost[] {
+/**
+ * 글은 id로 합치고(같은 글이면 나중에 고친 쪽의 제목·본문, 같으면 서버 쪽), 댓글은 양쪽 댓글을 id로 합친다.
+ * 지운 글은 댓글째 빠지고, 지운 댓글은 어느 쪽에 있든 빠진다.
+ */
+function mergePosts(
+  server: readonly CommunityPost[],
+  local: readonly CommunityPost[],
+  gonePosts: ReadonlySet<string>,
+  goneComments: ReadonlySet<string>,
+): CommunityPost[] {
+  const serverById = new Map(server.map((p) => [p.id, p] as const));
   const localById = new Map(local.map((p) => [p.id, p] as const));
-  const merged = mergeById<CommunityPost>(server, local, newestFirst);
+  const merged = mergeById<CommunityPost>(server, local, newestFirst, gonePosts);
   return merged.map((post) => {
-    const other = localById.get(post.id);
-    if (other === undefined || other === post) return post;
-    return { ...post, comments: mergeById<CommunityComment>(post.comments, other.comments, oldestFirst) };
+    const a = serverById.get(post.id);
+    const b = localById.get(post.id);
+    // 한쪽에만 있는 글은 댓글 순서도 그대로(지운 댓글만 뺀다) — 지금까지와 같은 모양
+    const comments =
+      a !== undefined && b !== undefined
+        ? mergeById<CommunityComment>(a.comments, b.comments, oldestFirst, goneComments)
+        : post.comments.filter((c) => !goneComments.has(c.id));
+    return sameComments(post.comments, comments) ? post : { ...post, comments };
   });
+}
+
+/** 같은 댓글 목록인가(같은 객체가 같은 순서) — 바뀐 것이 없으면 글 객체를 그대로 둔다 */
+function sameComments(a: readonly CommunityComment[], b: readonly CommunityComment[]): boolean {
+  return a.length === b.length && a.every((c, i) => c === b[i]);
 }
 
 // MARK: 시각

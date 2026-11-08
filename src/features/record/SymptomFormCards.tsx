@@ -15,9 +15,11 @@ export interface SymptomFormCardsProps {
   onChange: (patch: Partial<SymptomForm>) => void;
   /** 산후 10일 이상 — 오로 질문을 묻는다 */
   showsLochia: boolean;
-  /** 내 동네(프로필 값) */
-  neighborhood: string;
-  onNeighborhoodChange: (value: string) => void;
+  /** 내 동네(프로필 값) — showsNeighborhood가 false면 쓰지 않는다 */
+  neighborhood?: string;
+  onNeighborhoodChange?: (value: string) => void;
+  /** 내 동네 카드를 보일지(기본 true). 기록 수정 화면은 뺀다 — 기록의 칸이 아니라 프로필 값이다. */
+  showsNeighborhood?: boolean;
   /** 결과 단계(PC에서만 보임) — 판정에 쓴 답을 보여 주기만 한다. 고치려면 [다시 입력]. */
   disabled?: boolean;
 }
@@ -31,8 +33,9 @@ export function SymptomFormCards({
   form,
   onChange,
   showsLochia,
-  neighborhood,
+  neighborhood = "",
   onNeighborhoodChange,
+  showsNeighborhood = true,
   disabled = false,
 }: SymptomFormCardsProps) {
   const lochiaId = useId();
@@ -101,23 +104,25 @@ export function SymptomFormCards({
         ))}
       </Card>
 
-      <Card as="section" aria-labelledby={neighborhoodId} className="flex flex-col gap-1">
-        <SectionTitle id={neighborhoodId}>{RECORD_TEXT.neighborhoodTitle}</SectionTitle>
-        <input
-          type="text"
-          value={neighborhood}
-          onChange={(e) => onNeighborhoodChange(e.target.value)}
-          disabled={disabled}
-          placeholder={RECORD_TEXT.neighborhoodPlaceholder}
-          aria-labelledby={neighborhoodId}
-          aria-describedby={neighborhoodHelpId}
-          autoCapitalize="none"
-          className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle-aa disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <p id={neighborhoodHelpId} className="text-[0.8125rem] text-text-secondary">
-          {RECORD_TEXT.neighborhoodHelp}
-        </p>
-      </Card>
+      {showsNeighborhood ? (
+        <Card as="section" aria-labelledby={neighborhoodId} className="flex flex-col gap-1">
+          <SectionTitle id={neighborhoodId}>{RECORD_TEXT.neighborhoodTitle}</SectionTitle>
+          <input
+            type="text"
+            value={neighborhood}
+            onChange={(e) => onNeighborhoodChange?.(e.target.value)}
+            disabled={disabled}
+            placeholder={RECORD_TEXT.neighborhoodPlaceholder}
+            aria-labelledby={neighborhoodId}
+            aria-describedby={neighborhoodHelpId}
+            autoCapitalize="none"
+            className="min-h-11 w-full bg-transparent text-base text-text-primary placeholder:text-text-subtle-aa disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          <p id={neighborhoodHelpId} className="text-[0.8125rem] text-text-secondary">
+            {RECORD_TEXT.neighborhoodHelp}
+          </p>
+        </Card>
+      ) : null}
     </>
   );
 }

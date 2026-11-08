@@ -484,6 +484,8 @@ describe("수집 항목이 실제 저장 상태를 빠짐없이 덮는다", () =
     ownerAccountID: "이용자 식별자",
     moodChecks: "오늘의 질문(기분) 답변",
     moodCardSnoozedUntil: null,
+    // 지운 기록의 삭제 표시 — 지운 기록의 id·지운 시각만(내용 없음, store/tombstones). 처리방침에 따로 적을지는 CPO 확인(웹 신규)
+    deleted: null,
   };
 
   const ALL_ITEMS = [ACCOUNT_ITEMS, HEALTH_ITEMS, SETTING_ITEMS].join(" ");

@@ -35,7 +35,10 @@ export interface DataExport {
   account: { id: string; provider: string; serverUserId: string | null } | null;
   /** 서버 저장 동의의 판·시각(profile에도 있지만 찾기 쉽게 따로) */
   consent: { accepted: boolean; version: string | null; acceptedAt: IsoDateTimeString | null };
-  /** 앱 상태 전체 — 프로필·산모수첩·증상 기록·기분 답·기록장(저장 형식 그대로, web/04_DATA_MODEL.md) */
+  /**
+   * 앱 상태 전체 — 프로필·산모수첩·증상 기록·기분 답·기록장(저장 형식 그대로, web/04_DATA_MODEL.md).
+   * 지운 기록은 목록에 없고 deleted에 삭제 표시(id·지운 시각만 — store/tombstones)가 있다. 고친 기록은 고친 값과 고친 시각(updatedAt).
+   */
   state: PersistedState;
 }
 

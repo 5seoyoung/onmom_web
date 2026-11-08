@@ -111,10 +111,13 @@ export interface SymptomRecord extends RiskSymptomFlags {
   /** 기록 시점의 산후 경과일. 구버전 기록에는 없어서 null이면 오로 판정 보류. */
   postpartumDays: number | null;
   /**
-   * 이 기록의 결과(redFlagCode)를 낸 안내 규칙의 버전(src/rules/version.ts RULES_VERSION) — 만들 때 찍고 바꾸지 않는다(감사 추적).
+   * 이 기록의 결과(redFlagCode)를 낸 안내 규칙의 버전(src/rules/version.ts RULES_VERSION) — 만들 때 찍는다(감사 추적).
    * 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없어서 null(지어내지 않는다).
+   * 기록을 고치면 고친 답으로 지금 규칙을 다시 돌려 redFlagCode와 함께 이 값도 그때의 버전으로 바뀐다(rules/record rebuildSymptomRecord).
    */
   rulesVersion: string | null;
+  /** 고친 시각 — 고친 적이 없으면 칸이 없다(EditStamp). */
+  updatedAt?: IsoDateTimeString;
 }
 
 export interface MoodCheckRecord {
@@ -124,9 +127,11 @@ export interface MoodCheckRecord {
   answer: MoodAnswer;
   /**
    * 답할 때의 기분 문항·기준 버전(src/rules/version.ts MOOD_VERSION) — 같은 questionID라도 버전마다 문항이 다를 수 있다.
-   * 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없어서 null.
+   * 이 칸이 생기기 전의 웹 기록·iOS 기록에는 없어서 null. 답을 고쳐도 문항은 그대로라 이 값도 그대로다.
    */
   moodVersion: string | null;
+  /** 답을 고친 시각 — 고친 적이 없으면 칸이 없다(EditStamp). */
+  updatedAt?: IsoDateTimeString;
 }
 
 export interface CommunityComment {
@@ -144,7 +149,36 @@ export interface CommunityPost {
   authorName: string;
   date: IsoDateTimeString;
   comments: CommunityComment[]; // 오래된 순 append
+  /** 제목·본문을 고친 시각 — 고친 적이 없으면 칸이 없다(EditStamp). 댓글은 고치지 않는다(지우기만). */
+  updatedAt?: IsoDateTimeString;
 }
+
+/**
+ * 고친 기록의 표시 — 증상 기록·기분 답·기록장 글의 updatedAt. 같은 id가 두 곳(다른 탭·서버)에 있으면 이 시각이 늦은 쪽이 이긴다
+ * (칸이 없으면 고치기 전 — 고친 쪽이 이긴다. 같으면 지금까지처럼 서버 쪽, store/sync/merge.ts). 기록이 처음 생긴 시각(date)은 바꾸지 않는다 —
+ * 순서·통계(관리자 집계 0011)는 date를 본다.
+ */
+export type EditStamp = Pick<SymptomRecord, "updatedAt">;
+
+/**
+ * 삭제 표시(tombstone) — 지운 기록의 id와 지운 시각만 둔다. 건강 기록의 내용은 남기지 않는다.
+ * 여러 탭·서버 합치기는 기록을 id로 합집합하므로(store/sync/merge.ts), 지운 기록이 다른 쪽 사본에서 되살아나지 않게 이 표시로 막는다 —
+ * 표시가 있는 id는 어느 쪽에 있든 버린다(지우기가 고치기보다 이긴다).
+ */
+export interface Tombstone {
+  id: string;
+  deletedAt: IsoDateTimeString;
+}
+
+/** 목록별 삭제 표시 — 칸 이름은 지운 기록이 있던 목록(댓글은 글 안에 있어 따로 둔다). 목록마다 최근 TOMBSTONE_LIMIT개까지. */
+export interface DeletedEntries {
+  symptomHistory: Tombstone[];
+  moodChecks: Tombstone[];
+  communityPosts: Tombstone[];
+  comments: Tombstone[];
+}
+
+export const DELETED_LISTS = ["symptomHistory", "moodChecks", "communityPosts", "comments"] as const satisfies readonly (keyof DeletedEntries)[];
 
 /** 저장 루트 — iOS `AppStore.Persisted` */
 export interface PersistedState {
@@ -157,7 +191,14 @@ export interface PersistedState {
   ownerAccountID: string | null;
   moodChecks: MoodCheckRecord[]; // 최신순, 최대 60
   moodCardSnoozedUntil: IsoDateTimeString | null;
+  /** 지운 기록의 삭제 표시(id·시각만) — 위 목록에는 지운 기록이 없다(store/tombstones applyDeleted). 웹 전용(iOS에 없음). */
+  deleted: DeletedEntries;
 }
 
 export const SYMPTOM_HISTORY_LIMIT = 50;
 export const MOOD_CHECKS_LIMIT = 60;
+/**
+ * 목록마다 남기는 삭제 표시 수 — 지운 시각이 최근인 것부터. 표시 하나는 70바이트쯤이라 네 목록을 다 채워도 60KB 안쪽이다(서버 상한 1MB, 0007).
+ * 이보다 오래된 표시는 버린다 — 그만큼 오래 합치지 않은 사본(오래 꺼 둔 기기)이 있으면 그 기록이 다시 보일 수 있다.
+ */
+export const TOMBSTONE_LIMIT = 200;

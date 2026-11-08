@@ -38,6 +38,15 @@ export function moodAnswerLabel(answer: MoodAnswer): string {
   return content.mood_check.answers[answer];
 }
 
+/**
+ * 그 답의 문항 — 지금 문항표(MOOD_QUESTIONS)로 찾아도 될 때만: 문항 버전이 지금과 같거나, 버전이 없는 옛 기록(지금까지와 같게).
+ * 다른 버전의 답이면 null — 같은 번호라도 다른 문항일 수 있어 지금 문항을 그때 물은 것처럼 보이지 않게 한다(PDF 리포트·전체 기록).
+ */
+export function questionOfCheck(check: Pick<MoodCheckRecord, "questionID" | "moodVersion">, currentVersion: string): MoodQuestion | null {
+  if (typeof check.moodVersion === "string" && check.moodVersion !== currentVersion) return null;
+  return MOOD_QUESTIONS.find((q) => q.id === check.questionID) ?? null;
+}
+
 /** 모르는 답 값(다음 버전이 추가한 값 등)은 "글쎄요"로 본다 — 신호로 세지 않는다(AppStore.swift:313-315). */
 export function normalizeMoodAnswer(raw: unknown): MoodAnswer {
   return raw === "yes" || raw === "unsure" || raw === "no" ? raw : "unsure";
