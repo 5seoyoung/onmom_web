@@ -359,12 +359,6 @@ export const PROFILE_EDIT_TEXT = {
   maternityHelp: "산모수첩·진료기록에서 확인된 항목. 운동 추천 강도·금기에 반영돼요.", // 원문: MoreView.swift:259
 } as const;
 
-/**
- * 목표 선택지 — Swift allCases 순서(Models.swift:32-34). 표시명은 rules/exercise.ts GOAL_TITLE.
- * 분만 방식 선택지는 rules/exercise.ts DELIVERY_OPTIONS(온보딩·분석과 같은 배열).
- */
-export const GOAL_OPTIONS: readonly RecoveryGoal[] = ["homemaker", "returningToWork"];
-
 /** 재활 고려사항 토글 7개 — MoreView.swift 순서·라벨 그대로(:261-268). */
 export const MATERNITY_TOGGLES: ReadonlyArray<{ key: keyof MaternityRecord; label: string }> = [
   { key: "isPrimiparous", label: "초산" }, // 원문: MoreView.swift:261

@@ -4,8 +4,18 @@
 //   - 시각(기록 시각 등)은 ISO 8601 문자열
 // iOS JSON은 날짜를 2001-01-01 기준 초(Double)로 저장했으므로, 읽을 때 숫자도 받아들인다(store/decode).
 
-export type DeliveryMethod = "vaginal" | "cesarean";
-export type RecoveryGoal = "homemaker" | "returningToWork";
+/**
+ * 분만 방식 — 값과 순서는 Swift DeliveryMethod.allCases(Models.swift:6-29). 이 배열 하나를
+ * 선택지(rules/exercise.ts DELIVERY_OPTIONS — 온보딩·분석·프로필 편집)와 저장 읽기(store/decode.ts)가 같이 쓴다.
+ */
+export const DELIVERY_METHODS = ["vaginal", "cesarean"] as const;
+export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
+/**
+ * 회복 목표 — 값과 순서는 Swift RecoveryGoal.allCases(Models.swift:32-48). 이 배열 하나를
+ * 온보딩 선택지(onboardingModel.ts GOAL_OPTIONS)·프로필 편집 선택지·저장 읽기(store/decode.ts)가 같이 쓴다.
+ */
+export const RECOVERY_GOALS = ["homemaker", "returningToWork"] as const;
+export type RecoveryGoal = (typeof RECOVERY_GOALS)[number];
 export type MetricStatus = "normal" | "watch" | "alert";
 export type MoodAnswer = "yes" | "unsure" | "no";
 

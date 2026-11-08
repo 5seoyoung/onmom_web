@@ -16,16 +16,16 @@ import { parseLocalDate, toLocalDateString } from "@/domain/date";
 import { normalizeMoodAnswer } from "@/rules/mood";
 import { clampNrs } from "@/rules/record";
 import {
+  DELIVERY_METHODS,
   pickRiskFlags,
+  RECOVERY_GOALS,
   type CommunityComment,
   type CommunityPost,
-  type DeliveryMethod,
   type IsoDateTimeString,
   type LocalDateString,
   type MaternityRecord,
   type MoodCheckRecord,
   type PersistedState,
-  type RecoveryGoal,
   type SymptomRecord,
   type UserProfile,
 } from "@/domain/types";
@@ -108,9 +108,6 @@ export function decodeCalendarDate(v: unknown): LocalDateString | null {
   const d = toInstant(v);
   return d ? toLocalDateString(d) : null;
 }
-
-const DELIVERY_METHODS: readonly DeliveryMethod[] = ["vaginal", "cesarean"];
-const RECOVERY_GOALS: readonly RecoveryGoal[] = ["homemaker", "returningToWork"];
 
 /** 프로필 — 없거나 못 읽는 필드는 fallback(기본: 기본값) */
 export function decodeProfile(raw: unknown, fallback: UserProfile = defaultProfile()): UserProfile {

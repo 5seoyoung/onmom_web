@@ -8,7 +8,7 @@
 // 순수 함수만 둔다 — 네트워크·현재 시각은 호출하는 쪽이 넘긴다.
 
 import content from "@/content";
-import type { DeliveryMethod, MaternityRecord, RecoveryGoal } from "@/domain/types";
+import { DELIVERY_METHODS, type DeliveryMethod, type MaternityRecord, type RecoveryGoal } from "@/domain/types";
 
 // MARK: - 단계 버킷
 
@@ -216,13 +216,14 @@ export const DELIVERY_TITLE: Readonly<Record<DeliveryMethod, string>> = {
 };
 
 /**
- * 분만 방식 선택지 — 순서·제목은 Models.swift:6-29(DeliveryMethod.allCases). 온보딩·분석·프로필 편집이 같이 쓴다.
+ * 분만 방식 선택지 — 순서는 domain/types.ts DELIVERY_METHODS(Models.swift:6-29 DeliveryMethod.allCases), 제목은 DELIVERY_TITLE.
+ * 온보딩·분석·프로필 편집이 같이 쓴다.
  * DeliveryMethod.subtitle(Models.swift:23-28)은 싣지 않는다 — 어느 화면의 선택 행에도 부제가 없다.
  */
-export const DELIVERY_OPTIONS: ReadonlyArray<{ value: DeliveryMethod; title: string }> = [
-  { value: "vaginal", title: DELIVERY_TITLE.vaginal },
-  { value: "cesarean", title: DELIVERY_TITLE.cesarean },
-];
+export const DELIVERY_OPTIONS: ReadonlyArray<{ value: DeliveryMethod; title: string }> = DELIVERY_METHODS.map((value) => ({
+  value,
+  title: DELIVERY_TITLE[value],
+}));
 
 /** 목표 표시명 — Models.swift:37-41. 홈 히어로 칩·프로필·프로필 편집·온보딩 선택지가 같이 쓴다. */
 export const GOAL_TITLE: Readonly<Record<RecoveryGoal, string>> = {
