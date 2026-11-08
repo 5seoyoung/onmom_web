@@ -10,6 +10,9 @@
 //     disclaimers.record_normal(판정이 아니라 정보로), guide_cards "산후 정신건강"의 넷째 요점(109·1577-0199·119),
 //     chat_fallback.replies.mood의 ③(109·119)·replies.bleeding(양 기준·119)·bleeding_keywords, substances의 별칭(B4)과 "안전합니다" 문장·칩도 바꿨다.
 //     JSON에는 주석을 달 수 없어 표시는 쓰는 곳(rules/record·guideContent·rules/chat·rules/substance)에 있다.
+//  3. 2026-11-08 (DEV_NOTES §3 content.json 수정 요청, 화면 글자는 그대로):
+//     home_metrics.lochia.gate 설명 글을 코드의 세 갈래(10일 이상 판정 · 10일 미만 숨김 · 일수 없음은 표시하되 판정 보류)에 맞췄다(감사 #40).
+//     판정에는 쓰이지 않는 설명 글이다 — rules/version.test.ts가 LOCHIA_GATE_DAYS와 대조한다.
 import content from "./content.json";
 
 export type Content = typeof content;

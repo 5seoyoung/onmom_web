@@ -250,7 +250,7 @@ export const METRIC_STATUS_LABEL = {
 /**
  * 최근 기록 → 홈 회복 지표. 기록이 없으면 빈 배열(카드 숨김).
  * 오로: 기록 당시 일수가 null(구버전 기록)이면 항목은 보이되 판정 보류(normal), 10일 미만이면 항목 없음,
- * 10일 이상이면 판정(RedFlagEngine.swift:57-78). content.json home_metrics.lochia.gate 문구는 틀렸다(감사 #40).
+ * 10일 이상이면 판정(RedFlagEngine.swift:57-78). content.json home_metrics.lochia.gate 설명 글도 이 세 갈래다(감사 #40 — 2026-11-08 고침, version.test.ts가 대조).
  */
 export function metrics(record: SymptomRecord | null | undefined): RecoveryMetric[] {
   if (!record) return [];

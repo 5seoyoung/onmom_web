@@ -153,8 +153,14 @@ describe("RULES_VERSION — 판정 기준값과 짝", () => {
     expect(content.home_metrics.pain_nrs.watch).toBe(`${PAIN_WATCH_NRS}..${SEVERE_PAIN_NRS - 1}`);
     expect(content.home_metrics.pain_nrs.normal).toBe(`0..${PAIN_WATCH_NRS - 1}`);
     expect(content.weight_plan.rule).toContain(`bmi >= ${LOSS_PLAN_BMI} || retainedKg >= ${LOSS_PLAN_RETAINED_KG}`);
-    // 숫자는 같다. 다만 이 설명 글의 "아니면 표시 안 함"은 일수가 없는 옛 기록(항목은 보이되 판정 보류)과 다르다 — 감사 #40, CPO 결정 사항
-    expect(content.home_metrics.lochia.gate).toContain(`postpartumDays >= ${LOCHIA_GATE_DAYS}`);
+    // 일수 있음·10일 이상 → 판정, 10일 미만 → 숨김, 일수 없는 옛 기록 → 항목은 보이되 판정 보류(rules/redflag metrics, 감사 #40 — 2026-11-08 설명 글을 코드에 맞춤)
+    expect(content.home_metrics.lochia.gate).toBe(
+      `postpartumDays >= ${LOCHIA_GATE_DAYS} → 판정; postpartumDays < ${LOCHIA_GATE_DAYS} → 표시 안 함; postpartumDays 없음 → 표시하되 판정 보류(normal)`,
+    );
+    const lochiaOf = (postpartumDays: number | null) =>
+      metrics({ id: "r", date: "2026-09-23T01:00:00.000Z", lochiaIncreased: true, lochiaRed: true, feverEvent: false, painNrs: 0, redFlagCode: null, rulesVersion: null, postpartumDays })
+        .find((m) => m.name === "오로(분비물)")?.status;
+    expect([lochiaOf(LOCHIA_GATE_DAYS), lochiaOf(LOCHIA_GATE_DAYS - 1), lochiaOf(null)]).toEqual(["alert", undefined, "normal"]);
   });
 });
 

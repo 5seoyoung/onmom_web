@@ -1039,7 +1039,7 @@
   },
   "home_metrics": {
     "lochia": {
-      "gate": "postpartumDays >= 10 이어야 판정, 아니면 표시 안 함",
+      "gate": "postpartumDays >= 10 → 판정; postpartumDays < 10 → 표시 안 함; postpartumDays 없음 → 표시하되 판정 보류(normal)",
       "alert": "increased && red",
       "watch": "increased || red",
       "normal": "else"
