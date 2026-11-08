@@ -3,6 +3,7 @@
 // → 이용약관 → 한국어 404 → 시작 주소(/) → 홈 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
 // 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다).
 import { expect, test as base, type Page } from "@playwright/test";
+import { isBrowserOnlyBuild, seoulDateDaysAgo } from "./helpers";
 
 /** 이 사이트(시험 서버) 밖 주소인지 — 밖으로 나가는 요청은 막고 기록한다 */
 function isExternal(url: string, baseURL: string): boolean {
@@ -53,25 +54,8 @@ const test = base.extend<{ guard: Guard }>({
   ],
 });
 
-/** 한국 날짜 기준 n일 전(YYYY-MM-DD) — 앱은 사용자 로컬 자정 기준이고 브라우저 시간대는 Asia/Seoul */
-function seoulDateDaysAgo(n: number): string {
-  const today = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date());
-  const d = new Date(`${today}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
 async function onmomKeys(page: Page): Promise<string[]> {
   return page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("onmom.web.")));
-}
-
-/** 이 빌드가 Supabase 값 없이 만든 브라우저 전용 빌드인지 — 로그인 화면의 카카오 버튼이 "준비 중"으로 잠겨 있으면 그렇다 */
-async function isBrowserOnlyBuild(page: Page): Promise<boolean> {
-  await page.goto("./login/");
-  await expect(page.getByRole("button", { name: "게스트로 시작" })).toBeVisible();
-  const kakao = page.getByRole("button", { name: /^카카오로 시작하기/ });
-  await expect(kakao).toBeVisible();
-  return (await kakao.isDisabled()) && /준비 중/.test((await kakao.textContent()) ?? "");
 }
 
 test("처음 온 사람이 시작 주소(/)를 열면 로그인(/login/)으로 간다", async ({ page, baseURL }) => {

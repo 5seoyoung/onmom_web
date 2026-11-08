@@ -12,6 +12,10 @@ import { SideNav } from "./SideNav";
 //   탭바는 숨는다. 본문 안의 칸 나눔은 각 화면이 정한다.
 //   위아래 여백은 두지 않는다 — 화면이 자기 위아래 여백을 갖고, AI 상담처럼 창 높이(h-dvh)를 채우는 화면은
 //   여기서 여백을 더하면 창보다 길어져 페이지가 한 번 더 스크롤되고 입력창이 잘린다.
+// - 큰 모니터(창 90rem = 1440px 초과): 사이드바와 본문을 한 묶음(최대 90rem)으로 가운데 둔다 — 1440 창의 배치
+//   (사이드바 16rem + 여백 5rem + 본문 64rem + 여백 5rem)를 그대로 유지한다. 본문 자리는 전과 같고(묶음 가운데 = 전의 본문 가운데),
+//   사이드바만 본문 쪽으로 붙어 메뉴와 본문 사이가 5rem보다 벌어지지 않는다. 1440 이하는 묶음이 창 전부라 바뀌지 않는다.
+//   이때 사이드바 왼쪽에도 배경이 생기므로 SideNav가 그 폭에서만 왼쪽 선을 긋는다.
 //
 // 화면마다 자기 <main>을 그리므로 여기서는 <main>을 두지 않는다(랜드마크 중복 방지).
 // 사이드바가 본문보다 앞에 있어 PC 키보드 사용자를 위해 "본문 바로가기"를 둔다(초점을 받을 때만 보임, lg 이상만).
@@ -23,7 +27,7 @@ export const APP_CONTENT_ID = "app-content";
 
 export function AppShell({ children }: { children?: ReactNode }) {
   return (
-    <div className="lg:flex">
+    <div className="lg:mx-auto lg:flex lg:max-w-[90rem]">
       <a
         href={`#${APP_CONTENT_ID}`}
         className="sr-only max-lg:hidden focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:inline-flex focus:min-h-11 focus:items-center focus:rounded-button focus:bg-surface focus:px-4 focus:text-sm focus:font-semibold focus:text-neutral focus:shadow-[0_0.25rem_1.5rem_rgba(25,31,40,0.12)]"
