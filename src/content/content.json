@@ -1060,5 +1060,14 @@
       "watch": "4..7",
       "normal": "0..3"
     }
+  },
+  "ui": {
+    "home": {
+      "metric_names": {
+        "lochia": "오로(분비물)",
+        "fever": "발열",
+        "pain_nrs": "통증 NRS {nrs}/10"
+      }
+    }
   }
 }
