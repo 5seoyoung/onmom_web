@@ -56,3 +56,6 @@ next-env.d.ts
 /playwright-report/
 /test-results/
 /playwright/.cache/
+
+# 우리 지역 지원사업 목록 — 빌드 전 수집 단계(scripts/support-fetch.mjs)가 만든다. 저장소에는 빈 표시(src/content/support-programs.generated.json)만 둔다
+/public/support-programs.json
