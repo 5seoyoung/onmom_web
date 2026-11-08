@@ -132,7 +132,21 @@ for (const mode of MODES) {
         await check(page, mode, "회복 분석 — 결과");
       });
 
-      test("기록장(목록·글쓰기·글)·AI 상담", async ({ page }) => {
+      test("전체 기록·삭제 확인 창·기록 수정", async ({ page }) => {
+        await page.goto("./record/history/");
+        const records = page.getByRole("region", { name: "증상 기록" });
+        await expect(records.getByRole("button", { name: /삭제/ }).first()).toBeVisible();
+        await check(page, mode, "전체 기록");
+        await records.getByRole("button", { name: /삭제/ }).first().click();
+        await expect(page.getByRole("dialog", { name: "이 기록을 삭제할까요?" })).toBeVisible();
+        await expectNoLayoutProblems(page, "전체 기록 — 삭제 확인 창");
+        await page.keyboard.press("Escape");
+        await page.goto("./record/edit/?id=e2e-today");
+        await expect(page.getByRole("switch", { name: "어지러움·실신·균형장애" })).toBeChecked();
+        await check(page, mode, "기록 수정");
+      });
+
+      test("기록장(목록·글쓰기·글·수정)·AI 상담", async ({ page }) => {
         await page.goto("./journal/");
         await expect(page.getByText("둘째 주 산책")).toBeVisible();
         await check(page, mode, "기록장 — 목록");
@@ -140,6 +154,9 @@ for (const mode of MODES) {
         await page.goto(`./journal/post/?id=${SEED_POST_ID}`);
         await expect(page.getByText("무리하지 않기")).toBeVisible();
         await check(page, mode, "기록장 — 글 상세");
+        await page.goto(`./journal/edit/?id=${SEED_POST_ID}`);
+        await expect(page.getByRole("textbox", { name: /제목/ })).toHaveValue("둘째 주 산책");
+        await check(page, mode, "기록장 — 글 수정");
         await page.goto("./chat/");
         const input = page.getByRole("textbox", { name: "메시지를 입력하세요" });
         await input.fill("산후 운동은 언제부터 해도 되나요?");

@@ -176,6 +176,28 @@ test.describe("온보딩을 마친 게스트 — 오늘 위험 신호", () => {
     await page.goto(`./journal/post/?id=${SEED_POST_ID}`);
     await expect(page.getByText("무리하지 않기")).toBeVisible();
     await scan(page, "기록장 — 글 상세(댓글 하나)");
+    await page.goto(`./journal/edit/?id=${SEED_POST_ID}`);
+    await expect(page.getByRole("textbox", { name: /제목/ })).toHaveValue("둘째 주 산책");
+    await scan(page, "기록장 — 글 수정");
+  });
+
+  test("기록 — 전체 기록 · 삭제 확인 창 · 답 수정 창 · 기록 수정", async ({ page }) => {
+    await page.goto("./record/history/");
+    const records = page.getByRole("region", { name: "증상 기록" });
+    await expect(records.getByRole("button", { name: /삭제/ }).first()).toBeVisible();
+    await scan(page, "전체 기록(판 있음·없음 기록 2건, 답 3개)");
+    await records.getByRole("button", { name: /삭제/ }).first().click();
+    await expect(page.getByRole("dialog", { name: "이 기록을 삭제할까요?" })).toBeVisible();
+    await expectNoAxeViolations(page, "전체 기록 — 삭제 확인 창");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("region", { name: "오늘의 한 가지 질문" }).getByRole("button", { name: /수정/ }).first().click();
+    await expect(page.getByRole("dialog", { name: "답 수정" })).toBeVisible();
+    await expectNoAxeViolations(page, "전체 기록 — 답 수정 창");
+    await page.keyboard.press("Escape");
+    await page.goto("./record/edit/?id=e2e-today");
+    await expect(page.getByRole("switch", { name: "어지러움·실신·균형장애" })).toBeChecked();
+    await scan(page, "기록 수정(위험 신호 기록)");
   });
 
   test("프로필 · 설정 · 계정 삭제 창 · 프로필 편집", async ({ page }) => {
