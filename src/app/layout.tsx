@@ -22,7 +22,8 @@ export const metadata: Metadata = {
   description: APP_DESCRIPTION,
   openGraph: BASE_OPEN_GRAPH,
   twitter: BASE_TWITTER,
-  // 1.0 공개 전까지 검색 노출 막기. NEXT_PUBLIC_SITE_INDEXABLE=true여도 앱 화면은 noindex — 시작 주소(src/app/page.tsx)만 robotsFor("root")로 연다.
+  // 1.0 공개 전까지 검색 노출 막기. NEXT_PUBLIC_SITE_INDEXABLE=true여도 앱 화면은 noindex — 시작 주소·처리방침·약관 페이지만
+  // 자기 주소의 robotsFor(ROUTES.…)로 연다(config.SEARCH_INDEX_ROUTES, robots.txt·sitemap.xml도 같은 목록 — src/app/robots.ts).
   robots: robotsFor("app"),
   manifest: pwaAssetUrl(config.basePath, "manifest"),
   icons: {

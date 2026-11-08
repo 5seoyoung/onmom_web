@@ -119,20 +119,30 @@ describe("cspMetaContent — 운영 빌드에서만", () => {
   });
 });
 
-describe("public/robots.txt — 1.0 공개 전에는 모두 막는다", () => {
-  it("NEXT_PUBLIC_SITE_INDEXABLE이 기본(false)인 동안 Disallow: / — 링크 미리보기 봇만 허용", async () => {
-    const { readFileSync } = await import("node:fs");
-    const { join } = await import("node:path");
-    const txt = readFileSync(join(__dirname, "..", "public", "robots.txt"), "utf8");
-    const rules = txt.split("\n").filter((l) => l.trim() !== "" && !l.startsWith("#"));
+describe("robots.txt(빌드 때 src/app/robots.ts가 만든다) — 1.0 공개 전에는 모두 막는다", () => {
+  it("NEXT_PUBLIC_SITE_INDEXABLE이 기본(false)인 동안 예전 public/robots.txt와 같은 규칙 — Disallow: /, 링크 미리보기 봇만 허용, Sitemap 없음", async () => {
+    // 빌드가 쓰는 그대로 — Next가 기본 내보내기를 불러 이 함수로 글을 만든다(필드 이름 User-Agent의 대소문자는 RFC 9309상 같다)
+    const { resolveRobots } = await import("next/dist/build/webpack/loaders/metadata/resolve-route-data");
+    const robots = (await import("@/app/robots")).default;
+    const txt = resolveRobots(robots());
+    const rules = txt.split("\n").filter((l) => l.trim() !== "");
     expect(rules).toEqual([
-      "User-agent: kakaotalk-scrap",
-      "User-agent: Twitterbot",
-      "User-agent: facebookexternalhit",
-      "User-agent: Slackbot-LinkExpanding",
+      "User-Agent: kakaotalk-scrap",
+      "User-Agent: Twitterbot",
+      "User-Agent: facebookexternalhit",
+      "User-Agent: Slackbot-LinkExpanding",
       "Allow: /",
-      "User-agent: *",
+      "User-Agent: *",
       "Disallow: /",
     ]);
+    // 예전 파일처럼 두 묶음(빈 줄로 나뉨)
+    expect(txt).toBe(`${rules.slice(0, 5).join("\n")}\n\n${rules.slice(5).join("\n")}\n\n`);
+  });
+
+  it("public/에 robots.txt를 두지 않는다 — 빌드 충돌, 스위치를 따르지 않는 정적 파일", async () => {
+    const { existsSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    expect(existsSync(join(__dirname, "..", "public", "robots.txt"))).toBe(false);
+    expect(existsSync(join(__dirname, "..", "public", "sitemap.xml"))).toBe(false);
   });
 });
