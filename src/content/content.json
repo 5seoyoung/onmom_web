@@ -1080,6 +1080,16 @@
         "blocked": "지금은 권장 안 함",
         "unlock_week": "{week}주에 열림"
       }
+    },
+    "profile": {
+      "delivery_methods": {
+        "vaginal": "자연분만",
+        "cesarean": "제왕절개"
+      },
+      "goals": {
+        "homemaker": "전업",
+        "returning_to_work": "복직 예정"
+      }
     }
   }
 }

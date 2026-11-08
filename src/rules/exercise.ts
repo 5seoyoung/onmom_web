@@ -211,9 +211,10 @@ export { isRedFlagActive } from "./record";
 
 // MARK: - 화면 문구 (Swift 원문)
 
+/** 분만 방식 표시명 — content.json ui.profile.delivery_methods */
 export const DELIVERY_TITLE: Readonly<Record<DeliveryMethod, string>> = {
-  vaginal: "자연분만", // 원문: Models.swift:13
-  cesarean: "제왕절개", // 원문: Models.swift:14
+  vaginal: content.ui.profile.delivery_methods.vaginal, // 원문: Models.swift:13
+  cesarean: content.ui.profile.delivery_methods.cesarean, // 원문: Models.swift:14
 };
 
 /**
@@ -225,10 +226,10 @@ export const DELIVERY_OPTIONS: ReadonlyArray<{ value: DeliveryMethod; title: str
   { value: "cesarean", title: DELIVERY_TITLE.cesarean },
 ];
 
-/** 목표 표시명 — Models.swift:37-41. 홈 히어로 칩·프로필·프로필 편집·온보딩 선택지가 같이 쓴다. */
+/** 목표 표시명 — Models.swift:37-41, content.json ui.profile.goals. 홈 히어로 칩·프로필·프로필 편집·온보딩 선택지가 같이 쓴다. */
 export const GOAL_TITLE: Readonly<Record<RecoveryGoal, string>> = {
-  homemaker: "전업", // 원문: Models.swift:39
-  returningToWork: "복직 예정", // 원문: Models.swift:40
+  homemaker: content.ui.profile.goals.homemaker, // 원문: Models.swift:39
+  returningToWork: content.ui.profile.goals.returning_to_work, // 원문: Models.swift:40
 };
 
 export const EXERCISE_TEXT = {
