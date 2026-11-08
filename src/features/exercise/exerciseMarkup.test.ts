@@ -3,14 +3,15 @@
 // 콜드스타트 안내·연결 실패 [다시 시도]·오프라인 문구·빈 목록·영상 준비 중이 각각 그려지는지 본다.
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { EXTERNAL_LINK_PROPS } from "@/api/safeUrl";
 import type { MaternityRecord } from "@/domain/types";
 import { OFFLINE_TEXT } from "@/features/home/useOnline";
-import { EXERCISE_TEXT, type Video } from "@/rules/exercise";
+import { EXERCISE_TEXT, routeTag, type Video } from "@/rules/exercise";
 import { ExerciseBodyView } from "./ExerciseBlocks";
-import { exerciseBody, type VideoLoad } from "./exerciseModel";
-import { COLD_START_TEXT } from "./videoLoad";
+import { exerciseBody, videoLoadFromResult, type VideoLoad } from "./exerciseModel";
+import { COLD_START_TEXT, loadVideos, snapshotVideosFor } from "./videoLoad";
+import { parseVideoSnapshot } from "./videoSnapshot";
 
 const noop = () => {};
 const count = (html: string, needle: string) => html.split(needle).length - 1;
@@ -116,5 +117,70 @@ describe("상태 블록 — 늘 있는 live region 안에서 바뀐다", () => {
     expect(html).toContain(EXERCISE_TEXT.emptyPlan);
     expect(html).not.toContain(EXERCISE_TEXT.unlockedSection);
     expect(html).not.toContain("<article");
+  });
+});
+
+// 빌드 때 받아 둔 목록(videoLoad.ts VIDEO_SNAPSHOT) — 같은 영상이면 조회한 결과와 글자까지 같은 화면, 링크는 여전히 safeExternalUrl을 거친다.
+describe("받아 둔 목록으로 그린 운동 탭 — 조회한 결과와 같은 마크업", () => {
+  const C = routeTag("cesarean");
+  const V = routeTag("vaginal");
+  const LIVE_VIDEOS = LIVE.kind === "loaded" ? [...LIVE.videos] : [];
+  const SNAPSHOT = parseVideoSnapshot({
+    fetchedAt: "2026-11-08T18:30:00.000Z",
+    routes: { [C]: LIVE_VIDEOS, [V]: [{ ...video("v", "recovery_priority"), tags: ["stage_recovery_priority", V] }] },
+  });
+  const render = (load: VideoLoad) =>
+    renderToStaticMarkup(h(ExerciseBodyView, { body: exerciseBody(load, "cesarean", 9, maternity({ pelvicPain: true })), onRetry: noop }));
+
+  it("운동 탭(PlanBody가 만드는 load)·분석(loadVideos)·조회 결과(videoLoadFromResult)가 같은 HTML", async () => {
+    const fetched = render(videoLoadFromResult({ ok: true, videos: LIVE_VIDEOS }));
+    const snapshot = snapshotVideosFor(C, SNAPSHOT);
+    expect(snapshot).not.toBeNull();
+    expect(render({ kind: "loaded", videos: snapshot ?? [] })).toBe(fetched);
+    const loaded = await loadVideos(async () => ({ ok: false, kind: "network", message: "" }), C, { snapshot: SNAPSHOT });
+    expect(render(videoLoadFromResult(loaded))).toBe(fetched);
+    // 위 "실제 영상 카드" 검사와 같은 화면 — 허용되지 않은 주소(http)는 링크가 없다
+    expect(count(fetched, "<article")).toBe(6);
+    expect(count(fetched, EXERCISE_TEXT.watchVideo)).toBe(3);
+    expect(fetched).not.toContain('href="http://example.com/video"');
+  });
+});
+
+describe("PlanBody(서버 렌더 = 첫 렌더) — 받아 둔 목록이 있으면 처음부터 목록, 없으면 불러오는 중", () => {
+  const C = routeTag("cesarean");
+  const V = routeTag("vaginal");
+  afterEach(() => {
+    vi.doUnmock("@/content/videos.generated.json");
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  async function renderPlan(generated: unknown | null) {
+    vi.resetModules();
+    if (generated !== null) vi.doMock("@/content/videos.generated.json", () => ({ default: generated }));
+    const fetchSpy = vi.fn(async () => {
+      throw new Error("영상 목록을 조회하면 안 된다");
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { PlanBody } = await import("./ExerciseScreen");
+    const html = renderToStaticMarkup(h(PlanBody, { delivery: "cesarean", week: 9, maternity: maternity({ pelvicPain: true }) }));
+    return { html, fetchSpy };
+  }
+
+  it("저장소의 빈 목록: 첫 화면은 불러오는 중(조회는 effect가 한다 — 지금과 같다)", async () => {
+    const { html } = await renderPlan(null);
+    expect(html).toContain("운동 영상을 불러오고 있어요");
+    expect(html).not.toContain("<article");
+  });
+
+  it("목록이 실린 빌드: 첫 화면부터 영상 카드(불러오는 중·콜드스타트 안내 없음), 조회한 결과와 같은 HTML", async () => {
+    const generated = { fetchedAt: "2026-11-08T18:30:00.000Z", routes: { [V]: [{ ...video("v", "recovery_priority"), tags: ["stage_recovery_priority", V] }], [C]: LIVE.kind === "loaded" ? LIVE.videos : [] } };
+    const { html, fetchSpy } = await renderPlan(generated);
+    expect(html).not.toContain("운동 영상을 불러오고 있어요");
+    expect(html).not.toContain(COLD_START_TEXT);
+    expect(count(html, "<article")).toBe(6);
+    const fetched = renderToStaticMarkup(h(ExerciseBodyView, { body: exerciseBody(LIVE, "cesarean", 9, maternity({ pelvicPain: true })), onRetry: noop }));
+    expect(html).toBe(fetched);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
