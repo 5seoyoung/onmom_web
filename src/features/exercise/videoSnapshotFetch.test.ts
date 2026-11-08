@@ -237,6 +237,11 @@ describe("scripts/videos-fetch.mjs — 실제 Node로", () => {
   const committed = fileURLToPath(new URL("../../content/videos.generated.json", import.meta.url));
   const dir = mkdtempSync(join(tmpdir(), "onmom-videos-fetch-"));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
+  /** 표준 오류에 모듈 형식 경고(--disable-warning으로 끈다)·오류가 없다 — Node 버전마다 다른 경고 줄은 보지 않는다 */
+  const expectCleanStderr = (stderr: string) => {
+    expect(stderr).not.toContain("MODULE_TYPELESS_PACKAGE_JSON");
+    expect(stderr).not.toMatch(/Error/);
+  };
   const node = (out: string, env: Record<string, string>) =>
     exec(process.execPath, ["--disable-warning=MODULE_TYPELESS_PACKAGE_JSON", script, out], {
       env: { ...process.env, GITHUB_ACTIONS: "", ...env },
@@ -248,7 +253,7 @@ describe("scripts/videos-fetch.mjs — 실제 Node로", () => {
     const out = join(dir, "none.json");
     const local = await node(out, { VIDEO_API_URL: "" });
     expect(local.stdout.trim()).toMatch(/^videos-fetch: VIDEO_API_URL이 없어/);
-    expect(local.stderr).toBe("");
+    expectCleanStderr(local.stderr);
     expect(readFileSync(out, "utf8")).toBe(EMPTY);
     const ci = await node(out, { VIDEO_API_URL: "", GITHUB_ACTIONS: "true" });
     expect(ci.stdout.trim()).toMatch(/^::warning title=운동 영상 목록::videos-fetch: VIDEO_API_URL이 없어/);
@@ -269,7 +274,7 @@ describe("scripts/videos-fetch.mjs — 실제 Node로", () => {
       const { port } = server.address() as AddressInfo;
       const out = join(dir, "local.json");
       const { stdout, stderr } = await node(out, { VIDEO_API_URL: `http://127.0.0.1:${port}` });
-      expect(stderr).toBe("");
+      expectCleanStderr(stderr);
       expect(stdout).toMatch(new RegExp(`videos-fetch: 영상 ${V} 1개 · ${C} 1개`));
       expect(asked).toEqual([`GET /videos?include=${V}&limit=500`, `GET /videos?include=${C}&limit=500`]);
       const snapshot = parseVideoSnapshot(JSON.parse(readFileSync(out, "utf8")));
