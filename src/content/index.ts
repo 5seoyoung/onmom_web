@@ -13,6 +13,9 @@
 //  3. 2026-11-08 (DEV_NOTES §3 content.json 수정 요청, 화면 글자는 그대로):
 //     home_metrics.lochia.gate 설명 글을 코드의 세 갈래(10일 이상 판정 · 10일 미만 숨김 · 일수 없음은 표시하되 판정 보류)에 맞췄다(감사 #40).
 //     판정에는 쓰이지 않는 설명 글이다 — rules/version.test.ts가 LOCHIA_GATE_DAYS와 대조한다.
+//     disclaimers.record_normal을 " / "로 이은 한 줄에서 {title, body}로 나눴다(쓰는 곳 rules/record, 감사 #53).
+//     weight_plan.loss·recovery.chips의 첫 칩(자리표시 글자 "BMI x.x 또는 임신 전 +x.xkg"·"BMI x.x")을 빼고 계산값 칩의 틀을
+//     chip_templates({bmi}·{kg} — content/template.ts)로 뒀다(쓰는 곳 rules/weight, 감사 #53).
 import content from "./content.json";
 
 export type Content = typeof content;
