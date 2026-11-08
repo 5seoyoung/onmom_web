@@ -184,8 +184,8 @@ function pickNewer<T extends EditStamp>(serverItem: T, localItem: T, same?: (ser
 }
 
 /**
- * 같은 기록이 양쪽에 있을 때 — 서버 쪽을 쓰되, 서버 쪽에 없는(null) 버전 칸은 이 브라우저 쪽 값으로 채운다(머리 주석).
- * 기록은 쓴 뒤 바뀌지 않으므로 둘 다 있으면 같아야 하고, 그때는 서버 쪽 그대로다(어느 기기에서 합쳐도 같은 결과).
+ * 같은 기록이 양쪽에 있고 고친 시각도 같을 때(pickNewer) — 서버 쪽을 쓰되, 서버 쪽에 없는(null) 버전 칸은 이 브라우저 쪽 값으로 채운다(머리 주석).
+ * 같은 판의 기록이라 둘 다 있으면 같아야 하고, 그때는 서버 쪽 그대로다(어느 기기에서 합쳐도 같은 결과).
  */
 function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
   return <T extends Dated & Record<K, string | null>>(serverItem: T, localItem: T): T =>
@@ -193,8 +193,8 @@ function keepVersion<K extends "rulesVersion" | "moodVersion">(key: K) {
 }
 
 /**
- * 같은 증상 기록 — 서버 쪽에 없는(칸이 없거나 true/false가 아닌) 위험 증상 토글 칸은 이 브라우저 쪽 값으로 채운다(머리 주석, keepVersion과 같은 까닭).
- * 서버 쪽에 값이 있으면 그대로 — 기록은 쓴 뒤 바뀌지 않는다. 채울 것이 없으면 서버 쪽 객체 그대로(같은 결과를 같은 모양으로).
+ * 같은 증상 기록(고친 시각도 같음) — 서버 쪽에 없는(칸이 없거나 true/false가 아닌) 위험 증상 토글 칸은 이 브라우저 쪽 값으로 채운다
+ * (머리 주석, keepVersion과 같은 까닭). 서버 쪽에 값이 있으면 그대로. 채울 것이 없으면 서버 쪽 객체 그대로(같은 결과를 같은 모양으로).
  */
 function keepRiskFlags(serverItem: SymptomRecord, localItem: SymptomRecord): SymptomRecord {
   const mine = pickRiskFlags(localItem);
