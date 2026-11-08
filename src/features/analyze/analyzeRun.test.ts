@@ -5,6 +5,7 @@ import { createAppStore } from "@/store/appStore";
 import { createMemoryStorage, createStoragePersistence } from "@/store/persistence";
 import { homeStageCard, isRedFlagActive, routeTag, type Video } from "@/rules/exercise";
 import { exerciseBody, exerciseWeek } from "@/features/exercise/exerciseModel";
+import { parseVideoSnapshot } from "@/features/exercise/videoSnapshot";
 import { formValuesFromSaved, type AnalyzeFormValues } from "./analyzeModel";
 import { saveAndAnalyze, type AnalyzeRunDeps } from "./analyzeRun";
 
@@ -158,5 +159,35 @@ describe("[분석 시작] — 저장 먼저, 저장된 값으로 분석(D10, 감
     expect(await saveAndAnalyze(form({ deliveryDate: "" }), deps())).toEqual({ ok: false, message: "분만 방식을 먼저 선택해주세요." });
     expect(await saveAndAnalyze(form({ deliveryMethod: null }), deps())).toEqual({ ok: false, message: "분만 방식을 먼저 선택해주세요." });
     expect(fetchVideos).not.toHaveBeenCalled();
+  });
+
+  it("빌드 때 받아 둔 목록이 있으면 조회하지 않고(재시도 알림도 없음) 같은 영상으로 조회했을 때와 같은 결과", async () => {
+    const snapshot = parseVideoSnapshot({
+      fetchedAt: "2026-11-08T18:30:00.000Z",
+      routes: { [routeTag("vaginal")]: [FULL_CORE], [routeTag("cesarean")]: [{ ...FULL_CORE, video_id: "cs" }] },
+    });
+    const values = form({ maternity: { ...defaultMaternity(), diastasisRecti: true } });
+    const fetched = await saveAndAnalyze(values, {
+      actions: setup().actions,
+      readSaved: () => ({ profile: { ...defaultProfile(), deliveryMethod: "vaginal", deliveryDate: DELIVERY_13W }, maternity: { ...defaultMaternity(), diastasisRecti: true } }),
+      fetchVideos: async () => ({ ok: true, videos: [FULL_CORE] }),
+      now: () => NOW,
+    });
+    const store = setup();
+    const fetchVideos = vi.fn(async (): Promise<FetchVideosResult> => ({ ok: false, kind: "network", message: "" }));
+    const onVideoRetry = vi.fn();
+    const outcome = await saveAndAnalyze(values, {
+      actions: store.actions,
+      readSaved: () => store.getSnapshot().state,
+      fetchVideos,
+      now: () => NOW,
+      onVideoRetry,
+      videoSnapshot: snapshot,
+    });
+    expect(fetchVideos).not.toHaveBeenCalled();
+    expect(onVideoRetry).not.toHaveBeenCalled();
+    if (!outcome.ok || !fetched.ok) throw new Error("분석 실패");
+    expect(outcome.output.videoFetch).toBe("ok");
+    expect(outcome.output).toEqual(fetched.output);
   });
 });

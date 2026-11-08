@@ -1,6 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FetchVideosOptions, FetchVideosResult } from "@/api/video";
-import { COLD_START_NOTICE_MS, COLD_START_TEXT, VIDEO_RETRY_TIMEOUT_MS, fetchVideosWithRetry, shouldRetryVideoFetch } from "./videoLoad";
+import type { Video } from "@/rules/exercise";
+import type { VideoRouteTag } from "../../../supabase/functions/_shared/videos";
+import {
+  COLD_START_NOTICE_MS,
+  COLD_START_TEXT,
+  VIDEO_RETRY_TIMEOUT_MS,
+  VIDEO_SNAPSHOT,
+  fetchVideosWithRetry,
+  loadVideos,
+  shouldRetryVideoFetch,
+  snapshotVideosFor,
+} from "./videoLoad";
+import { EMPTY_VIDEO_SNAPSHOT, parseVideoSnapshot, type VideoSnapshot } from "./videoSnapshot";
 
 const ok: FetchVideosResult = { ok: true, videos: [] };
 const network: FetchVideosResult = { ok: false, kind: "network", message: "n" };
@@ -110,5 +122,96 @@ describe("fetchVideosWithRetry — 자동 재시도 1회", () => {
     });
     await expect(fetchVideosWithRetry(fn, "")).rejects.toThrow(TypeError);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// MARK: - 빌드 때 받아 둔 목록(videoSnapshot.ts)
+
+const V: VideoRouteTag = "route_vaginal_delivery";
+const C: VideoRouteTag = "route_cesarean_section";
+const snapVideo = (id: string, tag: string): Video => ({
+  video_id: id,
+  title: `영상 ${id}`,
+  url: `https://youtu.be/${id}`,
+  description: "",
+  tags: [tag, "stage_pelvic_floor"],
+});
+/** 받은 스냅숏 — 서버 순서(b → a)를 그대로 둔다 */
+const SNAPSHOT: VideoSnapshot = parseVideoSnapshot({
+  fetchedAt: "2026-11-08T18:30:00.000Z",
+  routes: { [V]: [snapVideo("vb", V), snapVideo("va", V)], [C]: [snapVideo("cb", C), snapVideo("ca", C)] },
+});
+
+describe("loadVideos — 받아 둔 목록이 있으면 요청 없이, 없으면 지금 조회 그대로", () => {
+  it("받은 스냅숏: 어느 분만 방식이든 fetchVideos를 부르지 않고 그 경로 목록을 서버 순서 그대로(재시도 알림 없음)", async () => {
+    for (const tag of [V, C]) {
+      const { fn } = sequence(network);
+      const onRetry = vi.fn();
+      const result = await loadVideos(fn, tag, { snapshot: SNAPSHOT, onRetry, signal: new AbortController().signal });
+      expect(result).toEqual({ ok: true, videos: [...SNAPSHOT.routes[tag]] });
+      expect(fn).not.toHaveBeenCalled();
+      expect(onRetry).not.toHaveBeenCalled();
+    }
+    // 돌려준 배열을 바꿔도 받아 둔 목록은 그대로
+    const res = await loadVideos(sequence(ok).fn, V, { snapshot: SNAPSHOT });
+    if (res.ok) res.videos.pop();
+    expect(SNAPSHOT.routes[V]).toHaveLength(2);
+  });
+
+  it("빈 스냅숏: fetchVideosWithRetry와 똑같이 — 같은 인자, 실패 뒤 35초로 한 번 더, 재시도 알림", async () => {
+    const { fn, calls } = sequence(server502, ok);
+    const onRetry = vi.fn();
+    const signal = new AbortController().signal;
+    expect(await loadVideos(fn, C, { snapshot: EMPTY_VIDEO_SNAPSHOT, signal, onRetry })).toBe(ok);
+    expect(calls).toEqual([
+      { tag: C, opts: { signal } },
+      { tag: C, opts: { signal, timeoutMs: VIDEO_RETRY_TIMEOUT_MS } },
+    ]);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it("모르는 태그(호출자 버그)는 받아 둔 목록을 쓰지 않고 조회로 — fetchVideos가 던지면 그대로 올린다", async () => {
+    const fn = vi.fn(async (): Promise<FetchVideosResult> => {
+      throw new TypeError("includeTag is required");
+    });
+    await expect(loadVideos(fn, "", { snapshot: SNAPSHOT })).rejects.toThrow(TypeError);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("기본은 이 빌드의 목록 — 저장소의 빈 목록이면 지금처럼 조회한다", async () => {
+    expect(VIDEO_SNAPSHOT).toEqual(EMPTY_VIDEO_SNAPSHOT);
+    expect(snapshotVideosFor(V)).toBeNull();
+    expect(snapshotVideosFor(C)).toBeNull();
+    const { fn, calls } = sequence(ok);
+    expect(await loadVideos(fn, V)).toBe(ok);
+    expect(calls).toEqual([{ tag: V, opts: { signal: undefined } }]);
+  });
+
+  it("snapshotVideosFor는 같은 빌드에서 늘 같은 배열(운동 탭 effect의 의존값이 바뀌지 않게)", () => {
+    expect(snapshotVideosFor(V, SNAPSHOT)).toBe(snapshotVideosFor(V, SNAPSHOT));
+    expect(snapshotVideosFor(C, SNAPSHOT)?.map((v) => v.video_id)).toEqual(["cb", "ca"]);
+  });
+});
+
+describe("목록이 실린 빌드 — 생성 파일을 바꿔 모듈을 다시 읽는다", () => {
+  afterEach(() => {
+    vi.doUnmock("@/content/videos.generated.json");
+    vi.resetModules();
+  });
+
+  it("VIDEO_SNAPSHOT이 그 목록이고, 기본 loadVideos는 요청하지 않는다", async () => {
+    vi.resetModules();
+    vi.doMock("@/content/videos.generated.json", () => ({ default: JSON.parse(JSON.stringify(SNAPSHOT)) }));
+    const mod = await import("./videoLoad");
+    expect(mod.VIDEO_SNAPSHOT).toEqual(SNAPSHOT);
+    const { fn } = sequence(ok);
+    expect(await mod.loadVideos(fn, C)).toEqual({ ok: true, videos: SNAPSHOT.routes[C] });
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("형식이 틀린 생성 파일이면 모듈을 읽을 때 멈춘다(정적 빌드가 멈춘다 — 조용히 넘기지 않는다)", async () => {
+    vi.resetModules();
+    vi.doMock("@/content/videos.generated.json", () => ({ default: { fetchedAt: "2026-11-08T18:30:00.000Z", routes: { [V]: [snapVideo("v", V)], [C]: [] } } }));
+    await expect(import("./videoLoad")).rejects.toThrow(/두 경로 모두/);
   });
 });

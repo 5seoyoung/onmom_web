@@ -6,7 +6,8 @@
 import type { FetchVideosOptions, FetchVideosResult } from "@/api/video";
 import { parseLocalDate } from "@/domain/date";
 import type { MaternityRecord, UserProfile } from "@/domain/types";
-import { fetchVideosWithRetry } from "@/features/exercise/videoLoad";
+import { loadVideos } from "@/features/exercise/videoLoad";
+import type { VideoSnapshot } from "@/features/exercise/videoSnapshot";
 import { routeTag } from "@/rules/exercise";
 import { runRecoveryAnalysis, type EngineOutput, type VideoFetchResult } from "@/rules/recovery";
 import type { AppActions } from "@/store/appStore";
@@ -27,6 +28,8 @@ export interface AnalyzeRunDeps {
   signal?: AbortSignal;
   /** 영상 조회가 첫 실패 뒤 자동 재시도에 들어갔다(콜드스타트 — 화면이 "서버를 깨우는 중" 안내를 켠다) */
   onVideoRetry?: () => void;
+  /** 빌드 때 받아 둔 영상 목록 — 기본은 이 빌드의 것(features/exercise/videoLoad.ts VIDEO_SNAPSHOT). 테스트가 바꾼다. */
+  videoSnapshot?: VideoSnapshot;
 }
 
 export type AnalyzeRunOutcome = { ok: true; output: EngineOutput } | { ok: false; message: string };
@@ -43,11 +46,16 @@ export async function saveAndAnalyze(values: AnalyzeFormValues, deps: AnalyzeRun
     return { ok: false, message: ANALYZE_TEXT.errorNoDelivery };
   }
 
-  // 영상 조회 — 잠든 서버(콜드스타트)를 위해 첫 실패 뒤 한 번 자동으로 다시 시도한다(features/exercise/videoLoad.ts, 05 §0)
+  // 영상 목록 — 빌드 때 받아 둔 목록이 있으면 그것(요청 없음), 없으면 조회. 조회는 잠든 서버(콜드스타트)를 위해 첫 실패 뒤
+  // 한 번 자동으로 다시 시도한다(features/exercise/videoLoad.ts loadVideos, 05 §0)
   let videos: VideoFetchResult;
   try {
     videos = videoFetchResultFrom(
-      await fetchVideosWithRetry(deps.fetchVideos, routeTag(profile.deliveryMethod), { signal: deps.signal, onRetry: deps.onVideoRetry }),
+      await loadVideos(deps.fetchVideos, routeTag(profile.deliveryMethod), {
+        signal: deps.signal,
+        onRetry: deps.onVideoRetry,
+        snapshot: deps.videoSnapshot,
+      }),
     );
   } catch {
     videos = { state: "failed" };

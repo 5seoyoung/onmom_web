@@ -10,8 +10,17 @@
 // 05 §0의 "(최대 30초)"는 쓰지 않는다 — 지킬 수 없는 약속이기 때문이다: Supabase(Edge Function) 빌드에서는 첫 시도가
 // 45초(api/video.ts VIDEO_PROXY_TIMEOUT_MS — 함수가 영상 서버를 40초 기다린다)까지 가고, 그 뒤 재시도 35초가 더 붙는다.
 // 직접 호출 빌드(NEXT_PUBLIC_VIDEO_URL)도 8초 + 35초라 30초를 넘는다.
+//
+// 빌드 때 받아 둔 목록(STATUS Q14 ①): 배포 워크플로가 빌드 전에 두 경로의 목록을 받아 src/content/videos.generated.json에 쓴다
+// (scripts/videos-fetch.mjs, 형식은 videoSnapshot.ts). 그 목록이 있으면 loadVideos·운동 탭은 요청 없이 바로 쓴다 — 서버가 잠들어도
+// 기다리지 않고, 분만 경로 태그가 기기 밖으로 나가지 않는다. 받지 못한 빌드(저장소의 빈 목록 — 내 컴퓨터·VIDEO_API_URL 없음·서버 실패)는
+// 위 조회(fetchVideosWithRetry)를 그대로 한다. 목록은 두 경로가 함께 있거나 함께 없다(videoSnapshot.ts — 요청 유무로 분만 방식이 드러나지 않게).
+// 목록은 배포마다 새로 받으므로(main push + 매일 03:30 KST) 영상 서버보다 최대 하루쯤 늦을 수 있다.
 
 import type { FetchVideosOptions, FetchVideosResult } from "@/api/video";
+import snapshotJson from "@/content/videos.generated.json";
+import type { Video } from "@/rules/exercise";
+import { parseVideoSnapshot, snapshotVideos, type VideoSnapshot } from "./videoSnapshot";
 
 /** 응답 없이 이만큼 지나면 "서버를 깨우는 중" 안내(05 §0 콜드스타트) */
 export const COLD_START_NOTICE_MS = 8_000;
@@ -53,4 +62,34 @@ export async function fetchVideosWithRetry(
   if (!shouldRetryVideoFetch(first) || opts.signal?.aborted) return first;
   opts.onRetry?.();
   return fetchVideos(includeTag, { signal: opts.signal, timeoutMs: opts.retryTimeoutMs ?? VIDEO_RETRY_TIMEOUT_MS });
+}
+
+// MARK: - 빌드 때 받아 둔 목록
+
+/** 이 빌드에 실린 운동 영상 목록(빌드 전 수집). 형식이 틀리면 모듈을 읽을 때(정적 빌드) 멈춘다 — 수집 단계는 같은 검사를 거쳐 쓴다. */
+export const VIDEO_SNAPSHOT: VideoSnapshot = parseVideoSnapshot(snapshotJson);
+
+/** 이 경로의 받아 둔 영상(서버가 준 순서 그대로) — 받지 못한 빌드거나 모르는 태그면 null(그때는 조회한다). 같은 빌드에서는 늘 같은 배열이다. */
+export function snapshotVideosFor(includeTag: string, snapshot: VideoSnapshot = VIDEO_SNAPSHOT): readonly Video[] | null {
+  return snapshotVideos(snapshot, includeTag);
+}
+
+export interface LoadVideosOptions extends FetchVideosWithRetryOptions {
+  /** 받아 둔 목록 — 기본은 이 빌드의 VIDEO_SNAPSHOT(테스트가 바꾼다) */
+  snapshot?: VideoSnapshot;
+}
+
+/**
+ * 영상 목록 — 받아 둔 목록에 이 경로 영상이 있으면 그것(요청 없음, onRetry도 부르지 않는다), 없으면 fetchVideosWithRetry 그대로.
+ * 회복 단계 분석(analyzeRun)이 쓴다. 운동 탭은 같은 판단을 그리기 전에 한다(snapshotVideosFor — 불러오는 중을 한 번도 그리지 않게).
+ */
+export async function loadVideos(
+  fetchVideos: FetchVideosFn,
+  includeTag: string,
+  opts: LoadVideosOptions = {},
+): Promise<FetchVideosResult> {
+  const { snapshot, ...retryOpts } = opts;
+  const videos = snapshotVideosFor(includeTag, snapshot);
+  if (videos !== null) return { ok: true, videos: [...videos] };
+  return fetchVideosWithRetry(fetchVideos, includeTag, retryOpts);
 }

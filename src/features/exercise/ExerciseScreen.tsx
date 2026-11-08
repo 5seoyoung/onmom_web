@@ -17,7 +17,7 @@ import { youtubeSection } from "@/features/youtube/youtubePlan";
 import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
 import { ExerciseBodyView, NeedsProfileBlock, RedFlagBlock } from "./ExerciseBlocks";
-import { COLD_START_NOTICE_MS, fetchVideosWithRetry } from "./videoLoad";
+import { COLD_START_NOTICE_MS, fetchVideosWithRetry, snapshotVideosFor } from "./videoLoad";
 import { YouTubeSection } from "./YouTubeSection";
 import {
   NEEDS_DELIVERY_DATE_TEXT,
@@ -77,9 +77,12 @@ function ExerciseContent({ state }: { state: PersistedState }) {
 // (시간 약속은 없다 — 프록시 빌드는 첫 시도 45초 + 재시도 35초까지 간다, videoLoad.ts).
 // 첫 실패(시간 초과·연결 실패·5xx)는 한 번 자동으로 다시 시도하고, 그래도 실패면 [다시 시도] 카드.
 // 오프라인(navigator.onLine=false)이면 실패 문구를 오프라인 안내로 바꾼다.
+// 빌드 때 받아 둔 목록(videoLoad.ts VIDEO_SNAPSHOT)에 이 경로 영상이 있으면 처음부터 그것을 그린다 — 조회·타이머 없음(분만 방식이 기기 밖으로
+// 나가지 않는다). 없으면(받지 못한 빌드) 위 조회 그대로. (export는 서버 렌더 시험용 — exerciseMarkup.test.ts)
 
-function PlanBody({ delivery, week, maternity }: { delivery: DeliveryMethod; week: number; maternity: MaternityRecord }) {
+export function PlanBody({ delivery, week, maternity }: { delivery: DeliveryMethod; week: number; maternity: MaternityRecord }) {
   const tag = routeTag(delivery);
+  const snapshot = snapshotVideosFor(tag);
   const online = useOnline();
   const [attempt, setAttempt] = useState(0);
   const requestKey = `${tag}#${attempt}`;
@@ -89,6 +92,7 @@ function PlanBody({ delivery, week, maternity }: { delivery: DeliveryMethod; wee
   const [wakingKey, setWakingKey] = useState<string | null>(null);
 
   useEffect(() => {
+    if (snapshot !== null) return;
     const controller = new AbortController();
     const wake = () => setWakingKey(requestKey);
     const noticeTimer = setTimeout(wake, COLD_START_NOTICE_MS);
@@ -101,9 +105,10 @@ function PlanBody({ delivery, week, maternity }: { delivery: DeliveryMethod; wee
       clearTimeout(noticeTimer);
       controller.abort();
     };
-  }, [tag, requestKey]);
+  }, [tag, requestKey, snapshot]);
 
-  const load = result !== null && result.key === requestKey ? result.load : null;
+  const load: VideoLoad | null =
+    snapshot !== null ? { kind: "loaded", videos: snapshot } : result !== null && result.key === requestKey ? result.load : null;
   const body = exerciseBody(load, delivery, week, maternity, { waking: wakingKey === requestKey, offline: !online });
   return <ExerciseBodyView body={body} onRetry={() => setAttempt((n) => n + 1)} />;
 }
