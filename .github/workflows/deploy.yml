@@ -80,13 +80,15 @@ jobs:
       # ① 같은 코드를 Supabase 값 없이(브라우저 전용) 빌드해 게스트 흐름 전체(온보딩 → 위험 신호 → 404 → 계정 삭제)를 시험한다 —
       #    서버 모드 빌드에서는 게스트 시작이 운영 서버에 익명 계정을 만들므로 그 시험이 건너뛰어진다(e2e/guest-flow.spec.ts).
       # ② 아래 Build가 out/을 배포할 빌드로 덮어쓰고, 그 out/(배포할 그 파일)을 같은 BASE_PATH로 띄워 다시 연다.
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps --only-shell chromium
+      # Chromium(폰·PC·글자 150%·Android 흉내) + WebKit(iPhone Safari 흉내 — playwright.config.ts의 iphone 프로젝트). WebKit은 시스템 라이브러리까지.
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps --only-shell chromium webkit
       - name: Build (browser-only, for e2e)
         run: npm run build
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || steps.site.outputs.url }}
+      # 전부(게스트 흐름 + 접근성 axe + 글자 150%·확대·320px + 관리자 대시보드 + iPhone WebKit·Android 흉내)
       - name: Browser smoke tests (browser-only build)
         run: npm run e2e:run
         env:
@@ -124,8 +126,9 @@ jobs:
           # 공유 미리보기(OG)의 절대 주소 — Variable이 없으면 위 "Site URL" 단계의 Pages 주소(커스텀 도메인을 넣으면 https://<도메인>/).
           # Variable을 넣으면 그 값이 우선한다(경로가 BASE_PATH와 다르면 빌드가 멈춘다 — src/config.ts siteUrlFrom, docs/PWA_AND_REMINDERS.md §2-3).
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL || steps.site.outputs.url }}
+      # 배포할 빌드 — 폰·PC만(게스트 상태를 쓰는 시험은 서버 모드라 어차피 건너뛰고, 글자 크기·기기 흉내는 ① 브라우저 전용 빌드에서 이미 봤다)
       - name: Browser smoke tests (deploy build)
-        run: npm run e2e:run
+        run: npm run e2e:run -- --project=phone --project=desktop
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
       - name: Upload Playwright report

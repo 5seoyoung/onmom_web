@@ -1,6 +1,6 @@
 // 브라우저 자동 시험(e2e) — docs/DEV_NOTES.md §11.
 // 빌드된 정적 사이트(out/)를 e2e/serve.mjs가 GitHub Pages처럼 BASE_PATH 아래에 띄우고, 폰·PC 크기 Chromium으로 연다.
-// 프로젝트: phone·desktop(게스트 흐름 + 접근성 axe), zoom(글자 150%·확대 150%·320px + 관리자 대시보드).
+// 프로젝트: phone·desktop(게스트 흐름 + 접근성 axe), zoom(글자 150%·확대 150%·320px), iphone(WebKit)·android(Chromium) 실기기 흉내.
 // 빌드와 BASE_PATH가 같아야 한다 — `npm run e2e`(빌드 + 시험) 또는 CI(배포와 같은 빌드를 시험).
 // 서버 연결 시험(e2e/server/)은 사람이 직접 켤 때만 돈다(E2E_SERVER=1 — `npm run e2e:server`, 방법은 그 파일 머리말). 실제 Supabase에
 // 시험 계정을 만들었다 지우므로 기본 실행(`npm run e2e`·`e2e:run`·CI)은 그 폴더를 아예 보지 않는다. 켜면 그 폴더만, 폰 크기 하나로
@@ -15,9 +15,11 @@ const CI = !!process.env.CI;
 const SERVER = process.env.E2E_SERVER === "1";
 
 const PHONE = { ...devices["Desktop Chrome"], viewport: { width: 402, height: 874 }, isMobile: false, hasTouch: true };
+// 실기기 흉내 프로젝트(iphone = WebKit, android) — 기본으로 켠다. WebKit이 없는 로컬은 E2E_DEVICES=0(npx playwright install webkit로 설치)
+const DEVICES = process.env.E2E_DEVICES !== "0";
 const ALWAYS_IGNORED = SERVER ? [] : ["**/e2e/server/**"];
 // 자기 프로젝트에서만 도는 시험 — phone·desktop은 보지 않는다
-const ONLY_IN_OWN_PROJECT = ["**/zoom.spec.ts", "**/admin-dashboard.spec.ts"];
+const ONLY_IN_OWN_PROJECT = ["**/zoom.spec.ts", "**/admin-dashboard.spec.ts", "**/devices.spec.ts"];
 
 export default defineConfig({
   testDir: SERVER ? "e2e/server" : "e2e",
@@ -52,6 +54,14 @@ export default defineConfig({
         // 글자 150%·확대 150%·320px(zoom.spec.ts) + 관리자 대시보드(가짜 행 — admin-dashboard.spec.ts). 크기는 시험이 모드마다 정한다.
         // Chromium(Chrome 글꼴 크기 설정을 CDP로 바꾸는 모드가 있음)
         { name: "zoom", use: { ...devices["Desktop Chrome"] }, testMatch: ["zoom.spec.ts", "admin-dashboard.spec.ts"] },
+        // 실기기 흉내 — 게스트 흐름 전체 + 접근성·글자 150% 일부(devices.spec.ts). E2E_DEVICES=0이면 뺀다(WebKit을 설치하지 않은 로컬).
+        // iPhone 17(402×681, dsf 3, 터치) Safari = Playwright WebKit / Android Pixel 10(360×732 — 국내에 흔한 360 폭) Chrome = Chromium
+        ...(DEVICES
+          ? [
+              { name: "iphone", use: { ...devices["iPhone 17"] }, testMatch: ["guest-flow.spec.ts", "devices.spec.ts"] },
+              { name: "android", use: { ...devices["Pixel 10"] }, testMatch: ["guest-flow.spec.ts", "devices.spec.ts"] },
+            ]
+          : []),
       ],
   webServer: {
     command: "node e2e/serve.mjs",
