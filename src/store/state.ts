@@ -4,9 +4,11 @@
 
 import {
   MOOD_CHECKS_LIMIT,
+  pickRiskFlags,
   type CommunityPost,
   type IsoDateTimeString,
   type MaternityRecord,
+  type MoodAnswer,
   type MoodCheckRecord,
   type PersistedState,
   type SymptomRecord,
@@ -15,6 +17,7 @@ import {
 import { isGuestID } from "./account";
 import { decodeMaternity, decodeProfile } from "./decode";
 import { initialState } from "./defaults";
+import { withTombstone } from "./tombstones";
 // 기록·기분 규칙은 rules/가 단일 출처다(08 §3-1) — 스토어는 상태 모양에 맞춰 넘기기만 한다.
 import * as MoodRules from "@/rules/mood";
 import * as RecordRules from "@/rules/record";
@@ -82,6 +85,82 @@ export function addMoodCheck(s: PersistedState, record: MoodCheckRecord): Persis
 
 export const MOOD_CARD_SNOOZE_DAYS = MoodRules.MOOD_CARD_SNOOZE_DAYS;
 
+// MARK: 기록 고치기·지우기 (웹 전용 — iOS에는 없다. LAUNCH_CHECKLIST 7-4)
+//
+// 고치면 고친 시각(updatedAt)을 찍고, 지우면 목록에서 빼고 삭제 표시(id·지운 시각만)를 남긴다 — 여러 탭·서버 합치기가
+// 고친 쪽을 고르고 지운 기록을 되살리지 않게(store/tombstones, store/sync/merge). 기록 시각(date)은 바꾸지 않는다.
+// 없는 id면 그대로(같은 객체) — 다른 탭·기기에서 이미 지웠을 수 있다.
+
+/** 고친 증상 기록의 값 — 날짜·id·고친 시각을 뺀 칸(rules/record rebuildSymptomRecord가 고친 답으로 다시 계산한 것) */
+export type SymptomRecordPatch = Omit<SymptomRecord, "id" | "date" | "updatedAt">;
+
+/**
+ * 증상 기록 고치기 — 칸을 통째로 바꾸고 고친 시각을 찍는다. 위험 증상 토글은 true/false인 칸만(pickRiskFlags — 새 기록과 같은 규칙).
+ * 값이 전과 같으면 그대로(같은 객체 — 저장·동기화 없음).
+ */
+export function updateSymptomRecord(s: PersistedState, id: string, patch: SymptomRecordPatch, now: Date): PersistedState {
+  const i = s.symptomHistory.findIndex((r) => r.id === id);
+  if (i < 0) return s;
+  const before = s.symptomHistory[i];
+  const values = symptomValues(patch);
+  if (sameValues(symptomValues(before), values)) return s;
+  const symptomHistory = s.symptomHistory.slice();
+  symptomHistory[i] = { id: before.id, date: before.date, ...values, updatedAt: now.toISOString() };
+  return { ...s, symptomHistory };
+}
+
+/** 기록에서 고칠 수 있는 칸만 — 위험 증상 토글은 true/false인 칸만(pickRiskFlags) */
+function symptomValues(r: SymptomRecordPatch): SymptomRecordPatch {
+  return {
+    lochiaIncreased: r.lochiaIncreased,
+    lochiaRed: r.lochiaRed,
+    feverEvent: r.feverEvent,
+    painNrs: r.painNrs,
+    redFlagCode: r.redFlagCode,
+    postpartumDays: r.postpartumDays,
+    rulesVersion: r.rulesVersion,
+    ...pickRiskFlags(r),
+  };
+}
+
+/** 칸 이름과 값이 모두 같은가(칸 순서는 보지 않는다) — 기록 칸은 글자·숫자·참거짓·null뿐이다 */
+function sameValues(a: object, b: object): boolean {
+  const ra = a as Readonly<Record<string, unknown>>;
+  const rb = b as Readonly<Record<string, unknown>>;
+  const keys = new Set([...Object.keys(ra), ...Object.keys(rb)]);
+  for (const k of keys) if (ra[k] !== rb[k]) return false;
+  return true;
+}
+
+/** 증상 기록 지우기 — 목록에서 빼고 삭제 표시를 남긴다. */
+export function deleteSymptomRecord(s: PersistedState, id: string, now: Date): PersistedState {
+  if (!s.symptomHistory.some((r) => r.id === id)) return s;
+  return {
+    ...s,
+    symptomHistory: s.symptomHistory.filter((r) => r.id !== id),
+    deleted: withTombstone(s.deleted, "symptomHistory", id, now.toISOString()),
+  };
+}
+
+/** 기분 답 고치기 — 답만 바꾼다(문항·문항 버전·답한 시각은 그대로). 같은 답이면 그대로. */
+export function updateMoodAnswer(s: PersistedState, id: string, answer: MoodAnswer, now: Date): PersistedState {
+  const i = s.moodChecks.findIndex((r) => r.id === id);
+  if (i < 0 || s.moodChecks[i].answer === answer) return s;
+  const moodChecks = s.moodChecks.slice();
+  moodChecks[i] = { ...moodChecks[i], answer, updatedAt: now.toISOString() };
+  return { ...s, moodChecks };
+}
+
+/** 기분 답 지우기 — 오늘 답을 지우면 오늘의 질문을 다시 묻는다(todayMoodCheck). */
+export function deleteMoodCheck(s: PersistedState, id: string, now: Date): PersistedState {
+  if (!s.moodChecks.some((r) => r.id === id)) return s;
+  return {
+    ...s,
+    moodChecks: s.moodChecks.filter((r) => r.id !== id),
+    deleted: withTombstone(s.deleted, "moodChecks", id, now.toISOString()),
+  };
+}
+
 /** 마음 연계 카드를 접어둔다(기본 7일). 기록은 그대로라 기한이 지나면 다시 판정한다(AppStore.swift:95-99). */
 export function snoozeMoodCard(s: PersistedState, now: Date, days: number = MOOD_CARD_SNOOZE_DAYS): PersistedState {
   return { ...s, moodCardSnoozedUntil: MoodRules.moodCardSnoozeUntil(now, days) };
@@ -130,6 +209,43 @@ export function addComment(s: PersistedState, postId: string, text: string, meta
   const communityPosts = s.communityPosts.slice();
   communityPosts[i] = { ...post, comments: [...post.comments, comment] };
   return { ...s, communityPosts };
+}
+
+/**
+ * 글 고치기 — 제목·본문을 trim해 바꾸고 고친 시각을 찍는다(작성자·쓴 시각·댓글은 그대로). 제목이 비거나 바뀐 것이 없으면 그대로.
+ */
+export function updatePost(s: PersistedState, postId: string, input: { title: string; body: string }, now: Date): PersistedState {
+  if (!canSubmitPost(input.title)) return s;
+  const i = s.communityPosts.findIndex((p) => p.id === postId);
+  if (i < 0) return s;
+  const post = s.communityPosts[i];
+  const title = input.title.trim();
+  const body = input.body.trim();
+  if (post.title === title && post.body === body) return s;
+  const communityPosts = s.communityPosts.slice();
+  communityPosts[i] = { ...post, title, body, updatedAt: now.toISOString() };
+  return { ...s, communityPosts };
+}
+
+/** 글 지우기 — 글과 그 댓글을 함께 뺀다. 표시는 글 하나만 남긴다(댓글은 글과 함께 걸러진다). */
+export function deletePost(s: PersistedState, postId: string, now: Date): PersistedState {
+  if (!s.communityPosts.some((p) => p.id === postId)) return s;
+  return {
+    ...s,
+    communityPosts: s.communityPosts.filter((p) => p.id !== postId),
+    deleted: withTombstone(s.deleted, "communityPosts", postId, now.toISOString()),
+  };
+}
+
+/** 댓글 지우기 — 없는 글·댓글이면 그대로. */
+export function deleteComment(s: PersistedState, postId: string, commentId: string, now: Date): PersistedState {
+  const i = s.communityPosts.findIndex((p) => p.id === postId);
+  if (i < 0) return s;
+  const post = s.communityPosts[i];
+  if (!post.comments.some((c) => c.id === commentId)) return s;
+  const communityPosts = s.communityPosts.slice();
+  communityPosts[i] = { ...post, comments: post.comments.filter((c) => c.id !== commentId) };
+  return { ...s, communityPosts, deleted: withTombstone(s.deleted, "comments", commentId, now.toISOString()) };
 }
 
 // MARK: 계정 귀속

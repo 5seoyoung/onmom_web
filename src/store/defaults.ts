@@ -2,6 +2,7 @@
 // 디코딩(없는 키)·eraseAll·첫 실행이 모두 이 값을 쓴다.
 
 import type { MaternityRecord, PersistedState, UserProfile } from "@/domain/types";
+import { emptyDeleted } from "./tombstones";
 
 export function defaultProfile(): UserProfile {
   return {
@@ -44,5 +45,6 @@ export function initialState(): PersistedState {
     ownerAccountID: null,
     moodChecks: [],
     moodCardSnoozedUntil: null,
+    deleted: emptyDeleted(),
   };
 }

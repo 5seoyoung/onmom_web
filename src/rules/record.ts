@@ -49,20 +49,33 @@ export function buildSymptomRecord(
   now: Date,
 ): { record: Omit<SymptomRecord, "id">; result: RedFlagResult } {
   const postpartumDays = postpartumDayCount(deliveryDate, now);
+  const { values, result } = evaluateSymptomForm(form, postpartumDays);
+  return { record: { date: now.toISOString(), ...values }, result };
+}
+
+/** 기록에서 날짜·id·고친 시각을 뺀 값 — 폼과 규칙이 정하는 칸 */
+export type SymptomRecordValues = Omit<SymptomRecord, "id" | "date" | "updatedAt">;
+
+/**
+ * 폼 + 기록 시점의 산후 일수 → 판정과 기록 칸. 새 기록(buildSymptomRecord)과 고친 기록(rebuildSymptomRecord)이 같은 규칙을 쓴다.
+ * 산후 일수가 null(그 칸이 생기기 전의 옛 기록)이면 오로 답은 그대로 두고 판정에서만 뺀다(metrics의 "판정 보류"와 같다 — 0일로 넘긴다).
+ */
+function evaluateSymptomForm(form: SymptomForm, postpartumDays: number | null): { values: SymptomRecordValues; result: RedFlagResult } {
   // 10일 전에는 오로 질문이 화면에 없다 — 묻지 않은 값이 기록에 남지 않게 한다
-  const asksLochia = showsLochiaInputs(postpartumDays);
+  const asksLochia = postpartumDays === null || showsLochiaInputs(postpartumDays);
+  const lochiaIncreased = asksLochia && form.lochiaIncreased;
+  const lochiaRed = asksLochia && form.lochiaRed;
   const input: SymptomInput = {
     ...form,
-    postpartumDays,
-    lochiaIncreased: asksLochia && form.lochiaIncreased,
-    lochiaRed: asksLochia && form.lochiaRed,
+    postpartumDays: postpartumDays ?? 0,
+    lochiaIncreased,
+    lochiaRed,
     painNrs: clampNrs(form.painNrs),
   };
   const result = checkRedFlags(input);
-  const record: Omit<SymptomRecord, "id"> = {
-    date: now.toISOString(),
-    lochiaIncreased: input.lochiaIncreased,
-    lochiaRed: input.lochiaRed,
+  const values: SymptomRecordValues = {
+    lochiaIncreased,
+    lochiaRed,
     feverEvent: input.feverEvent,
     painNrs: input.painNrs,
     redFlagCode: result.hospitalSignal?.code ?? null,
@@ -70,7 +83,36 @@ export function buildSymptomRecord(
     rulesVersion: result.trace.configVersion,
     ...riskFlagsOf(input),
   };
-  return { record, result };
+  return { values, result };
+}
+
+/** 고치는 기록에서 오로 질문을 보일지 — 그 기록의 산후 일수가 10일 이상이거나, 일수를 모르는 옛 기록(오로 답이 남아 있을 수 있다). */
+export function recordAsksLochia(record: Pick<SymptomRecord, "postpartumDays">): boolean {
+  return record.postpartumDays === null || showsLochiaInputs(record.postpartumDays);
+}
+
+/** 기록 → 폼 값(고치기 화면의 처음 값). 칸이 없는 위험 증상(rules-1.2 전의 기록)은 꺼짐으로 보인다 — 고쳐 저장하면 그때의 답이 남는다. */
+export function formFromRecord(record: SymptomRecord): SymptomForm {
+  return {
+    lochiaIncreased: record.lochiaIncreased,
+    lochiaRed: record.lochiaRed,
+    feverEvent: record.feverEvent,
+    painNrs: clampNrs(record.painNrs),
+    ...(Object.fromEntries(RISK_SYMPTOM_KEYS.map((key) => [key, record[key] === true])) as Record<RiskSymptomKey, boolean>),
+  };
+}
+
+/**
+ * 기록 고치기 — 고친 답으로 지금 규칙을 다시 돌린다(rules-1.2·감사 추적).
+ * - 기록 시각(date)과 기록 시점의 산후 일수(postpartumDays)는 그대로다 — 그날의 기록을 고치는 것이다. 출산일을 나중에 고쳤어도 일수는 바꾸지 않는다.
+ * - 결과(redFlagCode)와 규칙 버전(rulesVersion)은 고친 답으로 지금 규칙이 낸 값이다. 홈·운동 멈춤·PDF 리포트·내려받기가 고친 값을 본다.
+ * - 고친 시각(updatedAt)은 스토어가 붙인다(store/state updateSymptomRecord).
+ */
+export function rebuildSymptomRecord(
+  original: Pick<SymptomRecord, "postpartumDays">,
+  form: SymptomForm,
+): { values: SymptomRecordValues; result: RedFlagResult } {
+  return evaluateSymptomForm(form, original.postpartumDays);
 }
 
 /** 슬라이더 0~10(정수). iOS는 `Int(pain)`으로 소수를 버렸다. 화면 슬라이더(components/ui/numbers.ts)도 이 함수를 쓴다. */
