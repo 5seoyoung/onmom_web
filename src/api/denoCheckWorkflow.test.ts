@@ -42,10 +42,24 @@ describe("supabase.yml — 함수 Deno 타입 검사", () => {
     expect(check).toMatch(/deno-version: \d+\.\d+\.\d+\n/);
   });
 
+  it("내려받기가 잠깐 실패하면 한 번 더 받는다 — 두 번 모두 같은 커밋·같은 버전, 두 번째 실패는 작업 실패", () => {
+    const uses = [...check.matchAll(/uses: (denoland\/setup-deno@[0-9a-f]{40})/g)].map((m) => m[1]);
+    const versions = [...check.matchAll(/deno-version: (\S+)\n/g)].map((m) => m[1]);
+    expect(uses).toHaveLength(2);
+    expect(new Set(uses).size).toBe(1);
+    expect(new Set(versions).size).toBe(1);
+    expect(check).toMatch(/- id: deno\n {8}uses: denoland\/setup-deno@[0-9a-f]{40} # v[\d.]+\n {8}continue-on-error: true\n/);
+    const second = check.slice(check.lastIndexOf("- if: steps.deno.outcome == 'failure'\n        uses:"));
+    expect(second).toContain("uses: denoland/setup-deno@");
+    expect(second).not.toContain("continue-on-error");
+  });
+
   it("PR에서도 돌고, 배포 작업은 이 검사가 통과해야 시작한다", () => {
     const on = YML.slice(YML.indexOf("\non:\n"), YML.indexOf("\npermissions:"));
     expect(on).toMatch(/\n {2}pull_request:\n {4}paths:\n {6}- "supabase\/\*\*"\n/);
-    expect(job("deno-check")).not.toContain("if:"); // 검사는 어느 브랜치·이벤트에서나
+    expect(job("deno-check")).not.toMatch(/\n {4}if:/); // 검사는 어느 브랜치·이벤트에서나(작업 단위 조건 없음)
+    // 이 워크플로를 고친 main 커밋도 배포를 한 번 돌린다
+    expect(on).toMatch(/\n {2}push:\n {4}branches: \[main\]\n {4}paths:\n {6}- "supabase\/\*\*"\n(?: {6}#[^\n]*\n)? {6}- "\.github\/workflows\/supabase\.yml"\n/);
     const deploy = job("deploy");
     expect(deploy).toContain("\n    needs: deno-check\n");
     expect(deploy).toContain("\n    if: github.ref == 'refs/heads/main'\n");

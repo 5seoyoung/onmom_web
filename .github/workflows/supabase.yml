@@ -30,6 +30,8 @@ on:
     branches: [main]
     paths:
       - "supabase/**"
+      # 이 워크플로를 고친 커밋도 한 번 돌아 바뀐 배포 방식이 바로 확인된다
+      - ".github/workflows/supabase.yml"
   # PR에서는 함수 타입 검사(deno-check)만 돈다 — deploy 작업은 main에서만(아래 if). 비밀값을 쓰지 않는다.
   pull_request:
     paths:
@@ -67,7 +69,19 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+      # Deno 내려받기가 잠깐 실패하는 일이 있다(2026-11-08 HTTP 504로 배포가 막힘) — 30초 뒤 한 번 더 받는다.
+      # 두 번째도 실패하면 이 작업이 실패하고 배포는 시작하지 않는다(검사를 건너뛰고 배포하지 않는다).
+      - id: deno
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        continue-on-error: true
+        with:
+          deno-version: 2.9.8
+
+      - if: steps.deno.outcome == 'failure'
+        run: sleep 30
+
+      - if: steps.deno.outcome == 'failure'
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: 2.9.8
 
