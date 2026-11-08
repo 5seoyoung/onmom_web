@@ -1,5 +1,5 @@
 // 브라우저 자동 시험 — 브라우저 전용 빌드(Supabase 값 없음)의 게스트 흐름 전체. docs/DEV_NOTES.md §11.
-// 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 기록(어지러움 → 즉시 내원 + 전체 신호 목록) → 홈 "병원 확인 신호" → 운동 멈춤
+// 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 운동 오늘의 체조 [오늘 했어요] → 기록(어지러움 → 즉시 내원 + 전체 신호 목록) → 홈 "병원 확인 신호" → 운동 멈춤
 // → 이용약관 → 한국어 404 → 시작 주소(/) → 홈 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
 // 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다).
 import { expect, test as base, type Page } from "@playwright/test";
@@ -151,8 +151,31 @@ test("게스트 흐름: 온보딩 → 위험 신호 → 계정 삭제", async ({
   await expect(recovery.getByText("자연분만")).toBeVisible();
   await expect(recovery.getByText("전업")).toBeVisible();
 
-  // 기록 — 어지러움 → 즉시 내원
   const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+
+  // 운동 — 오늘의 체조(40일 = 5주, 자연분만: 코어 깨우기). [오늘 했어요]는 이 브라우저에만 저장된다 — 새로고침 뒤에도 남고, 다시 누르면 취소.
+  // 체크를 남긴 채 끝까지 가서, 계정 삭제가 이 키(onmom.web.exercise.routineChecks.v1)까지 지우는지 마지막 onmomKeys 검사로 본다.
+  await nav.getByRole("link", { name: "운동", exact: true }).click();
+  await expect(page).toHaveURL(/\/exercise\/$/);
+  const routine = page.getByRole("region", { name: "오늘의 체조" });
+  await expect(routine.getByText("코어 깨우기", { exact: true })).toBeVisible();
+  const done = routine.getByRole("button", { name: "오늘 했어요" });
+  await expect(done).toHaveAttribute("aria-pressed", "false");
+  await done.click();
+  await expect(done).toHaveAttribute("aria-pressed", "true");
+  await expect(routine.getByText("이번 주 1일")).toBeVisible();
+  await page.reload();
+  await expect(routine.getByRole("button", { name: "오늘 했어요" })).toHaveAttribute("aria-pressed", "true");
+  await routine.getByRole("button", { name: "오늘 했어요" }).click();
+  await expect(routine.getByRole("button", { name: "오늘 했어요" })).toHaveAttribute("aria-pressed", "false");
+  await expect(routine.getByText("이번 주 1일")).toHaveCount(0);
+  await routine.getByRole("button", { name: "오늘 했어요" }).click();
+  await expect(routine.getByRole("button", { name: "오늘 했어요" })).toHaveAttribute("aria-pressed", "true");
+  expect(await onmomKeys(page)).toContain("onmom.web.exercise.routineChecks.v1");
+  // 서버로 보내는 앱 상태에는 체크가 없다
+  expect(await page.evaluate(() => localStorage.getItem("onmom.web.state.v1") ?? "")).not.toContain("routine");
+
+  // 기록 — 어지러움 → 즉시 내원
   await nav.getByRole("link", { name: "기록", exact: true }).click();
   await expect(page).toHaveURL(/\/record\/$/);
   const dizzy = page.getByRole("switch", { name: "어지러움·실신·균형장애" });

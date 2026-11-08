@@ -9,6 +9,7 @@ import { fetchVideos } from "@/api/video";
 import { useLocalDay } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { ScreenHeader, cx } from "@/components/ui";
+import { toLocalDateString } from "@/domain/date";
 import type { DeliveryMethod, MaternityRecord, PersistedState } from "@/domain/types";
 import { StorageWarning } from "@/features/home/StorageWarning";
 import { useOnline } from "@/features/home/useOnline";
@@ -18,7 +19,8 @@ import { EXERCISE_TEXT, isRedFlagActive, routeTag } from "@/rules/exercise";
 import { useAppStore } from "@/store/useAppStore";
 import { ExerciseBodyView, NeedsProfileBlock, RedFlagBlock } from "./ExerciseBlocks";
 import { TodayRoutineCard } from "./TodayRoutineCard";
-import { todayRoutine } from "./todayRoutine";
+import { routineCheckModel, todayRoutine, type TodayRoutineModel } from "./todayRoutine";
+import { useRoutineChecks } from "./useRoutineChecks";
 import { COLD_START_NOTICE_MS, fetchVideosWithRetry } from "./videoLoad";
 import { YouTubeSection } from "./YouTubeSection";
 import {
@@ -33,16 +35,16 @@ import {
 } from "./exerciseModel";
 
 export function ExerciseScreen() {
-  const { hydrated, state } = useAppStore();
+  const { hydrated, state, storageAvailable } = useAppStore();
   return (
     // 좌우 lg(24) · 위 sm(8) · 항목 간격 md(16) — ExerciseView.swift:30-44. PC 틀은 pageFrame(탭 화면)
     <main className={cx("flex flex-1 flex-col gap-4 px-6 pt-2 pb-6", PAGE_FRAME.wide)}>
-      {hydrated ? <ExerciseContent state={state} /> : <ScreenHeader title={EXERCISE_TEXT.headerTitle} />}
+      {hydrated ? <ExerciseContent state={state} storageAvailable={storageAvailable} /> : <ScreenHeader title={EXERCISE_TEXT.headerTitle} />}
     </main>
   );
 }
 
-function ExerciseContent({ state }: { state: PersistedState }) {
+function ExerciseContent({ state, storageAvailable }: { state: PersistedState; storageAvailable: boolean }) {
   // 산후 주차는 브라우저의 오늘(로컬 달력)로 계산한다 — 빌드 시각이 박히지 않고, 탭을 열어 둔 채 자정이 지나면 주차·잠금이 따라 바뀐다.
   // 서버 렌더·하이드레이션 중에는 null이라 제목만 그린다(이 컴포넌트는 hydrated 뒤에만 마운트된다).
   const today = useLocalDay();
@@ -61,7 +63,7 @@ function ExerciseContent({ state }: { state: PersistedState }) {
     <>
       <ScreenHeader title={EXERCISE_TEXT.headerTitle} subtitle={subtitle ?? undefined} />
       <StorageWarning />
-      {routine.kind === "routine" ? <TodayRoutineCard routine={routine} /> : null}
+      {routine.kind === "routine" ? <TodayRoutineSection routine={routine} today={today} storageAvailable={storageAvailable} /> : null}
       {gate === "needsDelivery" ? (
         <NeedsProfileBlock title={EXERCISE_TEXT.needsDeliveryTitle} body={EXERCISE_TEXT.needsDeliveryBody} />
       ) : gate === "redFlag" ? (
@@ -74,6 +76,28 @@ function ExerciseContent({ state }: { state: PersistedState }) {
       {youtube !== null ? <YouTubeSection section={youtube} /> : null}
     </>
   );
+}
+
+// MARK: - 오늘의 체조
+//
+// [오늘 했어요]는 이 브라우저에만 저장한다(routineChecks.ts — 서버·내려받기에 싣지 않는다). 저장소를 쓸 수 없으면(사생활 보호 모드 등,
+// 앱 스토어 storageAvailable — 맨 위 저장 실패 안내와 같은 판단) 체크를 그리지 않는다.
+
+function TodayRoutineSection({
+  routine,
+  today,
+  storageAvailable,
+}: {
+  routine: Extract<TodayRoutineModel, { kind: "routine" }>;
+  today: Date;
+  storageAvailable: boolean;
+}) {
+  const checks = useRoutineChecks();
+  const check = storageAvailable ? routineCheckModel(checks.dates, today) : null;
+  const onToggleCheck = () => {
+    if (check !== null) checks.setDone(toLocalDateString(today), !check.done);
+  };
+  return <TodayRoutineCard routine={routine} check={check} onToggleCheck={onToggleCheck} />;
 }
 
 // MARK: - 영상 조회 + 본문
