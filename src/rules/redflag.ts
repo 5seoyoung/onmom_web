@@ -9,6 +9,7 @@
 // face_hand_swelling·upper_belly_pain 문구·칩, neuro_flag·cardioresp_flag·dvt_suspect에 더한 출처 칩)
 
 import content from "@/content";
+import { compileTemplate } from "@/content/template";
 import type { MetricStatus, RiskSymptomKey, SymptomRecord } from "@/domain/types";
 import { RULES_VERSION } from "./version";
 
@@ -247,10 +248,14 @@ export const METRIC_STATUS_LABEL = {
   alert: "병원 확인 신호",
 } as const satisfies Record<MetricStatus, string>;
 
+// 지표 이름 — Swift 원문을 content.json ui.home.metric_names로 옮겼다(DEV_NOTES §3 content.json 수정 요청). 원문 위치는 쓰는 줄에 둔다.
+const METRIC_NAMES = content.ui.home.metric_names;
+const PAIN_METRIC_NAME = compileTemplate("ui.home.metric_names.pain_nrs", METRIC_NAMES.pain_nrs, ["nrs"]);
+
 /**
  * 최근 기록 → 홈 회복 지표. 기록이 없으면 빈 배열(카드 숨김).
  * 오로: 기록 당시 일수가 null(구버전 기록)이면 항목은 보이되 판정 보류(normal), 10일 미만이면 항목 없음,
- * 10일 이상이면 판정(RedFlagEngine.swift:57-78). content.json home_metrics.lochia.gate 문구는 틀렸다(감사 #40).
+ * 10일 이상이면 판정(RedFlagEngine.swift:57-78). content.json home_metrics.lochia.gate 설명 글도 이 세 갈래다(감사 #40 — 2026-11-08 고침, version.test.ts가 대조).
  */
 export function metrics(record: SymptomRecord | null | undefined): RecoveryMetric[] {
   if (!record) return [];
@@ -267,12 +272,12 @@ export function metrics(record: SymptomRecord | null | undefined): RecoveryMetri
             ? "watch"
             : "normal";
     }
-    items.push({ name: "오로(분비물)", status: lochia }); // 원문: RedFlagEngine.swift:72
+    items.push({ name: METRIC_NAMES.lochia, status: lochia }); // 원문: RedFlagEngine.swift:72
   }
-  items.push({ name: "발열", status: record.feverEvent ? "alert" : "normal" }); // 원문: RedFlagEngine.swift:74
+  items.push({ name: METRIC_NAMES.fever, status: record.feverEvent ? "alert" : "normal" }); // 원문: RedFlagEngine.swift:74
   const nrs = record.painNrs;
   items.push({
-    name: `통증 NRS ${nrs}/10`, // 원문: RedFlagEngine.swift:75
+    name: PAIN_METRIC_NAME({ nrs }), // 원문: RedFlagEngine.swift:75
     status: nrs >= SEVERE_PAIN_NRS ? "alert" : nrs >= PAIN_WATCH_NRS ? "watch" : "normal",
   });
   return items;

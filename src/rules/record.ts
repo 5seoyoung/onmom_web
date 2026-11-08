@@ -88,11 +88,12 @@ export function addSymptomRecord(history: readonly SymptomRecord[], record: Symp
  * 걸린 신호가 없을 때의 안내 — 제목·본문 두 줄(RecordFlowView.swift:290, :295, 감사 #53).
  * "위험 신호가 없다"고 판정하지 않고, 체크한 항목이 목록과 맞지 않았다는 사실만 말한다(법률 사전 검토 H5 D-17).
  * 웹 신규 문구 — CPO 확인 필요 (content.json disclaimers.record_normal — iOS 원문 "즉시 내원이 필요한 위험 신호는 없어요"를 바꿈)
+ * content.json에는 2026-11-08부터 {title, body}로 둔다(그 전에는 " / "로 이은 한 줄을 여기서 잘랐다 — 감사 #53).
  */
-export const RECORD_NORMAL_RESULT: { title: string; body: string } = (() => {
-  const [title, body = ""] = content.disclaimers.record_normal.split(" / ");
-  return { title, body };
-})();
+export const RECORD_NORMAL_RESULT: { title: string; body: string } = {
+  title: content.disclaimers.record_normal.title,
+  body: content.disclaimers.record_normal.body,
+};
 
 // MARK: 홈 회복 기록 — 전부 가장 최근 기록 하나에서 파생한다(기록이 없으면 지어내지 않는다)
 

@@ -254,18 +254,21 @@ export function analysisSections(
 
 // MARK: - 표시용 라벨 (AnalyzeComponents.swift EngineLabel — 코드는 화면에 그대로 내지 않는다)
 
+/** 단계 라벨 — content.json ui.analyze.stage_labels(키 = 단계 코드) */
+const STAGE_LABELS = content.ui.analyze.stage_labels;
+
 export function stageLabel(code: StageCode): string {
   switch (code) {
     case "0-2w":
-      return "산후 0–2주"; // 원문: AnalyzeComponents.swift:9
+      return STAGE_LABELS["0-2w"]; // 원문: AnalyzeComponents.swift:9
     case "3-4w":
-      return "산후 3–4주"; // 원문: AnalyzeComponents.swift:10
+      return STAGE_LABELS["3-4w"]; // 원문: AnalyzeComponents.swift:10
     case "5-6w":
-      return "산후 5–6주"; // 원문: AnalyzeComponents.swift:11
+      return STAGE_LABELS["5-6w"]; // 원문: AnalyzeComponents.swift:11
     case "7-12w":
-      return "산후 7–12주"; // 원문: AnalyzeComponents.swift:12
+      return STAGE_LABELS["7-12w"]; // 원문: AnalyzeComponents.swift:12
     case "13w+":
-      return "산후 13주+"; // 원문: AnalyzeComponents.swift:13
+      return STAGE_LABELS["13w+"]; // 원문: AnalyzeComponents.swift:13
   }
 }
 

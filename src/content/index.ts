@@ -10,6 +10,18 @@
 //     disclaimers.record_normal(판정이 아니라 정보로), guide_cards "산후 정신건강"의 넷째 요점(109·1577-0199·119),
 //     chat_fallback.replies.mood의 ③(109·119)·replies.bleeding(양 기준·119)·bleeding_keywords, substances의 별칭(B4)과 "안전합니다" 문장·칩도 바꿨다.
 //     JSON에는 주석을 달 수 없어 표시는 쓰는 곳(rules/record·guideContent·rules/chat·rules/substance)에 있다.
+//  3. 2026-11-08 (DEV_NOTES §3 content.json 수정 요청, 화면 글자는 그대로):
+//     home_metrics.lochia.gate 설명 글을 코드의 세 갈래(10일 이상 판정 · 10일 미만 숨김 · 일수 없음은 표시하되 판정 보류)에 맞췄다(감사 #40).
+//     판정에는 쓰이지 않는 설명 글이다 — rules/version.test.ts가 LOCHIA_GATE_DAYS와 대조한다.
+//     disclaimers.record_normal을 " / "로 이은 한 줄에서 {title, body}로 나눴다(쓰는 곳 rules/record, 감사 #53).
+//     weight_plan.loss·recovery.chips의 첫 칩(자리표시 글자 "BMI x.x 또는 임신 전 +x.xkg"·"BMI x.x")을 빼고 계산값 칩의 틀을
+//     chip_templates({bmi}·{kg} — content/template.ts)로 뒀다(쓰는 곳 rules/weight, 감사 #53).
+//     ui 묶음을 더했다 — 코드에 손으로 옮겨 두었던 Swift 화면 문구(감사 #5·#25·#27). 원본 사본에는 없는 키다. 글자는 Swift 원문
+//     그대로이고(화면의 "—"만 1번대로 "-"), 원문 위치(Swift 파일·줄 표시)는 키를 쓰는 줄에 둔다. "{이름}"은 계산값 자리
+//     (content/template.ts가 모듈 로드 때 확인). 웹 신규 문구("CPO 확인 필요" 표시)는 옮기지 않고 코드에 둔다.
+//     화면 글자가 그대로인지는 content/uiCopy.test.ts가 옮기기 전 글자와 대조한다. 쓰는 곳: ui.home.metric_names → rules/redflag,
+//     ui.exercise·ui.profile → rules/exercise, ui.analyze → rules/recovery, ui.substance → rules/substance·features/substance/substanceModel,
+//     ui.chat → rules/chat, ui.support → rules/support.
 import content from "./content.json";
 
 export type Content = typeof content;

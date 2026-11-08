@@ -100,7 +100,8 @@ describe("formatOneDecimal — String(format: \"%.1f\")", () => {
   });
 });
 
-// 감사 #53으로 content.json 칩 자리표시가 바뀌어도 고정 칩("주당 0.5kg", "12개월 복귀")이 조용히 잘려 나가지 않는지 본다.
+// 감사 #53: 계산값 칩은 content.json chip_templates의 틀("BMI {bmi}", "임신 전 +{kg}kg"), 고정 칩은 chips. 형식이 어긋나면
+// 자리가 빠진 칩이나 옛 자리표시("x.x")가 화면에 나가지 않고 모듈 로드 때 실패하는지 본다.
 describe("content.json 칩 형식 방어", () => {
   afterEach(() => {
     vi.doUnmock("@/content");
@@ -115,21 +116,40 @@ describe("content.json 칩 형식 방어", () => {
     return import("./weight");
   }
 
-  it("자리표시가 빠진 감량 칩이면 로드 때 실패", async () => {
-    await expect(
-      loadWith((wp) => ({ ...wp, loss: { ...wp.loss, chips: wp.loss.chips.slice(1) } })),
-    ).rejects.toThrow(/weight_plan\.loss\.chips/);
+  it("지금 형식이면 그대로 불러온다", async () => {
+    await expect(loadWith((wp) => wp)).resolves.toHaveProperty("weightPlan");
   });
 
-  it("자리표시가 빠진 회복 칩이면 로드 때 실패", async () => {
+  it("감량 BMI 틀에 자리가 빠지면 로드 때 실패", async () => {
     await expect(
-      loadWith((wp) => ({ ...wp, recovery: { ...wp.recovery, chips: wp.recovery.chips.slice(1) } })),
-    ).rejects.toThrow(/weight_plan\.recovery\.chips/);
+      loadWith((wp) => ({ ...wp, loss: { ...wp.loss, chip_templates: { ...wp.loss.chip_templates, bmi: "BMI" } } })),
+    ).rejects.toThrow(/weight_plan\.loss\.chip_templates\.bmi/);
   });
 
-  it("자리표시가 첫 칩이 아니면 로드 때 실패", async () => {
+  it("남은 체중 틀에 모르는 자리가 있으면 로드 때 실패", async () => {
     await expect(
-      loadWith((wp) => ({ ...wp, loss: { ...wp.loss, chips: [...wp.loss.chips.slice(1), wp.loss.chips[0]] } })),
+      loadWith((wp) => ({ ...wp, loss: { ...wp.loss, chip_templates: { ...wp.loss.chip_templates, retained: "임신 전 +{bmi}kg" } } })),
+    ).rejects.toThrow(/weight_plan\.loss\.chip_templates\.retained/);
+  });
+
+  it("회복 BMI 틀이 옛 자리표시 글자면 로드 때 실패", async () => {
+    await expect(
+      loadWith((wp) => ({ ...wp, recovery: { ...wp.recovery, chip_templates: { bmi: "BMI x.x" } } })),
+    ).rejects.toThrow(/weight_plan\.recovery\.chip_templates\.bmi/);
+  });
+
+  it("틀이 없으면(옛 형식) 로드 때 실패", async () => {
+    await expect(
+      loadWith((wp) => ({ ...wp, recovery: { ...wp.recovery, chip_templates: undefined as unknown as WP["recovery"]["chip_templates"] } })),
+    ).rejects.toThrow(/weight_plan\.recovery\.chip_templates\.bmi/);
+  });
+
+  it("고정 칩에 옛 자리표시나 틀 자리가 있으면 로드 때 실패", async () => {
+    await expect(
+      loadWith((wp) => ({ ...wp, loss: { ...wp.loss, chips: ["BMI x.x 또는 임신 전 +x.xkg", ...wp.loss.chips] } })),
     ).rejects.toThrow(/weight_plan\.loss\.chips/);
+    await expect(
+      loadWith((wp) => ({ ...wp, recovery: { ...wp.recovery, chips: ["BMI {bmi}", ...wp.recovery.chips] } })),
+    ).rejects.toThrow(/weight_plan\.recovery\.chips\[0\]/);
   });
 });

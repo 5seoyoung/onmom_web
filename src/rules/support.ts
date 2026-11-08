@@ -29,15 +29,14 @@ export interface SupportDomain {
 export const SUPPORT_UNIVERSAL: SupportSolution = content.support_universal;
 export const SUPPORT_DOMAINS: readonly SupportDomain[] = content.support_domains;
 
-/** 화면 문구 — content.json에 없어 Swift 원문을 옮긴다 */
+/** 화면 문구 — Swift 원문을 content.json ui.support로 옮겼다(원문 위치는 각 줄) */
 export const SUPPORT_TEXT = {
-  title: "지원사업 추천", // 원문: SupportProgramView.swift:152
-  intro: "해당되는 항목을 체크하면 상황에 맞는 지원사업을 안내해요.", // 원문: SupportProgramView.swift:110
-  universalTitle: "모든 산모 공통", // 원문: SupportProgramView.swift:116
-  recommendButton: "추천 받기", // 원문: SupportProgramView.swift:128
-  nothingChecked: "체크한 항목이 없어요. 위에서 해당되는 상황을 골라 보세요.", // 원문: SupportProgramView.swift:134
-  // 원문: SupportProgramView.swift:143
-  footer: "전국 공통 정부·지자체 사업 안내입니다. 대상·금액·신청 기간은 거주 지역 보건소·주민센터에서 확인하세요.",
+  title: content.ui.support.title, // 원문: SupportProgramView.swift:152
+  intro: content.ui.support.intro, // 원문: SupportProgramView.swift:110
+  universalTitle: content.ui.support.universal_title, // 원문: SupportProgramView.swift:116
+  recommendButton: content.ui.support.recommend_button, // 원문: SupportProgramView.swift:128
+  nothingChecked: content.ui.support.nothing_checked, // 원문: SupportProgramView.swift:134
+  footer: content.ui.support.footer, // 원문: SupportProgramView.swift:143
 } as const;
 
 /** [추천 받기]는 한 문항 이상 체크했을 때만 누를 수 있다(SupportProgramView.swift:102). */

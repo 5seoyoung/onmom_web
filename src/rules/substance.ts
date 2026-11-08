@@ -53,10 +53,10 @@ export interface SubstanceDeps {
 
 const VERDICTS: readonly SubstanceVerdict[] = ["safe", "caution", "avoid", "unknown"];
 
-// 원문: SubstanceCheckView.swift:137
-const AI_ANSWER_CHIP = "AI 답변";
-// 원문: SubstanceCheckView.swift:139
-const AI_ANSWER_SUFFIX = " (AI 답변이며 진단·처방이 아닙니다. 복용 전 의료진·약사와 상담하세요.)";
+// content.json ui.substance — 원문: SubstanceCheckView.swift:137
+const AI_ANSWER_CHIP = content.ui.substance.ai_answer_chip;
+// content.json ui.substance(앞 공백까지 원문 그대로) — 원문: SubstanceCheckView.swift:139
+const AI_ANSWER_SUFFIX = content.ui.substance.ai_answer_suffix;
 
 export function isSubstanceVerdict(v: unknown): v is SubstanceVerdict {
   return typeof v === "string" && (VERDICTS as readonly string[]).includes(v);
@@ -192,8 +192,8 @@ export function substanceHeader(isBreastfeeding: boolean): { lead: string; note:
       }
     : {
         lead: "약·음식을 입력하면 산후 일반 정보를 보여 드려요.", // 웹 신규 문구 — CPO 확인 필요
-        // 원문: SubstanceCheckView.swift:24
-        note: "프로필이 '모유수유 안 함'으로 되어 있어요. 수유 중이라면 프로필 편집에서 바꿔주세요 - 분류 기준이 달라져요.",
+        // content.json ui.substance — 원문: SubstanceCheckView.swift:24
+        note: content.ui.substance.not_breastfeeding_note,
       };
 }
 

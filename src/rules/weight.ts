@@ -2,6 +2,7 @@
 // 규칙 기반(임상 자문 기준). 허리둘레 기준은 측정이 어려워 제외했다. 문구는 content.json `weight_plan`.
 
 import content from "@/content";
+import { compileTemplate, plainText } from "@/content/template";
 import type { UserProfile } from "@/domain/types";
 
 type WeightFields = Pick<UserProfile, "heightCm" | "currentWeightKg" | "prePregnancyWeightKg">;
@@ -49,20 +50,25 @@ export interface WeightPlan {
   chips: string[];
 }
 
-// content.json weight_plan.*.chips[0]은 계산값 자리표시("BMI x.x …")이고 나머지가 고정 칩이다. Swift는 고정 칩 목록 맨 앞에
-// 계산한 칩을 넣는다(Models.swift:152-154, :163). 자리표시 형식이 바뀌면(감사 #53) 고정 칩을 잘못 자르지 않도록
-// 위치를 가정하지 않고 확인한 뒤, 어긋나면 모듈 로드(정적 빌드) 때 실패시킨다.
-const PLACEHOLDER = "x.x";
+// content.json weight_plan.*.chip_templates는 계산값 칩의 틀("BMI {bmi}", "임신 전 +{kg}kg")이고 chips는 고정 칩이다. Swift는 고정 칩
+// 목록 맨 앞에 계산한 칩을 넣는다(Models.swift:152-154, :163). 2026-11-08 전에는 chips[0]이 자리표시 글자("BMI x.x 또는 임신 전 +x.xkg")였고
+// 여기서 잘라 냈다(감사 #53). 틀·칩 형식이 바뀌면 자리가 빠진 칩이나 옛 자리표시가 화면에 나가지 않도록 모듈 로드(정적 빌드) 때 실패시킨다.
+const LEGACY_PLACEHOLDER = "x.x";
 
 function fixedChips(chips: readonly string[], key: string): string[] {
-  if (!chips[0]?.includes(PLACEHOLDER) || chips.slice(1).some((c) => c.includes(PLACEHOLDER))) {
-    throw new Error(
-      `content.json weight_plan.${key}.chips 형식이 바뀌었습니다 — 첫 칩만 '${PLACEHOLDER}' 자리표시여야 합니다 (src/rules/weight.ts)`,
-    );
-  }
-  return chips.slice(1);
+  return chips.map((c, i) => {
+    if (c.includes(LEGACY_PLACEHOLDER)) {
+      throw new Error(
+        `content.json weight_plan.${key}.chips 형식이 바뀌었습니다 — 고정 칩에 '${LEGACY_PLACEHOLDER}' 자리표시가 있으면 안 됩니다(계산값 칩은 chip_templates) (src/rules/weight.ts)`,
+      );
+    }
+    return plainText(`weight_plan.${key}.chips[${i}]`, c);
+  });
 }
 
+const LOSS_BMI_CHIP = compileTemplate("weight_plan.loss.chip_templates.bmi", content.weight_plan.loss.chip_templates?.bmi, ["bmi"]);
+const LOSS_RETAINED_CHIP = compileTemplate("weight_plan.loss.chip_templates.retained", content.weight_plan.loss.chip_templates?.retained, ["kg"]);
+const RECOVERY_BMI_CHIP = compileTemplate("weight_plan.recovery.chip_templates.bmi", content.weight_plan.recovery.chip_templates?.bmi, ["bmi"]);
 const LOSS_FIXED_CHIPS = fixedChips(content.weight_plan.loss.chips, "loss");
 const RECOVERY_FIXED_CHIPS = fixedChips(content.weight_plan.recovery.chips, "recovery");
 
@@ -81,12 +87,12 @@ export function weightPlan(p: WeightFields): WeightPlan | null {
   if (overBMI || overRetained) {
     const { title, detail } = content.weight_plan.loss;
     const lead = overBMI
-      ? [`BMI ${formatOneDecimal(b)}`] // 원문: Models.swift:153
+      ? [LOSS_BMI_CHIP({ bmi: formatOneDecimal(b) })] // 원문: Models.swift:153
       : retained != null
-        ? [`임신 전 +${formatOneDecimal(retained)}kg`] // 원문: Models.swift:154
+        ? [LOSS_RETAINED_CHIP({ kg: formatOneDecimal(retained) })] // 원문: Models.swift:154
         : [];
     return { kind: "loss", title, detail, chips: [...lead, ...LOSS_FIXED_CHIPS] };
   }
   const { title, detail } = content.weight_plan.recovery;
-  return { kind: "recovery", title, detail, chips: [`BMI ${formatOneDecimal(b)}`, ...RECOVERY_FIXED_CHIPS] }; // 원문: Models.swift:163
+  return { kind: "recovery", title, detail, chips: [RECOVERY_BMI_CHIP({ bmi: formatOneDecimal(b) }), ...RECOVERY_FIXED_CHIPS] }; // 원문: Models.swift:163
 }
