@@ -77,7 +77,7 @@ export interface EngineOutput {
   meta: { engineVersion: string; generatedAt: string };
 }
 
-/** 호출하는 쪽이 `GET /videos?include={routeTag(delivery)}&limit=500`로 받아 온 결과 */
+/** 호출하는 쪽이 routeTag(delivery)의 영상 목록(limit 500 — api/video.ts fetchVideos)으로 받아 온 결과 */
 export type VideoFetchResult =
   | { state: "ok"; videos: readonly Video[] }
   | { state: "notConfigured" }

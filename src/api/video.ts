@@ -1,17 +1,19 @@
 // Video DB 조회 — iOS VideoDBClient.swift 이식.
-// GET …/videos?include=<route 태그>&limit=500 → { count, videos: [{ video_id, title, url, description, tags }] }
+// 결과: { count, videos: [{ video_id, title, url, description, tags }] }
 // 서버는 태그만 거르고, 주차 게이팅·금기는 앱 규칙이 한다(ExerciseRules). 그래서 라우트 전체(limit 500)를 받는다.
 //
 // 어디로 묻나
-// - Supabase가 설정된 빌드: Edge Function "videos"(`{functionsURL}/videos`, apikey = 공개 키). 영상 서버(Render)에 CORS가 없어
-//   브라우저가 직접 부를 수 없기 때문이다. 함수는 잠든 영상 서버를 깨우느라 40초까지 기다리므로 웹도 그만큼 기다린다.
-//   로그인 토큰은 보내지 않는다 — 공개 목록이고, 누가 요청했는지 함수가 알 필요가 없다.
-// - 설정이 없는 빌드(브라우저 전용): 예전처럼 NEXT_PUBLIC_VIDEO_URL을 직접 부른다.
+// - Supabase가 설정된 빌드: Edge Function "videos"에 POST `{functionsURL}/videos` 본문 { include: <route 태그>, limit: 500 }
+//   (apikey = 공개 키). 영상 서버(Render)에 CORS가 없어 브라우저가 직접 부를 수 없기 때문이다. 함수는 잠든 영상 서버를 깨우느라
+//   40초까지 기다리므로 웹도 그만큼 기다린다. 로그인 토큰은 보내지 않는다 — 공개 목록이고, 누가 요청했는지 함수가 알 필요가 없다.
+//   태그를 주소(쿼리)가 아니라 본문에 싣는다 — 함수 요청 주소는 Supabase 플랫폼의 요청 기록에 접속 IP와 함께 남기 때문이다
+//   (2026-11, 예전 GET ?include=&limit=는 함수가 당분간 함께 받는다 — supabase/functions/videos/handler.ts). POST 응답은 캐시되지 않는다.
+// - 설정이 없는 빌드(브라우저 전용): 예전처럼 NEXT_PUBLIC_VIDEO_URL을 직접 부른다 — GET …/videos?include=<route 태그>&limit=500.
+//   이 URL은 서버 접근 로그에 남으므로 분석·모니터링 도구가 네트워크 URL을 수집한다면 온맘 API 요청은 제외하거나 쿼리를 지운다(검수 #49).
 //
-// 서버로 나가는 사용자 정보는 분만 방식 라우트 태그 하나뿐이다(URL 쿼리). 이 URL은 서버 접근 로그에 남으므로
-// 분석·모니터링 도구가 네트워크 URL을 수집한다면 온맘 API 요청은 제외하거나 쿼리를 지운다(검수 #49).
-// Supabase 함수로 물을 때는 두 라우트를 늘 함께 묻는다 — 함수 요청 주소는 Supabase 요청 기록에 접속 IP와 함께 남으므로,
-// 누구나 같은 두 요청을 보내 주소만으로 그 사람의 분만 방식을 알 수 없게 한다(다른 쪽 응답은 쓰지 않는다).
+// 서버로 나가는 사용자 정보는 분만 방식 라우트 태그 하나뿐이다.
+// Supabase 함수로 물을 때는 두 라우트를 늘 같은 순서로 함께 묻는다 — 요청 수·순서만으로도 그 사람의 분만 방식을 알 수 없게
+// 누구나 같은 두 요청을 보낸다(다른 쪽 응답은 쓰지 않는다).
 // 응답의 url은 신뢰하지 않는다 — 링크로 만들 때 safeExternalUrl을 거친다(검수 #51).
 
 import { EXERCISE_TEXT, routeTag, VIDEO_QUERY_LIMIT, type Video } from "@/rules/exercise";
@@ -78,6 +80,7 @@ const fail = (kind: VideoFailureKind, status?: number): FetchVideosResult => ({
 /** 두 분만 라우트 태그 — Supabase 함수로 물을 때는 늘 둘 다 묻는다(머리말) */
 export const VIDEO_ROUTE_TAGS: readonly string[] = [routeTag("vaginal"), routeTag("cesarean")];
 
+/** 직접 호출(영상 서버) — GET 쿼리 */
 function withVideoQuery(base: URL, tag: string): string {
   const url = new URL(base.toString());
   url.searchParams.append("include", tag);
@@ -85,9 +88,14 @@ function withVideoQuery(base: URL, tag: string): string {
   return url.toString();
 }
 
+/** Edge Function videos의 POST 본문 — 함수 _shared/videos.ts parseVideoBody가 받는 모양(이 두 필드뿐) */
+export function videoRequestBody(tag: string): { include: string; limit: number } {
+  return { include: tag, limit: VIDEO_LIMIT };
+}
+
 /**
  * 분만 방식 라우트 태그(route_vaginal_delivery / route_cesarean_section)로 영상 목록을 받는다.
- * 태그 매핑은 규칙 모듈 몫이다. Supabase가 설정돼 있으면 Edge Function을, 아니면 NEXT_PUBLIC_VIDEO_URL을 부른다.
+ * 태그 매핑은 규칙 모듈 몫이다. Supabase가 설정돼 있으면 Edge Function을(POST 본문), 아니면 NEXT_PUBLIC_VIDEO_URL을(GET 쿼리) 부른다.
  * 함수가 영상 서버 실패를 502로 알리면 server, 연결 실패·시간 초과는 network다.
  * 미설정 확인이 먼저다(iOS ExerciseRules.swift:132) — 미설정 빌드에서는 어떤 입력이든 notConfigured로 끝나고 던지지 않는다.
  * 설정된 상태에서 빈 태그는 호출자 버그다: 보내면 두 라우트 영상이 섞이므로 TypeError로 거부한다.
@@ -101,9 +109,10 @@ export async function fetchVideos(includeTag: string, opts: FetchVideosOptions =
 
   const headers: Record<string, string> = { Accept: "application/json" };
   if (proxy && cfg.supabaseKey) headers.apikey = cfg.supabaseKey;
-  const get = (tag: string) =>
-    requestJson(withVideoQuery(url, tag), {
-      method: "GET",
+  const ask = (tag: string) =>
+    requestJson(proxy ? url.toString() : withVideoQuery(url, tag), {
+      // 함수에는 태그를 본문으로(주소에 남지 않게 — 머리말), 영상 서버에는 예전처럼 쿼리로
+      ...(proxy ? { method: "POST" as const, body: videoRequestBody(tag) } : { method: "GET" as const }),
       headers,
       timeoutMs: opts.timeoutMs ?? (proxy ? VIDEO_PROXY_TIMEOUT_MS : VIDEO_TIMEOUT_MS),
       signal: opts.signal,
@@ -114,7 +123,7 @@ export async function fetchVideos(includeTag: string, opts: FetchVideosOptions =
 
   // 머리말 — 함수로 물을 때는 두 라우트를 늘 같은 순서로 묻고 내 라우트 응답만 쓴다(순서로도 분만 방식이 드러나지 않게. requestJson은 실패를 던지지 않는다)
   const asked = proxy && VIDEO_ROUTE_TAGS.includes(includeTag) ? VIDEO_ROUTE_TAGS : [includeTag];
-  const responses = asked.map((tag) => get(tag));
+  const responses = asked.map((tag) => ask(tag));
   const res = await responses[asked.indexOf(includeTag)];
   if (!res.ok) return res.kind === "status" ? fail("server", res.status) : fail("network");
   // iOS는 디코딩 실패도 unreachable로 묶는다(VideoDBClient.swift:66-67)
