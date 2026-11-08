@@ -44,9 +44,14 @@ describe("NearbyClinics — 놓이는 자리의 폭(layout)", () => {
     expect(stack).not.toContain("lg:");
   });
 
-  it("wide는 PC(lg)에서만 입력·안내를 읽기 폭(읽기 화면의 글줄과 같은 READING_BLOCK)으로 — 폰 마크업은 기본과 같다", () => {
+  it("wide는 PC(lg)에서만 묶음 전체를 읽기 폭(읽기 화면의 글줄과 같은 READING_BLOCK)으로 — 폰 마크업은 기본과 같다", () => {
     expect(wide).toContain(READING_BLOCK);
     expect(phoneOnly(wide)).toBe(stack);
+  });
+
+  it("wide의 읽기 폭은 맨 바깥 묶음에 한 번만 — 입력 카드·안내·지도·병원 목록이 같은 폭(지도·목록이 검색 카드보다 넓지 않게)", () => {
+    expect(wide.startsWith(`<div class="flex w-full flex-col gap-4 ${READING_BLOCK}">`)).toBe(true);
+    expect(wide.split(READING_BLOCK)).toHaveLength(2);
   });
 });
 
