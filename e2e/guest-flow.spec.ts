@@ -1,58 +1,10 @@
 // 브라우저 자동 시험 — 브라우저 전용 빌드(Supabase 값 없음)의 게스트 흐름 전체. docs/DEV_NOTES.md §11.
 // 시작 주소(/) → 로그인 → 게스트 → 온보딩 4단계 → 홈 "N일차" → 운동 오늘의 체조 [오늘 했어요] → 기록(어지러움 → 즉시 내원 + 전체 신호 목록) → 홈 "병원 확인 신호" → 운동 멈춤
 // → 이용약관 → 한국어 404 → 시작 주소(/) → 홈 → 설정 > 계정 삭제 → 로그인, onmom.web.* 키 없음.
-// 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다).
-import { expect, test as base, type Page } from "@playwright/test";
+// 모든 시험에서: 콘솔 오류·페이지 예외 0개, 이 사이트 밖으로 나가는 요청 0개(브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다 — e2e/support/fixtures.ts).
+import type { Page } from "@playwright/test";
 import { isBrowserOnlyBuild, seoulDateDaysAgo } from "./helpers";
-
-/** 이 사이트(시험 서버) 밖 주소인지 — 밖으로 나가는 요청은 막고 기록한다 */
-function isExternal(url: string, baseURL: string): boolean {
-  if (url.startsWith("data:") || url.startsWith("blob:")) return false;
-  return new URL(url).origin !== new URL(baseURL).origin;
-}
-
-interface Guard {
-  /** 이 주소의 404 응답이 콘솔에 남기는 "Failed to load resource" 한 줄만 허용 — 없는 주소를 일부러 여는 단계용 */
-  allowNotFound(url: string): void;
-}
-
-const test = base.extend<{ guard: Guard }>({
-  guard: [
-    async ({ page, baseURL }, use) => {
-      const errors: string[] = [];
-      const external: string[] = [];
-      const allowed404 = new Set<string>();
-      page.on("console", (m) => {
-        if (m.type() !== "error") return;
-        // 없는 주소는 GitHub Pages처럼 상태 404로 404.html을 준다 — Chromium은 문서 자체의 404를 콘솔 오류로 남긴다.
-        if (m.text().startsWith("Failed to load resource") && allowed404.has(m.location().url)) return;
-        errors.push(`${m.text()} @ ${m.location().url}`);
-      });
-      page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
-      // CSP(src/csp.ts) 위반도 오류로 센다 — 콘솔 문구에 기대지 않고 securitypolicyviolation 이벤트를 직접 받는다.
-      await page.exposeBinding("__onmomCspViolation", (_src, v: string) => {
-        errors.push(`csp: ${v}`);
-      });
-      await page.addInitScript(() => {
-        document.addEventListener("securitypolicyviolation", (e) => {
-          const w = window as unknown as { __onmomCspViolation?: (v: string) => void };
-          w.__onmomCspViolation?.(`${e.effectiveDirective} ${e.blockedURI}`);
-        });
-      });
-      await page.context().route(
-        (url) => isExternal(url.href, baseURL!),
-        (route) => {
-          external.push(route.request().url());
-          return route.abort("blockedbyclient");
-        },
-      );
-      await use({ allowNotFound: (url) => allowed404.add(url) });
-      expect(errors, "콘솔 오류·페이지 예외").toEqual([]);
-      expect(external, "사이트 밖으로 나간 요청").toEqual([]);
-    },
-    { auto: true },
-  ],
-});
+import { expect, test } from "./support/fixtures";
 
 async function onmomKeys(page: Page): Promise<string[]> {
   return page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("onmom.web.")));
