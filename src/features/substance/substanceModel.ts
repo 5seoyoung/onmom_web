@@ -2,11 +2,12 @@
 // 판정은 rules/substance의 출처 있는 표가 한다. AI는 쓰지 않는다(2026-11-06 대표 결정 — 표에 없는 항목에 AI가 판정을 매기지 않게, 사전 검토 H5·D-10):
 // 표에 없는 항목은 표의 "정보 부족"으로 끝난다. Edge Function chat도 preset "substance"를 거절한다. 여기서는 "어떤 배지·칩으로 그릴지"만 정한다.
 
+import content from "@/content";
 import { lookupSubstance, normalizeSubstanceQuery, verdictLabel, type SubstanceResult, type SubstanceVerdict } from "@/rules/substance";
 
 /** 화면 문구 중 페이지(src/app/(app)/substance/page.tsx — 문서 제목)와 화면이 함께 쓰는 것 */
 export const SUBSTANCE_TEXT = {
-  title: "약물·음식 체크", // 원문: SubstanceCheckView.swift:56
+  title: content.ui.substance.title, // 원문: SubstanceCheckView.swift:56
   // 웹 신규 문구 — CPO 확인 필요 (화면에 늘 보이는 안내 — 일반 정보이고 복용 전 상담이 필요함을 고정으로 말한다. 임상 사전 검토 B4, 법률 사전 검토 4-2)
   generalNote: "공개 자료를 정리한 일반 정보예요. 약이나 음식을 먹기 전에 의사·약사와 상담하세요.",
 } as const;

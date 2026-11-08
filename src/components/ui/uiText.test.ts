@@ -58,6 +58,6 @@ describe("문구 모듈로 옮긴 글자 — 보이는 글자는 그대로", () 
     expect(ui.match(/웹 신규 문구 — CPO 확인 필요/g)).toHaveLength(2);
     expect(read("../../features/meta/shareMeta.ts")).toMatch(/웹 신규 문구 — CPO 확인 필요[^\n]*\nexport const APP_DESCRIPTION/);
     expect(read("../../features/chat/chatModel.ts")).toContain('title: "AI 상담", // 원문: ChatView.swift:51');
-    expect(read("../../features/substance/substanceModel.ts")).toContain('title: "약물·음식 체크", // 원문: SubstanceCheckView.swift:56');
+    expect(read("../../features/substance/substanceModel.ts")).toContain("title: content.ui.substance.title, // 원문: SubstanceCheckView.swift:56");
   });
 });
