@@ -249,9 +249,9 @@ describe("Swift 원문", () => {
       { value: "cesarean", title: "제왕절개" },
     ]);
     expect(DELIVERY_OPTIONS.every((o) => !("subtitle" in o))).toBe(true);
-    expect(GOAL_OPTIONS.map((o) => [o.title, o.subtitle])).toEqual([
-      ["전업", "복직 일정 없이 회복에 집중해요"],
-      ["복직 예정", "복직 예정일까지 남은 기간을 홈에서 확인해요"],
+    expect(GOAL_OPTIONS).toEqual([
+      { value: "homemaker", title: "전업", subtitle: "복직 일정 없이 회복에 집중해요" },
+      { value: "returningToWork", title: "복직 예정", subtitle: "복직 예정일까지 남은 기간을 홈에서 확인해요" },
     ]);
   });
 

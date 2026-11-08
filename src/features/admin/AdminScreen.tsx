@@ -449,13 +449,13 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           </span>
         </p>
 
-        {/* 방금 한 일(계정 삭제 완료) — 화면 낭독기에도 읽히고, 삭제 뒤 포커스가 여기로 온다(tabIndex -1: 탭 순서에는 없다). 비어 있으면 자리도 없다. */}
+        {/* 방금 한 일(계정 삭제 완료) — 화면 낭독기에도 읽히고, 삭제 뒤 포커스가 여기로 온다(tabIndex -1: 탭 순서에는 없고 링도 없다 — globals.css). 비어 있으면 자리도 없다. */}
         <div
           ref={noticeRef}
           tabIndex={-1}
           role="status"
           aria-live="polite"
-          className="empty:hidden rounded-chip bg-surface px-4 py-3 text-[0.8125rem] font-semibold text-text-primary ring-1 ring-divider focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          className="empty:hidden rounded-chip bg-surface px-4 py-3 text-[0.8125rem] font-semibold text-text-primary ring-1 ring-divider"
         >
           {notice}
         </div>

@@ -279,6 +279,23 @@ describe("decodePersisted — 모르는 값·틀린 타입", () => {
     expect(s.profile.goal).toBeNull();
   });
 
+  it("아는 분만 방식·목표는 그대로 — 받는 값은 Swift allCases 둘씩뿐(대소문자·서버 표기는 모르는 값)", () => {
+    for (const deliveryMethod of ["vaginal", "cesarean"]) {
+      expect(decodePersisted({ profile: { deliveryMethod } }, deps()).profile.deliveryMethod).toBe(deliveryMethod);
+    }
+    for (const goal of ["homemaker", "returningToWork"]) {
+      expect(decodePersisted({ profile: { goal } }, deps()).profile.goal).toBe(goal);
+    }
+    for (const [deliveryMethod, goal] of [
+      ["Vaginal", "Homemaker"],
+      ["c_section", "returning_to_work"],
+      ["", ""],
+    ]) {
+      const p = decodePersisted({ profile: { deliveryMethod, goal } }, deps()).profile;
+      expect([p.deliveryMethod, p.goal]).toEqual([null, null]);
+    }
+  });
+
   it("모르는 기분 답은 unsure(신호로 세지 않음)", () => {
     const s = decodePersisted(
       { moodChecks: [{ id: "a", answer: "maybe" }, { id: "b", answer: 1 }, { id: "c", answer: "yes" }] },

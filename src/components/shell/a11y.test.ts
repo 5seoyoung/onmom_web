@@ -113,6 +113,27 @@ describe("globals.css — 확대·움직임 줄이기·포커스", () => {
     expect(css.replace(/@layer base\s*\{[\s\S]*?\n\}/, "")).not.toMatch(/:focus-visible/);
   });
 
+  it("초점만 옮겨 받는 상자(tabIndex -1)는 링이 없다 — 한 곳(base 층)에서, 컨트롤 링 규칙 뒤에", () => {
+    const layer = stripComments(/@layer base\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "");
+    const ring = layer.search(/(^|\n)\s*:focus-visible\s*\{/);
+    const programmatic = layer.search(/\[tabindex="-1"\]:focus-visible\s*\{\s*outline: none;\s*\}/);
+    expect(ring).toBeGreaterThanOrEqual(0);
+    expect(programmatic).toBeGreaterThan(ring);
+  });
+
+  it("tabIndex -1 상자에 링을 다시 켜는 유틸리티가 없다(화면마다 다르지 않게)", () => {
+    const files = walk(SRC).filter((f) => f.endsWith(".tsx"));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const src = stripComments(readFileSync(file, "utf8"));
+      // tabIndex={-1}(또는 조건부 -1)이 있는 JSX 여는 태그 — 속성 안에 ">"가 없는 범위만 본다
+      for (const m of src.matchAll(/<[A-Za-z][^<>]*tabIndex=\{[^}]*-1[^}]*\}[^<>]*>/g)) {
+        if (/(focus|focus-visible):outline-(?!none)/.test(m[0])) offenders.push(`${relative(SRC, file)}: ${m[0].slice(0, 80)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("글씨 확대를 막지 않는다(text-size-adjust 100%, px 고정 font-size 없음)", () => {
     expect(css).toContain("-webkit-text-size-adjust: 100%");
     expect(css).not.toMatch(/font-size:\s*\d+px/);

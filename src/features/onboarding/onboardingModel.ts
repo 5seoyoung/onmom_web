@@ -15,7 +15,14 @@
 //   동의 단계만 보이고, 동의하면 동의 칸만 저장한 뒤 앱 홈(ROUTES.home)으로 간다(다른 프로필 값은 건드리지 않는다).
 
 import { CURRENT_CONSENT_VERSION } from "@/domain/consent";
-import type { DeliveryMethod, IsoDateTimeString, LocalDateString, RecoveryGoal, UserProfile } from "@/domain/types";
+import {
+  RECOVERY_GOALS,
+  type DeliveryMethod,
+  type IsoDateTimeString,
+  type LocalDateString,
+  type RecoveryGoal,
+  type UserProfile,
+} from "@/domain/types";
 import { parseLocalDate } from "@/domain/date";
 import { ROUTES } from "@/routes";
 import { GOAL_TITLE } from "@/rules/exercise";
@@ -125,11 +132,21 @@ export const ONBOARDING_TEXT = {
 // 분만 방식 선택지는 rules/exercise.ts DELIVERY_OPTIONS(분석·프로필 편집과 같은 배열).
 // 온보딩 행은 아이콘·제목만 보여준다(OnboardingFlowView.swift:169-175 SelectableRow에 subtitle 없음).
 
-/** 목표 선택지 — Models.swift:32-48(RecoveryGoal.allCases). 제목은 rules/exercise.ts GOAL_TITLE. */
-export const GOAL_OPTIONS: ReadonlyArray<{ value: RecoveryGoal; title: string; subtitle: string }> = [
-  { value: "homemaker", title: GOAL_TITLE.homemaker, subtitle: "복직 일정 없이 회복에 집중해요" }, // 원문: Models.swift:39, 45
-  { value: "returningToWork", title: GOAL_TITLE.returningToWork, subtitle: "복직 예정일까지 남은 기간을 홈에서 확인해요" }, // 원문: Models.swift:40, 46
-];
+/** 목표 부제(RecoveryGoal.subtitle) — 온보딩 선택 행에만 보인다. */
+const GOAL_SUBTITLE: Readonly<Record<RecoveryGoal, string>> = {
+  homemaker: "복직 일정 없이 회복에 집중해요", // 원문: Models.swift:45
+  returningToWork: "복직 예정일까지 남은 기간을 홈에서 확인해요", // 원문: Models.swift:46
+};
+
+/**
+ * 목표 선택지 — 순서는 domain/types.ts RECOVERY_GOALS(Models.swift:32-48 RecoveryGoal.allCases),
+ * 제목은 rules/exercise.ts GOAL_TITLE(Models.swift:39-40), 부제는 GOAL_SUBTITLE.
+ */
+export const GOAL_OPTIONS: ReadonlyArray<{ value: RecoveryGoal; title: string; subtitle: string }> = RECOVERY_GOALS.map((value) => ({
+  value,
+  title: GOAL_TITLE[value],
+  subtitle: GOAL_SUBTITLE[value],
+}));
 
 // MARK: - 규칙
 

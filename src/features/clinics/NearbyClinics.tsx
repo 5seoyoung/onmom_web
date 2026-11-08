@@ -4,8 +4,8 @@
 // 동네 입력 카드 → 안내문 → (찾는 중 | 오류 카드 | 지도 + 병원 목록). 기기 위치 권한은 쓰지 않는다.
 // 동네 값은 부모가 프로필(profile.neighborhood)과 묶어 넘긴다(RecordFlowView.swift:273-276, RegionResourcesView.swift:11).
 // 카카오 JS 키가 없으면 입력·안내문은 그대로 두고 "준비 중" 카드만 보인다(D6).
-// PC(lg 이상), 넓은 자리(layout="wide" — 지역 연계 화면): 입력·안내는 읽기 폭(READING_BLOCK — 읽기 화면의 글줄과 같은 45rem),
-// 병원 목록은 두 열.
+// PC(lg 이상), 넓은 자리(layout="wide" — 지역 연계 화면): 입력·안내·지도·병원 목록 모두 읽기 폭(READING_BLOCK — 읽기 화면의
+// 글줄과 같은 45rem)으로 같은 오른쪽 끝을 갖고, 병원 목록은 그 안에서 두 열(전에는 지도·목록만 본문 폭 전부라 검색 카드보다 넓었다).
 // 지도 높이는 그대로 둔다(크기가 바뀌면 SDK relayout이 필요하다).
 // 기록 결과처럼 좁은 열 안에서는 기본값(layout="stack") — 폰과 같은 한 줄이다.
 // 오프라인(navigator.onLine=false)이면 검색 실패 카드 문구를 오프라인 안내로 바꾼다(clinicsErrorMessage) — 검색 자체는 막지 않는다.
@@ -37,10 +37,13 @@ export interface NearbyClinicsProps {
   layout?: "stack" | "wide";
 }
 
-/** PC(lg)에서 넓은 자리일 때만 붙는 클래스 — 폰은 어느 쪽이든 같다 */
+/**
+ * PC(lg)에서 넓은 자리일 때만 붙는 클래스 — 폰은 어느 쪽이든 같다. 폭은 묶음 전체(입력·안내·지도·목록)에 한 번만 붙인다.
+ * 목록 두 열: 각 칸(li)도 grid라 병원 카드가 칸 높이를 채운다 — 이름이 길어 한 줄을 넘는 카드가 있어도 같은 줄의 카드 높이가 같다.
+ */
 const WIDE = {
-  field: READING_BLOCK,
-  list: "lg:grid lg:grid-cols-2",
+  column: READING_BLOCK,
+  list: "lg:grid lg:grid-cols-2 lg:*:grid",
 } as const;
 
 export function NearbyClinics({ address, onAddressChange, layout = "stack" }: NearbyClinicsProps) {
@@ -71,8 +74,8 @@ export function NearbyClinics({ address, onAddressChange, layout = "stack" }: Ne
   }
 
   return (
-    <div className="flex w-full flex-col gap-4">
-      <Card className={cx(wide && WIDE.field)}>
+    <div className={cx("flex w-full flex-col gap-4", wide && WIDE.column)}>
+      <Card>
         <form role="search" aria-labelledby={titleId} onSubmit={handleSubmit} className="flex flex-col gap-2">
           <SectionTitle id={titleId}>{CLINICS_TEXT.addressTitle}</SectionTitle>
           <div className="flex items-center gap-2">
@@ -98,7 +101,7 @@ export function NearbyClinics({ address, onAddressChange, layout = "stack" }: Ne
         </form>
       </Card>
 
-      <div className={cx("w-full", wide && WIDE.field)}>
+      <div className="w-full">
         <p className="text-[0.8125rem] text-text-secondary">{CLINICS_TEXT.intro}</p>
         {/* 상태(찾는 중·오류·준비 중)는 늘 있는 live region 안에서 바뀐다 — 스크린리더가 검색 결과 상태를 듣게.
             비어 있을 때 간격이 생기지 않도록 위 간격(16)은 안쪽 요소가 갖는다. */}

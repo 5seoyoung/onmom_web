@@ -15,12 +15,11 @@ import { useNow } from "@/components/clock";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, MeasurementField, PrimaryButton, SectionTitle, Toggle, cx } from "@/components/ui";
 import { toLocalDateString } from "@/domain/date";
-import type { MaternityRecord } from "@/domain/types";
+import { RECOVERY_GOALS, type MaternityRecord } from "@/domain/types";
 import { useAppStore } from "@/store/useAppStore";
 import { DELIVERY_OPTIONS, GOAL_TITLE } from "@/rules/exercise";
 import { LeaveSubPageHeader, useLeaveSubPage, type SubPageExit } from "@/features/profile/LeaveSubPage";
 import {
-  GOAL_OPTIONS,
   MATERNITY_TOGGLES,
   PROFILE_EDIT_TEXT,
   SETTINGS_HREF,
@@ -130,7 +129,7 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
         <SegmentedChoice
           legend={PROFILE_EDIT_TEXT.goal}
           name={ids.goalName}
-          options={GOAL_OPTIONS.map((v) => ({ value: v, label: GOAL_TITLE[v] }))}
+          options={RECOVERY_GOALS.map((v) => ({ value: v, label: GOAL_TITLE[v] }))}
           value={draft.goal}
           onChange={(v) => set("goal", v)}
         />
