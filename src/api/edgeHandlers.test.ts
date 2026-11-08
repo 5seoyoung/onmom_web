@@ -17,6 +17,7 @@ import {
   type LlmCallResult,
   type VerifiedUser,
 } from "../../supabase/functions/chat/handler";
+import { VIDEO_MAX_BODY_BYTES } from "../../supabase/functions/_shared/videos";
 import { createVideosHandler, type VideosLogEntry } from "../../supabase/functions/videos/handler";
 
 const SITE = "https://5seoyoung.github.io";
@@ -626,57 +627,90 @@ describe("Edge Function videos", () => {
   }
 
   const ok = () => Promise.resolve(Response.json({ count: 1, videos: [video] }));
+  const URL_BASE = "https://proj.supabase.co/functions/v1/videos";
   const get = (query: string, origin: string | null = SITE, method = "GET") =>
-    new Request(`https://proj.supabase.co/functions/v1/videos${query}`, {
+    new Request(`${URL_BASE}${query}`, {
       method,
       headers: origin ? { Origin: origin, apikey: "sb_publishable_x" } : {},
     });
+  /** 웹(src/api/video.ts)이 보내는 모양 — 태그는 본문에만. body가 문자열이면 그대로 보낸다(JSON이 아닌 본문 시험) */
+  const post = (body: unknown, origin: string | null = SITE) =>
+    new Request(URL_BASE, {
+      method: "POST",
+      headers: { ...(origin ? { Origin: origin } : {}), apikey: "sb_publishable_x", "content-type": "application/json" },
+      body: typeof body === "string" ? body : JSON.stringify(body),
+    });
 
-  it("preflight — 허용 origin이면 204 + 메서드·헤더, 업스트림을 부르지 않는다", async () => {
+  it("preflight — 허용 origin이면 204 + 메서드(POST·예전 GET)·헤더(content-type 포함), 업스트림을 부르지 않는다", async () => {
     const { handler, calls } = setup(ok);
     const res = await handler(get("", SITE, "OPTIONS"));
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
-    expect(res.headers.get("access-control-allow-methods")).toBe("GET, OPTIONS");
+    expect(res.headers.get("access-control-allow-methods")).toBe("GET, POST, OPTIONS");
     expect(res.headers.get("access-control-allow-headers")).toContain("apikey");
+    expect(res.headers.get("access-control-allow-headers")).toContain("content-type");
     expect(calls).toHaveLength(0);
   });
 
   it("허용 목록 밖 origin은 403 — 업스트림을 부르지 않고 Allow-Origin도 없다", async () => {
     const { handler, calls } = setup(ok);
-    for (const method of ["OPTIONS", "GET"]) {
-      const res = await handler(get("?include=route_vaginal_delivery&limit=500", "https://evil.example", method));
+    for (const req of [
+      get("?include=route_vaginal_delivery&limit=500", "https://evil.example", "OPTIONS"),
+      get("?include=route_vaginal_delivery&limit=500", "https://evil.example", "GET"),
+      post({ include: "route_vaginal_delivery", limit: 500 }, "https://evil.example"),
+    ]) {
+      const res = await handler(req);
       expect(res.status).toBe(403);
       expect(res.headers.get("access-control-allow-origin")).toBeNull();
     }
     expect(calls).toHaveLength(0);
   });
 
-  it("GET — 업스트림 주소(시간 제한 signal 포함), 알려진 필드만, 캐시·CORS 헤더", async () => {
+  it("POST 본문 — 업스트림 주소(시간 제한 signal 포함), 알려진 필드만, CORS 헤더, 캐시하지 않음(no-store)", async () => {
     const { handler, calls, logs } = setup(ok);
-    const res = await handler(get("?include=route_cesarean_section&limit=500"));
+    const res = await handler(post({ include: "route_cesarean_section", limit: 500 }));
     expect(res.status).toBe(200);
     expect(calls.map((c) => c.url)).toEqual(["https://video.example.test/videos?include=route_cesarean_section&limit=500"]);
+    expect(calls[0].init.method).toBe("GET");
     expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
     expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
     expect(res.headers.get("vary")).toBe("Origin");
-    expect(res.headers.get("cache-control")).toBe("public, max-age=300, s-maxage=600");
+    expect(res.headers.get("cache-control")).toBe("no-store");
     const { internal_note: dropped, ...expected } = video;
     expect(dropped).toBeTruthy();
     expect(await res.json()).toEqual({ count: 1, videos: [expected] });
-    // 로그에 분만 경로 태그(= 사용자의 분만 방식)가 남지 않는다
+    // 로그에 분만 경로 태그(= 사용자의 분만 방식)가 남지 않는다 — 메서드·상태·소요 시간만
+    expect(logs).toEqual([{ fn: "videos", method: "POST", status: 200, ms: expect.any(Number) }]);
     expect(JSON.stringify(logs)).not.toContain("route_");
   });
 
-  it("limit이 없으면 500, origin 없는 요청(서버·curl)도 받는다", async () => {
+  it("POST — limit이 없으면 500, origin 없는 요청(서버·curl)도 받는다", async () => {
     const { handler, calls } = setup(ok);
-    const res = await handler(get("?include=route_vaginal_delivery", null));
+    const res = await handler(post({ include: "route_vaginal_delivery" }, null));
     expect(res.status).toBe(200);
     expect(res.headers.get("access-control-allow-origin")).toBeNull();
     expect(calls.map((c) => c.url)).toEqual(["https://video.example.test/videos?include=route_vaginal_delivery&limit=500"]);
   });
 
-  it("잘못된 요청은 400 — 업스트림을 부르지 않는다", async () => {
+  it("예전 GET(열린 탭·설치한 앱에 남은 예전 번들)도 당분간 받는다 — 같은 결과, 캐시 헤더도 예전 그대로, 로그에 method GET", async () => {
+    const { handler, calls, logs } = setup(ok);
+    const res = await handler(get("?include=route_cesarean_section&limit=500"));
+    expect(res.status).toBe(200);
+    expect(calls.map((c) => c.url)).toEqual(["https://video.example.test/videos?include=route_cesarean_section&limit=500"]);
+    expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=300, s-maxage=600");
+    const { internal_note: _dropped, ...expected } = video;
+    void _dropped;
+    expect(await res.json()).toEqual({ count: 1, videos: [expected] });
+    expect(logs).toEqual([{ fn: "videos", method: "GET", status: 200, ms: expect.any(Number) }]);
+    expect(JSON.stringify(logs)).not.toContain("route_");
+
+    const noLimit = await handler(get("?include=route_vaginal_delivery", null));
+    expect(noLimit.status).toBe(200);
+    expect(calls.at(-1)?.url).toBe("https://video.example.test/videos?include=route_vaginal_delivery&limit=500");
+  });
+
+  it("잘못된 GET 쿼리는 400 — 업스트림을 부르지 않는다", async () => {
     const { handler, calls } = setup(ok);
     for (const q of [
       "",
@@ -693,11 +727,60 @@ describe("Edge Function videos", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("GET 외 메서드는 405", async () => {
-    const { handler } = setup(ok);
-    const res = await handler(get("?include=route_vaginal_delivery", SITE, "POST"));
-    expect(res.status).toBe(405);
-    expect(res.headers.get("allow")).toBe("GET, OPTIONS");
+  it("잘못된 POST 본문은 400 — 태그 하나(문자열)·limit 1~500 정수·모르는 필드 없음, 업스트림을 부르지 않는다", async () => {
+    const { handler, calls, logs } = setup(ok);
+    for (const body of [
+      "",
+      "not json",
+      "null",
+      "[]",
+      '"route_vaginal_delivery"',
+      {},
+      { include: "stage_pelvic_floor" },
+      { include: ["route_vaginal_delivery"] },
+      { include: ["route_vaginal_delivery", "route_cesarean_section"] },
+      { include: "route_vaginal_delivery", limit: 501 },
+      { include: "route_vaginal_delivery", limit: 0 },
+      { include: "route_vaginal_delivery", limit: 1.5 },
+      { include: "route_vaginal_delivery", limit: "500" },
+      { include: "route_vaginal_delivery", limit: null },
+      { include: "route_vaginal_delivery", exclude: "x" },
+      { include: "route_vaginal_delivery", context: { week: 3 } },
+    ]) {
+      const res = await handler(post(body));
+      expect(res.status, JSON.stringify(body)).toBe(400);
+      expect(await res.json()).toEqual({ ok: false, code: "bad_request" });
+    }
+    expect(calls).toHaveLength(0);
+    // 실패 로그에도 본문·태그가 없다
+    expect(JSON.stringify(logs)).not.toContain("route_");
+    expect(logs.every((l) => l.method === "POST" && l.code === "bad_request")).toBe(true);
+  });
+
+  it("POST 본문 상한 — 적힌 길이가 크거나 실제 본문이 크면 413, 업스트림을 부르지 않는다", async () => {
+    const { handler, calls } = setup(ok);
+    const big = JSON.stringify({ include: "route_vaginal_delivery", pad: "x".repeat(VIDEO_MAX_BODY_BYTES) });
+    const declared = new Request(URL_BASE, {
+      method: "POST",
+      headers: { Origin: SITE, "content-type": "application/json", "content-length": String(VIDEO_MAX_BODY_BYTES + 1) },
+      body: "{}",
+    });
+    for (const req of [post(big), declared]) {
+      const res = await handler(req);
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual({ ok: false, code: "too_large" });
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("GET·POST 외 메서드는 405 — 로그에 메서드 이름을 적지 않는다", async () => {
+    const { handler, logs } = setup(ok);
+    for (const method of ["PUT", "DELETE", "PATCH"]) {
+      const res = await handler(get("?include=route_vaginal_delivery", SITE, method));
+      expect(res.status).toBe(405);
+      expect(res.headers.get("allow")).toBe("GET, POST, OPTIONS");
+    }
+    expect(logs.every((l) => l.method === undefined && l.code === "method_not_allowed")).toBe(true);
   });
 
   it("영상 서버 주소 설정이 틀리면(https 아님) 500 not_configured — 부르지 않는다", async () => {
@@ -708,7 +791,7 @@ describe("Edge Function videos", () => {
       fetch: () => Promise.reject(new Error("should not be called")),
       log: () => {},
     });
-    const res = await handler(get("?include=route_vaginal_delivery"));
+    const res = await handler(post({ include: "route_vaginal_delivery" }));
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ ok: false, code: "not_configured" });
   });
@@ -721,12 +804,14 @@ describe("Edge Function videos", () => {
     [() => Promise.resolve(Response.json({ count: 1, videos: [{ ...video, tags: "x" }] })), "upstream_bad_response"],
   ] as [() => Promise<Response>, string][])("업스트림 실패 → 502 %s, 본문을 내보내지 않는다(#%#)", async (upstream, code) => {
     const { handler } = setup(upstream);
-    const res = await handler(get("?include=route_vaginal_delivery"));
-    expect(res.status).toBe(502);
-    const text = await res.text();
-    expect(JSON.parse(text)).toEqual({ ok: false, code });
-    expect(text).not.toContain("Traceback");
-    expect(res.headers.get("cache-control")).toBe("no-store");
-    expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+    for (const req of [post({ include: "route_vaginal_delivery" }), get("?include=route_vaginal_delivery")]) {
+      const res = await handler(req);
+      expect(res.status, req.method).toBe(502);
+      const text = await res.text();
+      expect(JSON.parse(text)).toEqual({ ok: false, code });
+      expect(text).not.toContain("Traceback");
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      expect(res.headers.get("access-control-allow-origin")).toBe(SITE);
+    }
   });
 });

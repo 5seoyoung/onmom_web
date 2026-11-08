@@ -21,6 +21,7 @@
 #              비밀값 지우기 — 비운 값은 건너뛸 뿐이다. 서버에서 지우려면 Supabase 대시보드 → Edge Functions → Secrets(설명서 G). 단 AI 스위치는 위 설명대로 되살아난다.
 # 비밀값은 로그에 찍지 않는다: set -x 금지, 명령 인자로 넘기지 않고(파일로), 값 대신 이름만 출력한다.
 # 운영 DB·함수를 바꾸므로 main에서만 돈다(Run workflow에서 다른 브랜치를 골라도 건너뜀). 테스트(npm test)가 통과해야 배포한다.
+# 함수 타입 검사(deno check — 아래 deno-check 작업)는 PR에서도 돈다. 타입 오류가 있으면 실패하고, main에서는 배포 작업이 시작되지 않는다.
 name: Supabase
 
 on:
@@ -29,6 +30,11 @@ on:
     branches: [main]
     paths:
       - "supabase/**"
+  # PR에서는 함수 타입 검사(deno-check)만 돈다 — deploy 작업은 main에서만(아래 if). 비밀값을 쓰지 않는다.
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase.yml"
 
 permissions:
   contents: read
@@ -42,13 +48,36 @@ env:
   # "false"로 바꿔 커밋해도 끈다. 화면 쪽 스위치는 따로다(deploy.yml ONMOM_AI).
   ONMOM_AI_CHAT_SERVER_ENABLED: "true"
 
+# main 배포는 한 번에 하나씩(취소 없이). PR 실행은 PR마다 따로 묶는다 — 같은 묶음에 들어가 기다리던 main 배포를 밀어내지 않게.
 concurrency:
-  group: supabase-deploy
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('supabase-pr-{0}', github.ref) || 'supabase-deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # 함수 세 개의 Deno 타입 검사 — Next tsc는 index.ts의 Deno 전용 가져오기(npm:·".ts")를 읽지 못해 이 검사만이 그 파일들을 본다
+  # (docs/SUPABASE_FUNCTIONS.md §7). index.ts에서 handler·adapters·_shared까지 따라가 모두 검사한다. 저장소에 파일을 만들지 않는다
+  # (--no-lock, --node-modules-dir=none — npm: 패키지는 러너의 Deno 캐시에만 받는다).
+  # Deno 버전과 액션 커밋을 고정한다 — 올릴 때는 setup-deno 새 태그의 커밋을 확인해(git ls-remote --tags https://github.com/denoland/setup-deno.git)
+  # 두 줄을 함께 바꾸고, 내 컴퓨터에서 같은 Deno 버전으로 한 번 돌려 본다.
+  deno-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.9.8
+
+      - name: Deno 타입 검사 (videos · chat · send-reminders)
+        run: deno check --no-lock --node-modules-dir=none supabase/functions/videos/index.ts supabase/functions/chat/index.ts supabase/functions/send-reminders/index.ts
+
   deploy:
-    # 운영 프로젝트에 db push·함수 배포를 하므로 main에서만 — Run workflow에서 다른 브랜치를 고르면 이 작업은 건너뛴다.
+    # 함수 타입 검사가 통과해야 시작한다(실패하면 DB·비밀값·함수 모두 그대로).
+    needs: deno-check
+    # 운영 프로젝트에 db push·함수 배포를 하므로 main에서만 — Run workflow에서 다른 브랜치를 고르거나 PR이면 이 작업은 건너뛴다.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25

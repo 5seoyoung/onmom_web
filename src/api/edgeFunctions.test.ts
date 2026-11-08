@@ -58,6 +58,7 @@ import {
 } from "../../supabase/functions/_shared/safety";
 import { isCrisisMessage } from "@/features/chat/chatModel";
 import {
+  parseVideoBody,
   parseVideoQuery,
   sanitizeVideoPayload,
   upstreamVideosUrl,
@@ -552,7 +553,44 @@ describe("시스템 프롬프트", () => {
 describe("영상 프록시 입력·응답", () => {
   const q = (s: string) => parseVideoQuery(new URLSearchParams(s));
 
-  it("include는 분만 경로 태그 하나, limit은 1~500(없으면 500)", () => {
+  it("POST 본문 — include는 분만 경로 태그 문자열 하나, limit은 1~500 정수(없으면 500), 다른 필드는 거부", () => {
+    expect(parseVideoBody({ include: "route_vaginal_delivery" })).toEqual({ include: "route_vaginal_delivery", limit: 500 });
+    expect(parseVideoBody({ include: "route_cesarean_section", limit: 20 })).toEqual({ include: "route_cesarean_section", limit: 20 });
+    expect(parseVideoBody({ limit: 1, include: "route_cesarean_section" })).toEqual({ include: "route_cesarean_section", limit: 1 });
+    for (const bad of [
+      null,
+      undefined,
+      "route_vaginal_delivery",
+      [],
+      ["route_vaginal_delivery"],
+      {},
+      { include: "stage_pelvic_floor" },
+      { include: ["route_vaginal_delivery"] },
+      { include: ["route_vaginal_delivery", "route_cesarean_section"] },
+      { include: "route_vaginal_delivery", limit: 501 },
+      { include: "route_vaginal_delivery", limit: 0 },
+      { include: "route_vaginal_delivery", limit: -1 },
+      { include: "route_vaginal_delivery", limit: 2.5 },
+      { include: "route_vaginal_delivery", limit: Number.NaN },
+      { include: "route_vaginal_delivery", limit: "20" },
+      { include: "route_vaginal_delivery", limit: null },
+      { include: "route_vaginal_delivery", exclude: "x" },
+      { include: "route_vaginal_delivery", week: 3 },
+    ]) {
+      expect(parseVideoBody(bad), JSON.stringify(bad)).toBeNull();
+    }
+  });
+
+  it("POST 본문과 예전 GET 쿼리는 같은 값을 같은 결과로 읽는다", () => {
+    for (const include of VIDEO_ROUTE_TAGS) {
+      for (const limit of [1, 20, VIDEO_MAX_LIMIT]) {
+        expect(parseVideoBody({ include, limit })).toEqual(q(`include=${include}&limit=${limit}`));
+      }
+      expect(parseVideoBody({ include })).toEqual(q(`include=${include}`));
+    }
+  });
+
+  it("(예전 GET) include는 분만 경로 태그 하나, limit은 1~500(없으면 500)", () => {
     expect(q("include=route_vaginal_delivery")).toEqual({ include: "route_vaginal_delivery", limit: 500 });
     expect(q("include=route_cesarean_section&limit=20")).toEqual({ include: "route_cesarean_section", limit: 20 });
     for (const bad of [
