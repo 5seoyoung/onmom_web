@@ -24,7 +24,7 @@ const handler = createVideosHandler({
   upstreamBaseUrl: Deno.env.get("VIDEO_API_URL")?.trim() || DEFAULT_VIDEO_API_URL,
   timeoutMs: VIDEO_UPSTREAM_TIMEOUT_MS,
   fetch: (url, init) => fetch(url, init),
-  // 상태·코드·소요 시간만(요청 주소·분만 경로는 기록하지 않는다)
+  // 메서드·상태·코드·소요 시간만(요청 주소·본문·분만 경로는 기록하지 않는다)
   log: (entry) => console.log(JSON.stringify(entry)),
 });
 
