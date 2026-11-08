@@ -3,11 +3,12 @@
 // Video DB는 태그 필터일 뿐이고, "언제 무엇이 열리는가"는 여기서 결정한다(02 §3).
 // 유일한 분만형태 분기점은 functional_strengthening(자연분만 6주 / 제왕절개 8주)이다.
 //
-// 단계 버킷·금기 사유 문구는 content.json(stage_buckets, blocked_rules)에서 읽고,
-// 화면 문구는 Swift 원문을 그대로 옮겨 `// 원문:` 위치를 붙였다.
+// 단계 버킷·금기 사유 문구는 content.json(stage_buckets, blocked_rules)에서, 운동 탭 섹션·배지 문구는 content.json ui.exercise에서 읽고,
+// 나머지 화면 문구는 Swift 원문을 그대로 옮겼다. 어느 쪽이든 쓰는 줄에 `// 원문:` 위치를 붙였다.
 // 순수 함수만 둔다 — 네트워크·현재 시각은 호출하는 쪽이 넘긴다.
 
 import content from "@/content";
+import { compileTemplate } from "@/content/template";
 import type { DeliveryMethod, MaternityRecord, RecoveryGoal } from "@/domain/types";
 
 // MARK: - 단계 버킷
@@ -239,9 +240,9 @@ export const EXERCISE_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "…위험 신호가 확인됐어요…"를 바꿈 — 앱이 확인·판정했다는 말로 읽힌다. 법률 사전 검토 H5)
   redFlagBody: "최근 기록에 '바로 병원에 가야 하는 신호'에 해당하는 항목이 있어요. 모든 운동 추천을 잠시 멈춰요. 먼저 의료기관에 방문하세요.",
   emptyPlan: "이 단계에 표시할 영상이 없어요.", // 원문: ExerciseView.swift:60
-  unlockedSection: "지금 가능한 운동", // 원문: ExerciseView.swift:67
-  lockedSectionBlocked: "지금은 권하지 않는 운동", // 원문: ExerciseView.swift:72
-  lockedSectionEarly: "아직 이른 운동", // 원문: ExerciseView.swift:72
+  unlockedSection: content.ui.exercise.sections.unlocked, // 원문: ExerciseView.swift:67
+  lockedSectionBlocked: content.ui.exercise.sections.locked_blocked, // 원문: ExerciseView.swift:72
+  lockedSectionEarly: content.ui.exercise.sections.locked_early, // 원문: ExerciseView.swift:72
   unavailableTitle: "영상 준비 중", // 원문: ExerciseView.swift:160
   // 서버 미설정 안내 — VideoDBClient가 던지는 notConfigured 메시지를 그대로 보여준다(ExerciseView.swift:87)
   unavailableBody: "운동 영상 추천은 준비 중이에요. 곧 만나보실 수 있어요.", // 원문: VideoDBClient.swift:39
@@ -283,11 +284,15 @@ export function exerciseTabGate(delivery: DeliveryMethod | null, activeRedFlag: 
 /** 상태 색 — 06 토큰 stateNormal / stateWatch / stateAlert */
 export type StateTone = "normal" | "watch" | "alert";
 
+// 배지 문구 — content.json ui.exercise.badges("{week}"는 열리는 주차)
+const BADGE_TEXT = content.ui.exercise.badges;
+const UNLOCK_WEEK_BADGE = compileTemplate("ui.exercise.badges.unlock_week", BADGE_TEXT.unlock_week, ["week"]);
+
 /** 영상 카드 배지 — "가능" / "지금은 권장 안 함" / "{n}주에 열림" (ExerciseView.swift:198-214) */
 export function videoBadge(item: PlanVideo): { text: string; tone: StateTone } {
-  if (item.unlocked) return { text: "가능", tone: "normal" }; // 원문: ExerciseView.swift:212
-  if (item.blockedReason !== null) return { text: "지금은 권장 안 함", tone: "alert" }; // 원문: ExerciseView.swift:213
-  return { text: `${item.unlockWeek}주에 열림`, tone: "watch" }; // 원문: ExerciseView.swift:214
+  if (item.unlocked) return { text: BADGE_TEXT.unlocked, tone: "normal" }; // 원문: ExerciseView.swift:212
+  if (item.blockedReason !== null) return { text: BADGE_TEXT.blocked, tone: "alert" }; // 원문: ExerciseView.swift:213
+  return { text: UNLOCK_WEEK_BADGE({ week: item.unlockWeek }), tone: "watch" }; // 원문: ExerciseView.swift:214
 }
 
 /**
