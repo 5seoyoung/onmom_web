@@ -358,19 +358,21 @@ export function UsageBarsCard({ view }: { view: UsageBarsView }) {
         <p className="py-4 text-center text-[0.9375rem] text-text-secondary">{ADMIN_TEXT.usageHidden}</p>
       ) : (
         <ul className="flex flex-col gap-3">
+          {/* 이름(6rem)·막대(5rem 이상)·값(7.5rem)이 한 줄에 들어가지 않으면(글자 150%·확대·좁은 폭) 값이 다음 줄 오른쪽으로 내려간다 —
+              전에는 카드가 화면보다 넓어져 가로 스크롤이 생기고 막대가 0 폭으로 사라졌다(e2e/admin-dashboard.spec.ts) */}
           {view.rows.map((r) => (
-            <li key={r.key} className="flex items-center gap-3 text-[0.875rem]">
+            <li key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.875rem]">
               <span className="w-24 shrink-0 text-text-primary">{r.label}</span>
               {r.value === null ? (
-                <span aria-hidden className="min-w-0 flex-1" />
+                <span aria-hidden className="min-w-20 flex-1" />
               ) : (
-                <span aria-hidden className="relative h-2.5 min-w-0 flex-1 rounded-full bg-divider">
+                <span aria-hidden className="relative h-2.5 min-w-20 flex-1 rounded-full bg-divider">
                   {r.widthPct > 0 ? (
                     <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${r.widthPct}%`, backgroundColor: BAR_COLOR }} />
                   ) : null}
                 </span>
               )}
-              <span className={cx("w-[7.5rem] shrink-0 text-right tabular-nums", r.value === null ? "text-text-secondary" : "text-text-primary")}>
+              <span className={cx("ml-auto w-[7.5rem] shrink-0 text-right tabular-nums", r.value === null ? "text-text-secondary" : "text-text-primary")}>
                 {r.valueLabel}
               </span>
             </li>

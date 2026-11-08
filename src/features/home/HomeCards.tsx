@@ -197,10 +197,12 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
           const href = telHref(call.number);
           return href === null ? null : (
             <li key={call.number}>
-              <a href={href} className="flex min-h-11 items-center gap-2 rounded-chip bg-coral-tint px-4 py-2">
+              {/* 이름이 7글자 폭보다 좁아지면 번호가 다음 줄(오른쪽)로 내려간다 — 글자 150%에서 이름이 한 줄에 1~2글자로 세로로 늘어지지 않게.
+                  보통 크기의 폰 폭에서는 한 줄 그대로. */}
+              <a href={href} className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-chip bg-coral-tint px-4 py-2">
                 <Phone aria-hidden className="size-3.5 shrink-0 fill-primary text-primary" />
-                <span className="min-w-0 flex-1 text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
-                <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
+                <span className="min-w-0 flex-1 basis-[7em] text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
               </a>
             </li>
           );
