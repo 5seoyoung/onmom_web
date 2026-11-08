@@ -74,7 +74,8 @@ export function HomeTopBar() {
     <header className="flex items-center justify-between gap-2 py-1 lg:justify-end lg:py-0">
       {/* "온맘" 제목(HomeView.swift:63 — 링크 아님. 이 화면이 앱 홈이다). PC는 사이드 메뉴에 로고가 있어 글자를 숨기고
           제목만 스크린 리더에 남긴다. */}
-      <h1 className="text-[1.375rem] font-bold text-primary lg:hidden">{HOME_TEXT.brand}</h1>
+      {/* data-logotype: 로고 글자(워드마크)라 글자 대비 요구에서 빠진다(WCAG 1.4.3) — 접근성 자동 검사(e2e/support/axe.ts)가 이 표시로 뺀다 */}
+      <h1 data-logotype className="text-[1.375rem] font-bold text-primary lg:hidden">{HOME_TEXT.brand}</h1>
       <h1 className="hidden lg:block lg:sr-only">{HOME_TEXT.brand}</h1>
       <Link
         href={HOME_CHAT_HREF}
@@ -196,10 +197,12 @@ export function MoodSupportCard({ onSnooze }: { onSnooze: () => void }) {
           const href = telHref(call.number);
           return href === null ? null : (
             <li key={call.number}>
-              <a href={href} className="flex min-h-11 items-center gap-2 rounded-chip bg-coral-tint px-4 py-2">
+              {/* 이름이 7글자 폭보다 좁아지면 번호가 다음 줄(오른쪽)로 내려간다 — 글자 150%에서 이름이 한 줄에 1~2글자로 세로로 늘어지지 않게.
+                  보통 크기의 폰 폭에서는 한 줄 그대로. */}
+              <a href={href} className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-chip bg-coral-tint px-4 py-2">
                 <Phone aria-hidden className="size-3.5 shrink-0 fill-primary text-primary" />
-                <span className="min-w-0 flex-1 text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
-                <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
+                <span className="min-w-0 flex-1 basis-[7em] text-[0.9375rem] font-medium text-text-primary">{call.name}</span>
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[0.9375rem] font-semibold text-primary-text">{call.number}</span>
               </a>
             </li>
           );

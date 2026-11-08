@@ -6,8 +6,10 @@ import type { ClinicRowView } from "./clinicsView";
 // 병원 한 곳 — NearbyClinicsView.swift:95-144(ClinicRow).
 // 코랄 12% 원(44) + 의료 가방 아이콘 · 이름 16 semibold · 직선거리 13 · 전화 13 · 오른쪽 전화/지도 원형 버튼(coralTint).
 // 버튼은 iOS 40pt보다 조금 큰 44(2.75rem) — 웹 누르는 영역 기준.
+// 전화·지도 단추는 아이콘만 있어 아이콘이 곧 단추의 모양이다(비텍스트 3:1, WCAG 1.4.11) — 원색 primary는 coral-tint 위 2.49:1이라
+// primary-strong(4.18:1, AI 상담 보내기 단추와 같은 기준 — DEV_NOTES §3 CPO 12). 왼쪽 의료 가방 원은 장식이라 원색 그대로.
 const roundButton =
-  "flex size-11 shrink-0 items-center justify-center rounded-full bg-coral-tint text-primary forced-colors:border forced-colors:border-[ButtonText]";
+  "flex size-11 shrink-0 items-center justify-center rounded-full bg-coral-tint text-primary-strong forced-colors:border forced-colors:border-[ButtonText]";
 
 export function ClinicRow({ row }: { row: ClinicRowView }) {
   return (
@@ -23,7 +25,7 @@ export function ClinicRow({ row }: { row: ClinicRowView }) {
       <div className="flex shrink-0 items-center gap-2">
         {row.telHref !== null ? (
           <a href={row.telHref} aria-label={row.callLabel} className={roundButton}>
-            <Phone aria-hidden className="size-[1.125rem] fill-primary" />
+            <Phone aria-hidden className="size-[1.125rem] fill-primary-strong" />
           </a>
         ) : null}
         {row.mapHref !== null ? (

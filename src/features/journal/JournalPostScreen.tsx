@@ -230,11 +230,13 @@ function CommentBar({ onSubmit }: { onSubmit: (text: string) => boolean }) {
         enterKeyHint="send"
         className="min-h-11 min-w-0 flex-1 rounded-full bg-surface px-4 py-2.5 text-base text-text-primary placeholder:text-text-subtle-aa"
       />
+      {/* 원과 화살표가 이 단추의 유일한 모양(비텍스트 3:1, WCAG 1.4.11) — AI 상담 보내기 단추와 같은 primary-strong(배경 위 4.43:1·
+          흰 화살표 4.63:1). 원색 primary는 2.64:1(DEV_NOTES §3 CPO 12와 같은 기준) */}
       <button
         type="submit"
         aria-label={JOURNAL_TEXT.commentSubmit}
         disabled={!canSubmit}
-        className="flex size-11 shrink-0 items-center justify-center rounded-full text-primary disabled:cursor-not-allowed disabled:text-text-subtle/40"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full text-primary-strong disabled:cursor-not-allowed disabled:text-text-subtle/40"
       >
         <CircleArrowUp aria-hidden className="size-8 fill-current stroke-surface" />
       </button>

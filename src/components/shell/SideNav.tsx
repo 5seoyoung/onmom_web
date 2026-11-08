@@ -37,8 +37,8 @@ export function SideNav() {
       <div className="px-4 pt-6 pb-5 [@media(max-height:52rem)]:pt-3 [@media(max-height:52rem)]:pb-2">
         <Link href={ROUTES.home} className="inline-flex min-h-11 items-center gap-2.5 rounded-button px-2">
           <Image src={brandLogo} alt="" aria-hidden width={36} height={36} className="size-9 shrink-0 rounded-[0.625rem] object-contain" />
-          {/* 로고 글자(워드마크)는 대비 요구에서 제외(WCAG 1.4.3 logotype) — 원색 코랄 그대로 */}
-          <span className="text-[1.375rem] font-bold text-primary">{APP_NAV_TEXT.brand}</span>
+          {/* 로고 글자(워드마크)는 대비 요구에서 제외(WCAG 1.4.3 logotype) — 원색 코랄 그대로. 접근성 자동 검사(e2e/support/axe.ts)가 data-logotype으로 뺀다 */}
+          <span data-logotype className="text-[1.375rem] font-bold text-primary">{APP_NAV_TEXT.brand}</span>
         </Link>
       </div>
 

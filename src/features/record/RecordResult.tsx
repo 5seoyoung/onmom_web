@@ -48,10 +48,11 @@ function CallRow({ name, number }: { name: string; number: string }) {
   const href = telHref(number);
   if (href === null) return null;
   return (
-    <a href={href} className="flex min-h-11 items-center gap-2 rounded-chip bg-white px-4 py-2 text-neutral">
+    // 이름이 7글자 폭보다 좁아지면 번호가 다음 줄(오른쪽)로 — 글자 150%에서 이름이 세로로 늘어지지 않게(홈 마음 카드의 전화 줄과 같음)
+    <a href={href} className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-chip bg-white px-4 py-2 text-neutral">
       <Phone aria-hidden className="size-3.5 shrink-0 fill-state-alert-strong text-state-alert-strong" />
-      <span className="min-w-0 flex-1 text-[0.9375rem] font-medium">{name}</span>
-      <span className="shrink-0 whitespace-nowrap text-[0.9375rem] font-bold text-state-alert-text">{number}</span>
+      <span className="min-w-0 flex-1 basis-[7em] text-[0.9375rem] font-medium">{name}</span>
+      <span className="ml-auto shrink-0 whitespace-nowrap text-[0.9375rem] font-bold text-state-alert-text">{number}</span>
     </a>
   );
 }
