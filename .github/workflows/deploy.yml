@@ -1,6 +1,7 @@
 # GitHub Pages 배포 — main에 push하면 테스트 → 브라우저 전용 빌드로 게스트 흐름 시험 → 정적 빌드(out/) → 브라우저 자동 시험(같은 out/) → Pages 배포.
 # 저장소 Settings → Pages → Build and deployment → Source: "GitHub Actions" 로 한 번 설정해야 한다.
-# 매일 한 번(schedule) 같은 길(테스트 → 유튜브 수집 → 빌드 → e2e → 배포)을 다시 돌아 운동 탭 "유튜브 추천 영상"을 새로 만든다.
+# 매일 한 번(schedule) 같은 길(테스트 → 유튜브·운동 영상 목록 수집 → 빌드 → e2e → 배포)을 다시 돌아 운동 탭 "유튜브 추천 영상"과
+# 빌드에 싣는 운동 영상 목록(scripts/videos-fetch.mjs)을 새로 만든다.
 # schedule은 기본 브랜치(main)의 최신 커밋으로 돈다 — 아래 두 job 모두 이벤트 조건이 없어 push와 똑같이 배포까지 간다.
 name: Deploy to GitHub Pages
 
@@ -76,6 +77,16 @@ jobs:
         run: node scripts/youtube-fetch.mjs
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+      # 운동 영상 목록(scripts/videos-fetch.mjs) — Edge Function videos가 부르는 그 영상 서버(VIDEO_API_URL)에서 두 분만 경로의 목록을
+      # 받아 src/content/videos.generated.json을 쓴다. 목록이 실린 빌드는 운동·분석 화면에서 영상 서버·함수를 부르지 않는다
+      # (잠든 Render 서버를 기다리지 않고, 분만 방식이 기기 밖으로 나가지 않는다). 요청마다 60초, 실패하면 한 번 더(잠든 서버 깨우기).
+      # 늘 성공으로 끝난다: VIDEO_API_URL이 없거나 서버가 끝내 실패하면 빈 목록을 쓰고 경고(annotation)만 남긴다 — 그 빌드는 지금처럼 함수에 묻는다.
+      # 값은 Variable(공개값 — supabase.yml이 함수 비밀값으로 넣는 것과 같은 VIDEO_API_URL)이고 이 단계에만 넘긴다. 아래 두 빌드가 같은 목록을 싣는다.
+      # --disable-warning: package.json에 "type"이 없어 Node가 .ts를 불러올 때마다 내는 모듈 형식 경고만 끈다.
+      - name: Fetch exercise video list
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/videos-fetch.mjs
+        env:
+          VIDEO_API_URL: ${{ vars.VIDEO_API_URL }}
       # 브라우저 자동 시험(e2e, docs/DEV_NOTES.md §11)은 두 번 돈다. 하나라도 실패하면 이 job이 실패해 아래 업로드·deploy job이 돌지 않는다.
       # ① 같은 코드를 Supabase 값 없이(브라우저 전용) 빌드해 게스트 흐름 전체(온보딩 → 위험 신호 → 404 → 계정 삭제)를 시험한다 —
       #    서버 모드 빌드에서는 게스트 시작이 운영 서버에 익명 계정을 만들므로 그 시험이 건너뛰어진다(e2e/guest-flow.spec.ts).
