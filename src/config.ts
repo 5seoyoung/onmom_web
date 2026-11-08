@@ -5,6 +5,8 @@
 //    비밀(카카오 REST 키·client secret·Anthropic 키·Admin 키)은 여기 두지 않는다 — 백엔드가 보유한다.
 //    ONMOM_APP_KEY도 웹에서는 비밀이 아니다(누구나 번들에서 읽을 수 있음). 인증 수단으로 기대하지 않는다.
 
+import { ROUTES, type RoutePath } from "@/routes";
+
 function url(v: string | undefined): string | null {
   const s = (v ?? "").trim().replace(/\/+$/, "");
   return s.length > 0 ? s : null;
@@ -91,7 +93,8 @@ export const config = {
    */
   vapidPublicKey: vapidPublicKey(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
   /**
-   * 검색 노출 — "true"면 시작 주소(/)만 색인을 허용하고, 나머지 화면은 계속 noindex(robotsFor). 기본은 전부 noindex(1.0 공개 전).
+   * 검색 노출 — "true"면 SEARCH_INDEX_ROUTES(시작 주소·처리방침·약관)만 색인을 허용하고(robotsFor, robots.txt의 Allow, sitemap.xml),
+   * 나머지 화면은 계속 noindex. 기본은 전부 noindex + robots.txt Disallow: / + 빈 sitemap(1.0 공개 전).
    */
   siteIndexable: (process.env.NEXT_PUBLIC_SITE_INDEXABLE ?? "").trim() === "true",
 } as const;
@@ -100,13 +103,21 @@ export const config = {
 export const isReminderConfigured = () => isSupabaseConfigured() && config.vapidPublicKey !== null;
 
 /**
- * 화면별 robots 메타 — 시작 주소("root", 제목·설명·공유 미리보기가 있는 "/")만 NEXT_PUBLIC_SITE_INDEXABLE=true일 때 색인을 허용한다.
- * 앱 화면("app")은 정적 HTML에 내용이 없고(관문이 저장소를 읽기 전에는 그리지 않음) 건강 기록 화면이라 늘 noindex.
- * 루트 레이아웃은 "app"을 쓰고, 시작 주소 페이지(src/app/page.tsx)가 "root"로 덮어쓴다.
- * (시작 주소는 화면 없이 로그인으로 옮긴다 — 로그인 화면은 noindex라, 검색에 내보낼 때는 무엇을 색인할지 다시 정한다.)
+ * 검색에 열 때(NEXT_PUBLIC_SITE_INDEXABLE=true) 색인을 허용하는 주소 — 이 목록 하나가 화면마다의 robots 메타(robotsFor)와
+ * 빌드 때 만드는 robots.txt·sitemap.xml(src/app/robots.ts·sitemap.ts → features/meta/searchIndex.ts)을 정한다.
+ * - 시작 주소(/) — 제목·설명·공유 미리보기가 있다(화면은 없이 로그인으로 옮긴다 — features/flow/RootRedirect).
+ * - 개인정보처리방침·이용약관 — 누구나 여는 안내 문서(앱 관문의 공개 주소 — features/flow/gate.ts).
+ * 공개 주소 중 로그인 콜백(/auth/callback/)·관리자 화면(/admin/)과 로그인·온보딩·앱 화면은 넣지 않는다(늘 noindex).
  */
-export function robotsFor(page: "root" | "app"): { index: boolean; follow: boolean } {
-  const index = page === "root" && config.siteIndexable;
+export const SEARCH_INDEX_ROUTES: readonly RoutePath[] = [ROUTES.root, ROUTES.privacy, ROUTES.terms];
+
+/**
+ * 화면별 robots 메타 — SEARCH_INDEX_ROUTES의 주소만 NEXT_PUBLIC_SITE_INDEXABLE=true일 때 색인을 허용한다. 기본은 전부 noindex.
+ * 앱 화면("app")은 정적 HTML에 내용이 없고(관문이 저장소를 읽기 전에는 그리지 않음) 건강 기록 화면이라 늘 noindex.
+ * 루트 레이아웃은 "app"을 쓰고, 목록의 페이지(src/app/page.tsx·privacy·terms)가 자기 주소로 덮어쓴다.
+ */
+export function robotsFor(page: RoutePath | "app"): { index: boolean; follow: boolean } {
+  const index = page !== "app" && config.siteIndexable && SEARCH_INDEX_ROUTES.includes(page);
   return { index, follow: index };
 }
 

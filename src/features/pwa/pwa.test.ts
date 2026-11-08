@@ -733,17 +733,15 @@ describe("disableReminder · rebindReminder", () => {
   });
 });
 
-describe("검색 노출(robots)", () => {
-  it("기본(NEXT_PUBLIC_SITE_INDEXABLE 없음)은 시작 주소도 앱 화면도 noindex", () => {
+describe("검색 노출(robots) — 자세한 시험은 src/features/meta/searchIndex.test.ts", () => {
+  it("기본(NEXT_PUBLIC_SITE_INDEXABLE 없음)은 시작 주소·안내 문서·앱 화면 모두 noindex", () => {
     expect(config.siteIndexable).toBe(false);
-    expect(robotsFor("root")).toEqual({ index: false, follow: false });
-    expect(robotsFor("app")).toEqual({ index: false, follow: false });
+    for (const page of [...Object.values(ROUTES), "app" as const]) expect(robotsFor(page), page).toEqual({ index: false, follow: false });
   });
 
-  it("시작 주소(/) 페이지만 robotsFor(\"root\")를 쓴다 — 스위치가 시작 주소에 닿고, 다른 공개 화면은 레이아웃의 noindex를 물려받는다", () => {
-    expect(read("src/app/page.tsx")).toContain('robots: robotsFor("root")');
-    for (const page of ["src/app/privacy/page.tsx", "src/app/terms/page.tsx", "src/app/admin/page.tsx", "src/app/login/page.tsx"]) {
-      expect(read(page), page).not.toContain('robotsFor("root")');
+  it("공개 화면 중 관리자·로그인 페이지는 robots를 정하지 않는다 — 레이아웃의 noindex를 물려받는다", () => {
+    for (const page of ["src/app/admin/page.tsx", "src/app/login/page.tsx"]) {
+      expect(read(page), page).not.toContain("robotsFor(");
     }
   });
 });

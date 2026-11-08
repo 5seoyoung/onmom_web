@@ -67,6 +67,12 @@ describe("chatProbeVerdict — AI가 켜져 있으면 통과", () => {
 
 describe("사전 요청 — 웹이 실제로 보내는 헤더", () => {
   const chat = FUNCTION_PREFLIGHTS.find((p: { fn: string }) => p.fn === "chat")!;
+  const videos = FUNCTION_PREFLIGHTS.find((p: { fn: string }) => p.fn === "videos")!;
+
+  it("videos는 POST + apikey·content-type(분만 경로를 JSON 본문으로 — src/api/video.ts)이고, 함수의 허용 목록에 모두 있다", () => {
+    expect(videos).toEqual({ fn: "videos", method: "POST", headers: "apikey, content-type" });
+    expect(missingAllowedHeaders(videos.headers, ALLOWED_REQUEST_HEADERS)).toEqual([]);
+  });
 
   it("chat은 서울 고정 헤더 x-region까지 묻고, 함수의 허용 목록에 모두 있다", () => {
     expect(chat.headers).toContain("x-region");

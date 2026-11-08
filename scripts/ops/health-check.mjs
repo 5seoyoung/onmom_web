@@ -132,9 +132,12 @@ function missingToken(group, name, ci) {
 
 // MARK: Edge Function 사전 요청(OPTIONS)
 
-/** 웹이 실제로 보내는 메서드·헤더(src/api/video.ts·llm.ts)로 사전 요청만 — 함수 본문(영상 서버·AI)은 부르지 않는다 */
+/**
+ * 웹이 실제로 보내는 메서드·헤더(src/api/video.ts·llm.ts)로 사전 요청만 — 함수 본문(영상 서버·AI)은 부르지 않는다.
+ * videos는 2026-11부터 POST 본문(JSON)으로 분만 경로를 보낸다 — content-type도 묻는다(예전 함수의 허용 헤더에도 있어 배포 순서와 무관하게 통과).
+ */
 export const FUNCTION_PREFLIGHTS = [
-  { fn: "videos", method: "GET", headers: "apikey" },
+  { fn: "videos", method: "POST", headers: "apikey, content-type" },
   { fn: "chat", method: "POST", headers: "authorization, apikey, content-type, x-region" },
 ];
 
