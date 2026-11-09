@@ -49,7 +49,7 @@ jobs:
 
       # supabase.yml과 같은 커밋·CLI 버전(올릴 때는 두 파일을 함께). 설치에 실패해도 다음 단계는 돌아 다른 항목을 점검하고,
       # DB 항목은 "Supabase CLI가 없음"으로 실패한다.
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
         continue-on-error: true
         with:
           version: 2.117.0
