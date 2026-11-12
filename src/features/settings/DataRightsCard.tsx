@@ -7,7 +7,9 @@
 //   (supabase/migrations/0005_admin_tools.sql 머리 주석, /admin/의 "내 계정 ID"와 같은 값). 앱 계정 id("kakao-<회원번호>"·"guest-…")는
 //   그 값이 아니어서 화면에 보이지 않는다. 이 브라우저에 저장된 세션에서 읽기만 한다(네트워크 요청 없음) — 설정 없는 빌드·세션 없음이면
 //   행을 그리지 않는다. 내려받기 파일의 account.serverUserId도 같은 값.
-// 내려받기는 스토어 스냅샷을 파일로 만들 뿐이다 — 네트워크 요청 없음, 로그 없음(건강 정보). 실패하면 문장으로 알린다.
+// 내려받기는 스토어 스냅샷을 파일로 만든다 — 로그 없음(건강 정보). 서버 계정이 있으면 누른 그때 서버 계정 정보(가입·로그인 시각, 카카오가
+//   준 정보, AI 동의 기록)를 내 것만 읽어 함께 담는다(serverAccount.ts, 2026-11-12 열람권 — 법률 사전 검토 D-15). 못 읽으면 기록만 담고
+//   그 사실을 알린다. 파일을 못 만들면 문장으로 알린다.
 // 그 아래 [PDF 리포트 만들기](웹 신규) — 같은 스냅샷을 인쇄용 화면(/settings/report/, features/report)으로 보여 주고 브라우저 인쇄로 PDF를 만든다.
 //   화면을 옮기는 것이라 버튼이 아니라 링크다.
 
@@ -21,7 +23,8 @@ import type { UserProfile } from "@/domain/types";
 import type { AppSnapshot } from "@/store/appStore";
 import { REPORT_HREF, REPORT_TEXT } from "@/features/report/reportText";
 import { AiConsentWithdraw } from "./AiConsentWithdraw";
-import { buildDataExport, downloadTextFile, exportFileName, serializeDataExport } from "./dataExport";
+import { buildDataExport, downloadTextFile, exportFileName, serializeDataExport, type ServerAccountInfo } from "./dataExport";
+import { fetchServerAccountInfo, serverAccountPortsFrom } from "./serverAccount";
 import { DATA_RIGHTS_TEXT, accountIdRow, consentRows } from "./settingsView";
 
 /**
@@ -54,20 +57,30 @@ function useServerUserId(accountId: string | null): string | null {
   return accountId === null ? null : id;
 }
 
+/** 서버 계정이 있을 때만 서버 계정 정보를 읽는다 — 없거나 못 읽으면 null */
+async function readServerAccount(serverUserId: string | null): Promise<ServerAccountInfo | null> {
+  if (serverUserId === null) return null;
+  const client = await getSupabaseClient().catch(() => null);
+  if (client === null) return null;
+  return fetchServerAccountInfo(serverAccountPortsFrom(client));
+}
+
 export function DataRightsCard({ snapshot }: { snapshot: Pick<AppSnapshot, "state" | "account"> }) {
-  const [failed, setFailed] = useState(false);
+  const [status, setStatus] = useState<"idle" | "busy" | "failed" | "noServerInfo">("idle");
   const serverUserId = useServerUserId(snapshot.account?.id ?? null);
   const idRow = accountIdRow(serverUserId);
   const rows = consentRows(snapshot.state.profile as UserProfile);
 
-  function exportData() {
+  async function exportData() {
+    setStatus("busy");
+    const serverAccount = await readServerAccount(serverUserId);
     const now = new Date();
     const ok = downloadTextFile(
       exportFileName(now),
-      serializeDataExport(buildDataExport(snapshot, now, serverUserId)),
+      serializeDataExport(buildDataExport(snapshot, now, serverUserId, serverAccount)),
       "application/json",
     );
-    setFailed(!ok);
+    setStatus(!ok ? "failed" : serverUserId !== null && serverAccount === null ? "noServerInfo" : "idle");
   }
 
   return (
@@ -106,7 +119,8 @@ export function DataRightsCard({ snapshot }: { snapshot: Pick<AppSnapshot, "stat
       <hr className="border-divider" />
       <button
         type="button"
-        onClick={exportData}
+        onClick={() => void exportData()}
+        disabled={status === "busy"}
         className="flex min-h-11 w-full flex-col items-start gap-0.5 py-1 text-left"
       >
         <span className="inline-flex items-center gap-1.5 text-[0.9375rem] font-semibold text-primary-text">
@@ -116,7 +130,11 @@ export function DataRightsCard({ snapshot }: { snapshot: Pick<AppSnapshot, "stat
         <span className="text-[0.8125rem] text-text-secondary">{DATA_RIGHTS_TEXT.exportHint}</span>
       </button>
       <div role="alert" className="empty:hidden">
-        {failed ? <p className="text-[0.8125rem] font-semibold text-state-alert-text">{DATA_RIGHTS_TEXT.exportFailed}</p> : null}
+        {status === "failed" ? (
+          <p className="text-[0.8125rem] font-semibold text-state-alert-text">{DATA_RIGHTS_TEXT.exportFailed}</p>
+        ) : status === "noServerInfo" ? (
+          <p className="text-[0.8125rem] font-semibold text-state-alert-text">{DATA_RIGHTS_TEXT.exportNoServerInfo}</p>
+        ) : null}
       </div>
 
       <hr className="border-divider" />

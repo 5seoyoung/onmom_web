@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MOOD_VERSION, RULES_VERSION } from "@/rules/version";
 import { initialState } from "@/store/defaults";
 import { addMoodCheck, addPost, addSymptomRecord, updateProfile } from "@/store/state";
-import { buildDataExport, DATA_EXPORT_FORMAT, exportFileName, serializeDataExport } from "./dataExport";
+import { buildDataExport, DATA_EXPORT_FORMAT, exportFileName, serializeDataExport, serverAccountFrom } from "./dataExport";
 
 const NOW = new Date(2026, 8, 28, 23, 40); // 2026-09-28 23:40 로컬(Asia/Seoul) = 09-28T14:40Z
 const SERVER_USER_ID = "3f0f9b2e-0000-4000-8000-000000000001";
@@ -65,7 +65,8 @@ describe("buildDataExport", () => {
   it("기록마다의 규칙·질문 버전이 상태와 함께 그대로 내려간다(옛 기록은 null), 맨 위의 버전은 내려받을 때 이 앱의 지금 버전", () => {
     const out = buildDataExport({ state: state(), account: { id: "guest-x", name: null, provider: "guest" } }, NOW);
     const file = JSON.parse(serializeDataExport(out));
-    expect(Object.keys(file)).toEqual(["format", "exportedAt", "rulesVersion", "moodVersion", "account", "consent", "state"]);
+    expect(Object.keys(file)).toEqual(["format", "exportedAt", "rulesVersion", "moodVersion", "account", "consent", "state", "serverAccount"]);
+    expect(file.serverAccount).toBeNull();
     expect([file.rulesVersion, file.moodVersion]).toEqual([RULES_VERSION, MOOD_VERSION]);
     expect(file.state.symptomHistory.map((r: { id: string; rulesVersion: string | null }) => [r.id, r.rulesVersion])).toEqual([
       ["r0", null],
@@ -96,5 +97,59 @@ describe("buildDataExport", () => {
     const text = serializeDataExport(out);
     expect(text).toContain("\n  ");
     expect(JSON.parse(text)).toEqual(JSON.parse(JSON.stringify(out)));
+  });
+});
+
+describe("serverAccountFrom — 서버 계정 정보(열람권, 2026-11-12)", () => {
+  const KAKAO_USER = {
+    id: SERVER_USER_ID,
+    email: "mom@example.com",
+    created_at: "2026-11-01T01:00:00Z",
+    last_sign_in_at: "2026-11-10T02:00:00Z",
+    is_anonymous: false,
+    app_metadata: { provider: "kakao" },
+    identities: [
+      {
+        provider: "kakao",
+        created_at: "2026-11-01T01:00:00Z",
+        last_sign_in_at: "2026-11-10T02:00:00Z",
+        identity_data: { sub: "1234", name: "해님", email: "mom@example.com", avatar_url: "https://k.kakaocdn.net/x.jpg", provider_token: "SECRET" },
+      },
+    ],
+  };
+  const AI_ROW = { version: "web-ai-2026-11-06", sensitive_agreed: true, transfer_agreed: true, accepted_at: "2026-11-10T02:01:00Z", recorded_at: "2026-11-10T02:01:01Z" };
+
+  it("카카오가 준 정보는 그대로, 토큰 이름의 칸은 빼고, AI 동의 두 칸과 시각을 담는다", () => {
+    const info = serverAccountFrom(KAKAO_USER, AI_ROW)!;
+    expect(info).toMatchObject({ id: SERVER_USER_ID, email: "mom@example.com", isAnonymous: false, lastSignInAt: "2026-11-10T02:00:00Z" });
+    expect(info.identities).toEqual([
+      {
+        provider: "kakao",
+        createdAt: "2026-11-01T01:00:00Z",
+        lastSignInAt: "2026-11-10T02:00:00Z",
+        data: { sub: "1234", name: "해님", email: "mom@example.com", avatar_url: "https://k.kakaocdn.net/x.jpg" },
+      },
+    ]);
+    expect(info.aiConsent).toEqual({
+      version: "web-ai-2026-11-06",
+      sensitiveAgreed: true,
+      transferAgreed: true,
+      acceptedAt: "2026-11-10T02:01:00Z",
+      recordedAt: "2026-11-10T02:01:01Z",
+    });
+    expect(JSON.stringify(info)).not.toContain("SECRET");
+  });
+
+  it("게스트는 이메일·identity 없이, 동의 행이 없으면 aiConsent null — 모르는 모양은 null", () => {
+    const guest = serverAccountFrom({ id: SERVER_USER_ID, email: "", is_anonymous: true, identities: [] }, null)!;
+    expect(guest).toMatchObject({ email: null, isAnonymous: true, identities: [], aiConsent: null });
+    expect(serverAccountFrom(null, AI_ROW)).toBeNull();
+    expect(serverAccountFrom({ email: "x" }, null)).toBeNull();
+  });
+
+  it("buildDataExport의 마지막 칸으로 그대로 들어간다", () => {
+    const info = serverAccountFrom(KAKAO_USER, null);
+    const out = buildDataExport({ state: state(), account: { id: "kakao-1", name: "해님", provider: "kakao" } }, NOW, SERVER_USER_ID, info);
+    expect(out.serverAccount).toBe(info);
   });
 });
