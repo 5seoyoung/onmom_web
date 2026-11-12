@@ -35,6 +35,21 @@ export const USAGE_K = STATS_MIN_GROUP_SIZE;
  */
 export const USAGE_CONSENT_FROM = "web-2026-11-06";
 
+/**
+ * 관리자 화면을 이 시간(분) 동안 쓰지 않으면 로그아웃한다 — 안전성 확보조치 기준 제6조④(일정 시간 이상 업무처리를 하지 않으면 접속 차단).
+ * 활동 = 누르기·키보드·스크롤·터치(AdminScreen useAdminIdleSignOut). 2단계 인증 화면(QR·키가 보이는 곳)에도 같은 시간을 쓴다.
+ */
+export const ADMIN_IDLE_MINUTES = 15;
+
+/**
+ * 관리자 권한 이력(admin_role_history)의 보존 기간(년) — supabase/migrations/0014_admin_hardening.sql 정리 함수의 `interval '3 years'`와
+ * 같아야 한다(adminHardeningSql.test.ts). 안전성 확보조치 기준 제5조③(권한 부여·변경·말소 내역 최소 3년).
+ */
+export const ADMIN_ROLE_HISTORY_RETENTION_YEARS = 3;
+
+/** CSV 내려받기 사유의 최대 글자 수 — 0014 admin_log_users_export의 `between 1 and 200`과 같아야 한다(adminHardeningSql.test.ts) */
+export const CSV_REASON_MAX = 200;
+
 export const ADMIN_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (관리자 화면 전체 — 메뉴에 링크하지 않는 운영자용 화면)
   title: "온맘 관리자",
@@ -145,6 +160,69 @@ export const ADMIN_TEXT = {
   accessLogNote: `이 화면에서 조회하거나(이용 통계 포함) 내려받으면 누가 언제 했는지 admin_audit 표에 ${ADMIN_AUDIT_RETENTION_YEARS}년 동안 남아요.`,
   // 웹 신규 문구 — CPO 확인 필요 (CSV 내려받기 기록 함수가 서버에 없을 때 — 기록 없이 파일을 만들지 않는다)
   auditSetupHint: "CSV를 만들지 않았어요. Supabase SQL Editor에서 supabase/migrations/0009_admin_access_log.sql을 실행했는지 확인해 주세요.",
+
+  // ── 관리자 보안 보강(supabase/migrations/0014_admin_hardening.sql) — 모두 웹 신규 문구 — CPO 확인 필요 (운영자용 화면) ──
+  // CSV 내려받기 사유(안전성 확보조치 기준 제8조② — 내려받은 사유 확인). 사유는 접근 기록(admin_audit)에 함께 남는다.
+  // 웹 신규 문구 — CPO 확인 필요
+  csvReasonTitle: "CSV를 내려받는 이유",
+  // 웹 신규 문구 — CPO 확인 필요
+  csvReasonLabel: "내려받는 이유(필수) - 감사 기록에 남아요. 이메일·건강 정보는 적지 마세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  csvReasonRequired: "내려받는 이유를 적어 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  csvReasonHasEmail: "이유에 이메일 주소가 있어요. 지우고 다시 시도해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  csvKeepNote: "내려받은 파일은 이 컴퓨터에 오래 두지 말고, 쓰고 나면 지워 주세요. 다른 사람에게 보내지 마세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (사유 확인 창의 확정 단추 — 위 csvExport와 같은 글자를 쓰면 화면에 같은 이름의 단추가 둘이 된다)
+  csvReasonConfirm: "이 이유로 내려받기",
+  // 웹 신규 문구 — CPO 확인 필요 (0014가 아직 없는 서버 — 사유를 받는 기록 함수가 없어 파일을 만들지 않는다)
+  csvReasonSetupHint: "CSV를 만들지 않았어요. Supabase SQL Editor에서 supabase/migrations/0014_admin_hardening.sql을 실행했는지 확인해 주세요.",
+
+  // 2단계 인증(안전성 확보조치 기준 제6조② — 외부에서 접속할 때 일회용 비밀번호 등 안전한 인증수단). 인증 앱(TOTP) 6자리 숫자.
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaEnrollTitle: "2단계 인증 등록",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaEnrollBody: "관리자 화면은 카카오 로그인에 더해 인증 앱의 숫자를 한 번 더 확인해야 열려요. 처음 한 번만 등록하면 돼요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaEnrollStep1: "휴대폰의 인증 앱(Google Authenticator·Microsoft Authenticator·아이폰 '암호' 앱 등)에서 아래 QR 코드를 찍어요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaQrAlt: "인증 앱 등록용 QR 코드",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaSecretLabel: "QR을 찍을 수 없으면 이 키를 인증 앱에 직접 넣어요",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaEnrollStep2: "인증 앱에 보이는 6자리 숫자를 아래에 입력해요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaChallengeTitle: "2단계 인증",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaChallengeBody: "인증 앱에 보이는 6자리 숫자를 입력해 주세요. 관리자 화면은 2단계 인증을 거쳐야 열려요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaCodeLabel: "인증 앱의 6자리 숫자",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaVerify: "확인",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaVerifying: "확인하고 있어요",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaPreparing: "등록을 준비하고 있어요",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaCodeFormat: "6자리 숫자를 입력해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaCodeInvalid: "숫자가 맞지 않아요. 인증 앱의 새 숫자로 다시 입력해 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaFailed: "확인하지 못했어요. 잠시 후 다시 시도해주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaEnrollFailed: "등록을 준비하지 못했어요. 잠시 후 다시 시도해주세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (Supabase Auth에서 앱 인증(TOTP)이 꺼져 있을 때)
+  mfaDisabled: "Supabase에서 앱 인증(TOTP)이 꺼져 있어요. 대시보드 Authentication → Multi-Factor에서 켜 주세요.",
+  // 웹 신규 문구 — CPO 확인 필요
+  mfaLostHint: "인증 앱을 잃었으면 운영 안내서의 '관리자 인증 앱을 잃었을 때'를 따라 주세요.",
+
+  // 무동작 자동 로그아웃(안전성 확보조치 기준 제6조④ — 일정 시간 업무처리를 하지 않으면 접속 차단)
+  // 웹 신규 문구 — CPO 확인 필요
+  idleTitle: "로그아웃했어요",
+  // 웹 신규 문구 — CPO 확인 필요
+  idleBody: `${ADMIN_IDLE_MINUTES}분 동안 쓰지 않아 로그아웃했어요. 다시 보려면 카카오로 로그인해 주세요.`,
+  // 웹 신규 문구 — CPO 확인 필요
+  idleLogin: "로그인하기",
 
   // ── 이용 통계(집계)(supabase/migrations/0011_admin_usage_stats.sql) — 모두 웹 신규 문구 — CPO 확인 필요 (운영자용 화면) ──
   // 분만 방식·목표·기분 답의 칸 이름은 앱의 원문(DELIVERY_TITLE·GOAL_TITLE·content.json mood_check.answers·PROFILE_TEXT.unset)을 쓴다 — USAGE_BUCKET_LABEL.
@@ -740,6 +818,46 @@ const EMAIL_LIKE_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
  */
 export function deleteReasonProblem(reason: string | null): string | null {
   return reason !== null && EMAIL_LIKE_RE.test(reason) ? ADMIN_TEXT.deleteReasonHasEmail : null;
+}
+
+// ── 관리자 보안 보강(0014) ─────────────────────────────────────────────────
+
+/** CSV 내려받기 사유 — 앞뒤 공백을 지운 값(서버도 trim). 길이는 입력 칸이 CSV_REASON_MAX로 막는다. */
+export function normalizeCsvReason(input: string): string {
+  return input.trim().slice(0, CSV_REASON_MAX);
+}
+
+/** CSV 사유가 보낼 수 없는 값이면 화면 문장 — 비었으면 필수 안내, 이메일 모양이면 지우라는 안내(서버 표 제약과 같은 패턴). 괜찮으면 null. */
+export function csvReasonProblem(reason: string): string | null {
+  if (reason.length === 0) return ADMIN_TEXT.csvReasonRequired;
+  return EMAIL_LIKE_RE.test(reason) ? ADMIN_TEXT.csvReasonHasEmail : null;
+}
+
+/** 무동작 자동 로그아웃 — 마지막 활동 시각(ms)부터 지금(ms)까지 minutes분이 지났는가. 시계가 뒤로 가면(기기 시각 변경) 지난 것으로 보지 않는다. */
+export function adminIdleExpired(lastActivityMs: number, nowMs: number, minutes: number = ADMIN_IDLE_MINUTES): boolean {
+  return nowMs - lastActivityMs >= minutes * 60_000;
+}
+
+/** 인증 앱 숫자 — 공백·하이픈을 지운 6자리 숫자면 그 값, 아니면 null(서버에 보내지 않는다). 전각 숫자는 받지 않는다. */
+export function normalizeTotpCode(input: string): string | null {
+  const s = input.replace(/[\s-]/g, "");
+  return /^[0-9]{6}$/.test(s) ? s : null;
+}
+
+/**
+ * 등록 QR(Supabase가 주는 SVG) → <img src>. supabase-js는 "data:image/svg+xml;utf-8,<svg…"처럼 인코딩하지 않은 SVG를 붙여 주는데,
+ * #·% 같은 글자가 있으면 브라우저가 주소를 자를 수 있어 글자를 인코딩해 다시 만든다. 이미 data URL이 아니면(맨 SVG) 같은 방식으로 감싼다.
+ * SVG가 아니면 null(그리지 않는다 — 비밀 키 글자로 등록할 수 있다).
+ */
+export function qrImageSrc(qr: string): string | null {
+  const svg = qr.replace(/^data:image\/svg\+xml(?:;[^,]*)?,/, "");
+  if (!/^\s*(<\?xml[^>]*>\s*)?<svg[\s>]/i.test(svg)) return null;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+/** 등록용 비밀 키를 4글자씩 띄운다(인증 앱에 손으로 넣기 쉽게). 앱은 공백을 무시한다. */
+export function groupSecret(secret: string): string {
+  return (secret.replace(/\s+/g, "").match(/.{1,4}/g) ?? []).join(" ");
 }
 
 /**
