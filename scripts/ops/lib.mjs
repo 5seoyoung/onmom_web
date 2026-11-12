@@ -170,7 +170,7 @@ export function projectStatusVerdict(status) {
 
 /**
  * 점검하는 예약 작업 — supabase/migrations 0006(onmom-anon-cleanup)·0007(onmom-send-reminders·onmom-llm-usage-cleanup)·
- * 0009(onmom-admin-audit-cleanup)과 같아야 한다.
+ * 0009(onmom-admin-audit-cleanup)·0014(onmom-admin-role-history-cleanup)와 같아야 한다.
  * windowHours = 이 시간 안에 한 번 이상 돌았어야 정상(매일 점검은 09:15 KST, GitHub이 늦게 시작해도 맞도록 여유를 둔다).
  * 예약 시각(schedule)이 바뀌면 점검이 실패한다 — 마이그레이션을 바꿨다면 여기도 같이 고친다.
  * 새 작업은 첫 실행 전까지 "실행 기록 없음"으로 실패한다 — 넣은 직후 점검 실패가 한 번 올 수 있다(2026-10-24 onmom-admin-audit-cleanup).
@@ -180,6 +180,7 @@ export const EXPECTED_JOBS = [
   { name: "onmom-anon-cleanup", schedule: "0 18 * * *", windowHours: 26, label: "매일 03:00 KST" },
   { name: "onmom-llm-usage-cleanup", schedule: "30 18 * * *", windowHours: 26, label: "매일 03:30 KST" },
   { name: "onmom-admin-audit-cleanup", schedule: "0 19 * * *", windowHours: 26, label: "매일 04:00 KST" },
+  { name: "onmom-admin-role-history-cleanup", schedule: "10 19 * * *", windowHours: 26, label: "매일 04:10 KST" },
 ];
 
 /** 실패·5xx를 세는 기간(시간) */

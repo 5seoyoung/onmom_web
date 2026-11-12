@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   ADMIN_AUDIT_RETENTION_YEARS,
+  ADMIN_IDLE_MINUTES,
   ADMIN_LIST_MAX,
   ADMIN_TEXT,
   ADMIN_PAGE_SIZE,
   CSV_MAX_ROWS,
+  CSV_REASON_MAX,
   DELETE_REASON_MAX,
+  adminIdleExpired,
+  csvReasonProblem,
+  groupSecret,
+  normalizeCsvReason,
+  normalizeTotpCode,
+  qrImageSrc,
   USAGE_BUCKET_LABEL,
   USAGE_DAYS_MAX,
   USAGE_DAYS_MIN,
@@ -1156,5 +1164,57 @@ describe("이용 통계 — 기능별 이용 · 분포", () => {
     expect(usageAdoptionView(s)).toMatchObject({ hidden: true, note: null });
     for (const id of USAGE_DISTRIBUTION_IDS) expect(usageDistributionView(s, id).hidden).toBe(true);
     expect(usageRedFlagView(s).hidden).toBe(true);
+  });
+});
+
+// ── 관리자 보안 보강(0014) ─────────────────────────────────────────────────
+
+describe("0014 — CSV 사유·무동작·인증 앱 숫자·QR", () => {
+  it("CSV 사유 — 공백을 지우고 200자까지, 비었거나 이메일 모양이면 보내지 않는다", () => {
+    expect(normalizeCsvReason("  월간 정리  ")).toBe("월간 정리");
+    expect(normalizeCsvReason("가".repeat(250))).toHaveLength(CSV_REASON_MAX);
+    expect(csvReasonProblem("")).toBe(ADMIN_TEXT.csvReasonRequired);
+    expect(csvReasonProblem(normalizeCsvReason("   "))).toBe(ADMIN_TEXT.csvReasonRequired);
+    expect(csvReasonProblem("문의 user@example.com 요청")).toBe(ADMIN_TEXT.csvReasonHasEmail);
+    expect(csvReasonProblem("월간 가입 현황 정리")).toBeNull();
+  });
+
+  it("무동작 — 마지막 활동부터 15분이 지나면(같거나 넘으면) 만료, 시계가 뒤로 가면 만료 아님", () => {
+    expect(ADMIN_IDLE_MINUTES).toBe(15);
+    const t = 1_700_000_000_000;
+    expect(adminIdleExpired(t, t + 15 * 60_000 - 1)).toBe(false);
+    expect(adminIdleExpired(t, t + 15 * 60_000)).toBe(true);
+    expect(adminIdleExpired(t, t - 60 * 60_000)).toBe(false);
+    expect(adminIdleExpired(t, t + 60_000, 1)).toBe(true);
+    expect(ADMIN_TEXT.idleBody).toContain(`${ADMIN_IDLE_MINUTES}분`);
+  });
+
+  it("인증 앱 숫자 — 공백·하이픈은 빼고 정확히 6자리 숫자만", () => {
+    expect(normalizeTotpCode("123456")).toBe("123456");
+    expect(normalizeTotpCode(" 123 456 ")).toBe("123456");
+    expect(normalizeTotpCode("123-456")).toBe("123456");
+    expect(normalizeTotpCode("12345")).toBeNull();
+    expect(normalizeTotpCode("1234567")).toBeNull();
+    expect(normalizeTotpCode("12a456")).toBeNull();
+    expect(normalizeTotpCode("１２３４５６")).toBeNull();
+  });
+
+  it("QR — supabase-js의 인코딩 안 된 SVG data URL을 인코딩해 다시 만든다, SVG가 아니면 그리지 않는다", () => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><path fill="#000" d="M0 0h1v1H0z"/></svg>';
+    const src = qrImageSrc(`data:image/svg+xml;utf-8,${svg}`)!;
+    expect(src.startsWith("data:image/svg+xml;charset=utf-8,")).toBe(true);
+    expect(src).not.toContain("#");
+    expect(decodeURIComponent(src.slice("data:image/svg+xml;charset=utf-8,".length))).toBe(svg);
+    expect(qrImageSrc(svg)).toBe(src);
+    expect(qrImageSrc('<?xml version="1.0"?>\n<svg viewBox="0 0 1 1"></svg>')).not.toBeNull();
+    expect(qrImageSrc("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(qrImageSrc("javascript:alert(1)")).toBeNull();
+    expect(qrImageSrc("")).toBeNull();
+  });
+
+  it("비밀 키는 4글자씩 띄운다", () => {
+    expect(groupSecret("JBSWY3DPEHPK3PXP")).toBe("JBSW Y3DP EHPK 3PXP");
+    expect(groupSecret("ABCDE")).toBe("ABCD E");
+    expect(groupSecret("")).toBe("");
   });
 });

@@ -13,17 +13,64 @@ import {
   fetchUsersPage,
   findUser,
   logUsersExport,
+  startTotpEnroll,
+  TOTP_FRIENDLY_NAME,
+  verifyTotp,
   type AdminClient,
+  type AdminMfaClient,
   type AdminRpcError,
   type AdminSessionUser,
+  type MfaFactor,
 } from "./adminApi";
 
 const USER_ID = "3f0f9b2e-0000-4000-8000-000000000001";
 
 type RpcReply = { data: unknown; error: AdminRpcError | null } | Error;
 
-function fakeClient(init: { user?: AdminSessionUser | null; sessionFailed?: boolean; replies?: Record<string, RpcReply> }) {
+/** 2단계 인증 가짜의 답 — 없으면 aal1·인증 앱 없음·등록 성공·확인 성공 */
+interface MfaInit {
+  level?: { current: string | null; next: string | null } | AdminRpcError;
+  factors?: MfaFactor[] | AdminRpcError;
+  enroll?: { id: string; qrCode: string; secret: string } | AdminRpcError;
+  unenroll?: AdminRpcError | null;
+  verify?: AdminRpcError | null | Error;
+}
+
+const isError = (v: unknown): v is AdminRpcError => typeof v === "object" && v !== null && "code" in v;
+
+/** 2단계 인증 가짜 — 부른 순서를 mfaCalls에 남긴다 */
+function fakeMfa(init: MfaInit = {}, mfaCalls: string[] = []): AdminMfaClient {
+  return {
+    async assurance() {
+      mfaCalls.push("assurance");
+      const v = init.level ?? { current: "aal1", next: "aal1" };
+      return isError(v) ? { data: null, error: v } : { data: v, error: null };
+    },
+    async factors() {
+      mfaCalls.push("factors");
+      const v = init.factors ?? [];
+      return isError(v) ? { data: null, error: v } : { data: v, error: null };
+    },
+    async enrollTotp(name) {
+      mfaCalls.push(`enroll:${name}`);
+      const v = init.enroll ?? { id: "f-new", qrCode: "data:image/svg+xml;utf-8,<svg></svg>", secret: "ABCDEFGHIJKLMNOP" };
+      return isError(v) ? { data: null, error: v } : { data: v, error: null };
+    },
+    async unenroll(id) {
+      mfaCalls.push(`unenroll:${id}`);
+      return { data: null, error: init.unenroll ?? null };
+    },
+    async verify(id, code) {
+      mfaCalls.push(`verify:${id}:${code}`);
+      if (init.verify instanceof Error) throw init.verify;
+      return { data: null, error: init.verify ?? null };
+    },
+  };
+}
+
+function fakeClient(init: { user?: AdminSessionUser | null; sessionFailed?: boolean; replies?: Record<string, RpcReply>; mfa?: MfaInit }) {
   const calls: { fn: string; args?: Record<string, unknown> }[] = [];
+  const mfaCalls: string[] = [];
   const client: AdminClient = {
     async getSessionUser() {
       return { user: init.user ?? null, failed: init.sessionFailed === true };
@@ -37,8 +84,10 @@ function fakeClient(init: { user?: AdminSessionUser | null; sessionFailed?: bool
     onSignedOut() {
       return () => {};
     },
+    async signOut() {},
+    mfa: fakeMfa(init.mfa, mfaCalls),
   };
-  return { client, calls };
+  return { client, calls, mfaCalls };
 }
 
 describe("checkAdminAccess", () => {
@@ -59,26 +108,109 @@ describe("checkAdminAccess", () => {
     expect(calls).toEqual([]);
   });
 
-  it("카카오 계정 — is_admin() 참이면 관리자, 거짓이면 ID를 보여 줄 수 있게 notAdmin", async () => {
-    const admin = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: true, error: null } } });
-    expect(await checkAdminAccess(admin.client)).toEqual({ kind: "admin", userId: USER_ID });
-    expect(admin.calls).toEqual([{ fn: "is_admin", args: undefined }]);
+  const MEMBER = { admin_membership: { data: true, error: null } } as const;
 
-    const notAdmin = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: false, error: null } } });
+  it("관리자 목록에 없으면 ID를 보여 줄 수 있게 notAdmin — 2단계 인증으로 가지 않는다", async () => {
+    const notAdmin = fakeClient({ user: { id: USER_ID }, replies: { admin_membership: { data: false, error: null } } });
     expect(await checkAdminAccess(notAdmin.client)).toEqual({ kind: "notAdmin", userId: USER_ID });
+    expect(notAdmin.calls).toEqual([{ fn: "admin_membership", args: undefined }]);
+    expect(notAdmin.mfaCalls).toEqual([]);
 
     // 참 비슷한 값("true" 문자열 등)은 관리자로 보지 않는다
-    const truthy = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: "true", error: null } } });
+    const truthy = fakeClient({ user: { id: USER_ID }, replies: { admin_membership: { data: "true", error: null } } });
     expect(await checkAdminAccess(truthy.client)).toEqual({ kind: "notAdmin", userId: USER_ID });
   });
 
-  it("관리자 SQL이 없으면 설치 안내, 그 밖의 오류·예외는 실패", async () => {
-    const missing = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: null, error: { code: "PGRST202" } } } });
+  it("관리자 목록 + aal2 세션 — is_admin()으로 한 번 더 확인하고 대시보드", async () => {
+    const admin = fakeClient({ user: { id: USER_ID }, replies: { ...MEMBER, is_admin: { data: true, error: null } }, mfa: { level: { current: "aal2", next: "aal2" } } });
+    expect(await checkAdminAccess(admin.client)).toEqual({ kind: "admin", userId: USER_ID });
+    expect(admin.calls.map((c) => c.fn)).toEqual(["admin_membership", "is_admin"]);
+    expect(admin.mfaCalls).toEqual(["assurance"]);
+
+    // aal2인데 서버가 관리자가 아니라고 하면 들여보내지 않는다(어긋남 — 실패)
+    const odd = fakeClient({ user: { id: USER_ID }, replies: { ...MEMBER, is_admin: { data: false, error: null } }, mfa: { level: { current: "aal2", next: "aal2" } } });
+    expect(await checkAdminAccess(odd.client)).toEqual({ kind: "error", failure: "failed" });
+  });
+
+  it("관리자 목록 + aal1 — 확인된 인증 앱이 있으면 숫자 확인, 없으면(확인 전 등록만 있어도) 등록", async () => {
+    const challenge = fakeClient({
+      user: { id: USER_ID },
+      replies: MEMBER,
+      mfa: { level: { current: "aal1", next: "aal2" }, factors: [{ id: "f-1", type: "totp", status: "verified" }] },
+    });
+    expect(await checkAdminAccess(challenge.client)).toEqual({ kind: "mfaChallenge", userId: USER_ID, factorId: "f-1" });
+    expect(challenge.calls.map((c) => c.fn)).toEqual(["admin_membership"]);
+
+    const enroll = fakeClient({ user: { id: USER_ID }, replies: MEMBER, mfa: { factors: [{ id: "f-old", type: "totp", status: "unverified" }] } });
+    expect(await checkAdminAccess(enroll.client)).toEqual({ kind: "mfaEnroll", userId: USER_ID });
+    const none = fakeClient({ user: { id: USER_ID }, replies: MEMBER });
+    expect(await checkAdminAccess(none.client)).toEqual({ kind: "mfaEnroll", userId: USER_ID });
+    // 인증 앱(totp)이 아닌 수단은 숫자 확인에 쓰지 않는다
+    const phone = fakeClient({ user: { id: USER_ID }, replies: MEMBER, mfa: { factors: [{ id: "f-p", type: "phone", status: "verified" }] } });
+    expect(await checkAdminAccess(phone.client)).toEqual({ kind: "mfaEnroll", userId: USER_ID });
+  });
+
+  it("0014가 아직 없는 서버(admin_membership 없음) — 예전처럼 is_admin()만 본다", async () => {
+    const legacy = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: true, error: null } } });
+    expect(await checkAdminAccess(legacy.client)).toEqual({ kind: "admin", userId: USER_ID });
+    expect(legacy.calls.map((c) => c.fn)).toEqual(["admin_membership", "is_admin"]);
+    expect(legacy.mfaCalls).toEqual([]);
+    const legacyNot = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: false, error: null } } });
+    expect(await checkAdminAccess(legacyNot.client)).toEqual({ kind: "notAdmin", userId: USER_ID });
+    // 관리자 SQL(0002)도 없으면 설치 안내
+    const missing = fakeClient({ user: { id: USER_ID } });
     expect(await checkAdminAccess(missing.client)).toEqual({ kind: "error", failure: "setupMissing" });
-    const broken = fakeClient({ user: { id: USER_ID }, replies: { is_admin: { data: null, error: { code: "500" } } } });
+  });
+
+  it("그 밖의 오류·예외, 인증 단계·인증 수단을 읽지 못하면 실패", async () => {
+    const broken = fakeClient({ user: { id: USER_ID }, replies: { admin_membership: { data: null, error: { code: "500" } } } });
     expect(await checkAdminAccess(broken.client)).toEqual({ kind: "error", failure: "failed" });
-    const thrown = fakeClient({ user: { id: USER_ID }, replies: { is_admin: new Error("offline") } });
+    const thrown = fakeClient({ user: { id: USER_ID }, replies: { admin_membership: new Error("offline") } });
     expect(await checkAdminAccess(thrown.client)).toEqual({ kind: "error", failure: "failed" });
+    const level = fakeClient({ user: { id: USER_ID }, replies: MEMBER, mfa: { level: { code: "session_not_found" } } });
+    expect(await checkAdminAccess(level.client)).toEqual({ kind: "error", failure: "failed" });
+    const factors = fakeClient({ user: { id: USER_ID }, replies: MEMBER, mfa: { factors: { code: "500" } } });
+    expect(await checkAdminAccess(factors.client)).toEqual({ kind: "error", failure: "failed" });
+  });
+});
+
+describe("startTotpEnroll — 인증 앱 등록 시작", () => {
+  it("확인 전에 남은 등록을 지우고 새로 만든다 — 인증 앱에 보일 이름은 하나", async () => {
+    const { client, mfaCalls } = fakeClient({ mfa: { factors: [{ id: "f-old", type: "totp", status: "unverified" }, { id: "f-ph", type: "phone", status: "unverified" }] } });
+    expect(await startTotpEnroll(client)).toEqual({ ok: true, factorId: "f-new", qrCode: "data:image/svg+xml;utf-8,<svg></svg>", secret: "ABCDEFGHIJKLMNOP" });
+    expect(mfaCalls).toEqual(["factors", "unenroll:f-old", `enroll:${TOTP_FRIENDLY_NAME}`]);
+  });
+
+  it("이미 확인된 인증 앱이 있으면 등록하지 않는다(숫자 확인으로 가야 한다)", async () => {
+    const { client, mfaCalls } = fakeClient({ mfa: { factors: [{ id: "f-1", type: "totp", status: "verified" }] } });
+    expect(await startTotpEnroll(client)).toEqual({ ok: false, failure: "failed" });
+    expect(mfaCalls).toEqual(["factors"]);
+  });
+
+  it("앱 인증이 꺼진 프로젝트는 disabled, 목록·지우기·등록 실패는 failed", async () => {
+    expect(await startTotpEnroll(fakeClient({ mfa: { enroll: { code: "mfa_totp_enroll_not_enabled" } } }).client)).toEqual({ ok: false, failure: "disabled" });
+    expect(await startTotpEnroll(fakeClient({ mfa: { enroll: { code: "mfa_factor_name_conflict" } } }).client)).toEqual({ ok: false, failure: "failed" });
+    expect(await startTotpEnroll(fakeClient({ mfa: { factors: { code: "500" } } }).client)).toEqual({ ok: false, failure: "failed" });
+    const stuck = fakeClient({ mfa: { factors: [{ id: "f-old", type: "totp", status: "unverified" }], unenroll: { code: "500" } } });
+    expect(await startTotpEnroll(stuck.client)).toEqual({ ok: false, failure: "failed" });
+    expect(stuck.mfaCalls).toEqual(["factors", "unenroll:f-old"]);
+  });
+});
+
+describe("verifyTotp — 6자리 숫자 확인", () => {
+  it("맞으면 ok — 받은 숫자 그대로 보낸다", async () => {
+    const { client, mfaCalls } = fakeClient({});
+    expect(await verifyTotp(client, "f-1", "123456")).toEqual({ ok: true });
+    expect(mfaCalls).toEqual(["verify:f-1:123456"]);
+  });
+
+  it("틀림·시간 지남은 invalid, 꺼짐은 disabled, 그 밖·예외는 failed", async () => {
+    for (const code of ["mfa_verification_failed", "mfa_challenge_expired", "mfa_verification_rejected"]) {
+      expect(await verifyTotp(fakeClient({ mfa: { verify: { code } } }).client, "f", "000000")).toEqual({ ok: false, failure: "invalid" });
+    }
+    expect(await verifyTotp(fakeClient({ mfa: { verify: { code: "mfa_totp_verify_not_enabled" } } }).client, "f", "000000")).toEqual({ ok: false, failure: "disabled" });
+    expect(await verifyTotp(fakeClient({ mfa: { verify: { code: "over_request_rate_limit" } } }).client, "f", "000000")).toEqual({ ok: false, failure: "failed" });
+    expect(await verifyTotp(fakeClient({ mfa: { verify: new Error("offline") } }).client, "f", "000000")).toEqual({ ok: false, failure: "failed" });
   });
 });
 
@@ -234,6 +366,8 @@ function pagedClient(total: number, failAt: number | null = null) {
     onSignedOut() {
       return () => {};
     },
+    async signOut() {},
+    mfa: fakeMfa(),
   };
   return { client, calls };
 }
@@ -294,22 +428,24 @@ function exportClient(total: number, logReply: RpcReply = { data: null, error: n
   return { client, order };
 }
 
-describe("logUsersExport — CSV 내려받기를 접근 기록에", () => {
-  it("파일에 담을 행 수만 보낸다(계정 ID·파일 내용 없음)", async () => {
+describe("logUsersExport — CSV 내려받기를 사유와 함께 접근 기록에(0014)", () => {
+  it("파일에 담을 행 수와 사유만 보낸다(계정 ID·파일 내용 없음)", async () => {
     const { client, calls } = fakeClient({ replies: { admin_log_users_export: { data: null, error: null } } });
-    expect(await logUsersExport(client, 250)).toEqual({ ok: true, value: null });
-    expect(calls).toEqual([{ fn: "admin_log_users_export", args: { p_rows: 250 } }]);
+    expect(await logUsersExport(client, 250, "월간 가입 현황 정리")).toEqual({ ok: true, value: null });
+    expect(calls).toEqual([{ fn: "admin_log_users_export", args: { p_rows: 250, p_reason: "월간 가입 현황 정리" } }]);
   });
 
-  it("0009가 없으면 설치 안내, 권한 없음, 그 밖(22023 등)·예외는 실패", async () => {
+  it("0014가 없으면 설치 안내, 권한 없음, 그 밖(22023·이메일 제약 23514 등)·예외는 실패", async () => {
     const missing = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "PGRST202" } } } });
-    expect(await logUsersExport(missing.client, 1)).toEqual({ ok: false, failure: "setupMissing" });
+    expect(await logUsersExport(missing.client, 1, "r")).toEqual({ ok: false, failure: "setupMissing" });
     const forbidden = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "42501" } } } });
-    expect(await logUsersExport(forbidden.client, 1)).toEqual({ ok: false, failure: "forbidden" });
+    expect(await logUsersExport(forbidden.client, 1, "r")).toEqual({ ok: false, failure: "forbidden" });
     const invalid = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "22023" } } } });
-    expect(await logUsersExport(invalid.client, -1)).toEqual({ ok: false, failure: "failed" });
+    expect(await logUsersExport(invalid.client, -1, "r")).toEqual({ ok: false, failure: "failed" });
+    const email = fakeClient({ replies: { admin_log_users_export: { data: null, error: { code: "23514" } } } });
+    expect(await logUsersExport(email.client, 1, "r")).toEqual({ ok: false, failure: "failed" });
     const thrown = fakeClient({ replies: { admin_log_users_export: new Error("offline") } });
-    expect(await logUsersExport(thrown.client, 1)).toEqual({ ok: false, failure: "failed" });
+    expect(await logUsersExport(thrown.client, 1, "r")).toEqual({ ok: false, failure: "failed" });
   });
 });
 
@@ -317,7 +453,7 @@ describe("exportUsersCsv — 목록 모으기 → 접근 기록 → 파일", () 
   it("전체 목록을 모은 뒤 행 수를 기록하고, 그다음에 파일을 만든다", async () => {
     const { client, order } = exportClient(150);
     const saved: number[] = [];
-    const r = await exportUsersCsv(client, (rows) => {
+    const r = await exportUsersCsv(client, "월간 정리", (rows) => {
       saved.push(rows.length);
       // 파일을 만들 때는 이미 기록이 남아 있다
       expect(order.at(-1)?.fn).toBe("admin_log_users_export");
@@ -326,10 +462,10 @@ describe("exportUsersCsv — 목록 모으기 → 접근 기록 → 파일", () 
     expect(r).toEqual({ ok: true, rows: 150 });
     expect(saved).toEqual([150]);
     expect(order.map((c) => c.fn)).toEqual(["admin_list_users", "admin_list_users", "admin_log_users_export"]);
-    expect(order.at(-1)?.args).toEqual({ p_rows: 150 });
+    expect(order.at(-1)?.args).toEqual({ p_rows: 150, p_reason: "월간 정리" });
   });
 
-  it("기록을 남기지 못하면 파일을 만들지 않는다 — 0009가 없는 서버·권한 없음·네트워크 예외 모두", async () => {
+  it("기록을 남기지 못하면 파일을 만들지 않는다 — 0014가 없는 서버·권한 없음·네트워크 예외 모두", async () => {
     for (const [reply, failure] of [
       [{ data: null, error: { code: "PGRST202" } }, "setupMissing"],
       [{ data: null, error: { code: "42501" } }, "forbidden"],
@@ -337,7 +473,7 @@ describe("exportUsersCsv — 목록 모으기 → 접근 기록 → 파일", () 
     ] as const) {
       const { client } = exportClient(30, reply);
       let saved = 0;
-      const r = await exportUsersCsv(client, () => {
+      const r = await exportUsersCsv(client, "월간 정리", () => {
         saved += 1;
         return true;
       });
@@ -351,13 +487,13 @@ describe("exportUsersCsv — 목록 모으기 → 접근 기록 → 파일", () 
     const saveNever = () => {
       throw new Error("불리면 안 된다");
     };
-    expect(await exportUsersCsv(forbidden.client, saveNever)).toEqual({ ok: false, step: "list", failure: "forbidden" });
+    expect(await exportUsersCsv(forbidden.client, "월간 정리", saveNever)).toEqual({ ok: false, step: "list", failure: "forbidden" });
     expect(forbidden.calls.map((c) => c.fn)).toEqual(["admin_list_users"]);
 
     const blocked = exportClient(5);
-    expect(await exportUsersCsv(blocked.client, () => false)).toEqual({ ok: false, step: "save", failure: "failed" });
+    expect(await exportUsersCsv(blocked.client, "월간 정리", () => false)).toEqual({ ok: false, step: "save", failure: "failed" });
     const throws = exportClient(5);
-    expect(await exportUsersCsv(throws.client, saveNever)).toEqual({ ok: false, step: "save", failure: "failed" });
+    expect(await exportUsersCsv(throws.client, "월간 정리", saveNever)).toEqual({ ok: false, step: "save", failure: "failed" });
     expect(throws.order.map((c) => c.fn)).toEqual(["admin_list_users", "admin_log_users_export"]);
   });
 });
