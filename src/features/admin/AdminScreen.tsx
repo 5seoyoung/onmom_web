@@ -24,6 +24,12 @@
 //   "0009_admin_access_log.sql을 실행했는지 확인" 안내만 보인다(조회·찾기·삭제는 0009 없이도 그대로 된다).
 // 이용 통계(0011_admin_usage_stats.sql): 서버가 볼 때마다 admin_audit에 남긴다. 0011이 아직 없는 서버에서는 그 묶음만
 //   "0011_admin_usage_stats.sql을 실행했는지 확인" 안내를 보이고, 다른 카드는 그대로 된다.
+// 관리자 보안 보강(0014_admin_hardening.sql — 안전성 확보조치 기준 제5조③·제6조②④·제8조②):
+//   - 2단계 인증: 서버는 인증 앱 숫자까지 확인한 세션(aal2)만 관리자로 본다. 관리자 목록에 있는 계정은 대시보드 전에 AdminMfa
+//     (처음이면 QR 등록, 다음부터는 6자리 숫자)를 거친다. 0014가 아직 없는 서버에서는 예전처럼 바로 대시보드(adminApi checkAdminAccess).
+//   - 무동작 자동 로그아웃: 대시보드·2단계 인증 화면을 ADMIN_IDLE_MINUTES(15분) 동안 쓰지 않으면 이 브라우저에서 로그아웃하고
+//     "로그아웃했어요" 안내를 보인다(백그라운드 탭에서 타이머가 늦어도 마지막 활동 시각으로 판단 — 돌아오면 바로 확인).
+//   - CSV 내려받기는 사유를 받아(CsvReasonDialog) 접근 기록에 함께 남긴다. 권한 이력(admins 넣기·빼기)은 서버 트리거가 남긴다.
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -54,6 +60,7 @@ import {
   ADMIN_PAGE_SIZE,
   ADMIN_TEXT,
   USAGE_DEFAULT_DAYS,
+  adminIdleExpired,
   adminRowView,
   chartBars,
   chartSummary,
@@ -73,7 +80,9 @@ import {
   type UsageStats,
   type UserRowView,
 } from "./adminModel";
+import { AdminMfa, type AdminMfaMode } from "./AdminMfa";
 import { AdminsTable, ConsentVersionsTable, TOOL_BUTTON_CLASS, ToolCard, UserSearch, type SearchState } from "./AdminTools";
+import { CsvReasonDialog } from "./CsvReasonDialog";
 import { DeleteUserDialog } from "./DeleteUserDialog";
 import { NewUsersChart } from "./NewUsersChart";
 import { UsageStatsSection } from "./UsageStats";
@@ -84,7 +93,55 @@ type Screen =
   | { kind: "notConfigured" }
   | { kind: "forbidden"; userId: string | null }
   | { kind: "error"; failure: Exclude<AdminFailure, "forbidden"> }
+  /** 관리자 목록에 있지만 2단계 인증 전(0014) — 등록 또는 숫자 확인 */
+  | { kind: "mfa"; client: AdminClient; mode: AdminMfaMode }
+  /** 무동작으로 로그아웃함 */
+  | { kind: "timedOut" }
   | { kind: "admin"; client: AdminClient; userId: string };
+
+/** 활동으로 보는 입력 — 이 중 하나라도 있으면 무동작 시계를 처음부터 다시 잰다 */
+const ACTIVITY_EVENTS = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
+/** 화면이 떠 있는 동안 무동작을 확인하는 간격(ms) — 백그라운드 탭은 브라우저가 늦추지만, 돌아올 때(focus·visibilitychange) 바로 확인한다 */
+const IDLE_CHECK_MS = 15_000;
+
+/**
+ * 무동작 자동 로그아웃(안전성 확보조치 기준 제6조④) — active인 동안 마지막 활동 시각을 기억하고, ADMIN_IDLE_MINUTES가 지나면 onExpire를 한 번 부른다.
+ * 타이머에 기대지 않고 시각으로 판단한다(백그라운드 탭·잠든 노트북). 시간이 지난 뒤의 첫 입력은 시계를 되돌리지 않고 로그아웃을 부른다.
+ */
+function useAdminIdleSignOut(active: boolean, onExpire: () => void) {
+  const expireRef = useRef(onExpire);
+  useEffect(() => {
+    expireRef.current = onExpire;
+  });
+  useEffect(() => {
+    if (!active) return;
+    let last = Date.now();
+    let done = false;
+    const check = () => {
+      if (done || !adminIdleExpired(last, Date.now())) return;
+      done = true;
+      expireRef.current();
+    };
+    const touch = () => {
+      check();
+      if (!done) last = Date.now();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    const opts = { capture: true, passive: true } as const;
+    for (const ev of ACTIVITY_EVENTS) window.addEventListener(ev, touch, opts);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", onVisibility);
+    const timer = window.setInterval(check, IDLE_CHECK_MS);
+    return () => {
+      for (const ev of ACTIVITY_EVENTS) window.removeEventListener(ev, touch, opts);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(timer);
+    };
+  }, [active]);
+}
 
 export function AdminScreen() {
   // 설정 여부는 빌드 때 정해지는 값이라 정적 HTML과 브라우저의 첫 그림이 같다
@@ -103,12 +160,19 @@ export function AdminScreen() {
         return;
       }
       const client = adminClientFrom(supabase);
-      stopWatching = client.onSignedOut(() => setScreen({ kind: "forbidden", userId: null }));
+      // 무동작 로그아웃이면 그 안내를 그대로 둔다(로그아웃 알림이 "권한이 없어요"로 덮지 않게)
+      stopWatching = client.onSignedOut(() => setScreen((s) => (s.kind === "timedOut" ? s : { kind: "forbidden", userId: null })));
       const access = await checkAdminAccess(client);
       if (cancelled) return;
       switch (access.kind) {
         case "admin":
           setScreen({ kind: "admin", client, userId: access.userId });
+          break;
+        case "mfaEnroll":
+          setScreen({ kind: "mfa", client, mode: { kind: "enroll" } });
+          break;
+        case "mfaChallenge":
+          setScreen({ kind: "mfa", client, mode: { kind: "challenge", factorId: access.factorId } });
           break;
         case "notAdmin":
           setScreen({ kind: "forbidden", userId: access.userId });
@@ -137,7 +201,15 @@ export function AdminScreen() {
   const adminUserId = screen.kind === "admin" ? screen.userId : null;
   const onForbidden = useCallback(() => setScreen({ kind: "forbidden", userId: adminUserId }), [adminUserId]);
 
+  // 대시보드와 2단계 인증 화면(QR·키가 보이는 곳) — 15분 동안 쓰지 않으면 화면을 내리고 이 브라우저에서 로그아웃한다
+  const signedInClient = screen.kind === "admin" || screen.kind === "mfa" ? screen.client : null;
+  useAdminIdleSignOut(signedInClient !== null, () => {
+    setScreen({ kind: "timedOut" });
+    if (signedInClient !== null) void signedInClient.signOut().catch(() => undefined);
+  });
+
   if (screen.kind === "admin") return <AdminDashboard client={screen.client} onForbidden={onForbidden} />;
+  if (screen.kind === "mfa") return <AdminMfa key={screen.mode.kind} client={screen.client} mode={screen.mode} onVerified={retry} />;
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-6 py-16 text-center">
@@ -146,6 +218,21 @@ export function AdminScreen() {
         <div role="status" className="flex flex-col items-center gap-4">
           <LoaderCircle aria-hidden className="size-7 animate-spin text-primary motion-reduce:animate-none" />
           <h1 className="text-lg font-semibold text-text-primary">{ADMIN_TEXT.checking}</h1>
+        </div>
+      ) : screen.kind === "timedOut" ? (
+        <div className="flex w-full max-w-[22rem] flex-col items-center gap-6">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-lg font-semibold text-text-primary">{ADMIN_TEXT.idleTitle}</h1>
+            <p className="text-[0.9375rem] text-text-secondary">{ADMIN_TEXT.idleBody}</p>
+          </div>
+          <div className="flex w-full flex-col gap-3">
+            <Link href={ROUTES.login} className={primaryButtonClass}>
+              {ADMIN_TEXT.idleLogin}
+            </Link>
+            <Link href={ROUTES.home} className={secondaryButtonClass}>
+              {ADMIN_TEXT.home}
+            </Link>
+          </div>
         </div>
       ) : screen.kind === "error" ? (
         <div className="flex w-full max-w-[22rem] flex-col items-center gap-6">
@@ -221,8 +308,11 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
   const noticeRef = useRef<HTMLDivElement>(null);
   const pendingFocusRef = useRef<"trigger" | "notice" | null>(null);
-  // CSV 내려받기(메타데이터만) — logSetupMissing: 접근 기록 함수(0009)가 서버에 없어 파일을 만들지 않았다
+  // CSV 내려받기(메타데이터만) — logSetupMissing: 사유를 받는 접근 기록 함수(0014)가 서버에 없어 파일을 만들지 않았다
   const [csv, setCsv] = useState<"idle" | "busy" | "failed" | "logSetupMissing">("idle");
+  // 사유 확인 창(0014 — 사유 없이는 내려받지 않는다). 창이 닫히면 [CSV 내려받기]로 포커스를 되돌린다.
+  const [csvAsking, setCsvAsking] = useState(false);
+  const csvButtonRef = useRef<HTMLButtonElement>(null);
   const usageTitleId = useId();
   const usersTitleId = useId();
   const consentTitleId = useId();
@@ -374,17 +464,26 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
   }
 
   /**
-   * CSV — 전체 목록을 서버 최대(100명)씩 모으고, 내려받기를 접근 기록(admin_audit)에 남긴 뒤 파일로(adminApi exportUsersCsv).
-   * 부분 파일은 만들지 않고, 기록을 남기지 못해도 만들지 않는다.
+   * CSV — 사유를 받은 뒤(CsvReasonDialog) 전체 목록을 서버 최대(100명)씩 모으고, 내려받기를 사유와 함께 접근 기록(admin_audit)에 남긴 뒤
+   * 파일로(adminApi exportUsersCsv). 부분 파일은 만들지 않고, 기록을 남기지 못해도 만들지 않는다.
    */
-  async function exportCsv() {
+  async function exportCsv(reason: string) {
     setCsv("busy");
-    const r = await exportUsersCsv(client, (rows) =>
+    const r = await exportUsersCsv(client, reason, (rows) =>
       downloadTextFile(csvFileName(new Date()), usersCsv(rows, CURRENT_CONSENT_VERSION), "text/csv;charset=utf-8"),
     );
     if (r.ok) setCsv("idle");
-    else if (r.failure === "forbidden") onForbidden();
-    else setCsv(r.step === "log" && r.failure === "setupMissing" ? "logSetupMissing" : "failed");
+    else if (r.failure === "forbidden") {
+      onForbidden();
+      return;
+    } else setCsv(r.step === "log" && r.failure === "setupMissing" ? "logSetupMissing" : "failed");
+    // 내려받는 동안 단추가 잠겨 포커스가 body로 떨어진다 — 단추로 되돌린다(실패 안내는 role=alert로 읽힌다)
+    requestAnimationFrame(() => csvButtonRef.current?.focus());
+  }
+
+  function openCsvReason() {
+    setCsv("idle");
+    setCsvAsking(true);
   }
 
   const shownOverview = lastOf(overview);
@@ -539,7 +638,14 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           titleId={usersTitleId}
           note={ADMIN_TEXT.csvNote}
           actions={
-            <button type="button" onClick={() => void exportCsv()} disabled={csv === "busy" || shownUsers === null} className={TOOL_BUTTON_CLASS}>
+            <button
+              ref={csvButtonRef}
+              type="button"
+              onClick={openCsvReason}
+              disabled={csv === "busy" || shownUsers === null}
+              aria-haspopup="dialog"
+              className={TOOL_BUTTON_CLASS}
+            >
               {csv === "busy" ? (
                 <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
               ) : (
@@ -550,7 +656,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
           }
         >
           <div role="alert" className="empty:hidden text-[0.8125rem] font-semibold text-state-alert-text">
-            {csv === "failed" ? ADMIN_TEXT.csvFailed : csv === "logSetupMissing" ? ADMIN_TEXT.auditSetupHint : null}
+            {csv === "failed" ? ADMIN_TEXT.csvFailed : csv === "logSetupMissing" ? ADMIN_TEXT.csvReasonSetupHint : null}
           </div>
           {users.status === "failed" ? (
             <LoadFailed failure={users.failure} onRetry={reload} bare />
@@ -575,6 +681,18 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
 
       {deleteTarget !== null ? (
         <DeleteUserDialog target={deleteTarget} busy={deleteBusy} error={deleteError} onConfirm={(reason) => void confirmDelete(reason)} onClose={closeDelete} />
+      ) : null}
+      {csvAsking ? (
+        <CsvReasonDialog
+          onConfirm={(reason) => {
+            setCsvAsking(false);
+            void exportCsv(reason);
+          }}
+          onClose={() => {
+            setCsvAsking(false);
+            requestAnimationFrame(() => csvButtonRef.current?.focus());
+          }}
+        />
       ) : null}
     </main>
   );

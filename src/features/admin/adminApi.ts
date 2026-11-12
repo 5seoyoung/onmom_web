@@ -8,7 +8,13 @@
 //   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005, 이메일은 0013)
 //   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
 //   admin_list_admins()                 — 관리자 목록(0005)
-//   admin_log_users_export(p_rows)      — CSV 내려받기를 admin_audit에 남긴다(0009). 파일을 만들기 전에 부르고, 실패하면 파일을 만들지 않는다
+//   admin_log_users_export(p_rows, p_reason) — CSV 내려받기를 사유와 함께 admin_audit에 남긴다(0009 → 0014 사유 필수). 파일을 만들기 전에 부르고,
+//                                         실패하면 파일을 만들지 않는다
+//   admin_membership()                  — 내 계정이 관리자 목록에 있는가(0014 — 2단계 인증 전, 화면이 등록·코드 입력을 보일지 정한다)
+//
+// 2단계 인증(0014): is_admin()은 aal2 세션(인증 앱 숫자까지 확인한 세션)만 참이다. 화면은 관리자 목록에 있으면 Supabase Auth MFA로
+//   등록(QR) 또는 6자리 숫자 확인을 거친 뒤 대시보드를 연다 — checkAdminAccess·startTotpEnroll·verifyTotp. 0014가 아직 없는 서버
+//   (admin_membership이 없음)에서는 예전처럼 is_admin만 본다.
 //
 // 접근 기록(0009·0011): 위 읽기 함수도 서버가 부를 때마다 admin_audit에 한 줄씩 남긴다(누가·언제·무엇을·몇 명) — 화면은 따로 할 일이 없다.
 // CSV는 브라우저가 만들어 서버가 모르므로 화면이 admin_log_users_export를 부른다(exportUsersCsv).
@@ -44,13 +50,49 @@ export interface AdminSessionUser {
   is_anonymous?: boolean;
 }
 
+/** Supabase Auth MFA 응답 — rpc와 같은 모양(data 또는 error) */
+export interface MfaReply<T> {
+  data: T | null;
+  error: AdminRpcError | null;
+}
+
+export interface MfaFactor {
+  id: string;
+  /** "totp" · "phone" · "webauthn" … */
+  type: string;
+  /** "verified" | "unverified" */
+  status: string;
+}
+
+/** 관리자 2단계 인증에 쓰는 Supabase Auth MFA의 부분(인증 앱 — TOTP만) */
+export interface AdminMfaClient {
+  /** 지금 세션의 인증 단계 — aal1(카카오 로그인만)·aal2(인증 앱 숫자까지) */
+  assurance(): Promise<MfaReply<{ current: string | null; next: string | null }>>;
+  /** 이 계정에 등록된 인증 수단 전부(확인 전 포함) */
+  factors(): Promise<MfaReply<MfaFactor[]>>;
+  /** 인증 앱 등록 시작 — QR(SVG data URL)과 비밀 키. 숫자를 확인하기 전까지는 "확인 전" 상태로 남는다. */
+  enrollTotp(friendlyName: string): Promise<MfaReply<{ id: string; qrCode: string; secret: string }>>;
+  unenroll(factorId: string): Promise<MfaReply<null>>;
+  /** 6자리 숫자 확인 — 맞으면 세션이 aal2가 된다 */
+  verify(factorId: string, code: string): Promise<MfaReply<null>>;
+}
+
 /** 관리자 화면이 쓰는 Supabase 클라이언트의 부분 — 테스트는 이 모양의 가짜를 넘긴다. */
 export interface AdminClient {
   getSessionUser(): Promise<{ user: AdminSessionUser | null; failed: boolean }>;
   rpc(fn: string, args?: Record<string, unknown>): Promise<{ data: unknown; error: AdminRpcError | null }>;
   /** 로그아웃(다른 탭 포함)을 알린다. 돌려준 함수로 그만 듣는다. */
   onSignedOut(cb: () => void): () => void;
+  /** 이 브라우저에서만 로그아웃(무동작 자동 로그아웃) */
+  signOut(): Promise<void>;
+  mfa: AdminMfaClient;
 }
+
+/** 등록할 때 인증 앱에 보이는 이름 — 계정마다 같은 이름은 하나만 있을 수 있다(확인 전 등록을 지우고 다시 만든다) */
+export const TOTP_FRIENDLY_NAME = "온맘 관리자";
+
+const authErrorOf = (error: { code?: string; message?: string } | null | undefined): AdminRpcError | null =>
+  error === null || error === undefined ? null : { code: error.code, message: error.message };
 
 /** supabase-js 클라이언트 → AdminClient */
 export function adminClientFrom(client: SupabaseClient): AdminClient {
@@ -72,6 +114,34 @@ export function adminClientFrom(client: SupabaseClient): AdminClient {
         if (event === "SIGNED_OUT") cb();
       });
       return () => data.subscription.unsubscribe();
+    },
+    async signOut() {
+      await client.auth.signOut({ scope: "local" });
+    },
+    mfa: {
+      async assurance() {
+        const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+        return { data: data === null ? null : { current: data.currentLevel ?? null, next: data.nextLevel ?? null }, error: authErrorOf(error) };
+      },
+      async factors() {
+        const { data, error } = await client.auth.mfa.listFactors();
+        return {
+          data: data === null ? null : data.all.map((f) => ({ id: f.id, type: String(f.factor_type), status: String(f.status) })),
+          error: authErrorOf(error),
+        };
+      },
+      async enrollTotp(friendlyName) {
+        const { data, error } = await client.auth.mfa.enroll({ factorType: "totp", friendlyName });
+        return { data: data === null ? null : { id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret }, error: authErrorOf(error) };
+      },
+      async unenroll(factorId) {
+        const { error } = await client.auth.mfa.unenroll({ factorId });
+        return { data: null, error: authErrorOf(error) };
+      },
+      async verify(factorId, code) {
+        const { error } = await client.auth.mfa.challengeAndVerify({ factorId, code });
+        return { data: null, error: authErrorOf(error) };
+      },
     },
   };
 }
@@ -102,22 +172,97 @@ export type AdminAccess =
   | { kind: "anonymous" }
   /** 카카오로 로그인했지만 관리자 목록에 없음 — 소유자가 자기 ID를 목록에 넣을 수 있게 ID를 보인다 */
   | { kind: "notAdmin"; userId: string }
+  /** 관리자 목록에 있지만 인증 앱이 아직 없다 — 등록(QR) 화면(0014) */
+  | { kind: "mfaEnroll"; userId: string }
+  /** 관리자 목록에 있고 인증 앱이 있다 — 6자리 숫자 확인 화면(0014) */
+  | { kind: "mfaChallenge"; userId: string; factorId: string }
   | { kind: "admin"; userId: string }
   | { kind: "error"; failure: Exclude<AdminFailure, "forbidden"> };
 
+/** is_admin() 하나로 판단 — 0014 전 서버, 또는 aal2 세션의 마지막 확인. 거짓·권한 없음이면 otherwise. */
+async function isAdminNow(client: AdminClient, userId: string, otherwise: AdminAccess): Promise<AdminAccess> {
+  const { data, error } = await client.rpc("is_admin");
+  if (error !== null) {
+    const failure = failureOf(error);
+    return failure === "forbidden" ? otherwise : { kind: "error", failure };
+  }
+  return data === true ? { kind: "admin", userId } : otherwise;
+}
+
+/**
+ * 관리자 화면에 들어갈 수 있는가 — 세션 → 관리자 목록(admin_membership, 0014) → 2단계 인증 단계.
+ *   aal2 세션이면 is_admin()으로 한 번 더 확인하고 대시보드. aal1이면 확인된 인증 앱이 있으면 숫자 확인, 없으면 등록.
+ *   0014가 아직 없는 서버(admin_membership 없음 — 배포 사이 몇 분)는 예전처럼 is_admin()만 본다.
+ */
 export async function checkAdminAccess(client: AdminClient): Promise<AdminAccess> {
   try {
     const { user, failed } = await client.getSessionUser();
     if (user === null) return failed ? { kind: "error", failure: "failed" } : { kind: "signedOut" };
     if (user.is_anonymous === true) return { kind: "anonymous" };
-    const { data, error } = await client.rpc("is_admin");
-    if (error !== null) {
-      const failure = failureOf(error);
-      return failure === "forbidden" ? { kind: "notAdmin", userId: user.id } : { kind: "error", failure };
+    const notAdmin: AdminAccess = { kind: "notAdmin", userId: user.id };
+    const member = await client.rpc("admin_membership");
+    if (member.error !== null) {
+      const failure = failureOf(member.error);
+      if (failure === "setupMissing") return await isAdminNow(client, user.id, notAdmin);
+      return failure === "forbidden" ? notAdmin : { kind: "error", failure };
     }
-    return data === true ? { kind: "admin", userId: user.id } : { kind: "notAdmin", userId: user.id };
+    if (member.data !== true) return notAdmin;
+
+    const level = await client.mfa.assurance();
+    if (level.error !== null || level.data === null) return { kind: "error", failure: "failed" };
+    // 관리자 목록에 있고 aal2인데 is_admin이 거짓이면 서버와 화면이 어긋난 것 — 들여보내지 않고 실패로
+    if (level.data.current === "aal2") return await isAdminNow(client, user.id, { kind: "error", failure: "failed" });
+    const factors = await client.mfa.factors();
+    if (factors.error !== null || factors.data === null) return { kind: "error", failure: "failed" };
+    const verified = factors.data.find((f) => f.type === "totp" && f.status === "verified");
+    return verified === undefined ? { kind: "mfaEnroll", userId: user.id } : { kind: "mfaChallenge", userId: user.id, factorId: verified.id };
   } catch {
     return { kind: "error", failure: "failed" };
+  }
+}
+
+/** Supabase Auth에서 앱 인증(TOTP)이 꺼져 있음 — 대시보드에서 켜야 한다 */
+const MFA_DISABLED_CODES: ReadonlySet<string> = new Set(["mfa_totp_enroll_not_enabled", "mfa_totp_verify_not_enabled"]);
+/** 숫자가 틀렸거나 시간이 지남 — 새 숫자로 다시 */
+const MFA_INVALID_CODES: ReadonlySet<string> = new Set(["mfa_verification_failed", "mfa_challenge_expired", "mfa_verification_rejected"]);
+
+export type MfaFailure = "invalid" | "disabled" | "failed";
+
+export type TotpEnrollResult =
+  | { ok: true; factorId: string; qrCode: string; secret: string }
+  | { ok: false; failure: Exclude<MfaFailure, "invalid"> };
+
+/**
+ * 인증 앱 등록 시작 — 확인 전에 남은 등록(창을 닫았거나 새로고침)은 지우고 새로 만든다(같은 이름은 하나만 있을 수 있다).
+ * 이미 확인된 인증 앱이 있으면 등록하지 않는다(화면은 숫자 확인으로 가야 한다 — checkAdminAccess).
+ */
+export async function startTotpEnroll(client: AdminClient): Promise<TotpEnrollResult> {
+  try {
+    const listed = await client.mfa.factors();
+    if (listed.error !== null || listed.data === null) return { ok: false, failure: "failed" };
+    const totp = listed.data.filter((f) => f.type === "totp");
+    if (totp.some((f) => f.status === "verified")) return { ok: false, failure: "failed" };
+    for (const stale of totp) {
+      const removed = await client.mfa.unenroll(stale.id);
+      if (removed.error !== null) return { ok: false, failure: "failed" };
+    }
+    const { data, error } = await client.mfa.enrollTotp(TOTP_FRIENDLY_NAME);
+    if (error !== null || data === null) return { ok: false, failure: MFA_DISABLED_CODES.has(error?.code ?? "") ? "disabled" : "failed" };
+    return { ok: true, factorId: data.id, qrCode: data.qrCode, secret: data.secret };
+  } catch {
+    return { ok: false, failure: "failed" };
+  }
+}
+
+/** 6자리 숫자 확인 — 맞으면 세션이 aal2가 된다(그다음 checkAdminAccess가 대시보드로). code는 normalizeTotpCode를 거친 값. */
+export async function verifyTotp(client: AdminClient, factorId: string, code: string): Promise<{ ok: true } | { ok: false; failure: MfaFailure }> {
+  try {
+    const { error } = await client.mfa.verify(factorId, code);
+    if (error === null) return { ok: true };
+    const c = error.code ?? "";
+    return { ok: false, failure: MFA_INVALID_CODES.has(c) ? "invalid" : MFA_DISABLED_CODES.has(c) ? "disabled" : "failed" };
+  } catch {
+    return { ok: false, failure: "failed" };
   }
 }
 
@@ -195,10 +340,14 @@ export async function fetchAllUsers(client: AdminClient, max: number = CSV_MAX_R
   }
 }
 
-/** CSV 내려받기를 접근 기록에 남긴다(0009 admin_log_users_export) — 보내는 것은 파일에 담을 행 수뿐(계정 ID·파일 내용 없음). */
-export async function logUsersExport(client: AdminClient, rows: number): Promise<AdminResult<null>> {
+/**
+ * CSV 내려받기를 접근 기록에 남긴다(0014 admin_log_users_export) — 보내는 것은 파일에 담을 행 수와 사유뿐(계정 ID·파일 내용 없음).
+ * 사유는 normalizeCsvReason·csvReasonProblem을 거친 값(서버도 공백 제거·1~200자·이메일 모양 거절). 0014가 없는 서버는
+ * 사유를 받는 함수가 없어 setupMissing(파일을 만들지 않는다).
+ */
+export async function logUsersExport(client: AdminClient, rows: number, reason: string): Promise<AdminResult<null>> {
   try {
-    const { error } = await client.rpc("admin_log_users_export", { p_rows: rows });
+    const { error } = await client.rpc("admin_log_users_export", { p_rows: rows, p_reason: reason });
     return error === null ? { ok: true, value: null } : { ok: false, failure: failureOf(error) };
   } catch {
     return { ok: false, failure: "failed" };
@@ -215,12 +364,13 @@ export type CsvExportResult = { ok: true; rows: number } | { ok: false; step: "l
  */
 export async function exportUsersCsv(
   client: AdminClient,
+  reason: string,
   save: (rows: readonly AdminUserRow[]) => boolean,
   max: number = CSV_MAX_ROWS,
 ): Promise<CsvExportResult> {
   const all = await fetchAllUsers(client, max);
   if (!all.ok) return { ok: false, step: "list", failure: all.failure };
-  const logged = await logUsersExport(client, all.value.length);
+  const logged = await logUsersExport(client, all.value.length, reason);
   if (!logged.ok) return { ok: false, step: "log", failure: logged.failure };
   let saved = false;
   try {

@@ -37,6 +37,8 @@ function usageDaily(days: number) {
 }
 
 const REPLIES: Record<string, { data: unknown; error: { code: string } | null }> = {
+  // 관리자 목록에 있고(0014) 2단계 인증을 마친 세션(aal2 — 아래 가짜 mfa)
+  admin_membership: { data: true, error: null },
   is_admin: { data: true, error: null },
   admin_overview: {
     data: {
@@ -93,7 +95,7 @@ const REPLIES: Record<string, { data: unknown; error: { code: string } | null }>
     data: [{ id: FOUND_ID, created_at: "2026-10-25T01:00:00+00:00", last_sign_in_at: null, is_anonymous: true, provider: "anonymous", email: null, has_state: false, consent_version: null, state_updated_at: null }],
     error: null,
   },
-  // CSV 내려받기 — 접근 기록 함수(0009)가 없는 서버: 파일을 만들지 않고 안내를 보인다
+  // CSV 내려받기 — 사유를 받는 접근 기록 함수(0014)가 없는 서버: 파일을 만들지 않고 안내를 보인다
   admin_log_users_export: { data: null, error: { code: "PGRST202" } },
 };
 
@@ -107,6 +109,14 @@ const fakeClient: AdminClient = {
   getSessionUser: async () => ({ user: { id: ADMIN_ID, is_anonymous: false }, failed: false }),
   rpc: async (fn) => REPLIES[fn] ?? { data: null, error: { code: "PGRST202" } },
   onSignedOut: () => () => {},
+  signOut: async () => {},
+  mfa: {
+    assurance: async () => ({ data: { current: "aal2", next: "aal2" }, error: null }),
+    factors: async () => ({ data: [{ id: "f-1", type: "totp", status: "verified" }], error: null }),
+    enrollTotp: async () => ({ data: null, error: { code: "unexpected" } }),
+    unenroll: async () => ({ data: null, error: null }),
+    verify: async () => ({ data: null, error: null }),
+  },
 };
 fake.client = fakeClient;
 
@@ -167,7 +177,10 @@ beforeAll(async () => {
       this.setAttribute("open", "");
     };
     HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+      if (!this.hasAttribute("open")) return;
       this.removeAttribute("open");
+      // 브라우저처럼 close 이벤트를 보낸다 — 창의 onClose(부모가 창을 내리고 포커스를 되돌림)가 불린다
+      this.dispatchEvent(new Event("close"));
     };
   }
   globalThis.IntersectionObserver ??= class {
@@ -211,15 +224,51 @@ describe("관리자 대시보드 — axe(jsdom)", { timeout: SLOW }, () => {
     expect(note!.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("계정 찾기 결과 · CSV 접근 기록 실패 안내(0009 없음)에도 위반이 없다", async () => {
+  it("CSV 사유 확인 창(0014) — 창 안에 위반이 없고, 사유 없이는 내려받지 않는다", async () => {
+    await settle(() => expect(buttonNamed(ADMIN_TEXT.csvExport).disabled).toBe(false));
+    await act(async () => buttonNamed(ADMIN_TEXT.csvExport).click());
+    const dialog = await vi.waitFor(() => {
+      const d = document.querySelector("dialog[open]");
+      if (!d) throw new Error("창이 아직 없다");
+      return d;
+    });
+    expect(dialog.getAttribute("aria-labelledby")).toBeTruthy();
+    // 열리면 사유 칸에 포커스
+    expect(document.activeElement?.tagName).toBe("TEXTAREA");
+    expect(await violations(dialog)).toEqual([]);
+    // 비운 채로 확정 → 필수 안내(서버에 보내지 않음), 칸은 aria-invalid
+    await act(async () => buttonNamed(ADMIN_TEXT.csvReasonConfirm).click());
+    const alert = dialog.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe(ADMIN_TEXT.csvReasonRequired);
+    expect(dialog.querySelector("textarea")?.getAttribute("aria-invalid")).toBe("true");
+    expect(await violations(dialog)).toEqual([]);
+    // 이메일 모양은 막는다
+    await act(async () => typeInto(dialog.querySelector("textarea")!, "문의 a@example.com"));
+    await act(async () => buttonNamed(ADMIN_TEXT.csvReasonConfirm).click());
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(ADMIN_TEXT.csvReasonHasEmail);
+    // 취소하면 창이 닫히고 [CSV 내려받기]로 포커스가 돌아온다
+    await act(async () => buttonNamed(ADMIN_TEXT.cancel).click());
+    await settle(() => expect(document.querySelector("dialog[open]")).toBeNull());
+    await settle(() => expect(document.activeElement).toBe(buttonNamed(ADMIN_TEXT.csvExport)));
+  });
+
+  it("계정 찾기 결과 · CSV 접근 기록 실패 안내(0014 없음)에도 위반이 없다", async () => {
     const input = document.querySelector<HTMLInputElement>("main form input")!;
     await act(async () => typeInto(input, FOUND_ID));
     await act(async () => buttonNamed(ADMIN_TEXT.searchButton).click());
     await settle(() => expect(document.body.textContent).toContain(ADMIN_TEXT.colAccountId));
     await settle(() => expect(buttonNamed(ADMIN_TEXT.csvExport)).toBeDefined());
     await act(async () => buttonNamed(ADMIN_TEXT.csvExport).click());
-    await settle(() => expect(document.body.textContent).toContain(ADMIN_TEXT.auditSetupHint));
-    expect([...document.querySelectorAll('[role="alert"]')].some((a) => a.textContent === ADMIN_TEXT.auditSetupHint)).toBe(true);
+    const dialog = await vi.waitFor(() => {
+      const d = document.querySelector("dialog[open]");
+      if (!d) throw new Error("창이 아직 없다");
+      return d;
+    });
+    await act(async () => typeInto(dialog.querySelector("textarea")!, "월간 가입 현황 정리"));
+    await act(async () => buttonNamed(ADMIN_TEXT.csvReasonConfirm).click());
+    await settle(() => expect(document.body.textContent).toContain(ADMIN_TEXT.csvReasonSetupHint));
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    expect([...document.querySelectorAll('[role="alert"]')].some((a) => a.textContent === ADMIN_TEXT.csvReasonSetupHint)).toBe(true);
     expect(await violations()).toEqual([]);
 
     // 실제 브라우저(색·글자 150%)로 같은 마크업을 재는 e2e가 쓰도록 남긴다(저장소에 올리지 않음 — e2e/support/admin-dashboard.ts)
