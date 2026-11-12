@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // AI를 켠 뒤 첫 주 매일 보기(D20) — 내 컴퓨터에서, 읽기만(바꾸는 요청은 하지 않는다). 사용자 수·오류·사용량을 **개수로만** 본다.
-//   node scripts/ops/daily.mjs              (SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다 — docs/RUNBOOK.md "명령")
+//   node scripts/ops/daily.mjs              (SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다 — docs/dev/RUNBOOK.md "명령")
 //   node scripts/ops/daily.mjs --ledger     (docs/private/ACCESS_LEDGER.md가 있으면 이 조회를 한 줄 덧붙인다 — 접근 대장 규칙)
 // 보여 주는 것(모두 지난 24시간 기준, 계정 수는 지금 값)
 //   1) 계정·동의 — 읽기 전용 DB 사용자(supabase_read_only_user)로 SELECT 한 문장(dailyUsageSql). 개수만 받는다.
@@ -194,7 +194,7 @@ async function main() {
   const token = readAccessToken();
   if (token === null) {
     throw new OpsError(
-      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/RUNBOOK.md \"명령\").",
+      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/dev/RUNBOOK.md \"명령\").",
     );
   }
   const writeLedger = process.argv.includes("--ledger");
@@ -277,7 +277,7 @@ async function main() {
 
   say("");
   if (issues.length === 0) say("확인할 것 없음.");
-  else say(`확인할 것 ${issues.length}개: ${issues.join(", ")} — docs/RUNBOOK.md`);
+  else say(`확인할 것 ${issues.length}개: ${issues.join(", ")} — docs/dev/RUNBOOK.md`);
   process.exitCode = issues.length === 0 ? 0 : 1;
 }
 

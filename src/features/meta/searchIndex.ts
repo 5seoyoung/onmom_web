@@ -1,4 +1,4 @@
-// 검색 노출 — 빌드 때 만드는 robots.txt·sitemap.xml의 내용(src/app/robots.ts·sitemap.ts가 이 함수를 부른다). docs/SECURITY.md "검색 노출".
+// 검색 노출 — 빌드 때 만드는 robots.txt·sitemap.xml의 내용(src/app/robots.ts·sitemap.ts가 이 함수를 부른다). docs/dev/SECURITY.md "검색 노출".
 //
 // 스위치는 하나다: NEXT_PUBLIC_SITE_INDEXABLE(config.siteIndexable). 화면마다의 robots 메타(config.robotsFor)와 같은 목록
 // (config.SEARCH_INDEX_ROUTES — 시작 주소·처리방침·약관)을 쓴다.

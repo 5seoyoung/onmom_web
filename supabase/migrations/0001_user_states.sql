@@ -1,5 +1,5 @@
 -- 온맘 웹 — 사용자별 앱 상태(건강 기록 포함) 저장. Supabase 대시보드 → SQL Editor에 통째로 붙여 넣고 Run.
--- 설명: docs/SUPABASE_SETUP.md
+-- 설명: docs/dev/SUPABASE_SETUP.md
 --
 -- 한 계정 = 한 행. state에는 웹 앱 상태 JSON 전체(프로필·산모수첩·증상 기록·기분 답·기록장)가 들어간다 — 민감정보(건강).
 -- 계정은 카카오 사용자와 게스트(Supabase 익명 사용자, signInAnonymously) 둘 다다. 익명 사용자도 로그인 역할은 authenticated이고

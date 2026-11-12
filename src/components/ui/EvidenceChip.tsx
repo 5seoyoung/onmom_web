@@ -9,7 +9,7 @@ import { UI_TEXT } from "./uiText";
  *   - 출처(src:) 칩: 문서 돋보기 아이콘 + primary 글씨 + primary 10% 배경
  *     (글자는 AA 글자 전용 토큰 primary-text — 원색 코랄은 10% 배경 위 2.5:1, DEV_NOTES §3 CPO 12.
  *      아이콘은 iOS 원색 코랄 그대로 — aria-hidden 장식이라 대비 요구 대상이 아니고, 뜻은 sr-only "출처:"가 전한다.
- *      currentColor를 물려받으면 글자 토큰으로 어두워지므로 text-primary를 명시. docs/ACCESSIBILITY.md §2)
+ *      currentColor를 물려받으면 글자 토큰으로 어두워지므로 text-primary를 명시. docs/dev/ACCESSIBILITY.md §2)
  *   - 근거 설명 칩: textSecondary 글씨 + background(#F9FAFB) 배경
  * inverse = RedFlagCard 안(AnalyzeResultView.swift:221-228): 둘 다 흰 글씨, 아이콘 없음. iOS의 흰 22% 채움은 짙은 코랄 카드 위에서도
  *   3.31:1이라 채움 없이 흰 60% 테두리만 둔다 — 글자 대비는 카드 면 그대로 4.63:1(DEV_NOTES §3 CPO 12)

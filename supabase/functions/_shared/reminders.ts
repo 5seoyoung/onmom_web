@@ -1,4 +1,4 @@
-// Edge Function 공용 — 매일 리마인더(웹 푸시)의 규칙과 암호화. 설명: docs/PWA_AND_REMINDERS.md
+// Edge Function 공용 — 매일 리마인더(웹 푸시)의 규칙과 암호화. 설명: docs/dev/PWA_AND_REMINDERS.md
 //
 // ⚠️ 이 폴더(_shared)의 파일은 Deno(함수)·vitest(src/features/pwa/webPush.test.ts)·Next tsc가 모두 읽는다(cors.ts 머리말과 같은 제약):
 //    Deno 전역·npm: 가져오기를 쓰지 않는다. 암호화는 어디에나 있는 Web Crypto(crypto.subtle)만으로 한다 — 의존성 없음.

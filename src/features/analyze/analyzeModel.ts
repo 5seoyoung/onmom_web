@@ -124,7 +124,7 @@ export function analyzePhaseKey(phase: { kind: "form"; formKey: number } | { kin
   return phase.kind === "form" ? `form-${phase.formKey}` : phase.kind;
 }
 
-/** fetchVideos 결과 → 분석 입력(docs/DEV_NOTES.md §4). 예외로 끝난 조회는 "failed"로 본다. */
+/** fetchVideos 결과 → 분석 입력(docs/dev/DEV_NOTES.md §4). 예외로 끝난 조회는 "failed"로 본다. */
 export function videoFetchResultFrom(res: FetchVideosResult): VideoFetchResult {
   if (res.ok) return { state: "ok", videos: res.videos };
   return res.kind === "notConfigured" ? { state: "notConfigured" } : { state: "failed" };

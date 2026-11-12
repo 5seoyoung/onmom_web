@@ -3,7 +3,7 @@
 //   node scripts/ops/auth-switch.mjs --off --dry-run   → 지금 값과 바뀔 값만 보여 준다(아무것도 바꾸지 않음)
 //   node scripts/ops/auth-switch.mjs --off             → 끄기(한 번 더 묻는다 — 묻지 않으려면 --yes)
 //   node scripts/ops/auth-switch.mjs --on              → 다시 켜기
-//   SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다(docs/RUNBOOK.md "명령"). SUPABASE_PROJECT_REF가 비면 운영 프로젝트.
+//   SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다(docs/dev/RUNBOOK.md "명령"). SUPABASE_PROJECT_REF가 비면 운영 프로젝트.
 // 바꾸는 것: PATCH /v1/projects/{ref}/config/auth 의 external_anonymous_users_enabled · external_kakao_enabled 두 칸만.
 // 바꾸지 않는 것: 이미 로그인한 사람의 세션(끊지 않는다 — 만료될 때까지 그대로 동작), 카카오 키·시크릿과 다른 인증 설정, 사이트(Variables).
 // 끈 동안: [게스트로 시작]은 서버 계정 없이 이 브라우저 전용 게스트로 시작하고(기록은 서버에 올라가지 않는다), 카카오 로그인은 실패한다.
@@ -66,7 +66,7 @@ async function main(argv) {
   const token = readAccessToken();
   if (token === null) {
     throw new OpsError(
-      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/RUNBOOK.md \"명령\").",
+      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/dev/RUNBOOK.md \"명령\").",
     );
   }
   const ref = readProjectRef();
@@ -111,7 +111,7 @@ async function main(argv) {
   console.log(
     enable
       ? "다시 켰습니다. 사이트에서 [게스트로 시작]·카카오 로그인을 한 번씩 확인합니다."
-      : "껐습니다. 이미 로그인한 세션은 그대로입니다. 사이트 화면은 바뀌지 않으므로(버튼은 보임) 필요하면 deploy.yml의 ONMOM_SITE_MODE를 browser로 커밋해 사이트에서도 끕니다(docs/RUNBOOK.md 3-8). 다시 켜기: --on",
+      : "껐습니다. 이미 로그인한 세션은 그대로입니다. 사이트 화면은 바뀌지 않으므로(버튼은 보임) 필요하면 deploy.yml의 ONMOM_SITE_MODE를 browser로 커밋해 사이트에서도 끕니다(docs/dev/RUNBOOK.md 3-8). 다시 켜기: --on",
   );
 }
 

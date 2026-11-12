@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno 전용 가져오기(npm:·".ts")를 Next tsc가 읽지 못하는 줄에만 @ts-ignore를 쓴다. */
 // Supabase Edge Function "chat" — AI 상담(patient_edu)을 Anthropic(Claude)에 묻는다. AI는 상담에만 쓴다(약물 체크는 표만 — preset "substance"는 400).
-// 설명·배포·비밀 값: docs/SUPABASE_FUNCTIONS.md
+// 설명·배포·비밀 값: docs/dev/SUPABASE_FUNCTIONS.md
 //
 // - 키: ANTHROPIC_API_KEY는 Supabase 함수 비밀(secrets)에만 둔다. 웹·저장소에는 없다.
 // - 로그인 확인은 함수 안에서 한다(Supabase Auth getUser). 시범 동안 익명 게스트는 403 ai_login_required. 게이트웨이 JWT 확인은 끈다

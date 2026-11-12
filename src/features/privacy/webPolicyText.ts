@@ -3,7 +3,7 @@
 // 사실과 맞춘 이 판을 시행한다. 설정이 없는 빌드(브라우저 전용)는 iOS 원문(policyText.ts)을 그대로 보인다 — policy.ts policyFor.
 //
 // 구성은 개인정보보호법 §30·시행령 §31의 기재 사항 순서(목적·항목·보유·위탁·국외 이전·제3자 제공·민감정보·아동·
-// 자동 수집 장치·안전성 확보 조치·권리·생성형 AI·책임자·구제·변경). 검토용 사본과 체크리스트: docs/privacy/CONSENT_AND_POLICY_DRAFT.md
+// 자동 수집 장치·안전성 확보 조치·권리·생성형 AI·책임자·구제·변경). 검토용 사본과 체크리스트: docs/dev/privacy/CONSENT_AND_POLICY_DRAFT.md
 //
 // 원칙
 // - 사실만 쓴다. 업체의 보관 기간처럼 우리가 정하지 않는 값은 "그 업체의 정책에 따른 기간"으로 쓰고 숫자를 지어내지 않는다.
@@ -336,7 +336,7 @@ export function webPolicySections(o: WebPolicyOptions = DEFAULT_WEB_POLICY_OPTIO
         // 0006_anon_cleanup.sql — 익명·user_states 없음·카카오 연결 없음·만든 지 30일 지남. 기록을 저장한 게스트는 해당하지 않는다(첫 줄 그대로).
         `• 서버에 기록을 한 번도 저장하지 않은 게스트 계정(동의 전에 멈춘 경우 등)은 만든 지 ${ANON_CLEANUP_DAYS}일이 지나면 자동으로 삭제합니다.`,
         // 0004_push_reminders.sql — 끄기 = 행 삭제, 계정 삭제 = cascade. 카카오 로그아웃은 세션을 끝내기 전에 지우고(최대 3초), 못 지웠거나
-        // 브라우저 구독이 끝난 행은 발송 함수가 푸시 서비스의 404/410 응답을 받을 때 지운다(docs/PWA_AND_REMINDERS.md §4)
+        // 브라우저 구독이 끝난 행은 발송 함수가 푸시 서비스의 404/410 응답을 받을 때 지운다(docs/dev/PWA_AND_REMINDERS.md §4)
         ...(o.reminders
           ? [
               "• 알림 정보는 알림을 끄거나 계정을 삭제하면 즉시 삭제합니다. 로그아웃하거나 브라우저에서 알림 구독이 끝나 그때 지우지 못한 정보는 다음 알림을 보낼 때 삭제합니다.",

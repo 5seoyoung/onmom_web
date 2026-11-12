@@ -1,4 +1,4 @@
--- 온맘 웹 — AI 상담을 켜기 위한 동의 기록 손보기: 두 동의 칸 + 서버 시각 + 본인 행 지우기(철회). 설명: docs/SUPABASE_FUNCTIONS.md
+-- 온맘 웹 — AI 상담을 켜기 위한 동의 기록 손보기: 두 동의 칸 + 서버 시각 + 본인 행 지우기(철회). 설명: docs/dev/SUPABASE_FUNCTIONS.md
 -- 보통은 GitHub Actions "Supabase" 워크플로(supabase db push)가 적용한다. 대시보드 SQL Editor에 통째로 붙여 넣어도 된다.
 --
 -- 왜: 0010의 ai_consents는 사용자당 판·동의 시각(브라우저 시각) 한 줄이고 지우기가 없었다(계정 삭제로만 지워짐). AI를 켜려면

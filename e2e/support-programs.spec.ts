@@ -1,4 +1,4 @@
-// 브라우저 자동 시험 — 지원사업 화면의 "우리 지역 지원사업"(src/features/support/RegionalProgramsSection.tsx). docs/DEV_NOTES.md §11.
+// 브라우저 자동 시험 — 지원사업 화면의 "우리 지역 지원사업"(src/features/support/RegionalProgramsSection.tsx). docs/dev/DEV_NOTES.md §11.
 // 빌드에 실린 표시(src/content/support-programs.generated.json)에 따라 두 갈래로 확인한다:
 // - 비었으면(서비스 키 없음·수집 실패 — 저장소 그대로): 카드가 없고 목록 파일을 요청하지 않는다.
 // - 있으면(CI가 DATA_GO_KR_SERVICE_KEY로 수집한 빌드): [지역 고르기] → 이 사이트의 정적 파일 한 번 → 시·도·시·군·구 → 정부24 새 탭 링크.

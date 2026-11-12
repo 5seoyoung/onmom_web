@@ -1,4 +1,4 @@
-// 글자 크게·확대·좁은 폭에서 화면이 깨지지 않는지 — docs/ACCESSIBILITY.md §1-1·§3의 자동 검사를 시험으로 옮긴 것.
+// 글자 크게·확대·좁은 폭에서 화면이 깨지지 않는지 — docs/dev/ACCESSIBILITY.md §1-1·§3의 자동 검사를 시험으로 옮긴 것.
 // 한 번의 page.evaluate로 지금 화면(맨 위 → 각 컨트롤 위치로 스크롤)을 잰다:
 //   - 문서 가로 넘침(가로 스크롤이 생김) — WCAG 1.4.4·1.4.10
 //   - 화면 오른쪽(또는 왼쪽) 밖으로 나간 요소(가로로 스크롤하는 상자 안은 제외)
@@ -26,7 +26,7 @@ export const LAYOUT_ALLOWANCES: readonly LayoutAllowance[] = [
   {
     kind: "clipped-text",
     selector: "[data-allow-truncate]",
-    reason: "한 줄 말줄임을 일부러 둔 글자(기록장 목록 글 제목 — iOS lineLimit(1), docs/ACCESSIBILITY.md §6 '그대로 둔 것'). 전체 글은 글 상세에 있다",
+    reason: "한 줄 말줄임을 일부러 둔 글자(기록장 목록 글 제목 — iOS lineLimit(1), docs/dev/ACCESSIBILITY.md §6 '그대로 둔 것'). 전체 글은 글 상세에 있다",
   },
 ];
 

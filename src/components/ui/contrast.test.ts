@@ -2,8 +2,8 @@
 // - 글자 전용 토큰(state-*-text·primary-text·text-subtle-aa)은 실제로 깔리는 배경(흰 표면·background·coral-tint·divider·
 //   배지 12%/15%·출처 칩 10%) 위에서 AA 4.5:1 — 그리고 원색과 같은 색상(hue)을 짙게만 한 값인지도 본다.
 // - 포커스 링 토큰은 비텍스트 3:1(WCAG 1.4.11).
-// - iOS 원색을 글자로 쓰면 못 미친다는 사실은 it.fails로 적어 둔다(docs/DEV_NOTES.md §3 CPO 12): 원색이 바뀌어 통과하면 그 it.fails가
-//   실패하므로, 그때 글자 전용 토큰을 거두고 원색으로 돌아갈 수 있다. 표는 docs/ACCESSIBILITY.md.
+// - iOS 원색을 글자로 쓰면 못 미친다는 사실은 it.fails로 적어 둔다(docs/dev/DEV_NOTES.md §3 CPO 12): 원색이 바뀌어 통과하면 그 it.fails가
+//   실패하므로, 그때 글자 전용 토큰을 거두고 원색으로 돌아갈 수 있다. 표는 docs/dev/ACCESSIBILITY.md.
 // - 공용 컴포넌트가 글자에 원색 대신 글자 전용 토큰을 쓰는지도 소스로 확인한다(기능 폴더는 다른 담당 — 문서에 목록).
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -218,7 +218,7 @@ describe("공용 컴포넌트는 글자에 글자 전용 토큰을 쓴다(원색
 });
 
 // ─── iOS 원색을 글자로 쓰면 못 미친다 — CPO 12 결정(원색은 글자·흰 글씨 바탕에 쓰지 않는다). 결정 전에는 it.fails(기대 실패)였다. ───
-// 원색이 바뀌어 통과하게 되면 아래가 실패한다 — 그때 글자 전용·strong 토큰을 거둘지 다시 정한다(docs/ACCESSIBILITY.md §4).
+// 원색이 바뀌어 통과하게 되면 아래가 실패한다 — 그때 글자 전용·strong 토큰을 거둘지 다시 정한다(docs/dev/ACCESSIBILITY.md §4).
 describe("iOS 원색 글자는 AA에 못 미친다 — 그래서 글자 전용 토큰·strong 면을 쓴다(DEV_NOTES §3 CPO 12)", () => {
   it("흰 글씨 / 원색 코랄(state-alert)은 큰 글씨 3:1도 못 미친다 — 레드플래그 카드는 state-alert-strong", () => {
     expect(contrast(WHITE, C["state-alert"])).toBeLessThan(AA_LARGE);

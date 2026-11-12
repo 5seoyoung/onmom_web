@@ -1,4 +1,4 @@
-// 사용자 관리(Supabase Auth) — 게스트(익명 계정)·카카오 로그인·계정 연결 + 사용자별 서버 저장. 설정 방법: docs/SUPABASE_SETUP.md
+// 사용자 관리(Supabase Auth) — 게스트(익명 계정)·카카오 로그인·계정 연결 + 사용자별 서버 저장. 설정 방법: docs/dev/SUPABASE_SETUP.md
 //
 // 켜지는 조건: NEXT_PUBLIC_SUPABASE_URL과 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY가 둘 다 있을 때(config.isSupabaseConfigured).
 // 꺼져 있으면 카카오 버튼은 "준비 중", Supabase 요청·번들 없음, 게스트는 이 브라우저에만 저장(지금까지와 같다).

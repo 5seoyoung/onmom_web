@@ -1,6 +1,6 @@
 -- 온맘 웹 — AI 상담(Edge Function "chat")의 사용 한도. Supabase 대시보드 → SQL Editor에 통째로 붙여 넣고 Run해도 되고,
 -- 보통은 GitHub Actions "Supabase" 워크플로(supabase db push)가 적용한다.
--- 설명: docs/SUPABASE_FUNCTIONS.md
+-- 설명: docs/dev/SUPABASE_FUNCTIONS.md
 --
 -- 무엇을 남기나: "누가(사용자 id) 언제 AI에 한 번 물었다"만. 질문·답·컨텍스트는 어디에도 저장하지 않는다.
 -- 왜: 한 사람이 1시간에 보낼 수 있는 횟수(기본 30)와 서비스 전체의 하루 상한(기본 500 — 익명 계정을 여럿 만들어 비용을 키우는 것을 막는다)을 센다.

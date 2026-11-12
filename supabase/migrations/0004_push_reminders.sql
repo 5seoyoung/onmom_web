@@ -1,4 +1,4 @@
--- 온맘 웹 — 매일 리마인더(웹 푸시): 구독 표 + 매일 발송 예약(pg_cron → Edge Function send-reminders). 설명: docs/PWA_AND_REMINDERS.md
+-- 온맘 웹 — 매일 리마인더(웹 푸시): 구독 표 + 매일 발송 예약(pg_cron → Edge Function send-reminders). 설명: docs/dev/PWA_AND_REMINDERS.md
 -- 보통은 GitHub Actions "Supabase" 워크플로(supabase db push)가 적용한다. 대시보드 SQL Editor에 통째로 붙여 넣어도 된다.
 --
 -- 무엇을 남기나: 기기(브라우저)마다 푸시 끝점(endpoint)·브라우저가 만든 암호화 키(p256dh·auth)·시간대·시각. 건강 데이터는 없다.
@@ -8,7 +8,7 @@
 -- 예약: 매일 11:00 UTC = 20:00 KST(content.json notification.daily_reminder hour 20). 함수는 행의 시간대로 "지금 20시인가"를 다시 확인한다.
 -- 비밀값은 이 파일에 없다 — 발송 함수를 부를 때 쓰는 값은 Vault에서 실행 시점에 읽는다(아래 3). 여러 번 실행해도 같은 결과.
 -- 켜는 순서: 이 파일이 먼저 적용돼도 예약은 Vault에 reminder_cron_secret이 생기기 전까지 아무 요청도 보내지 않는다(아래 3) —
---   함수 배포·비밀값을 마친 뒤 Vault 값을 넣는 것이 "켜기"다(docs/PWA_AND_REMINDERS.md §5).
+--   함수 배포·비밀값을 마친 뒤 Vault 값을 넣는 것이 "켜기"다(docs/dev/PWA_AND_REMINDERS.md §5).
 -- 남용 방지: 끝점은 브라우저 회사의 푸시 서비스만(check 제약), 사용자당 기기 10개까지(트리거) — 발송 함수가 아무 주소로나 요청하지 않게.
 
 -- 1) 표 ------------------------------------------------------------------------------------------------
@@ -112,7 +112,7 @@ create policy "push_subscriptions: 본인 행 지우기" on public.push_subscrip
 
 -- 3) 매일 발송 예약 — pg_cron + pg_net → Edge Function send-reminders --------------------------------------
 -- Supabase 문서 "Scheduling Edge Functions"의 방식 그대로: 주소·키는 Vault에서 실행 시점에 읽고(vault.decrypted_secrets), 이 파일에는 없다.
--- 사람이 한 번 넣는 값(docs/PWA_AND_REMINDERS.md "주인이 할 일"):
+-- 사람이 한 번 넣는 값(docs/dev/PWA_AND_REMINDERS.md "주인이 할 일"):
 --   select vault.create_secret('<REMINDER_CRON_SECRET과 같은 긴 무작위 문자열>', 'reminder_cron_secret');   -- 필수. 함수 비밀값 REMINDER_CRON_SECRET과 같은 값
 --   select vault.create_secret('https://<ref>.supabase.co', 'project_url');                              -- 선택. 없으면 아래 기본 주소
 --   select vault.create_secret('<Publishable key>', 'publishable_key');                                    -- 선택. 게이트웨이용 apikey 헤더

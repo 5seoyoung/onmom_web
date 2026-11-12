@@ -1,4 +1,4 @@
-// 접근성·복원력 소스 검사(브라우저 없이) — docs/ACCESSIBILITY.md의 "자동 검사" 절.
+// 접근성·복원력 소스 검사(브라우저 없이) — docs/dev/ACCESSIBILITY.md의 "자동 검사" 절.
 // - 오류 화면(src/app/error.tsx·global-error.tsx·not-found.tsx): 클라이언트 경계, 한국어 문구, 다시 시도, 오류 내용 로그 금지.
 // - globals.css: 움직임 줄이기 전역 규칙, 포커스 링 토큰·base 층, 확대 존중(text-size-adjust).
 // - 껍데기(AppShell): 본문 바로가기 + 화면 전환 뒤 초점 이동(RouteFocus).

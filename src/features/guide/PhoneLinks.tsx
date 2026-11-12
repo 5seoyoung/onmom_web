@@ -14,7 +14,7 @@ import { phoneCallLabel, splitPhoneNumbers } from "./guideContent";
 
 export interface PhoneLinksProps {
   text: string;
-  /** 링크 색 — 기본은 글자용 코랄(primary-text, AA 4.5:1 — docs/ACCESSIBILITY.md §4). 붉은 카드처럼 어두운 배경에서는 흰색 등으로 바꾼다 */
+  /** 링크 색 — 기본은 글자용 코랄(primary-text, AA 4.5:1 — docs/dev/ACCESSIBILITY.md §4). 붉은 카드처럼 어두운 배경에서는 흰색 등으로 바꾼다 */
   linkClassName?: string;
   /**
    * false면 링크를 걸지 않고 번호를 한 줄로 묶기만 한다 — 이미 통째로 링크인 행 안(지원사업의 전화·페이지 행)에서 링크를 겹치지 않게.

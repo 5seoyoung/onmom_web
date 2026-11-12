@@ -78,7 +78,7 @@ function attribute(tag, name) {
 
 /**
  * 로그인 화면 HTML의 CSP — <meta http-equiv="Content-Security-Policy">가 정확히 1개, script-src가 있고
- * 'unsafe-inline'·'unsafe-eval'이 없어야 통과(정적 사이트라 헤더 대신 메타 — docs/SECURITY.md §2). → { ok, detail }
+ * 'unsafe-inline'·'unsafe-eval'이 없어야 통과(정적 사이트라 헤더 대신 메타 — docs/dev/SECURITY.md §2). → { ok, detail }
  */
 export function analyzeLoginCsp(html) {
   const tags = String(html).match(/<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi) ?? [];
@@ -355,7 +355,7 @@ export function renderSummary(results, { startedAt, siteUrl, ref }) {
   lines.push(
     failed.length === 0
       ? `**모두 통과** — ${passed.length}개 통과${results.length > passed.length ? `, ${results.length - passed.length}개 건너뜀` : ""}`
-      : `**실패 ${failed.length}개** (전체 ${results.length}개 중 통과 ${passed.length}개) — 아래 '실패' 줄을 보고 운영 안내서(docs/RUNBOOK.md)의 해당 장애를 따릅니다.`,
+      : `**실패 ${failed.length}개** (전체 ${results.length}개 중 통과 ${passed.length}개) — 아래 '실패' 줄을 보고 운영 안내서(docs/dev/RUNBOOK.md)의 해당 장애를 따릅니다.`,
   );
   lines.push("", "| 결과 | 분류 | 항목 | 내용 |", "|---|---|---|---|");
   for (const r of results) lines.push(`| ${LABEL[r.status]} | ${cell(r.group)} | ${cell(r.name)} | ${cell(r.detail)} |`);
@@ -363,7 +363,7 @@ export function renderSummary(results, { startedAt, siteUrl, ref }) {
     "",
     `- 사이트 ${siteUrl} · Supabase 프로젝트 ${ref}`,
     "- 모두 읽기만 합니다(사용자 데이터·설정을 바꾸지 않음). DB 항목은 개수만 봅니다.",
-    "- 되돌리기·끄기: docs/SUPABASE_SETUP.md G, 문제 해결: 같은 문서 I",
+    "- 되돌리기·끄기: docs/dev/SUPABASE_SETUP.md G, 문제 해결: 같은 문서 I",
     "",
   );
   return lines.join("\n");

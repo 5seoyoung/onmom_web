@@ -7,7 +7,7 @@
 //
 // 모두 웹 신규 문구 — CPO 확인 필요 (2026-11-06 시행판에서 새로 쓰거나 고친 줄에는 따로 표시를 달았다)
 
-/** 계정 정보 — 게스트 = Supabase 익명 사용자, 카카오 = Supabase 카카오 로그인(동의항목: docs/SUPABASE_SETUP.md A-7) */
+/** 계정 정보 — 게스트 = Supabase 익명 사용자, 카카오 = Supabase 카카오 로그인(동의항목: docs/dev/SUPABASE_SETUP.md A-7) */
 export const ACCOUNT_ITEMS =
   "이용자 식별자(게스트는 임의로 만든 식별자, 카카오 로그인은 카카오 회원번호와 카카오에서 제공에 동의한 닉네임·카카오계정(이메일)·프로필 사진 주소)";
 
@@ -55,7 +55,7 @@ export const AI_TRANSFER_ITEMS = `대화 내용(같은 대화의 최근 메시�
 
 /**
  * 매일 리마인더(웹 푸시) 구독 — 알림을 켠 기기(브라우저)마다 한 행(supabase/migrations/0004_push_reminders.sql push_subscriptions).
- * 켠 경우에만 생기고, 끄거나 계정을 삭제하면 바로 지운다. 건강 데이터는 없다(알림 문구도 고정 — docs/PWA_AND_REMINDERS.md).
+ * 켠 경우에만 생기고, 끄거나 계정을 삭제하면 바로 지운다. 건강 데이터는 없다(알림 문구도 고정 — docs/dev/PWA_AND_REMINDERS.md).
  */
 export const PUSH_ITEMS = "브라우저 푸시 구독 주소·암호화 키·시간대";
 

@@ -63,7 +63,7 @@ export const config = {
    */
   siteUrl: siteUrlFrom(process.env.NEXT_PUBLIC_SITE_URL, process.env.NEXT_PUBLIC_BASE_PATH ?? ""),
   /**
-   * Supabase 프로젝트 주소(https://<ref>.supabase.co) — 카카오 로그인 + 사용자별 서버 저장(docs/SUPABASE_SETUP.md).
+   * Supabase 프로젝트 주소(https://<ref>.supabase.co) — 카카오 로그인 + 사용자별 서버 저장(docs/dev/SUPABASE_SETUP.md).
    * 이 값과 아래 키가 둘 다 있어야 켜진다. 비면 카카오 버튼은 "준비 중"이고 Supabase로 요청을 보내지 않는다.
    */
   supabaseUrl: url(process.env.NEXT_PUBLIC_SUPABASE_URL),
@@ -87,7 +87,7 @@ export const config = {
   aiChatEnabled: (process.env.NEXT_PUBLIC_AI_CHAT_ENABLED ?? "").trim() === "true",
   /**
    * 웹 푸시(매일 리마인더)의 VAPID 공개 키 — 공개값(브라우저가 구독할 때 applicationServerKey로 쓴다).
-   * scripts/generate-vapid.mjs가 만든 한 쌍 중 공개 키만 여기에, 비밀 키는 Supabase 함수 비밀값(VAPID_PRIVATE_KEY)에만(docs/PWA_AND_REMINDERS.md).
+   * scripts/generate-vapid.mjs가 만든 한 쌍 중 공개 키만 여기에, 비밀 키는 Supabase 함수 비밀값(VAPID_PRIVATE_KEY)에만(docs/dev/PWA_AND_REMINDERS.md).
    * Supabase 설정과 이 값이 둘 다 있어야 설정 화면의 알림 토글이 켜진다(isReminderConfigured). 비면 "준비 중".
    * 형식이 틀리면(65바이트 비압축 P-256 공개 키의 base64url이 아님) 빌드가 멈춘다 — 동작하지 않는 토글을 내보내지 않게.
    */

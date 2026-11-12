@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno 전용 가져오기(npm:·".ts")를 Next tsc가 읽지 못하는 줄에만 @ts-ignore를 쓴다. */
-// Supabase Edge Function "send-reminders" — 매일 리마인더(웹 푸시) 발송. 설명·비밀값·예약: docs/PWA_AND_REMINDERS.md
+// Supabase Edge Function "send-reminders" — 매일 리마인더(웹 푸시) 발송. 설명·비밀값·예약: docs/dev/PWA_AND_REMINDERS.md
 //
 // - 부르는 쪽: pg_cron(매시 정각 — 0007_schedules_and_limits.sql, 처음 0004는 하루 한 번 11:00 UTC) — 헤더 x-reminder-secret(Vault reminder_cron_secret)로 확인한다.
 //   예약은 Vault에 reminder_cron_secret과 project_url(https://<ref>.supabase.co)이 둘 다 있을 때만 요청을 만든다.

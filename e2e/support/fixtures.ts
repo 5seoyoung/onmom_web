@@ -1,4 +1,4 @@
-// 모든 브라우저 시험의 공통 검사(docs/DEV_NOTES.md §11) — 콘솔 오류·페이지 예외·CSP 위반 0개, 이 사이트 밖으로 나가는 요청 0개.
+// 모든 브라우저 시험의 공통 검사(docs/dev/DEV_NOTES.md §11) — 콘솔 오류·페이지 예외·CSP 위반 0개, 이 사이트 밖으로 나가는 요청 0개.
 // 브라우저 전용 빌드는 건강 정보를 어디에도 보내지 않는다 — 밖으로 나가는 요청은 막고 기록한다(운영 서버·영상 서버·카카오에 요청하지 않는다).
 // 시험 파일은 @playwright/test 대신 여기의 test·expect를 쓴다(guard가 자동으로 붙는다).
 import { expect, test as base } from "@playwright/test";

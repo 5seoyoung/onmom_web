@@ -2,7 +2,7 @@
 #
 # 읽는 곳: GitHub Actions "Supabase" 워크플로(.github/workflows/supabase.yml)
 #   supabase link → supabase db push(migrations/) → supabase secrets set → supabase functions deploy videos chat send-reminders
-# 설명서: docs/SUPABASE_SETUP.md
+# 설명서: docs/dev/SUPABASE_SETUP.md
 #
 # ⚠️ 인증(Auth) 설정은 이 파일로 관리하지 않는다 — Supabase 대시보드가 기준이다(카카오·익명 로그인·수동 연결·
 #    Site URL·Redirect URLs·CAPTCHA). 그래서 이 파일에는 [auth]가 없다.
@@ -40,7 +40,7 @@ verify_jwt = false
 
 # 매일 리마인더 발송(pg_cron → 함수, supabase/migrations/0004_push_reminders.sql) — pg_cron 요청에는 사용자 토큰이 없어 게이트웨이 검사를 끈다.
 # 함수가 x-reminder-secret(Vault reminder_cron_secret = 함수 비밀값 REMINDER_CRON_SECRET, 16자 이상) 또는 서버 키로 부른 쪽을 직접 확인하고,
-# 그 밖은 401로 끝낸다(푸시 서비스를 부르지 않는다). 설명: docs/PWA_AND_REMINDERS.md §4·§5.
+# 그 밖은 401로 끝낸다(푸시 서비스를 부르지 않는다). 설명: docs/dev/PWA_AND_REMINDERS.md §4·§5.
 # ⚠️ 함수의 부른 쪽 확인(_shared/reminders.ts callerAuthorized)을 지우거나 바꾸면 이 값을 true로 되돌린다.
 [functions.send-reminders]
 verify_jwt = false

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment -- Deno는 ".ts" 확장자가 있어야 가져온다. Next tsc(TS5097)만 그 줄을 넘기게 한다. */
 // Supabase Edge Function "videos" — 운동 영상 목록 프록시(영상 서버에 CORS가 없어 브라우저가 직접 부를 수 없다).
-// 설명·배포: docs/SUPABASE_FUNCTIONS.md
+// 설명·배포: docs/dev/SUPABASE_FUNCTIONS.md
 //
 // 공개 데이터라 로그인 없이 부른다 — 게이트웨이 JWT 확인을 끈다(supabase/config.toml [functions.videos] verify_jwt = false).
 // 환경 변수(모두 선택): VIDEO_API_URL(기본 https://hackathon-video-api.onrender.com), ALLOWED_ORIGINS(쉼표 구분).

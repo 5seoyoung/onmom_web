@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 운영 상태 한눈에 — 내 컴퓨터에서, 읽기만(바꾸는 요청은 하지 않는다).
-//   node scripts/ops/status.mjs            (SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다 — docs/RUNBOOK.md "명령")
+//   node scripts/ops/status.mjs            (SUPABASE_ACCESS_TOKEN이 이 터미널의 환경 변수에 있어야 한다 — docs/dev/RUNBOOK.md "명령")
 //   SUPABASE_PROJECT_REF=<다른 ref> …      (비우면 운영 프로젝트 movrwmoniopgetdmagon)
 // 보여 주는 것
 //   1) 프로젝트 상태(Management API) — 일시 중지면 대시보드에서 Restore
@@ -65,7 +65,7 @@ async function main() {
   const token = readAccessToken();
   if (token === null) {
     throw new OpsError(
-      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/RUNBOOK.md \"명령\").",
+      "SUPABASE_ACCESS_TOKEN 환경 변수가 없습니다 — Supabase Account → Access Tokens의 토큰을 이 터미널에만 넣고 다시 실행하세요(docs/dev/RUNBOOK.md \"명령\").",
     );
   }
   const ref = readProjectRef();
@@ -160,7 +160,7 @@ async function main() {
 
   say("");
   if (issues.length === 0) say("이상 없음. 공개 사이트·함수 응답까지 보려면: node scripts/ops/health-check.mjs");
-  else say(`확인할 것 ${issues.length}개: ${issues.join(", ")} — docs/RUNBOOK.md`);
+  else say(`확인할 것 ${issues.length}개: ${issues.join(", ")} — docs/dev/RUNBOOK.md`);
   process.exitCode = issues.length === 0 ? 0 : 1;
 }
 

@@ -1,6 +1,6 @@
 // 실기기 흉내(iphone = Playwright WebKit + iPhone 17 설명자, android = Chromium + Pixel 10 설명자 — 터치·모바일 뷰포트·dsf 3)에서
 // 접근성 검사(axe)와 글자 150%의 일부. 게스트 흐름 전체(guest-flow.spec.ts)도 같은 프로젝트에서 돈다(playwright.config.ts).
-// WebKit은 iOS Safari와 같은 엔진이지만 macOS·Linux용 빌드다 — VoiceOver·실제 Safari aA·날짜 선택기는 여기서 볼 수 없다(docs/ACCESSIBILITY.md §7).
+// WebKit은 iOS Safari와 같은 엔진이지만 macOS·Linux용 빌드다 — VoiceOver·실제 Safari aA·날짜 선택기는 여기서 볼 수 없다(docs/dev/ACCESSIBILITY.md §7).
 import type { Page } from "@playwright/test";
 import { SERVER_BUILD_SKIP, expect, screenReady, test } from "./support/app";
 import { expectNoAxeViolations } from "./support/axe";

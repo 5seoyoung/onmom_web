@@ -1,9 +1,9 @@
 # Supabase 배포 — DB 표(마이그레이션) → Edge Function 비밀값 → Edge Function(videos·chat·send-reminders) 배포.
-# 설명서: docs/SUPABASE_SETUP.md (D단계). 웹 사이트 배포는 deploy.yml이 따로 한다.
+# 설명서: docs/dev/SUPABASE_SETUP.md (D단계). 웹 사이트 배포는 deploy.yml이 따로 한다.
 #
 # 필요한 값 — 저장소 Settings → Secrets and variables → Actions
 #   Secrets:   SUPABASE_ACCESS_TOKEN(필수) · SUPABASE_DB_PASSWORD(필수) · ANTHROPIC_API_KEY(AI 상담에 필요 — 없으면 질문마다 앱 안내로만 답한다)
-#              VAPID_PRIVATE_KEY · VAPID_SUBJECT · REMINDER_CRON_SECRET(매일 리마인더를 켤 때 — docs/PWA_AND_REMINDERS.md §5)
+#              VAPID_PRIVATE_KEY · VAPID_SUBJECT · REMINDER_CRON_SECRET(매일 리마인더를 켤 때 — docs/dev/PWA_AND_REMINDERS.md §5)
 #   Variables: SUPABASE_PROJECT_REF(필수) · VIDEO_API_URL · ALLOWED_ORIGINS
 #              CHAT_HOURLY_LIMIT · CHAT_GUEST_HOURLY_LIMIT · CHAT_GLOBAL_HOURLY_LIMIT · CHAT_GLOBAL_DAILY_LIMIT(AI 상담 한도 — 공개값)
 #              ANTHROPIC_WORKSPACE_ID(조직 전체용 Anthropic 키일 때 — wrkspc_…, Secrets에 넣어도 읽는다)
@@ -14,7 +14,7 @@
 # 끄려면 Variable AI_CHAT_SERVER_ENABLED=false를 넣고 이 워크플로를 돌린다. 급하면 Supabase Edge Functions → Secrets에서 값을 지우면 바로 꺼지지만,
 # Variable 없이는 다음 실행이 기본값으로 되살리므로 Variable도 함께 넣는다. 스위치는 새 함수가 올라간 뒤에 넣는다(아래 "서버 쪽 AI 스위치 넣기").
 # 매일 리마인더는 이 워크플로만으로 켜지지 않는다 — 마지막에 Supabase SQL Editor에서 Vault reminder_cron_secret과 project_url을 넣어야
-# 예약이 함수를 부른다(docs/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약(0007, 매시)이 돌아도 요청을 만들지 않는다.
+# 예약이 함수를 부른다(docs/dev/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약(0007, 매시)이 돌아도 요청을 만들지 않는다.
 # 비어 있는 선택 값은 건너뛴다(서버에 이미 있던 값은 그대로 남고, 없으면 함수 기본값 — supabase/functions/_shared).
 #
 # 하지 않는 것: 인증(Auth) 설정 올리기(`supabase config push`) — 인증 설정은 대시보드가 기준이다(supabase/config.toml 참고).
@@ -57,7 +57,7 @@ concurrency:
 
 jobs:
   # 함수 세 개의 Deno 타입 검사 — Next tsc는 index.ts의 Deno 전용 가져오기(npm:·".ts")를 읽지 못해 이 검사만이 그 파일들을 본다
-  # (docs/SUPABASE_FUNCTIONS.md §7). index.ts에서 handler·adapters·_shared까지 따라가 모두 검사한다. 저장소에 파일을 만들지 않는다
+  # (docs/dev/SUPABASE_FUNCTIONS.md §7). index.ts에서 handler·adapters·_shared까지 따라가 모두 검사한다. 저장소에 파일을 만들지 않는다
   # (--no-lock, --node-modules-dir=none — npm: 패키지는 러너의 Deno 캐시에만 받는다).
   # Deno 버전과 액션 커밋을 고정한다 — 올릴 때는 setup-deno 새 태그의 커밋을 확인해(git ls-remote --tags https://github.com/denoland/setup-deno.git)
   # 두 줄을 함께 바꾸고, 내 컴퓨터에서 같은 Deno 버전으로 한 번 돌려 본다.
@@ -129,13 +129,13 @@ jobs:
           # 아직 아무것도 넣지 않았는데 main push로 돌았으면 조용히 건너뛴다(사이트는 지금처럼 브라우저 저장만).
           # 직접 실행(Run workflow)했거나 일부만 넣었으면 무엇이 빠졌는지 알리고 실패한다.
           if [ "${#missing[@]}" -eq 3 ] && [ "${EVENT_NAME}" = "push" ]; then
-            echo "::notice title=Supabase 배포 건너뜀::아직 Supabase 값이 없습니다. docs/SUPABASE_SETUP.md C단계를 마친 뒤 Actions → Supabase → Run workflow로 실행하세요."
+            echo "::notice title=Supabase 배포 건너뜀::아직 Supabase 값이 없습니다. docs/dev/SUPABASE_SETUP.md C단계를 마친 뒤 Actions → Supabase → Run workflow로 실행하세요."
             echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "${#missing[@]}" -gt 0 ]; then
             for m in "${missing[@]}"; do
-              echo "::error title=값이 없습니다::저장소 Settings → Secrets and variables → Actions → ${m} 를 넣어 주세요 (docs/SUPABASE_SETUP.md C단계)."
+              echo "::error title=값이 없습니다::저장소 Settings → Secrets and variables → Actions → ${m} 를 넣어 주세요 (docs/dev/SUPABASE_SETUP.md C단계)."
             done
             exit 1
           fi
@@ -336,7 +336,7 @@ jobs:
             grep -qw -- "${name}" <<< "${present}" || missing_reminder+=("${name}")
           done
           if [ "${#missing_reminder[@]}" -gt 0 ]; then
-            echo "::notice title=매일 리마인더 꺼짐::서버에 없는 비밀값: ${missing_reminder[*]} — 켜려면 docs/PWA_AND_REMINDERS.md §5(키 만들기 → Secrets → Vault)."
+            echo "::notice title=매일 리마인더 꺼짐::서버에 없는 비밀값: ${missing_reminder[*]} — 켜려면 docs/dev/PWA_AND_REMINDERS.md §5(키 만들기 → Secrets → Vault)."
           fi
 
       - name: Edge Function 배포 (videos · chat · send-reminders)
@@ -409,7 +409,7 @@ jobs:
             fi
           elif [ "${status}" = "503" ] && [ "${code}" = "auth_unavailable" ]; then
             echo "chat=no_key" >> "$GITHUB_OUTPUT"
-            echo "::warning title=AI 상담 — 로그인 확인 불가::chat 함수가 로그인을 확인할 서버 키를 찾지 못했습니다(503 auth_unavailable). 이대로면 모든 질문이 앱 안내로만 답합니다. 개발자에게 알리세요 — 함수가 읽는 SUPABASE_SECRET_KEYS(새 secret 키 default) 또는 예전 SUPABASE_SERVICE_ROLE_KEY가 없습니다. Edge Functions → chat → Logs의 missing_env도 확인 (docs/SUPABASE_SETUP.md B-4)."
+            echo "::warning title=AI 상담 — 로그인 확인 불가::chat 함수가 로그인을 확인할 서버 키를 찾지 못했습니다(503 auth_unavailable). 이대로면 모든 질문이 앱 안내로만 답합니다. 개발자에게 알리세요 — 함수가 읽는 SUPABASE_SECRET_KEYS(새 secret 키 default) 또는 예전 SUPABASE_SERVICE_ROLE_KEY가 없습니다. Edge Functions → chat → Logs의 missing_env도 확인 (docs/dev/SUPABASE_SETUP.md B-4)."
           else
             echo "chat=unknown" >> "$GITHUB_OUTPUT"
             echo "::warning title=AI 상담 — 확인 못 함::chat 함수 응답이 예상과 다릅니다(HTTP ${status} ${code:-}). Supabase → Edge Functions → chat → Logs를 확인하세요."
@@ -432,7 +432,7 @@ jobs:
             echo ""
             if [ "${JOB_STATUS}" = "success" ]; then
               echo "- 테스트 · DB 표(supabase/migrations) · Edge Function 비밀값 · 함수(videos, chat, send-reminders) 배포를 마쳤습니다."
-              echo "- 매일 리마인더는 Supabase SQL Editor에서 Vault \`reminder_cron_secret\`과 \`project_url\`(https://<ref>.supabase.co)을 넣어야 켜집니다(docs/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약이 함수를 부르지 않습니다."
+              echo "- 매일 리마인더는 Supabase SQL Editor에서 Vault \`reminder_cron_secret\`과 \`project_url\`(https://<ref>.supabase.co)을 넣어야 켜집니다(docs/dev/PWA_AND_REMINDERS.md §5 E). 둘 중 하나라도 없으면 예약이 함수를 부르지 않습니다."
               echo "- 서버 쪽 AI 상담 스위치(함수 비밀값 AI_CHAT_SERVER_ENABLED)는 \"true\"일 때만 켜집니다. Variable이 없으면 저장소의 기본값(env ONMOM_AI_CHAT_SERVER_ENABLED)을 함수 배포 뒤에 넣습니다. 끄려면 Variable을 false로 두고 이 워크플로를 다시 돌립니다 — 서버 값만 지우면 다음 실행이 되살립니다."
               case "${CHAT_CHECK}" in
                 ok) echo "- AI 상담 함수의 로그인 확인: 정상(서버 쪽 AI 스위치 켜짐)" ;;
@@ -455,6 +455,6 @@ jobs:
               echo "- AI 상담 한도(Variables):${limits}. 게스트 한도는 한 사람 한도까지만 쓰고, 함수 Logs의 시작 줄 \`limits\`에서 실제 값을 봅니다."
               echo "- 웹 사이트는 이 워크플로가 바꾸지 않습니다. 사이트 설정(NEXT_PUBLIC_*)을 바꿨다면 Actions → Deploy to GitHub Pages → Run workflow."
             else
-              echo "- 중간에 실패했습니다. 빨간 ✗ 단계의 메시지와 docs/SUPABASE_SETUP.md \"I. 문제 해결\"을 확인하세요."
+              echo "- 중간에 실패했습니다. 빨간 ✗ 단계의 메시지와 docs/dev/SUPABASE_SETUP.md \"I. 문제 해결\"을 확인하세요."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

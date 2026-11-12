@@ -2,7 +2,7 @@
 
 // 로그인 — LoginView.swift. 위 여백 · 로고/이름/한 줄 소개 · 아래 여백 · 버튼 묶음(간격 lg).
 // 웹 차이: Apple 로그인 없음(D2).
-// 카카오 로그인은 Supabase 설정(NEXT_PUBLIC_SUPABASE_URL·PUBLISHABLE_KEY)이 있을 때만 켜진다 — docs/SUPABASE_SETUP.md.
+// 카카오 로그인은 Supabase 설정(NEXT_PUBLIC_SUPABASE_URL·PUBLISHABLE_KEY)이 있을 때만 켜진다 — docs/dev/SUPABASE_SETUP.md.
 //   켜짐: 누르면 카카오 동의 화면으로 이동 → /auth/callback/ 에서 로그인을 마친다(features/flow/AuthCallbackScreen).
 //   꺼짐: 버튼을 끄고 "준비 중"을 붙인다(D2, 네트워크 없음).
 // [게스트로 시작] → src/auth signInGuest: 설정이 있으면 Supabase 익명 계정(Turnstile 사이트 키가 있으면 사람 확인 뒤 — 보통은 보이지

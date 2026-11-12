@@ -25,7 +25,7 @@ export const CONTENT_SELF_HARM_KEYWORDS: readonly string[] = ["죽고", "자해"
 
 /**
  * 선필터 보강 키워드(웹 서버 신규 — 임상 자문 확인 필요). 띄어쓰기·하이픈·따옴표를 지운 뒤 비교하므로 붙여 쓴 꼴로 적는다.
- * 과장 표현("힘들어 죽겠다")·죽음에 대한 걱정("죽을까 봐 무서워요")은 넣지 않았다. 바꾸면 docs/SUPABASE_FUNCTIONS.md에도 적는다.
+ * 과장 표현("힘들어 죽겠다")·죽음에 대한 걱정("죽을까 봐 무서워요")은 넣지 않았다. 바꾸면 docs/dev/SUPABASE_FUNCTIONS.md에도 적는다.
  */
 export const EXTRA_SELF_HARM_KEYWORDS: readonly string[] = [
   // 한국어

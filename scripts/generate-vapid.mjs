@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // VAPID 키 한 쌍 만들기(웹 푸시 — 매일 리마인더). 의존성 없음(node:crypto). 실행: node scripts/generate-vapid.mjs
 //
-// 출력 두 줄을 각각 넣는다(docs/PWA_AND_REMINDERS.md):
+// 출력 두 줄을 각각 넣는다(docs/dev/PWA_AND_REMINDERS.md):
 //   공개 키 → GitHub 저장소 Variables: NEXT_PUBLIC_VAPID_PUBLIC_KEY (사이트 번들에 들어가는 공개값)
 //   비밀 키 → Supabase Edge Function 비밀값: VAPID_PRIVATE_KEY (절대 저장소·Variables·NEXT_PUBLIC_*에 넣지 않는다)
 // 파일에 저장하지 않는다 — 터미널에만 보인다. 형식은 web-push 라이브러리와 같다(공개 키 = 비압축 P-256 65바이트 base64url 87자, 비밀 키 = 32바이트 base64url 43자).

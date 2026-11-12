@@ -1,5 +1,5 @@
 // Content-Security-Policy — GitHub Pages는 응답 헤더를 붙일 수 없어 루트 레이아웃의 <meta http-equiv>로 싣는다(src/app/layout.tsx).
-// 설정된 기능의 출처만 넣는다(빈 값이면 그 출처도 없다). 허용 목록을 바꾸면 docs/SECURITY.md §CSP도 고친다.
+// 설정된 기능의 출처만 넣는다(빈 값이면 그 출처도 없다). 허용 목록을 바꾸면 docs/dev/SECURITY.md §CSP도 고친다.
 //
 // 메타 태그의 한계(헤더와 다른 점)
 // - frame-ancestors·report-uri·sandbox는 메타에서 무시된다 — 클릭재킹 막기는 GitHub Pages에서는 할 수 없다(커스텀 도메인 + 프록시 필요).
@@ -20,7 +20,7 @@
 // javascript: 주소)는 해시가 없어 막힌다 — 스크립트는 src로만 불러온다(카카오·Turnstile 로더처럼).
 // 'unsafe-eval'은 넣지 않는다(운영 빌드·카카오 지도 SDK·Turnstile 모두 필요 없음 — 브라우저에서 확인). 개발 서버(next dev)는
 // eval·HMR 웹소켓이 필요해 운영 빌드에서만 싣는다(cspMetaContent).
-// 사용자가 쓴 글은 React가 늘 글자로만 그린다(dangerouslySetInnerHTML 없음 — docs/SECURITY.md).
+// 사용자가 쓴 글은 React가 늘 글자로만 그린다(dangerouslySetInnerHTML 없음 — docs/dev/SECURITY.md).
 
 export interface CspInput {
   /** https://<ref>.supabase.co — Auth·REST·Edge Functions(https)와 Realtime(wss) */

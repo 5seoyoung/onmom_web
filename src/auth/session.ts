@@ -542,7 +542,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
 
   async function redirectToKakao(client: SupabaseClient): Promise<boolean> {
     try {
-      // 동의항목(scopes)은 Supabase가 정한다(account_email·profile_nickname·profile_image) — docs/SUPABASE_SETUP.md
+      // 동의항목(scopes)은 Supabase가 정한다(account_email·profile_nickname·profile_image) — docs/dev/SUPABASE_SETUP.md
       const { error } = await client.auth.signInWithOAuth({ provider: KAKAO, options: { redirectTo: authCallbackUrl(deps.origin()) } });
       return !error;
     } catch {

@@ -5,7 +5,7 @@
 //   요청 헤더로만 보내고 출력·오류 메시지·요약에 싣지 않는다. 사용자 데이터(건강 기록·계정)는 읽지 않는다 — DB는 예약 작업 기록의 개수만
 //   (daily.mjs는 계정·동의·AI 사용의 개수만 — 사람별 값은 묻지 않는다).
 
-/** 운영 프로젝트(공개값 — supabase/config.toml project_id, docs/SUPABASE_SETUP.md 0-2). 다른 프로젝트는 SUPABASE_PROJECT_REF로. */
+/** 운영 프로젝트(공개값 — supabase/config.toml project_id, docs/dev/SUPABASE_SETUP.md 0-2). 다른 프로젝트는 SUPABASE_PROJECT_REF로. */
 export const DEFAULT_PROJECT_REF = "movrwmoniopgetdmagon";
 /** 공개 사이트(basePath까지, 끝 슬래시) — 2026-11-04 전용 도메인으로 옮김(GitHub Pages Custom domain, basePath 없음). 다른 주소는 SITE_URL로. */
 export const DEFAULT_SITE_URL = "https://onmomcare.app/";

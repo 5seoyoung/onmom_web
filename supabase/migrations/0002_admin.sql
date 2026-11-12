@@ -1,6 +1,6 @@
 -- 온맘 웹 — 관리자 화면(/admin/)용 집계. Supabase 대시보드 → SQL Editor에 통째로 붙여 넣고 Run.
 -- 먼저 0001_user_states.sql(동의 칸 consent_version·consent_accepted_at 포함)을 실행해야 한다 — 아래 0)이 확인한다.
--- 설명: docs/SUPABASE_SETUP.md
+-- 설명: docs/dev/SUPABASE_SETUP.md
 --
 -- 원칙(개인정보 최소화)
 -- - 관리자는 집계와 계정 메타데이터(계정 ID, 가입·접속 시각, 게스트/카카오, 동의 판, 서버 기록 유무와 마지막 저장 시각)만 본다.

@@ -6,7 +6,7 @@
 // ⚠️ 그 Supabase 프로젝트(운영 값이면 운영)에 시험 계정 하나와 기록 한 줄을 만들었다가 지운다. 중간에 실패해도 끝에서 그 계정을 지운다
 //    (delete_my_account — 로그인한 본인만 자기를 지우는 함수, supabase/migrations/0001). service_role·secret 키는 쓰지 않는다(넣으면 시작하지 않는다).
 //
-// 돌리는 법(저장소 루트 · 공개 값만 — 주소와 Publishable key: docs/SUPABASE_SETUP.md 0-2·B-4):
+// 돌리는 법(저장소 루트 · 공개 값만 — 주소와 Publishable key: docs/dev/SUPABASE_SETUP.md 0-2·B-4):
 //   1) Supabase 값으로 빌드(out/을 덮어쓴다):
 //        BASE_PATH=/onmom_web NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_… npm run build
 //   2) 같은 값으로 시험 — Playwright가 out/을 e2e/serve.mjs로 E2E_PORT에 띄운다(그 포트에 이미 떠 있으면 그것을 쓴다):

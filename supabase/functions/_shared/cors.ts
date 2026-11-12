@@ -3,7 +3,7 @@
 // ⚠️ 이 폴더(_shared)의 파일은 Deno(함수)와 vitest(src/api/edgeFunctions.test.ts) 양쪽에서 읽고, Next 프로젝트의 tsc도 검사한다.
 //    그래서 Deno 전역(Deno.*)·npm: 가져오기를 쓰지 않고, 서로의 값도 가져오지 않는다(타입만 `import type … ".ts"`).
 //    Deno는 ".ts" 확장자가 있어야 가져오고, Next의 tsc는 ".ts"로 끝나는 값 가져오기를 거부하기 때문이다(TS5097).
-//    값을 가져와야 하는 handler.ts·index.ts는 그 줄에만 `@ts-ignore`를 붙인다(docs/SUPABASE_FUNCTIONS.md "타입 검사").
+//    값을 가져와야 하는 handler.ts·index.ts는 그 줄에만 `@ts-ignore`를 붙인다(docs/dev/SUPABASE_FUNCTIONS.md "타입 검사").
 //
 // 허용 목록 밖 origin의 브라우저 요청은 거절한다(403). origin이 없는 요청(서버·curl)은 CORS 대상이 아니라 그대로 받는다 —
 // 영상은 공개 데이터이고, AI 상담은 따로 로그인 토큰을 확인한다.

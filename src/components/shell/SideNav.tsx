@@ -24,7 +24,7 @@ const itemBase =
   "flex min-h-11 items-center gap-3 rounded-button px-3 transition-[color,background-color] motion-reduce:transition-none";
 // 활성 글자는 AA 글자 전용 토큰(primary-text) — 원색 코랄은 coral-tint 위 2.6:1(DEV_NOTES §3 CPO 12).
 // 활성 아이콘은 iOS 팔레트의 원색 코랄 그대로(06 §1) — aria-hidden 장식이라 대비 요구(WCAG 1.4.11) 대상이 아니다.
-// currentColor를 물려받으면 글자 토큰(#bf3636)으로 어두워지므로 아이콘에 text-primary를 명시한다(docs/ACCESSIBILITY.md §2).
+// currentColor를 물려받으면 글자 토큰(#bf3636)으로 어두워지므로 아이콘에 text-primary를 명시한다(docs/dev/ACCESSIBILITY.md §2).
 // 아이콘 색은 aria-hidden 아이콘 줄에 바로 적는다 — 따로 상수로 빼면 contrast.test의 장식 줄 판별이 아이콘인지 알 수 없다.
 const itemActive = "bg-coral-tint font-semibold text-primary-text";
 const itemIdle = "text-text-primary hover:bg-divider";

@@ -1,4 +1,4 @@
-// 접근성 자동 검사(axe-core, WCAG 2.1 A/AA + 저장소 규칙) — 서버 없이 닿는 모든 화면·상태. docs/ACCESSIBILITY.md §1-5.
+// 접근성 자동 검사(axe-core, WCAG 2.1 A/AA + 저장소 규칙) — 서버 없이 닿는 모든 화면·상태. docs/dev/ACCESSIBILITY.md §1-5.
 // 폰(402)·PC(1440) Chromium에서 모두 돈다. 실기기 흉내(iPhone WebKit·Android Chromium)는 devices.spec.ts의 일부만.
 // 예외는 e2e/support/axe.ts EXCLUSIONS(규칙 + 선택자 + 이유) 한 곳.
 // 관리자 대시보드(데이터가 있는 화면)는 서버가 있어야 그려진다 — src/features/admin/adminA11y.test.ts(jsdom + axe)가 가짜 행으로 본다.

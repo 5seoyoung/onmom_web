@@ -2,8 +2,8 @@
 
 /* 디자인 토큰 — iOS Theme.swift / 06_DESIGN.md.
    라이트 모드 하나(iOS도 라이트 고정). 코랄은 CTA·핵심 강조에만.
-   ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다(docs/DEV_NOTES.md §3 CPO 12).
-      iOS 원색은 아이콘·배경·테두리용으로 그대로 두고, 글자에는 아래 "글자 전용" 토큰을 쓴다(CPO 12 결정, docs/ACCESSIBILITY.md).
+   ⚠️ 검수 결과: 흰 글씨/primary(2.76:1), 상태 배지, textSubtle 면책 문구가 WCAG AA에 못 미친다(docs/dev/DEV_NOTES.md §3 CPO 12).
+      iOS 원색은 아이콘·배경·테두리용으로 그대로 두고, 글자에는 아래 "글자 전용" 토큰을 쓴다(CPO 12 결정, docs/dev/ACCESSIBILITY.md).
       흰 글씨가 올라가는 면·스위치 켬 트랙·선택 테두리에는 "strong"(짙은 코랄), 스위치 꺼짐에는 control-off를 쓴다(CPO 12 결정). */
 @theme {
   --color-primary: #fb6f6f;
@@ -99,7 +99,7 @@ body {
     outline: none;
   }
 
-  /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 기본값이 이미 AA(docs/DEV_NOTES.md §3 CPO 12)라 그대로. */
+  /* 대비 높이기(prefers-contrast: more) — 링만 굵게. 색 토큰은 기본값이 이미 AA(docs/dev/DEV_NOTES.md §3 CPO 12)라 그대로. */
   @media (prefers-contrast: more) {
     :focus-visible {
       outline-width: 3px;

@@ -20,7 +20,7 @@ export function canCheckSubstance(query: string): boolean {
 /**
  * 판정 배지 색 — safe 정상 · caution 관찰 · avoid 이상 · unknown textSecondary, 배경은 같은 색 15%
  * (SubstanceCheckView.swift:60-67, :75-78). 글자(verdict_labels)가 항상 함께 나와 색만으로 전하지 않는다.
- * 글자는 같은 계열의 글자 전용 토큰(state-*-text) — 원색 글자는 15% 배경 위에서 AA에 못 미친다(docs/ACCESSIBILITY.md §4·§6).
+ * 글자는 같은 계열의 글자 전용 토큰(state-*-text) — 원색 글자는 15% 배경 위에서 AA에 못 미친다(docs/dev/ACCESSIBILITY.md §4·§6).
  */
 export const VERDICT_BADGE_CLASS: Record<SubstanceVerdict, string> = {
   safe: "bg-state-normal/15 text-state-normal-text",

@@ -12,7 +12,7 @@
 //
 // 답마다 어디서 왔는지(origin: 인사말·앱 안내·AI)를 말풍선에 남긴다 — 실패 뒤 섞인 대화에서 AI 답과 앱 안내가 구분되게(LAUNCH_CHECKLIST 5-3).
 // 앱 안내로 답한 이유(fallbackReason)도 남긴다 — 서버 함수의 한도(429)·혼잡(503)·거절(422)을 "연결되지 않아"로 뭉개지 않고
-// 배너·기본 답의 첫머리를 이유에 맞게 바꾼다(supabase/functions/chat/handler.ts, docs/SUPABASE_FUNCTIONS.md §5).
+// 배너·기본 답의 첫머리를 이유에 맞게 바꾼다(supabase/functions/chat/handler.ts, docs/dev/SUPABASE_FUNCTIONS.md §5).
 
 import { isAiConsentRequired, isAiLoginRequired, type LLMContext, type LLMOptions, type LLMRequest, type LLMResult } from "@/api/llm";
 import content from "@/content";

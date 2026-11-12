@@ -1,4 +1,4 @@
-// axe-core 접근성 검사 — WCAG 2.0·2.1 A/AA 규칙 + 이 저장소의 화면 규칙(docs/ACCESSIBILITY.md §9: 화면마다 <main>·h1 하나, 제목 단계 건너뛰지 않음).
+// axe-core 접근성 검사 — WCAG 2.0·2.1 A/AA 규칙 + 이 저장소의 화면 규칙(docs/dev/ACCESSIBILITY.md §9: 화면마다 <main>·h1 하나, 제목 단계 건너뛰지 않음).
 // axe를 page.evaluate로 넣는다(<script> 태그를 더하지 않는다) — 페이지의 CSP(인라인 스크립트 해시)를 느슨하게 하지 않고, 위반으로 세지도 않게.
 // 예외는 규칙 + 선택자 + 이유로만 둔다(아래 EXCLUSIONS) — 화면 전체·규칙 전체를 끄지 않는다.
 import axe from "axe-core";
@@ -9,7 +9,7 @@ import { expect, test } from "./fixtures";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"];
 
 /**
- * 태그 밖(best-practice)이지만 이 저장소가 규칙으로 정한 것(docs/ACCESSIBILITY.md §9) — 켠다.
+ * 태그 밖(best-practice)이지만 이 저장소가 규칙으로 정한 것(docs/dev/ACCESSIBILITY.md §9) — 켠다.
  * heading-order(제목 건너뜀) · page-has-heading-one · landmark-one-main · landmark-no-duplicate-main · landmark-unique(같은 이름의 같은 랜드마크)
  */
 const HOUSE_RULES = ["heading-order", "page-has-heading-one", "landmark-one-main", "landmark-no-duplicate-main", "landmark-unique"];
@@ -32,7 +32,7 @@ export const EXCLUSIONS: readonly AxeExclusion[] = [
     rule: "color-contrast",
     // 로그인 h1(로고 그림 + "온맘") · 홈 머리 h1 "온맘"(폰) · PC 사이드바 로고 글자 — 셋 다 원색 코랄 #FB6F6F(배경 위 2.64~2.76:1)
     selector: "[data-logotype]",
-    reason: "WCAG 1.4.3 예외(Logotypes) — 브랜드 이름 '온맘' 워드마크는 글자 대비 요구 대상이 아니다(docs/ACCESSIBILITY.md §4 끝)",
+    reason: "WCAG 1.4.3 예외(Logotypes) — 브랜드 이름 '온맘' 워드마크는 글자 대비 요구 대상이 아니다(docs/dev/ACCESSIBILITY.md §4 끝)",
   },
 ];
 

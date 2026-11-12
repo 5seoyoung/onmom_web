@@ -1,4 +1,4 @@
--- 온맘 웹 — AI 상담을 공개하기 전 안전장치: AI 답변 국외 이전 동의의 서버 기록 + 한도 손보기. 설명: docs/SUPABASE_FUNCTIONS.md
+-- 온맘 웹 — AI 상담을 공개하기 전 안전장치: AI 답변 국외 이전 동의의 서버 기록 + 한도 손보기. 설명: docs/dev/SUPABASE_FUNCTIONS.md
 --   1) public.ai_consents(동의 기록 — 함수 chat이 확인) 2) llm_consume_quota 다섯 인자판(게스트 한도·전체 1시간 상한) 3) llm_refund_quota(돌려주기)
 -- 보통은 GitHub Actions "Supabase" 워크플로(supabase db push)가 적용한다. 대시보드 SQL Editor에 통째로 붙여 넣어도 된다.
 --

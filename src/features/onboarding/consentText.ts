@@ -1,7 +1,7 @@
 // 온보딩 동의 단계 — 서버 저장 빌드(Supabase 설정 있음)의 문구. 2026-11-06 시범 운영 시행판(판 web-2026-11-06 — 대표 결정: 바깥 법률
 // 검토 없이 시행). 설정이 없는 빌드(브라우저 전용)는 iOS 원문 동의(onboardingModel.ts ONBOARDING_TEXT.consent*)를 그대로 쓴다.
 //
-// 동의 구조 — docs/privacy/CONSENT_AND_POLICY_DRAFT.md
+// 동의 구조 — docs/dev/privacy/CONSENT_AND_POLICY_DRAFT.md
 // - 필수 (a) 개인정보 수집·이용(법 §15②: 항목·목적·보유 기간·거부 권리와 불이익을 알린다)
 // - 필수 (b) 민감정보(건강정보) 처리 — (a)와 따로 받는다(법 §23①1)
 // - 필수 (c) 만 14세 이상 확인 — 14세 미만은 법정대리인 동의가 필요한데(법 §22의2) 그 절차를 두지 않는다

@@ -1,4 +1,4 @@
-// 브라우저 자동 시험(e2e) — docs/DEV_NOTES.md §11.
+// 브라우저 자동 시험(e2e) — docs/dev/DEV_NOTES.md §11.
 // 빌드된 정적 사이트(out/)를 e2e/serve.mjs가 GitHub Pages처럼 BASE_PATH 아래에 띄우고, 폰·PC 크기 Chromium으로 연다.
 // 프로젝트: phone·desktop(게스트 흐름 + 접근성 axe), zoom(글자 150%·확대 150%·320px), iphone(WebKit)·android(Chromium) 실기기 흉내.
 // 빌드와 BASE_PATH가 같아야 한다 — `npm run e2e`(빌드 + 시험) 또는 CI(배포와 같은 빌드를 시험).

@@ -1,5 +1,5 @@
 // .github/workflows/supabase.yml의 함수 타입 검사(deno-check 작업) — 함수마다 index.ts를 deno check로 보고, 배포 작업이 그 검사를 기다리는지 글자로 확인한다.
-// Next tsc는 index.ts의 Deno 전용 가져오기(npm:·".ts")를 읽지 못하므로(docs/SUPABASE_FUNCTIONS.md §7) 이 검사가 빠지면 index.ts의 타입 오류가 배포까지 간다.
+// Next tsc는 index.ts의 Deno 전용 가져오기(npm:·".ts")를 읽지 못하므로(docs/dev/SUPABASE_FUNCTIONS.md §7) 이 검사가 빠지면 index.ts의 타입 오류가 배포까지 간다.
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";

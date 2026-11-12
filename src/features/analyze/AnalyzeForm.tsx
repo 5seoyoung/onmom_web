@@ -84,7 +84,7 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
         </div>
       </Card>
 
-      {/* 글자 150%에서 라벨이 8.5rem보다 좁아지면 입력이 다음 줄로(온보딩 날짜 줄과 같은 규칙 — docs/ACCESSIBILITY.md §6) */}
+      {/* 글자 150%에서 라벨이 8.5rem보다 좁아지면 입력이 다음 줄로(온보딩 날짜 줄과 같은 규칙 — docs/dev/ACCESSIBILITY.md §6) */}
       <Card className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <label htmlFor={dateId} className="min-w-[8.5rem] flex-1 text-base text-text-secondary">
           {ANALYZE_TEXT.deliveryDate}

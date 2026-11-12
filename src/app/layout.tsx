@@ -46,7 +46,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ko" className="h-full antialiased">
       <head>
-        {/* 보안 정책(CSP) — GitHub Pages는 헤더를 못 붙여 메타로 싣는다. 설정된 기능의 출처만 들어간다(src/csp.ts, docs/SECURITY.md).
+        {/* 보안 정책(CSP) — GitHub Pages는 헤더를 못 붙여 메타로 싣는다. 설정된 기능의 출처만 들어간다(src/csp.ts, docs/dev/SECURITY.md).
             운영 빌드에서만(개발 서버는 eval·HMR이 필요). 인라인 스크립트는 해시로만 허용 — next build 뒤 scripts/csp-hash.mjs가 페이지마다
             해시를 넣고 메타를 <meta charset> 바로 뒤로 옮긴다. 메타는 정적 HTML에만 있고 브라우저에서는 다시 그리지 않는다(까닭은 CspMeta). */}
         <CspMeta />

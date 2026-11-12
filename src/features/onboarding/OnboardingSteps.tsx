@@ -45,7 +45,7 @@ export const CONSENT_LINK_CLASS = "inline-flex min-h-11 items-center rounded-but
 
 /**
  * 날짜 줄(출산일·복직 예정일) — 라벨·안내 왼쪽, 날짜 입력 오른쪽. 라벨 묶음이 최소 폭(8.5rem)보다 좁아지면(글자 150% 등) 입력이
- * 다음 줄로 넘어간다(docs/ACCESSIBILITY.md §3·§6). 입력은 줄어들지 않는다(DATE_INPUT_CLASS shrink-0).
+ * 다음 줄로 넘어간다(docs/dev/ACCESSIBILITY.md §3·§6). 입력은 줄어들지 않는다(DATE_INPUT_CLASS shrink-0).
  * 8.5rem: 402px 폰·글자 100%에서는 두 줄 모두 iOS처럼 입력이 오른쪽에 그대로 있고(복직 예정일 줄의 라벨 묶음 약 139px),
  * 125% 이상에서는 넘어간다. 9rem이면 100%에서 복직 예정일 줄이, 10rem이면 두 줄 모두 넘어갔다.
  */

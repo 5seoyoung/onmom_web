@@ -44,7 +44,7 @@ export const TODAY_ROUTINE_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요. 고를 단계를 모두 보일 때(날마다 같다)
   introPicked: "지금 열린 단계에서 골랐어요.",
   // 웹 신규 문구 — CPO 확인 필요. 근거: ACOG FAQ131 "Exercise After Pregnancy"(2022-09 갱신, 2024-10 검토 — 통증이 있으면 멈춤,
-  // docs/clinical/CLINICAL_PREREVIEW.md 참고문헌 G3, 원문 확인). 출혈·어지러움은 그 정리에서 확인하지 못했다 — 앱의 병원 신호(기록 탭의
+  // docs/dev/clinical/CLINICAL_PREREVIEW.md 참고문헌 G3, 원문 확인). 출혈·어지러움은 그 정리에서 확인하지 못했다 — 앱의 병원 신호(기록 탭의
   // 출혈·어지러움 항목)와 같은 보수적 안내로 넣었다. ACOG CO 804 본문(유료)은 확인하지 못했다. 임상 확인 필요.
   stopNote: "운동 중 통증·출혈·어지러움이 있으면 멈추고 의료진과 상담하세요.",
   // 웹 신규 문구 — CPO 확인 필요. 산모수첩 확인 항목에 주의 오버레이가 하나라도 있을 때(주의 문구는 분석 결과에만)

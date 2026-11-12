@@ -1,4 +1,4 @@
-// PC 화면 틀(components/shell/AppShell·SideNav·pageFrame) — 창 폭별로 사이드바와 본문 자리를 잰다. docs/DEV_NOTES.md §7-2·§9.
+// PC 화면 틀(components/shell/AppShell·SideNav·pageFrame) — 창 폭별로 사이드바와 본문 자리를 잰다. docs/dev/DEV_NOTES.md §7-2·§9.
 // - 1024~1440: 사이드바는 창 왼쪽 끝, 본문(최대 64rem)은 남은 자리 가운데. 1440 창에서 제목 x = 392.
 // - 1440 초과(큰 모니터): 사이드바·본문 묶음(최대 90rem)이 가운데 — 메뉴와 본문 사이는 1440 창과 같은 80px에서 더 벌어지지 않고,
 //   묶음 양옆 빈자리가 같다. 본문(제목) 자리는 전과 같다(묶음 가운데 = 예전 본문 가운데).

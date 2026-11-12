@@ -1,5 +1,5 @@
 /* global self */
-// 온맘 서비스 워커 — 정적 파일 캐시 + 매일 리마인더(웹 푸시). 설명: docs/PWA_AND_REMINDERS.md
+// 온맘 서비스 워커 — 정적 파일 캐시 + 매일 리마인더(웹 푸시). 설명: docs/dev/PWA_AND_REMINDERS.md
 //
 // 주소: `${basePath}/sw.js` (GitHub Pages는 /onmom_web/sw.js, 커스텀 도메인은 /sw.js). basePath는 이 파일의 주소에서 뗀다 —
 //       하드코딩하지 않아 도메인을 바꿔도 이 파일은 그대로다. 등록은 src/features/pwa/PwaClient.tsx(운영 빌드에서만).

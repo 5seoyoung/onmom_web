@@ -1,4 +1,4 @@
-// 글자 150% · 브라우저 확대 150% · 320px 폭에서 화면이 깨지지 않는지 — docs/ACCESSIBILITY.md §1-1·§3을 시험으로 옮긴 것("zoom" 프로젝트, Chromium).
+// 글자 150% · 브라우저 확대 150% · 320px 폭에서 화면이 깨지지 않는지 — docs/dev/ACCESSIBILITY.md §1-1·§3을 시험으로 옮긴 것("zoom" 프로젝트, Chromium).
 // 무엇이 실제 설정을 흉내 내나:
 //   - text150(폰 402·PC 1440): <html> font-size 150%. 이 사이트의 글자는 모두 rem이라 Android Chrome "텍스트 크기 조정"·iOS Safari aA 글자 크기처럼
 //     글자만 1.5배가 되고 화면 폭(미디어쿼리)은 그대로다. deviceScaleFactor는 확대가 아니다(픽셀 밀도만 바뀜).

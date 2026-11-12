@@ -40,7 +40,7 @@ $$;
 --   · reminder_cron_secret — 함수 비밀값 REMINDER_CRON_SECRET과 같은 값, 비어 있지 않음(0004와 같다)
 --   · project_url — https://<ref>.supabase.co. 이제 필수다. https://로 시작해야 한다(비밀 헤더를 평문 http로 보내지 않게). 끝의 /는 떼고 붙인다.
 --   publishable_key(선택)는 0004와 같다 — 있으면 apikey 헤더, 없으면 헤더를 싣지 않는다(jsonb_strip_nulls).
--- 사람이 한 번 넣는 값(docs/PWA_AND_REMINDERS.md §5):
+-- 사람이 한 번 넣는 값(docs/dev/PWA_AND_REMINDERS.md §5):
 --   select vault.create_secret('https://<ref>.supabase.co', 'project_url');
 
 -- 같은 이름의 예약이 있으면 지우고 다시 만든다(여러 번 실행해도 하나만 남는다)
@@ -80,12 +80,12 @@ begin
   if to_regclass('vault.secrets') is not null then
     if exists (select 1 from vault.secrets where name = 'reminder_cron_secret')
       and not exists (select 1 from vault.secrets where name = 'project_url') then
-      raise warning 'Vault에 project_url이 없어 매일 리마인더를 보내지 않습니다 — docs/PWA_AND_REMINDERS.md §5대로 project_url을 넣으세요';
+      raise warning 'Vault에 project_url이 없어 매일 리마인더를 보내지 않습니다 — docs/dev/PWA_AND_REMINDERS.md §5대로 project_url을 넣으세요';
     end if;
   end if;
 exception
   when others then
-    raise warning 'Vault의 project_url을 확인하지 못했습니다(SQLSTATE %) — docs/PWA_AND_REMINDERS.md §5를 확인하세요', sqlstate;
+    raise warning 'Vault의 project_url을 확인하지 못했습니다(SQLSTATE %) — docs/dev/PWA_AND_REMINDERS.md §5를 확인하세요', sqlstate;
 end;
 $$;
 

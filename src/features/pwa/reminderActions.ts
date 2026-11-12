@@ -1,6 +1,6 @@
 // 매일 리마인더 — reminderModel.ts의 켜기·끄기·다시 묶기·맞추기 절차에 실제 브라우저(serviceWorker.ts)·서버(pushSubscriptions.ts) 의존성을 넣어 부른다.
 // 쓰는 곳: 설정 화면 토글(useReminder), 계정이 바뀔 때·앱을 열 때(PwaClient). 로그아웃 흐름도 세션이 살아 있을 때 disableReminderNow()를 부르면
-// 서버 행까지 바로 지운다(docs/PWA_AND_REMINDERS.md §8). 모두 브라우저에서만 부른다. 던지지 않는다(실패는 결과 값으로).
+// 서버 행까지 바로 지운다(docs/dev/PWA_AND_REMINDERS.md §8). 모두 브라우저에서만 부른다. 던지지 않는다(실패는 결과 값으로).
 // 켜기·다시 묶기·맞추기에 성공하면 이 브라우저에 켜 둔 표시를 남기고(reminderSetting.ts), 끄기·로그아웃·다시 묶기 실패에서 지운다.
 
 import { config } from "@/config";

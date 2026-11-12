@@ -7,7 +7,7 @@
 // 문구: 새 문장을 만들지 않는다 — 이름은 브랜드명, 부제·설명은 App Store 제출 문안(web/reference/docs/APP_STORE.md, CPO 작성) 원문.
 //   (예전 서비스 소개 화면의 제목·설명을 그대로 옮겼다 — 소개 화면은 2026-10-14 CPO 결정으로 없앴다.)
 // 이미지: public/og-image.png(1200×630) — 브랜드 로고(src/features/flow/brand-logo.png)를 2배로 키워 로고 배경색(#FDEFEB) 위 가운데에
-//   둔 것(macOS sips — 다시 만드는 법은 docs/PWA_AND_REMINDERS.md §2-4). 로고 안에 "온맘" 글자가 있어 alt는 브랜드명.
+//   둔 것(macOS sips — 다시 만드는 법은 docs/dev/PWA_AND_REMINDERS.md §2-4). 로고 안에 "온맘" 글자가 있어 alt는 브랜드명.
 
 import type { Metadata } from "next";
 

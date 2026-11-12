@@ -174,7 +174,7 @@ export const CHAT_GUEST_HOURLY_LIMIT_DEFAULT = 5;
 export const CHAT_GLOBAL_HOURLY_LIMIT_DEFAULT = 60;
 /**
  * 서비스 전체가 24시간에 보낼 수 있는 LLM 요청 수 — 익명 계정을 여럿 만들어 비용을 키우는 것을 막는 상한(CHAT_GLOBAL_DAILY_LIMIT).
- * 넘으면 모두 앱 규칙 안내로 답한다. 이용자가 늘면 함수 비밀값으로 올린다(docs/SUPABASE_FUNCTIONS.md).
+ * 넘으면 모두 앱 규칙 안내로 답한다. 이용자가 늘면 함수 비밀값으로 올린다(docs/dev/SUPABASE_FUNCTIONS.md).
  */
 export const CHAT_GLOBAL_DAILY_LIMIT_DEFAULT = 500;
 /** 사용자 한도의 창(초) */
