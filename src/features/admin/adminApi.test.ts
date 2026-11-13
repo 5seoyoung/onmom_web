@@ -566,6 +566,40 @@ describe("deleteUser — 이용자의 삭제 요청 처리", () => {
     expect(deleteFailureOf(null)).toBe("failed");
   });
 
+  /** 카카오 연결 끊기 함수(account)가 kakao 값으로 답하는 가짜 — 부른 순서를 calls에 함께 남긴다 */
+  function withUnlink(kakao: string, deleteReply: RpcReply = { data: null, error: null }) {
+    const f = fakeClient({ replies: { admin_delete_user: deleteReply } });
+    const bodies: unknown[] = [];
+    f.client.functions = {
+      async invoke(name, o) {
+        f.calls.push({ fn: `function:${name}` });
+        bodies.push(o.body);
+        return { data: { ok: true, kakao }, error: null };
+      },
+    };
+    return { ...f, bodies };
+  }
+
+  it("카카오 계정이면 지우기 전에 카카오 연결 끊기를 요청한다(관리자 끊기) — 끊지 못해도 삭제는 이어 간다", async () => {
+    const ok = withUnlink("unlinked");
+    expect(await deleteUser(ok.client, USER_ID, null, { kakao: true })).toEqual({ ok: true });
+    expect(ok.calls.map((c) => c.fn)).toEqual(["function:account", "admin_delete_user"]);
+    expect(ok.bodies).toEqual([{ action: "kakao-unlink-admin", target: USER_ID }]);
+    const failed = withUnlink("failed");
+    expect(await deleteUser(failed.client, USER_ID, null, { kakao: true })).toEqual({ ok: true, kakaoUnlinkFailed: true });
+    expect(failed.calls.map((c) => c.fn)).toEqual(["function:account", "admin_delete_user"]);
+    const off = withUnlink("skipped");
+    expect(await deleteUser(off.client, USER_ID, null, { kakao: true })).toEqual({ ok: true });
+  });
+
+  it("카카오 계정이 아니면 끊기를 부르지 않는다, 삭제가 실패하면 끊기 결과와 상관없이 실패", async () => {
+    const guest = withUnlink("failed");
+    expect(await deleteUser(guest.client, USER_ID, null)).toEqual({ ok: true });
+    expect(guest.calls.map((c) => c.fn)).toEqual(["admin_delete_user"]);
+    const gone = withUnlink("failed", { data: null, error: { code: "P0002", message: "onmom: user not found" } });
+    expect(await deleteUser(gone.client, USER_ID, null, { kakao: true })).toEqual({ ok: false, failure: "notFound" });
+  });
+
   it("실패·예외는 ok false", async () => {
     const self = fakeClient({ replies: { admin_delete_user: { data: null, error: { code: "P0001", message: "onmom: cannot delete own account" } } } });
     expect(await deleteUser(self.client, USER_ID, null)).toEqual({ ok: false, failure: "self" });

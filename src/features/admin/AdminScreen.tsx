@@ -444,7 +444,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     if (deleteTarget === null || deleteBusy) return;
     setDeleteBusy(true);
     setDeleteError(null);
-    const r = await deleteUser(client, deleteTarget.id, reason);
+    const r = await deleteUser(client, deleteTarget.id, reason, { kakao: deleteTarget.kind === "kakao" });
     setDeleteBusy(false);
     if (!r.ok) {
       if (r.failure === "forbidden") onForbidden();
@@ -454,7 +454,7 @@ function AdminDashboard({ client, onForbidden }: { client: AdminClient; onForbid
     const deletedId = deleteTarget.id;
     pendingFocusRef.current = "notice"; // 연 단추는 방금 지운 행과 함께 사라진다 — 알림 줄로
     setDeleteTarget(null);
-    setNotice(ADMIN_TEXT.deleteDone);
+    setNotice(r.kakaoUnlinkFailed ? `${ADMIN_TEXT.deleteDone} ${ADMIN_TEXT.deleteKakaoUnlinkFailed}` : ADMIN_TEXT.deleteDone);
     // 찾기 결과가 그 계정이면 "삭제됐어요"로 바꾼다(다시 [계정 삭제]를 누를 수 없게)
     setSearch((s) => (s.kind === "found" && s.row.id === deletedId ? { kind: "deleted", row: s.row } : s));
     // 이 쪽의 마지막 한 명을 지웠으면 앞 쪽으로(빈 쪽을 보이지 않게), 아니면 같은 쪽을 다시

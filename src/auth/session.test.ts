@@ -1361,6 +1361,43 @@ describe("계정 삭제", () => {
     expect(store.getSnapshot().state.hasOnboarded).toBe(false);
   });
 
+  /** 카카오 로그인 뒤 — account 함수(카카오 연결 끊기)가 kakao 값으로 답하는 가짜 클라이언트 */
+  async function signedInWithUnlink(kakao: string | "error") {
+    const fc = fakeClient({ codes: { abc: kakaoSession() } });
+    const bodies: unknown[] = [];
+    Object.assign(fc.client, {
+      functions: {
+        async invoke(name: string, o: { body: unknown }) {
+          fc.calls.push(`fn:${name}:${fc.currentUserId() ?? "-"}`);
+          bodies.push(o.body);
+          return kakao === "error" ? { data: null, error: { name: "FunctionsHttpError" } } : { data: { ok: true, kakao }, error: null };
+        },
+      },
+    });
+    const remotes = new Map([[KAKAO_USER_ID, new FakeRemote()]]);
+    remotes.get(KAKAO_USER_ID)!.setServer(onboardedState({ ownerAccountID: KAKAO_ACCOUNT }));
+    const ctx = setup({ remotes, client: fc });
+    const store = setupStore();
+    await ctx.manager.completeCallback(store, `${CALLBACK}?code=abc`);
+    return { ...ctx, store, bodies };
+  }
+
+  it("카카오 계정은 지우기 전에(세션이 살아 있을 때) 카카오 연결 끊기를 요청한다 — 끊었거나 꺼져 있으면 결과는 그대로", async () => {
+    for (const kakao of ["unlinked", "skipped", "error"]) {
+      const { manager, store, fc, bodies } = await signedInWithUnlink(kakao);
+      expect(await manager.deleteAccount(store)).toEqual({ ok: true });
+      expect(fc.calls.slice(-3)).toEqual([`fn:account:${KAKAO_USER_ID}`, `rpc:delete_my_account:${KAKAO_USER_ID}`, "signOut:local"]);
+      expect(bodies).toEqual([{ action: "kakao-unlink-self" }]);
+    }
+  });
+
+  it("끊기를 시도했지만 실패했으면 삭제는 끝내고 kakaoUnlinkFailed", async () => {
+    const { manager, store, fc } = await signedInWithUnlink("failed");
+    expect(await manager.deleteAccount(store)).toEqual({ ok: true, kakaoUnlinkFailed: true });
+    expect(fc.calls).toContain(`rpc:delete_my_account:${KAKAO_USER_ID}`);
+    expect(store.getSnapshot().account).toBeNull();
+  });
+
   it("세션이 끝났으면 서버에 요청할 수 없다 — noSession, 아무것도 지우지 않는다", async () => {
     const { manager } = setup();
     const store = setupStore();

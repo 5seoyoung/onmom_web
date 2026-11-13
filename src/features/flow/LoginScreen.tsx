@@ -27,6 +27,7 @@ import { CONTACT_EMAIL, CONTACT_TEXT, mailtoHref } from "@/features/terms/contac
 import { TermsSheetLink } from "@/features/terms/TermsSheetLink";
 import { BrandLogo } from "./BrandLogo";
 import { kakaoFailedMessage, LOGIN_TEXT, loginConsentText } from "./loginText";
+import { POST_DELETE_NOTICE_TEXT, takeKakaoUnlinkFailed } from "./postDeleteNotice";
 
 /** 아래 글자 링크(개인정보처리방침 보기 · 이용약관 보기 · 문의) — 누르는 영역은 높이 44 이상(min-h-11) */
 const FOOTER_LINK_CLASS = "inline-flex min-h-11 items-center rounded-button px-2 text-xs font-semibold text-primary-text";
@@ -42,6 +43,12 @@ export function LoginScreen() {
   /** 카카오 동의 화면으로 보내지 못했다 — 문구는 그릴 때 정한다(오프라인이면 오프라인 안내, 연결되면 원문으로 바뀐다) */
   const [kakaoFailed, setKakaoFailed] = useState(false);
   const online = useOnline();
+  /** 방금 계정을 지웠는데 카카오 연결을 끊지 못했다(postDeleteNotice.ts) — 이 탭에서 한 번만 */
+  const [kakaoUnlinkFailed, setKakaoUnlinkFailed] = useState(false);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 브라우저 저장소는 마운트 뒤에만 읽을 수 있다(정적 HTML과 첫 렌더를 맞춘다)
+    if (takeKakaoUnlinkFailed()) setKakaoUnlinkFailed(true);
+  }, []);
 
   // 카카오 화면에서 [뒤로]로 돌아오면(bfcache 복원) 버튼을 다시 켠다.
   useEffect(() => {
@@ -88,6 +95,11 @@ export function LoginScreen() {
       <div aria-hidden className="flex-1" />
 
       <div className="flex flex-col gap-4 px-6 pb-8 lg:px-8 lg:pb-10">
+        {kakaoUnlinkFailed ? (
+          <p role="status" className="rounded-button bg-state-watch/10 p-4 text-[0.8125rem] text-text-secondary">
+            {POST_DELETE_NOTICE_TEXT.kakaoUnlinkFailed}
+          </p>
+        ) : null}
         {/* 카카오 옐로 #FEE500 · 글자 rgb(0.15, 0.11, 0.05) — LoginView.swift:47-53 */}
         <button
           type="button"

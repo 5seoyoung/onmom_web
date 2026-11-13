@@ -1,7 +1,7 @@
 # 온맘 웹 — Supabase CLI 설정(연결된 원격 프로젝트용 최소 설정)
 #
 # 읽는 곳: GitHub Actions "Supabase" 워크플로(.github/workflows/supabase.yml)
-#   supabase link → supabase db push(migrations/) → supabase secrets set → supabase functions deploy videos chat send-reminders
+#   supabase link → supabase db push(migrations/) → supabase secrets set → supabase functions deploy videos chat send-reminders account
 # 설명서: docs/dev/SUPABASE_SETUP.md
 #
 # ⚠️ 인증(Auth) 설정은 이 파일로 관리하지 않는다 — Supabase 대시보드가 기준이다(카카오·익명 로그인·수동 연결·
@@ -43,4 +43,12 @@ verify_jwt = false
 # 그 밖은 401로 끝낸다(푸시 서비스를 부르지 않는다). 설명: docs/dev/PWA_AND_REMINDERS.md §4·§5.
 # ⚠️ 함수의 부른 쪽 확인(_shared/reminders.ts callerAuthorized)을 지우거나 바꾸면 이 값을 true로 되돌린다.
 [functions.send-reminders]
+verify_jwt = false
+
+# 계정 — 계정 삭제 때 카카오 연결 끊기, 카카오 연결 해제 웹훅(functions/account/handler.ts). 비밀값 KAKAO_ADMIN_KEY가 없으면 꺼진 채로 돈다.
+# 웹훅은 카카오가 보내는 요청이라 Supabase 토큰이 없다(헤더 Authorization: KakaoAK <어드민 키>) → 게이트웨이 검사를 끈다.
+# 화면 요청(끊기)은 함수가 Authorization의 로그인 토큰을 auth.getUser로 직접 확인하고(틀리면 401), 관리자 끊기는 그 토큰으로 is_admin()(aal2)을 확인한다(아니면 403).
+# 웹훅은 함수가 KakaoAK 헤더를 어드민 키와 상수 시간으로 비교한다(다르거나 키가 없으면 401).
+# ⚠️ 함수의 토큰·헤더 확인을 지우거나 바꾸면 이 값을 true로 되돌린다 — 그러지 않으면 누구나 남의 카카오 연결을 끊거나 계정을 지울 수 있다.
+[functions.account]
 verify_jwt = false

@@ -41,6 +41,15 @@ export function pickServerKey(
 }
 
 /**
+ * 사용자 권한으로 PostgREST를 부를 때 쓸 공개 키 — SUPABASE_PUBLISHABLE_KEYS(새 방식 JSON)의 "default"가 먼저, 없으면 예전 SUPABASE_ANON_KEY.
+ * 공개 키는 비밀이 아니지만 기록하지 않는다. account 함수가 관리자 확인(is_admin — 그 사용자의 토큰으로)에 쓴다.
+ */
+export function pickPublishableKey(publishableKeysJson: string | null | undefined, legacyAnonKey: string | null | undefined): string | null {
+  // 고르는 규칙은 서버 키와 같다(JSON의 "default" → 예전 키) — 출처 이름만 다르다
+  return pickServerKey(publishableKeysJson, legacyAnonKey)?.key ?? null;
+}
+
+/**
  * 토큰 자체의 문제를 뜻하는 Supabase Auth 오류 코드(Supabase 문서 "Auth error codes").
  * bad_jwt(서명·형식·만료), session_not_found·session_expired(로그아웃·세션 만료), user_not_found(계정 삭제),
  * no_authorization(토큰 없음), invalid_jwt(supabase-js가 형식을 먼저 거른 경우).
