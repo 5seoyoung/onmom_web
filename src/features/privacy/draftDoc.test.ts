@@ -6,7 +6,7 @@ import { AI_CONSENT_VERSION } from "@/features/chat/aiConsent";
 import { AI_CONSENT_TEXT } from "@/features/chat/AiConsentCard";
 import { AI_CONSENT_ITEMS, AI_TRANSFER_NOTICE, REQUIRED_CONSENTS, SERVER_CONSENT_TEXT } from "@/features/onboarding/consentText";
 import { policyFor } from "./policy";
-import { webPolicySections } from "./webPolicyText";
+import { WEB_POLICY_CHANGES, WEB_POLICY_EFFECTIVE_DATE, webPolicySections } from "./webPolicyText";
 
 // CPO·법률 검토 문서(docs/dev/privacy/CONSENT_AND_POLICY_DRAFT.md)가 코드의 문구를 빠짐없이 담고 있는가.
 // 코드가 원본이다 — 문구를 바꾸면 이 테스트가 실패하므로 검토 문서도 같이 고친다(검토받지 않은 문구가 나가지 않게).
@@ -57,7 +57,8 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
   });
 
   it("웹 처리방침 초안 — 모든 절의 모든 줄(Turnstile·매일 리마인더를 쓰는 빌드 — 하나만·둘 다 — 와 유튜브 추천 영상이 있는 빌드 포함)", () => {
-    const web = policyFor({ serverStorage: true });
+    // 새 판이 본문이 되는 날로 본다 — 그 전의 본문(2026-11-06 판)과 지난 판은 저장소 기록에서 꺼낸 고정본(editions.ts)이라 검토 대상이 아니다
+    const web = policyFor({ serverStorage: true, now: new Date(`${WEB_POLICY_EFFECTIVE_DATE}T00:00:00+09:00`) });
     for (const t of [web.draftLabel!, web.effective, web.note]) expect(DOC, t).toContain(t);
     const variants = [
       { turnstile: true, reminders: false },
@@ -69,6 +70,10 @@ describe.skipIf(ON_CI)("검토 문서가 코드 문구와 같다", () => {
       expect(DOC, s.title).toContain(s.title);
       for (const line of s.body.split("\n").filter((l) => l.trim() !== "")) expect(DOC, line).toContain(line);
     }
+  });
+
+  it("개정 안내 — 바뀌는 내용 요약이 문서에도 있다", () => {
+    for (const c of WEB_POLICY_CHANGES) expect(DOC, c).toContain(c);
   });
 
   // 서비스 소개 저장 카드(빌드별 문구) 대조는 없앴다 — 서비스 소개 화면을 없앴다(2026-10-14 CPO 결정).

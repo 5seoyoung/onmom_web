@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef } from "react";
 import { activePolicy } from "./policy";
-import { PolicySections, PolicyTitleBlock, PolicyWebNote } from "./PrivacyPolicy";
+import { PolicyPreviousEditions, PolicySections, PolicyTitleBlock, PolicyUpcomingNotice, PolicyWebNote } from "./PrivacyPolicy";
 import { PRIVACY_POLICY_CLOSE, PRIVACY_POLICY_NAV_TITLE } from "./policyText";
 
 export interface PrivacyPolicyDialogProps {
@@ -67,7 +67,9 @@ function PolicySheet({ onClose }: { onClose: () => void }) {
       <div className="flex flex-col gap-6 p-6 pb-10">
         <PolicyTitleBlock policy={policy} />
         <PolicyWebNote policy={policy} />
+        <PolicyUpcomingNotice policy={policy} headingLevel="h3" />
         <PolicySections policy={policy} headingLevel="h3" />
+        <PolicyPreviousEditions policy={policy} headingLevel="h3" />
       </div>
     </dialog>
   );

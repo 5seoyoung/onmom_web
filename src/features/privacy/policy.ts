@@ -15,10 +15,13 @@ import {
   PRIVACY_POLICY_WEB_NOTE,
   type PolicySection,
 } from "./policyText";
+import { EDITION_2026_10_24, EDITION_2026_11_06, type FrozenPolicyEdition } from "./editions";
 import {
   DEFAULT_WEB_POLICY_OPTIONS,
+  WEB_POLICY_CHANGES,
   WEB_POLICY_DRAFT_LABEL,
   WEB_POLICY_EFFECTIVE,
+  WEB_POLICY_EFFECTIVE_DATE,
   WEB_POLICY_NOTE,
   webPolicySections,
   type WebPolicyOptions,
@@ -35,15 +38,29 @@ export interface PolicyDocument {
   /** 본문 위 안내 */
   note: string;
   sections: readonly PolicySection[];
+  /**
+   * 시행을 앞둔 새 판(웹 방침만) — 18절대로 시행 7일 전부터 이 화면에 미리 알린다. 바뀌는 내용 요약과 새 판 전문.
+   * 새 판이 시행되면(서울 날짜가 시행일 이상) null이고 그 판이 본문이 된다.
+   */
+  upcoming: { effective: string; changes: readonly string[]; sections: readonly PolicySection[] } | null;
+  /** 지난 판(웹 방침만, 최근 판부터) — 적용 기간과 전문(editions.ts 고정본). iOS 원문은 빈 목록. */
+  previous: readonly FrozenPolicyEdition[];
 }
 
 export interface PolicyBuild {
   /** 서버 저장(Supabase)이 켜진 빌드인가 */
   serverStorage: boolean;
   webOptions?: WebPolicyOptions;
+  /** 지금 시각 — 새 판의 시행일과 견준다(기본: 지금. 정적 화면은 빌드 시각 — 매일 다시 배포한다) */
+  now?: Date;
 }
 
-export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIONS }: PolicyBuild): PolicyDocument {
+/** 한국 날짜 "YYYY-MM-DD" — 시행일은 한국 날짜로 정한다(빌드 서버는 UTC) */
+export function seoulDate(now: Date): string {
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIONS, now = new Date() }: PolicyBuild): PolicyDocument {
   if (!serverStorage) {
     return {
       kind: "ios",
@@ -52,6 +69,23 @@ export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIO
       draftLabel: null,
       note: PRIVACY_POLICY_WEB_NOTE,
       sections: PRIVACY_POLICY_SECTIONS,
+      upcoming: null,
+      previous: [],
+    };
+  }
+  const live = webPolicySections(webOptions);
+  if (seoulDate(now) < WEB_POLICY_EFFECTIVE_DATE) {
+    // 새 판 시행 전 — 직전 판(고정본)이 본문, 새 판은 개정 안내로 미리 보인다
+    const current = EDITION_2026_11_06;
+    return {
+      kind: "webDraft",
+      title: PRIVACY_POLICY_TITLE,
+      effective: current.effective,
+      draftLabel: current.draftLabel,
+      note: current.note,
+      sections: current.sections,
+      upcoming: { effective: WEB_POLICY_EFFECTIVE, changes: WEB_POLICY_CHANGES, sections: live },
+      previous: [EDITION_2026_10_24],
     };
   }
   return {
@@ -60,7 +94,9 @@ export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIO
     effective: WEB_POLICY_EFFECTIVE,
     draftLabel: WEB_POLICY_DRAFT_LABEL,
     note: WEB_POLICY_NOTE,
-    sections: webPolicySections(webOptions),
+    sections: live,
+    upcoming: null,
+    previous: [EDITION_2026_11_06, EDITION_2026_10_24],
   };
 }
 
@@ -73,7 +109,10 @@ export function activeWebPolicyOptions(): WebPolicyOptions {
   return { turnstile: config.turnstileSiteKey !== null, reminders: isReminderConfigured(), youtube: YOUTUBE_ACTIVE };
 }
 
-/** 이 빌드의 방침 — 빌드 때 정해지는 값(NEXT_PUBLIC_*)이라 서버 HTML과 브라우저가 같다 */
-export function activePolicy(): PolicyDocument {
-  return policyFor({ serverStorage: isSupabaseConfigured(), webOptions: activeWebPolicyOptions() });
+/**
+ * 이 빌드의 방침 — 빌드 때 정해지는 값(NEXT_PUBLIC_*)과 지금 날짜로 고른다. /privacy/ 본문은 서버 컴포넌트라 빌드 날짜(매일 다시 배포),
+ * 시트(PrivacyPolicyDialog)는 연 시각이다 — 새 판 시행일 아침 배포 전 몇 시간은 둘이 다를 수 있다(둘 다 새 판 전문을 보인다).
+ */
+export function activePolicy(now: Date = new Date()): PolicyDocument {
+  return policyFor({ serverStorage: isSupabaseConfigured(), webOptions: activeWebPolicyOptions(), now });
 }

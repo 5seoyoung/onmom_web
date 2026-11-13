@@ -1,5 +1,5 @@
 import { activePolicy } from "./policy";
-import { PolicySections, PolicyWebNote } from "./PrivacyPolicy";
+import { PolicyPreviousEditions, PolicySections, PolicyUpcomingNotice, PolicyWebNote } from "./PrivacyPolicy";
 import { PrivacyPolicyHeader } from "./PrivacyPolicyHeader";
 
 // /privacy/ — 설정에서 푸시로 여는 전체 화면(MoreView.swift:76, PrivacyPolicyView(showsCloseButton: false)).
@@ -14,7 +14,9 @@ export function PrivacyPolicyScreen() {
     <main className="mx-auto flex w-full max-w-[42rem] flex-1 flex-col gap-6 px-6 pt-2 pb-10">
       <PrivacyPolicyHeader title={policy.title} effective={policy.effective} />
       <PolicyWebNote policy={policy} />
+      <PolicyUpcomingNotice policy={policy} headingLevel="h2" />
       <PolicySections policy={policy} headingLevel="h2" />
+      <PolicyPreviousEditions policy={policy} headingLevel="h2" />
     </main>
   );
 }
