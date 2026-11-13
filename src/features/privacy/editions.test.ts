@@ -33,6 +33,13 @@ describe("처리방침 판 — 시행 7일 전 안내와 지난 판(2026-11-20 �
     expect(p.previous.map((e) => e.id)).toEqual(["2026-11-06", "2026-10-24"]);
   });
 
+  it("선택 기능을 켠 빌드는 시행 전이라도 새 판이 본문 — 고정본(선택 기능 꺼짐)에는 켠 업체가 없어서", () => {
+    const p = policyFor({ serverStorage: true, now: BEFORE, webOptions: { turnstile: false, reminders: false, youtube: true } });
+    expect(p.effective).toBe(WEB_POLICY_EFFECTIVE);
+    expect(p.upcoming).toBeNull();
+    expect(p.sections.map((x) => x.body).join("\n")).toContain("YouTube");
+  });
+
   it("브라우저 전용 빌드(iOS 원문)에는 안내·지난 판이 없다", () => {
     const p = policyFor({ serverStorage: false, now: BEFORE });
     expect(p.upcoming).toBeNull();

@@ -74,7 +74,10 @@ export function policyFor({ serverStorage, webOptions = DEFAULT_WEB_POLICY_OPTIO
     };
   }
   const live = webPolicySections(webOptions);
-  if (seoulDate(now) < WEB_POLICY_EFFECTIVE_DATE) {
+  // 고정본은 그때 운영 빌드(선택 기능 — Turnstile·매일 알림·유튜브 — 모두 꺼짐)의 글자다. 선택 기능을 켠 빌드에서 옛 고정본을 보이면 켠 업체가
+  // 방침에서 빠진다 — 그런 빌드는 새 판을 본문으로 보인다(선택 기능을 켜는 것 자체가 방침 변경이라 따로 공지한다 — 18절).
+  const optionsOff = !webOptions.turnstile && !webOptions.reminders && webOptions.youtube !== true;
+  if (optionsOff && seoulDate(now) < WEB_POLICY_EFFECTIVE_DATE) {
     // 새 판 시행 전 — 직전 판(고정본)이 본문, 새 판은 개정 안내로 미리 보인다
     const current = EDITION_2026_11_06;
     return {
