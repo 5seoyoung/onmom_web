@@ -369,7 +369,8 @@ export const MATERNITY_TOGGLES: ReadonlyArray<{ key: keyof MaternityRecord; labe
   { key: "anemia", label: "산후 빈혈" }, // 원문: MoreView.swift:264
   { key: "heavyBleeding", label: "분만 시 출혈 많음" }, // 원문: MoreView.swift:265
   { key: "preeclampsia", label: "임신중독증·고혈압" }, // 원문: MoreView.swift:266
-  { key: "pelvicPain", label: "골반통·치골결합 이개" }, // 원문: MoreView.swift:267
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "골반통·치골결합 이개"(MoreView.swift:267) — 소견명 대신 증상으로, 분석 토글·차단 사유와 같은 말(임상 자체 검토 X-PGP))
+  { key: "pelvicPain", label: "골반통·치골결합 통증" },
   { key: "diastasisRecti", label: "복직근 이개(DRA)" }, // 원문: MoreView.swift:268
 ];
 

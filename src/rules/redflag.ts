@@ -7,6 +7,13 @@
 // "crisis"(병원 찾기 대신 위기 상담 전화 안내). 출처 칩은 임상 사전 검토 §5에 원문으로 확인한 자료만 쓴다(지어내지 않는다).
 // 웹 신규 문구 — CPO 확인 필요 (content.json red_flags의 heavy_bleeding_dizzy·seizure·harm_thoughts·heavy_bleeding·headache_vision·
 // face_hand_swelling·upper_belly_pain 문구·칩, neuro_flag·cardioresp_flag·dvt_suspect에 더한 출처 칩)
+//
+// rules-1.3(2026-11-13, 임상 자체 검토 docs/dev/clinical/CLINICAL_SELF_REVIEW_2026-11.md §2 — 공식 지침 원문 대조, 임상의가 쓴 것이 아님):
+// 흉통·호흡곤란·빠른 심장박동을 119로(T10 — AWHONN 911), 10일 이후 오로는 "늘거나 또는 붉으면" 즉시 내원(R-PPH — NICE NG194 1.2.13),
+// 발열 토글에 오한을 합침(R-FEVER·T6), 상처 토글에 감염 신호(T8)·종아리 토글에 허벅지·팔(T9)을 넣고, 오로 냄새(T7)·심한 구토(T12)·
+// 유방 붉음 하루 넘게(T13)·갑자기 몹시 지침(T15) 신호를 더했다(모두 즉시 내원 — CDC "immediately", NICE "without delay").
+// 웹 신규 문구 — CPO 확인 필요 (content.json red_flags의 pph_suspect·severe_pain·fever_infection·neuro_flag·cardioresp_flag·dvt_suspect 문구·칩,
+// lochia_odor·severe_vomiting·breast_red_swelling·extreme_tiredness 문구·칩, ui.home.metric_names.fever "발열·오한")
 
 import content from "@/content";
 import { compileTemplate } from "@/content/template";
@@ -24,14 +31,17 @@ export interface SymptomInput extends Record<RiskSymptomKey, boolean> {
   lochiaIncreased: boolean;
   /** 오로가 붉은색(선홍색)인가 */
   lochiaRed: boolean;
-  /** 38°C 이상 전신 고열·오한·몸살 */
+  /** 체온계로 38.0°C 이상이었거나 몸이 덜덜 떨리는 오한(rules-1.3 — 오한을 합침, 임상 자체 검토 R-FEVER·T6) */
   feverEvent: boolean;
   /** 통증 0~10 */
   painNrs: number;
   // 위험 증상 토글 — 판정에 쓰고, rules-1.2부터 기록에도 남긴다(rules/record buildSymptomRecord).
+  /** 수술·회음부 상처가 점점 더 아프거나 붉게 붓거나 고름·냄새 나는 진물·벌어짐(rules-1.3에서 감염 신호까지 넓힘 — T8) */
   woundPainWorsening: boolean;
   dizzinessFainting: boolean;
+  /** 흉통·숨참·가만히 있어도 빠른 심장박동(rules-1.3에서 넓히고 119로 — T10) */
   chestPainBreathing: boolean;
+  /** 한쪽 다리(종아리·허벅지)나 팔의 붓기·통증·붉음·열감(rules-1.3에서 허벅지·팔까지 — T9. 칸 이름은 그대로) */
   calfPainSwelling: boolean;
   /** 피가 많이 남(1시간 안에 패드 1장 이상이 흠뻑 젖거나 달걀만 한 핏덩이) — 산후 일수와 상관없이 묻는다(§3 T1) */
   bleedingHeavy: boolean;
@@ -45,6 +55,14 @@ export interface SymptomInput extends Record<RiskSymptomKey, boolean> {
   seizure: boolean;
   /** 나 자신이나 아기를 해칠 것 같은 생각(§3 T11) */
   harmThoughts: boolean;
+  /** 오로(분비물)의 심한 냄새(rules-1.3 — 임상 자체 검토 T7) */
+  lochiaOdor: boolean;
+  /** 계속 토해서 물도 넘기지 못함(rules-1.3 — T12) */
+  severeVomiting: boolean;
+  /** 유방이 붉게 붓고 아픈 것이 하루 넘게 이어짐(rules-1.3 — T13) */
+  breastRedSwollen: boolean;
+  /** 갑자기 몹시 지치고 힘이 없음(rules-1.3 — T15) */
+  extremeTiredness: boolean;
 }
 
 export interface RedFlag {
@@ -78,20 +96,25 @@ export const PAIN_WATCH_NRS = 4;
 // content.json 교체(임상 회신 반영)로 규칙이 빠지거나 순서가 바뀌면 안 된다.
 // rules-1.2: 등급이 높은 규칙을 앞에 둔다(119 → 위기 상담 → 즉시 내원). rules-1.1의 여섯 규칙은 서로의 순서를 그대로 둔다.
 // 다량 출혈은 오로 규칙보다 앞 — 둘 다 걸리면 양 기준과 119 안내가 있는 쪽이 대표 신호다.
+// rules-1.3: cardioresp_flag가 119 등급이 되어 119 묶음(seizure 뒤)으로 올렸다. 오로 냄새는 오로 규칙 바로 뒤, 새 신호 셋은 맨 뒤.
 const RED_FLAG_ORDER = [
   "heavy_bleeding_dizzy",
   "seizure",
+  "cardioresp_flag",
   "harm_thoughts",
   "heavy_bleeding",
   "pph_suspect",
+  "lochia_odor",
   "severe_pain",
   "fever_infection",
   "neuro_flag",
-  "cardioresp_flag",
   "dvt_suspect",
   "headache_vision",
   "face_hand_swelling",
   "upper_belly_pain",
+  "severe_vomiting",
+  "breast_red_swelling",
+  "extreme_tiredness",
 ] as const;
 type RedFlagCode = (typeof RED_FLAG_ORDER)[number];
 
@@ -107,16 +130,19 @@ const MATCHERS: Record<RedFlagCode, (i: SymptomInput) => boolean> = {
   // 겨냥: 1차·2차 산후출혈 — 산후 일수와 상관없이(§3 T1. 10일 게이트는 오로 색 질문에만 둔다)
   heavy_bleeding: (i) => i.bleedingHeavy,
   // 겨냥: 산후출혈·자궁복고부전. 산후 10일 이전의 붉은 오로는 흔해서 판정하지 않는다(양이 많으면 heavy_bleeding이 날짜와 상관없이 본다).
-  pph_suspect: (i) => i.postpartumDays >= LOCHIA_GATE_DAYS && i.lochiaIncreased && i.lochiaRed,
-  // 겨냥: 상처 감염·혈종 등
+  // rules-1.3: 둘 다가 아니라 하나만이어도(늘거나 또는 붉음) — NICE NG194 1.2.13 "the bleeding increases", 1.2.4 "persistent or increased"
+  pph_suspect: (i) => i.postpartumDays >= LOCHIA_GATE_DAYS && (i.lochiaIncreased || i.lochiaRed),
+  // 겨냥: 자궁내막염 등 감염(rules-1.3 T7 — CDC "discharge that smells bad")
+  lochia_odor: (i) => i.lochiaOdor,
+  // 겨냥: 상처 감염·혈종 등(rules-1.3에서 상처 토글이 감염 신호까지 — T8)
   severe_pain: (i) => i.painNrs >= SEVERE_PAIN_NRS || i.woundPainWorsening,
-  // 겨냥: 산욕열·감염
+  // 겨냥: 산욕열·감염·패혈증(rules-1.3에서 오한까지 — T6)
   fever_infection: (i) => i.feverEvent,
   // 겨냥: 빈혈·저혈압·자간전증 등 신경학적 징후
   neuro_flag: (i) => i.dizzinessFainting,
-  // 겨냥: 폐색전증·심근병증 등 심폐 징후
+  // 겨냥: 폐색전증·심근병증 등 심폐 징후 — rules-1.3에서 119(T10, AWHONN 911)
   cardioresp_flag: (i) => i.chestPainBreathing,
-  // 겨냥: 심부정맥혈전증
+  // 겨냥: 심부정맥혈전증(rules-1.3에서 허벅지·팔까지 — T9)
   dvt_suspect: (i) => i.calfPainSwelling,
   // 겨냥: 산후 자간전증(§3 T2)
   headache_vision: (i) => i.headacheVision,
@@ -124,6 +150,12 @@ const MATCHERS: Record<RedFlagCode, (i: SymptomInput) => boolean> = {
   face_hand_swelling: (i) => i.faceHandSwelling,
   // 겨냥: 산후 자간전증·HELLP(§3 T4)
   upper_belly_pain: (i) => i.upperBellyPain,
+  // 겨냥: 탈수·감염 등(rules-1.3 T12 — CDC "Severe nausea and throwing up")
+  severe_vomiting: (i) => i.severeVomiting,
+  // 겨냥: 유선염·유방 농양(rules-1.3 T13 — NICE NG194 1.2.4 "more than 24 hours despite self-management")
+  breast_red_swelling: (i) => i.breastRedSwollen,
+  // 겨냥: 산후 심근병증·빈혈·감염 등(rules-1.3 T15 — CDC "Overwhelming tiredness")
+  extreme_tiredness: (i) => i.extremeTiredness,
 };
 
 interface RedFlagRule {
@@ -228,6 +260,7 @@ export const RED_FLAG_GUIDES: readonly RedFlagGuide[] = RULES.map((r) => ({
 // iOS에서 한때 홈이 자체 임계값을 가져, 산후 10일 이내 붉은 오로를 기록 탭과 홈이 서로 다르게 말했다.
 // 근거: 오로 "10일 이후 선홍색 재발·양 증가"(임산부수첩 2023 p.60), 발열 38°C 이상, 통증 NRS 8 이상 = 즉시 내원 기준.
 // NRS 4~7의 "살펴볼 신호"는 임상 판정이 아니라 중등도 통증을 눈에 띄게 하려는 표시 구간이다.
+// rules-1.3: 오로는 늘거나 또는 붉으면 레드플래그(pph_suspect)와 같이 "병원 확인 신호" — "살펴볼 신호" 구간이 없어졌다(둘이 서로 다른 말을 하지 않게).
 
 export interface RecoveryMetric {
   name: string;
@@ -265,12 +298,8 @@ export function metrics(record: SymptomRecord | null | undefined): RecoveryMetri
   if (days == null || days >= LOCHIA_GATE_DAYS) {
     let lochia: MetricStatus = "normal";
     if (days != null && days >= LOCHIA_GATE_DAYS) {
-      lochia =
-        record.lochiaIncreased && record.lochiaRed
-          ? "alert"
-          : record.lochiaIncreased || record.lochiaRed
-            ? "watch"
-            : "normal";
+      // rules-1.3: 레드플래그(pph_suspect)와 같은 조건 — 하나만이어도 병원 확인 신호
+      lochia = record.lochiaIncreased || record.lochiaRed ? "alert" : "normal";
     }
     items.push({ name: METRIC_NAMES.lochia, status: lochia }); // 원문: RedFlagEngine.swift:72
   }

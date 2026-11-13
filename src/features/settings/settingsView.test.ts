@@ -302,14 +302,14 @@ describe("프로필 편집 초안", () => {
 });
 
 describe("MATERNITY_TOGGLES", () => {
-  it("MoreView 순서·라벨 7개", () => {
+  it("MoreView 순서·라벨 7개 — 골반통만 2026-11-13 '치골결합 통증'으로(임상 자체 검토 X-PGP)", () => {
     expect(MATERNITY_TOGGLES.map((t) => t.label)).toEqual([
       "초산",
       "임신성 당뇨(GDM)",
       "산후 빈혈",
       "분만 시 출혈 많음",
       "임신중독증·고혈압",
-      "골반통·치골결합 이개",
+      "골반통·치골결합 통증",
       "복직근 이개(DRA)",
     ]);
   });

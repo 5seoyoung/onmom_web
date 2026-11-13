@@ -13,9 +13,10 @@
 // 영상 목록(영상 서버)은 쓰지 않는다 — 서버가 잠들어 있거나 오프라인이어도 카드가 같은 목록을 보이게.
 //
 // 고르기(routinePool → pickTodayStages)
-// - 회복 우선기는 지금 단계일 때(0~1주)만 넣는다 — 요약이 "호흡·이완만. 윗몸일으키기 등 복부운동 금지"라는 제한이라,
+// - 회복 우선기는 지금 단계일 때(0~1주)만 넣는다 — 요약이 "호흡·이완 위주. 윗몸일으키기 등 복부운동 금지"라는 제한이라,
 //   뒤 단계(예: 코어 강화 "복근·코어 강화·요가")와 나란히 두면 서로 어긋난다(2026-11-08 결정).
-// - 지금 단계(열린 단계 중 가장 늦은 것 = rules/exercise currentStage)는 늘 넣고, 그보다 앞 단계에서 2개를 날짜 순번으로 돌려 고른다.
+//   rules-1.3부터 골반저근이 0주에 함께 열린다(임상 자체 검토 E-PF) — 0~1주는 회복 우선기 + 골반저근 둘이다.
+// - 지금 단계(가장 늦게 열린 단계 = rules/exercise currentStage)는 늘 넣고, 나머지 열린 단계에서 2개를 날짜 순번으로 돌려 고른다.
 //   같은 날(로컬 달력)에는 같은 목록, 다음 날은 한 칸 밀린 묶음 — 앞 단계마다 같은 횟수로 나온다. 고를 단계가 3개 이하면 날마다 모두.
 // - 화면 순서는 단계순.
 //
@@ -24,7 +25,7 @@
 import type { DeliveryMethod, LocalDateString, MaternityRecord } from "@/domain/types";
 import { toLocalDateString } from "@/domain/date";
 import { ANALYZE_TEXT } from "@/features/analyze/analyzeModel";
-import { STAGE_BUCKETS, blockedBuckets, bucketByKey, startWeek, type StageBucket } from "@/rules/exercise";
+import { STAGE_BUCKETS, blockedBuckets, bucketByKey, currentStage, startWeek, type StageBucket } from "@/rules/exercise";
 import { recoveryRecommendation } from "@/rules/recovery";
 import { ROUTES } from "@/routes";
 import type { ExerciseGate } from "./exerciseModel";
@@ -93,23 +94,26 @@ export function localDayNumber(d: Date): number {
   return Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000);
 }
 
-/** 고를 단계 — 열린 단계(단계순)에서 지금 단계가 아닌 회복 우선기를 뺀다(머리 주석) */
-export function routinePool(open: readonly StageBucket[]): StageBucket[] {
-  return open.filter((b, i) => b.key !== RESTRICTION_STAGE_KEY || i === open.length - 1);
+/**
+ * 고를 단계 — 열린 단계(단계순)에서 지금 단계(current — rules/exercise currentStage)가 아닌 회복 우선기를 뺀다(머리 주석). 단계순 그대로.
+ * rules-1.3부터 지금 단계가 꼭 맨 뒤 단계는 아니다(골반저근이 0주부터 열려, 0~1주는 회복 우선기·2~5주는 코어 깨우기가 지금 단계).
+ */
+export function routinePool(open: readonly StageBucket[], current: StageBucket | null): StageBucket[] {
+  return open.filter((b) => b.key !== RESTRICTION_STAGE_KEY || b.key === current?.key);
 }
 
 /**
- * 고를 단계(단계순, 마지막이 지금 단계)에서 오늘 볼 단계를 고른다(머리 주석). 지금 단계는 늘 넣고, 앞 단계에서
+ * 고를 단계에서 오늘 볼 단계를 고른다(머리 주석). 지금 단계(current — 주지 않으면 맨 뒤 단계)는 늘 넣고, 나머지에서
  * TODAY_ROUTINE_MAX − 1개를 dayNumber로 돌려 고른다. 결과는 단계순.
  */
-export function pickTodayStages(pool: readonly StageBucket[], dayNumber: number): StageBucket[] {
-  if (pool.length <= TODAY_ROUTINE_MAX) return [...pool];
-  const current = pool[pool.length - 1];
-  const earlier = pool.slice(0, -1);
-  const n = earlier.length;
+export function pickTodayStages(pool: readonly StageBucket[], dayNumber: number, current: StageBucket | null = pool.at(-1) ?? null): StageBucket[] {
+  const byOrder = (a: StageBucket, b: StageBucket) => a.order - b.order;
+  if (pool.length <= TODAY_ROUTINE_MAX || current === null) return [...pool].sort(byOrder).slice(0, TODAY_ROUTINE_MAX);
+  const others = pool.filter((b) => b.key !== current.key);
+  const n = others.length;
   const start = ((dayNumber % n) + n) % n;
-  const picked = Array.from({ length: TODAY_ROUTINE_MAX - 1 }, (_, i) => earlier[(start + i) % n]);
-  return [...picked, current].sort((a, b) => a.order - b.order);
+  const picked = Array.from({ length: TODAY_ROUTINE_MAX - 1 }, (_, i) => others[(start + i) % n]);
+  return [...picked, current].sort(byOrder);
 }
 
 /** 운동 탭 본문 분기·프로필 → 오늘의 체조 카드 */
@@ -122,9 +126,10 @@ export function todayRoutine(
 ): TodayRoutineModel {
   if (gate === "redFlag") return { kind: "stopped" };
   if (gate !== "plan" || delivery === null || week === null || Number.isNaN(today.getTime())) return { kind: "none" };
-  const pool = routinePool(openStages(delivery, week, maternity));
+  const current = currentStage(delivery, week, maternity);
+  const pool = routinePool(openStages(delivery, week, maternity), current);
   if (pool.length === 0) return { kind: "none" };
-  const picked = pickTodayStages(pool, localDayNumber(today));
+  const picked = pickTodayStages(pool, localDayNumber(today), current);
   // 회복 단계 분석과 같은 판정 — 산모수첩 확인 항목에 걸린 주의 오버레이가 있는가
   const hasCaution = recoveryRecommendation(delivery, week, maternity).caution.length > 0;
   return {

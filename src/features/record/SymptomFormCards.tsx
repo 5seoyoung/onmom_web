@@ -70,8 +70,8 @@ export function SymptomFormCards({
 
       <Card>
         <Toggle
-          label={<span className="font-semibold">{RECORD_TEXT.feverTitle}</span>}
-          description={RECORD_TEXT.feverDescription}
+          label={<span className="font-semibold">{RECORD_WEB_TEXT.feverTitle}</span>}
+          description={RECORD_WEB_TEXT.feverDescription}
           checked={form.feverEvent}
           disabled={disabled}
           onCheckedChange={(v) => onChange({ feverEvent: v })}
@@ -88,7 +88,7 @@ export function SymptomFormCards({
       </Card>
 
       <Card as="section" aria-labelledby={riskId} className="flex flex-col gap-2">
-        <SectionTitle id={riskId}>{RECORD_TEXT.riskTitle}</SectionTitle>
+        <SectionTitle id={riskId}>{RECORD_WEB_TEXT.riskTitle}</SectionTitle>
         {RISK_TOGGLES.map(({ key, label, description }, i) => (
           <div key={key} className="flex flex-col gap-2">
             {i > 0 ? <RowDivider /> : null}

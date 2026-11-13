@@ -94,10 +94,15 @@ export const ENGINE_VERSION = "onmom-rules/1.0";
 
 // MARK: - 근거 칩 (content.json에 없는 것은 Swift 원문)
 
-const SRC_STAGE_BASIS = "src:회복 단계 기준"; // 원문: RecoveryAnalysis.swift:29
-const BLOCKED_CHIPS = ["산모수첩 확인 항목", "src:산모수첩 확인항목"] as const; // 원문: RecoveryAnalysis.swift:35
+// 2026-11-13(임상 자체 검토 X-CHIP): iOS 원문은 "src:회복 단계 기준"·"src:산모수첩 확인항목"을 출처 칩으로 썼다(RecoveryAnalysis.swift:29·35).
+// 둘은 문헌이 아니라 앱 안의 기준·입력 항목 이름이라 출처 칩("src:")이 아니라 일반 칩으로 둔다(content.json caution_overlays도 같게 바꿨다).
+const STAGE_BASIS_CHIP = "회복 단계 기준"; // 원문: RecoveryAnalysis.swift:29 ("src:" 뗌)
+const BLOCKED_CHIPS = ["산모수첩 확인 항목"] as const; // 원문: RecoveryAnalysis.swift:35 (같은 뜻의 출처 칩 "src:산모수첩 확인항목"은 뺌)
 
 // MARK: - 주의 오버레이 (산모수첩 확인 항목 → MaternityRecord 필드와 1:1)
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-13 임상 자체 검토 X-PE·C-GDM·X-PGP·X-CHIP: content.json caution_overlays의 임신중독증 라벨에 "출산 후 3~5일 사이
+// 혈압 확인"(NICE NG133 1.4.10·1.5.13), 임신성 당뇨 라벨에 "출산 후 혈당 검사 시기를 의료진에게 확인"(NICE NG3 1.6.11 — 국내 시기는 확인 못 해 숫자 없이),
+// 골반통 라벨 "치골결합 이개" → "치골결합 통증", 칩 "src:산모수첩 확인항목"은 일반 칩 "산모수첩 확인 항목"으로)
 
 type MaternityFlag = Exclude<keyof MaternityRecord, "isPrimiparous">;
 const MATERNITY_FLAGS: readonly string[] = ["gdm", "anemia", "heavyBleeding", "preeclampsia", "pelvicPain", "diastasisRecti"] satisfies MaternityFlag[];
@@ -137,7 +142,7 @@ export function recoveryRecommendation(delivery: DeliveryMethod, week: number, m
     .map((b) => ({
       item: b.key,
       label: `${b.title} - ${b.summary}`, // 원문: RecoveryAnalysis.swift:28
-      evidenceChips: [`${startWeek(b, delivery)}주차부터 가능`, SRC_STAGE_BASIS], // 원문: RecoveryAnalysis.swift:29
+      evidenceChips: [`${startWeek(b, delivery)}주차부터 가능`, STAGE_BASIS_CHIP], // 원문: RecoveryAnalysis.swift:29
     }));
 
   const forbidden: RecItem[] = [];
@@ -156,7 +161,7 @@ export function recoveryRecommendation(delivery: DeliveryMethod, week: number, m
     forbidden.push({
       item: b.key,
       label: `${b.title} - ${b.summary}`, // 원문: RecoveryAnalysis.swift:39
-      evidenceChips: [`${startWeek(b, delivery)}주차부터 (현재 ${week}주차)`, SRC_STAGE_BASIS], // 원문: RecoveryAnalysis.swift:40
+      evidenceChips: [`${startWeek(b, delivery)}주차부터 (현재 ${week}주차)`, STAGE_BASIS_CHIP], // 원문: RecoveryAnalysis.swift:40
     });
   }
 

@@ -166,7 +166,7 @@ describe("증상 기록", () => {
     const t = section(buildReport(s, GUEST, NOW, { includeJournal: false }), "symptoms");
     expect(t.rows.map((r) => r.id)).toEqual(["c", "b", "a"]);
     expect(t.columns).toBe(SYMPTOM_COLUMNS);
-    expect(t.columns).toEqual(["기록 시각", "산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)", "결과"]);
+    expect(t.columns).toEqual(["기록 시각", "산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "열·오한 (38.0℃ 이상)", "통증 정도 (NRS)", "결과"]);
   });
 
   it("많은 출혈 칸(rules-1.2 — 산후 0일부터 묻는다): 예·아니요, 그 칸이 없는 옛 기록은 값 없음(null) — 신호 줄에는 겹쳐 쓰지 않는다", () => {

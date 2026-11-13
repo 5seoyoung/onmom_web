@@ -103,11 +103,11 @@ describe("buildHomeViewModel — home.png", () => {
     expect(vm.metrics).toBeNull();
   });
 
-  it("지금 회복 단계: 9주차 골반저근, 막힌 단계 줄, 다음 단계 없음(코어 강화도 막힘)", () => {
+  it("지금 회복 단계: 9주차 코어 깨우기(rules-1.3 — 막히지 않은 단계 중 가장 늦게 열린 것), 막힌 단계 줄, 다음 단계 없음(코어 강화도 막힘)", () => {
     expect(vm.stageCard).toEqual({
       kind: "stage",
       heading: "지금 회복 단계 - 9주차",
-      current: "골반저근 · 케겔(골반저근 운동)",
+      current: "코어 깨우기 · Drawing-in(심부 코어 활성)",
       next: null,
       excluded: ["기능 강화 제외 - 골반통·치골결합 통증이 있어 한다리·비대칭 동작(클램·런지 등)은 피해요"],
     });
@@ -144,11 +144,11 @@ describe("buildHomeViewModel — home_redflag.png (최근 기록에 레드플래
     });
   });
 
-  it("회복 지표: 오로 정상 · 발열 확인 필요 · 통증 3/10 정상 · 1시간 전", () => {
+  it("회복 지표: 오로 해당 없음 · 발열·오한 병원 확인 신호 · 통증 3/10 해당 없음 · 1시간 전", () => {
     expect(vm.metrics).toEqual({
       items: [
         { name: "오로(분비물)", status: "normal" },
-        { name: "발열", status: "alert" },
+        { name: "발열·오한", status: "alert" },
         { name: "통증 NRS 3/10", status: "normal" },
       ],
       relativeTime: "1시간 전",
@@ -239,7 +239,7 @@ describe("오늘의 회복 기록 카드", () => {
   it("산후 10일 전 기록은 오로 항목이 없다", () => {
     const vm = buildHomeViewModel(stateWith({ symptomHistory: [record({ postpartumDays: 5, painNrs: 8 })] }), NOW);
     expect(vm.metrics?.items).toEqual([
-      { name: "발열", status: "normal" },
+      { name: "발열·오한", status: "normal" },
       { name: "통증 NRS 8/10", status: "alert" },
     ]);
   });
@@ -346,9 +346,10 @@ describe("마음 연계 카드 — home_mood_card.png", () => {
     expect(buildHomeViewModel(expired, NOW).showMoodCard).toBe(true);
   });
 
-  it("전화 링크는 숫자만 — 원문 두 번호는 그대로 두고 자살예방상담전화 109·위급할 때 119를 더했다(임상 사전 검토 B3)", () => {
-    expect(MOOD_CALLS.map((c) => telHref(c.number))).toEqual(["tel:15770199", "tel:109", "tel:0222762276", "tel:119"]);
+  it("전화 링크는 숫자만 — 109 → 1577-0199 → 119(2026-11-13 임상 자체 검토 M-CARD·§8: 예약 상담 02-2276-2276은 위기 전화가 아니라 뺌)", () => {
+    expect(MOOD_CALLS.map((c) => telHref(c.number))).toEqual(["tel:109", "tel:15770199", "tel:119"]);
     expect(MOOD_CALLS.find((c) => c.number === "109")?.name).toBe("자살예방상담전화 (24시간)");
+    expect(MOOD_CALLS.find((c) => c.number === "1577-0199")?.name).toBe("정신건강위기상담전화 (24시간)");
   });
 });
 
@@ -358,8 +359,17 @@ describe("체중 목표 카드", () => {
   });
 
   it("회복 목표", () => {
-    const vm = buildHomeViewModel(stateWith({ profile: { heightCm: 165, currentWeightKg: 55 } }), NOW);
+    const vm = buildHomeViewModel(stateWith({ profile: { deliveryDate: "2026-07-26", heightCm: 165, currentWeightKg: 55 } }), NOW);
     expect(vm.weightPlan).toMatchObject({ kind: "recovery", title: "체중 회복 목표", chips: ["BMI 20.2", "12개월 복귀"] });
+  });
+
+  it("산후 28일(4주)부터만 — 출산일이 없거나 27일째까지는 그리지 않는다(rules-1.3, 임상 자체 검토 W-WHEN)", () => {
+    const at = (deliveryDate: string | null) =>
+      buildHomeViewModel(stateWith({ profile: { deliveryDate, heightCm: 160, currentWeightKg: 62.5 } }), NOW).weightPlan;
+    // NOW = 2026-09-27
+    expect(at(null)).toBeNull();
+    expect(at("2026-08-31")).toBeNull(); // 27일째
+    expect(at("2026-08-30")?.kind).toBe("loss"); // 28일째
   });
 });
 

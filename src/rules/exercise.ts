@@ -12,6 +12,10 @@ import { compileTemplate } from "@/content/template";
 import { DELIVERY_METHODS, type DeliveryMethod, type MaternityRecord, type RecoveryGoal } from "@/domain/types";
 
 // MARK: - 단계 버킷
+//
+// rules-1.3(2026-11-13, 임상 자체 검토 E-PF·E-0): 골반저근은 분만 방식과 상관없이 0주부터 연다 — NICE NG210 1.3.13 "Before discharging women from
+// maternity services … encourage them to do pelvic floor muscle training", NG194 1.1.13. 6주 잠금을 받치는 근거를 찾지 못했다. 나머지 주차는 그대로.
+// 웹 신규 문구 — CPO 확인 필요 (content.json stage_buckets 회복 우선기 요약 "호흡·이완 위주…"·골반저근 요약 "케겔(골반저근 가볍게 조이고 풀기) · 아프거나 불편하면 멈추기")
 
 export interface StageBucket {
   key: string;
@@ -97,7 +101,7 @@ export function blockedBuckets(m: MaternityRecord): BlockedBuckets {
     const prev = blocked[PREECLAMPSIA_RULE.blocks];
     blocked[PREECLAMPSIA_RULE.blocks] = prev !== undefined ? prev + PREECLAMPSIA_APPEND : PREECLAMPSIA_RULE.reason;
   }
-  // 골반통·치골결합 이개 — 비대칭·한다리·와이드 동작 배제
+  // 골반통·치골결합 통증 — 비대칭·한다리·와이드 동작 배제
   if (m.pelvicPain) {
     blocked[PELVIC_PAIN_RULE.blocks] = PELVIC_PAIN_RULE.reason;
   }
@@ -161,14 +165,24 @@ function compareCodeUnits(a: string, b: string): number {
 // 주차로 열린 단계 중 산모수첩 소견으로 막힌 단계는 뺀다. 막힌 단계를 "지금 단계"라고 보여주면
 // 운동 탭에서는 잠겨 있어 서로 다른 말을 하게 된다(HomeView.swift:404-405).
 
-/** 지금 회복 단계 — 주차가 됐고 차단되지 않은 단계 중 order가 가장 큰 것 */
+/**
+ * 지금 회복 단계 — 주차가 됐고 차단되지 않은 단계 중 **여는 주차가 가장 늦은 것**, 같으면 order가 작은 것.
+ * rules-1.2까지는 "order가 가장 큰 것"이었다(Swift). 두 규칙은 단계가 order 순서대로 열릴 때 같은 답을 낸다. rules-1.3에서 골반저근(order 2)을
+ * 0주부터 열면서(임상 자체 검토 E-PF — NICE NG210 1.3.13) 순서가 어긋났다: order 기준이면 출산 직후부터 골반저근이 "지금 단계"가 되어
+ * 회복 우선기의 제한("윗몸일으키기 등 복부운동 금지")이 홈·오늘의 체조에서 사라지고, 2~5주에도 코어 깨우기 대신 골반저근이 보인다.
+ * 여는 주차 기준이면 0~1주 회복 우선기, 2주 코어 깨우기, 6/8주 기능 강화, 12주 코어 강화로 전과 같고, 골반저근은 그 옆에서 늘 열려 있다.
+ */
 export function currentStage(delivery: DeliveryMethod, week: number, maternity: MaternityRecord): StageBucket | null {
   const blocked = blockedBuckets(maternity);
   let current: StageBucket | null = null;
   for (const b of STAGE_BUCKETS) {
-    if (week >= startWeek(b, delivery) && blocked[b.key] === undefined && (current === null || b.order > current.order)) {
+    if (week < startWeek(b, delivery) || blocked[b.key] !== undefined) continue;
+    if (current === null) {
       current = b;
+      continue;
     }
+    const later = startWeek(b, delivery) - startWeek(current, delivery);
+    if (later > 0 || (later === 0 && b.order < current.order)) current = b;
   }
   return current;
 }

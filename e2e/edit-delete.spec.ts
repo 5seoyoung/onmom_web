@@ -82,10 +82,10 @@ test("기록 전체 보기 — 증상 기록 수정·삭제, 오늘의 질문 �
   await expect(page.getByRole("link", { name: "전체 기록 보기" })).toHaveCount(0);
 
   // 기록 1 — 발열(병원 확인 신호), 기록 2 — 통증 2(해당 없음)
-  await page.getByRole("switch", { name: /발열/ }).click();
+  await page.getByRole("switch", { name: /열·오한/ }).click();
   await page.getByRole("button", { name: "확인하기" }).click();
   await page.getByRole("button", { name: "다시 입력" }).click();
-  await page.getByRole("switch", { name: /발열/ }).click(); // 끈다
+  await page.getByRole("switch", { name: /열·오한/ }).click(); // 끈다
   await page.getByRole("slider", { name: /통증 정도/ }).focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowRight");
@@ -114,7 +114,7 @@ test("기록 전체 보기 — 증상 기록 수정·삭제, 오늘의 질문 �
   const save = page.getByRole("button", { name: "저장", exact: true });
   await expect(save).toBeDisabled(); // 바뀐 것이 없으면 잠김
   await expect(page.getByRole("textbox", { name: /내 동네/ })).toHaveCount(0);
-  await page.getByRole("switch", { name: /발열/ }).click();
+  await page.getByRole("switch", { name: /열·오한/ }).click();
   await save.click();
   await expect(page.getByRole("status").filter({ hasText: "기록을 수정했어요." })).toBeVisible();
   await expect(page.getByRole("main").getByRole("alert")).toBeVisible();

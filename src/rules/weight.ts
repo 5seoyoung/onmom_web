@@ -15,6 +15,18 @@ export const LOSS_PLAN_BMI = 23;
 /** 임신 전보다 이 값(kg) 이상 남았으면 감량 목표 */
 export const LOSS_PLAN_RETAINED_KG = 4.5;
 
+/**
+ * 홈 체중 목표 카드를 보이기 시작하는 산후 일수(rules-1.3, 2026-11-13 — 임상 자체 검토 W-WHEN). 산후 4주 전 감량 목표를 받치는 근거가 없다:
+ * 수유부 감량 연구(Lovelady, NEJM 2000 — NICHD 보도자료)는 "beginning at the 4th week after they gave birth"였다. 출산일을 모르면 보이지 않는다.
+ * 바꾸면 RULES_VERSION을 함께 올린다(version.test.ts).
+ */
+export const WEIGHT_PLAN_FROM_DAY = 28;
+
+/** 홈 체중 목표 카드를 보일 산후 일수인가 — 출산일이 없으면(null) 아니다 */
+export function weightPlanDue(postpartumDays: number | null): boolean {
+  return postpartumDays !== null && postpartumDays >= WEIGHT_PLAN_FROM_DAY;
+}
+
 /** 체질량지수 — 키·현재 체중이 둘 다 있어야(0이면 미입력). */
 export function bmi(p: Pick<UserProfile, "heightCm" | "currentWeightKg">): number | null {
   if (!(p.heightCm > 0) || !(p.currentWeightKg > 0)) return null;

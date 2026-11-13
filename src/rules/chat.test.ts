@@ -100,7 +100,11 @@ describe("오탐 줄이기 — 무해한 낱말을 지운 뒤 원래 키워드�
     // 모두 원래 키워드를 품은 낱말이다(그래서 예전에는 걸렸다)
     for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(/피|오로|패드/.test(phrase), phrase).toBe(true);
     for (const { phrase } of SELF_HARM_BENIGN_PHRASES) expect(phrase).toContain("사라지");
-    expect(content.chat_fallback.bleeding_keywords).toEqual(["출혈", "피", "하혈", "핏덩이", "핏덩어리", "핏물", "혈괴", "선홍", "오로"]);
+    expect(content.chat_fallback.bleeding_keywords).toEqual([
+      "출혈", "피", "하혈", "핏덩이", "핏덩어리", "핏물", "혈괴", "선홍", "오로",
+      // 2026-11-13 임상 자체 검토 KW-B
+      "덩어리", "생리처럼", "생리보다", "생리만큼", "분비물", "패드",
+    ]);
     expect(content.chat_fallback.self_harm_keywords).toContain("사라지고");
   });
 
@@ -350,7 +354,27 @@ describe("2026-11 챗 키워드 — 임상 자체 검토 §7-1 예문", () => {
     },
   );
 
+  it.each(["덩어리가 나왔어요", "생리처럼 많이 나와요", "패드가 한 시간 만에 다 젖어요", "분비물이 늘었어요"])(
+    "출혈 표현 '%s' → 출혈 안내(양 기준·119)",
+    (text) => {
+      expect(replyTo(text)).toBe(replies.bleeding);
+    },
+  );
+
   it.each(["수유패드 추천해 주세요", "수유 패드 뭐가 좋아요?", "생리는 언제 다시 해요?"])("'%s'는 출혈 안내가 아니다", (text) => {
     expect(replyTo(text)).not.toBe(replies.bleeding);
+  });
+
+  it("출혈 답은 분비물 냄새·열·오한도 병원으로, AI가 꺼졌을 때의 기본 답에도 119·109가 있다(CH1·CH5)", () => {
+    expect(replies.bleeding).toContain("심한 냄새");
+    expect(replies.bleeding).toContain("오한");
+    for (const n of ["119", "109"]) expect(replies.default, n).toContain(n);
+    // 응급 표현이 키워드를 빠져나가 기본 답을 받아도 119가 보인다
+    for (const text of ["숨이 차요", "가슴이 아파요", "경련을 했어요"]) expect(replyTo(text), text).toContain("119");
+  });
+
+  it("기분 답에 안심 문구('도움을 받으면 좋아져요')가 없다", () => {
+    expect(replies.mood).not.toContain("좋아져요");
+    expect(replies.mood).toContain("혼자 견디지 마세요");
   });
 });

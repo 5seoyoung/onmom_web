@@ -42,10 +42,14 @@ describe("RecoveryStateCard — 오늘의 회복 기록", () => {
 });
 
 describe("MoodSupportCard — 위기 연락처(임상 사전 검토 B3)", () => {
-  it("1577-0199·02-2276-2276에 더해 자살예방상담전화 109와 위급할 때 119가 눌러서 걸 수 있는 줄로 나온다", () => {
+  it("자살예방상담전화 109 · 정신건강위기상담전화 1577-0199 · 위급할 때 119가 눌러서 걸 수 있는 줄로 나온다(2026-11-13: 예약 상담 02-2276-2276은 뺌)", () => {
     const html = renderToStaticMarkup(h(MoodSupportCard, { onSnooze: () => {} }));
-    for (const tel of ["tel:15770199", "tel:109", "tel:0222762276", "tel:119"]) expect(html, tel).toContain(`href="${tel}"`);
+    for (const tel of ["tel:109", "tel:15770199", "tel:119"]) expect(html, tel).toContain(`href="${tel}"`);
+    expect(html).not.toContain("tel:0222762276");
     expect(html).toContain("자살예방상담전화 (24시간)");
+    expect(html).toContain("정신건강위기상담전화 (24시간)");
+    // 안심 문구("나아져요")를 쓰지 않는다
+    expect(html).not.toContain("나아져요");
   });
 });
 

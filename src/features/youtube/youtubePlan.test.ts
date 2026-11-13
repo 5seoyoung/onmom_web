@@ -66,9 +66,9 @@ describe("운동 탭 게이트 — 플랜일 때만", () => {
 });
 
 describe("주차 게이팅 — 큐레이션 목록의 '가능' 카드와 같은 단계만(이른 단계 포함, 잠긴 단계는 싣지 않는다)", () => {
-  it("0주: 회복 우선기만 · 2주: 코어 깨우기까지 · 6주(자연분만): 골반저근·기능 강화까지 · 12주: 전부", () => {
-    expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 0, maternity()))).toEqual(["a", "v"]);
-    expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 2, maternity()))).toEqual(["a", "v", "b"]);
+  it("0주: 회복 우선기·골반저근(rules-1.3) · 2주: 코어 깨우기까지 · 6주(자연분만): 기능 강화까지 · 12주: 전부", () => {
+    expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 0, maternity()))).toEqual(["a", "v", "c"]);
+    expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 2, maternity()))).toEqual(["a", "v", "b", "c"]);
     expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 6, maternity()))).toEqual(["a", "v", "b", "c", "d"]);
     expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 12, maternity()))).toEqual(["a", "v", "b", "c", "d", "e"]);
   });
@@ -80,7 +80,7 @@ describe("주차 게이팅 — 큐레이션 목록의 '가능' 카드와 같은 
 
   it("분만 방식이 정해진 영상은 그 분만 방식에만", () => {
     expect(ids(youtubeSection(FIXTURE, "plan", "vaginal", 0, maternity()))).not.toContain("s");
-    expect(ids(youtubeSection(FIXTURE, "plan", "cesarean", 0, maternity()))).toEqual(["a", "s"]);
+    expect(ids(youtubeSection(FIXTURE, "plan", "cesarean", 0, maternity()))).toEqual(["a", "s", "c"]);
   });
 });
 

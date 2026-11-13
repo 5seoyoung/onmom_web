@@ -52,6 +52,8 @@ function asRoutine(r: TodayRoutineModel): Extract<TodayRoutineModel, { kind: "ro
 }
 
 const keys = (stages: readonly { key: string }[]) => stages.map((s) => s.key);
+/** 고를 단계 — 화면과 같게 지금 단계(currentStage)를 넘긴다 */
+const poolOf = (d: DeliveryMethod, week: number, m: MaternityRecord) => routinePool(openStages(d, week, m), currentStage(d, week, m));
 
 describe("열린 단계 — 운동 탭과 같은 주차 게이팅·산모수첩 차단", () => {
   it("제왕절개 6주: 기능 강화(8주)는 아직, 자연분만 6주: 기능 강화(6주)까지", () => {
@@ -64,10 +66,10 @@ describe("열린 단계 — 운동 탭과 같은 주차 게이팅·산모수첩 
     ]);
   });
 
-  it("0~1주는 회복 우선기 하나, 12주부터 다섯 단계", () => {
+  it("0~1주는 회복 우선기·골반저근 둘(rules-1.3 — 골반저근 0주), 12주부터 다섯 단계", () => {
     for (const d of DELIVERIES) {
-      expect(keys(openStages(d, 0, maternity()))).toEqual(["recovery_priority"]);
-      expect(keys(openStages(d, 1, maternity()))).toEqual(["recovery_priority"]);
+      expect(keys(openStages(d, 0, maternity()))).toEqual(["recovery_priority", "pelvic_floor"]);
+      expect(keys(openStages(d, 1, maternity()))).toEqual(["recovery_priority", "pelvic_floor"]);
       expect(keys(openStages(d, 12, maternity()))).toEqual(STAGE_BUCKETS.map((b) => b.key));
     }
   });
@@ -98,9 +100,12 @@ describe("열린 단계 — 운동 탭과 같은 주차 게이팅·산모수첩 
 });
 
 describe("고를 단계 — 회복 우선기는 지금 단계일 때만", () => {
-  it("0~1주(회복 우선기가 지금 단계)에는 회복 우선기 하나", () => {
+  it("0~1주(회복 우선기가 지금 단계)에는 회복 우선기 + 골반저근 — 제한 문구 '복부운동 금지'가 함께 보인다", () => {
     for (const d of DELIVERIES) {
-      for (const week of [0, 1]) expect(keys(routinePool(openStages(d, week, maternity())))).toEqual([RESTRICTION_STAGE_KEY]);
+      for (const week of [0, 1]) {
+        expect(currentStage(d, week, maternity())?.key).toBe(RESTRICTION_STAGE_KEY);
+        expect(keys(poolOf(d, week, maternity()))).toEqual([RESTRICTION_STAGE_KEY, "pelvic_floor"]);
+      }
     }
   });
 
@@ -108,7 +113,7 @@ describe("고를 단계 — 회복 우선기는 지금 단계일 때만", () => 
     for (const d of DELIVERIES) {
       for (let week = 2; week <= 16; week++) {
         for (const m of ALL_MATERNITY) {
-          const pool = keys(routinePool(openStages(d, week, m)));
+          const pool = keys(poolOf(d, week, m));
           expect(pool, `${d} ${week}주`).not.toContain(RESTRICTION_STAGE_KEY);
           expect(pool.length).toBeGreaterThan(0);
         }
@@ -116,9 +121,9 @@ describe("고를 단계 — 회복 우선기는 지금 단계일 때만", () => 
     }
   });
 
-  it("2~5주는 코어 깨우기 하나, 자연분만 12주는 회복 우선기를 뺀 네 단계", () => {
-    expect(keys(routinePool(openStages("cesarean", 3, maternity())))).toEqual(["early_core_activation"]);
-    expect(keys(routinePool(openStages("vaginal", 12, maternity())))).toEqual([
+  it("2~5주는 코어 깨우기·골반저근, 자연분만 12주는 회복 우선기를 뺀 네 단계", () => {
+    expect(keys(poolOf("cesarean", 3, maternity()))).toEqual(["early_core_activation", "pelvic_floor"]);
+    expect(keys(poolOf("vaginal", 12, maternity()))).toEqual([
       "early_core_activation",
       "pelvic_floor",
       "functional_strengthening",
@@ -132,7 +137,7 @@ describe("고를 단계 — 회복 우선기는 지금 단계일 때만", () => 
 });
 
 describe("오늘 고르기 — 날짜마다 정해지고 날마다 돈다", () => {
-  const pool4 = routinePool(openStages("vaginal", 12, maternity()));
+  const pool4 = poolOf("vaginal", 12, maternity());
 
   it("같은 날이면 몇 시든 같은 목록(자정 직후·직전)", () => {
     const a = pickTodayStages(pool4, localDayNumber(day(2026, 11, 8, 0, 1)));
@@ -161,12 +166,12 @@ describe("오늘 고르기 — 날짜마다 정해지고 날마다 돈다", () =
     for (const d of DELIVERIES) {
       for (let week = 0; week <= 16; week++) {
         for (const m of [maternity(), maternity("pelvicPain"), maternity("diastasisRecti"), maternity("pelvicPain", "preeclampsia")]) {
-          const pool = routinePool(openStages(d, week, m));
+          const pool = poolOf(d, week, m);
           const current = currentStage(d, week, m);
           for (let n = 0; n < 10; n++) {
-            const picked = pickTodayStages(pool, 20_000 + n);
+            const picked = pickTodayStages(pool, 20_000 + n, current);
             expect(picked).toHaveLength(Math.min(TODAY_ROUTINE_MAX, pool.length));
-            expect(picked.at(-1)?.key).toBe(current?.key);
+            expect(keys(picked), `${d} ${week}주`).toContain(current?.key);
             expect(new Set(keys(picked)).size).toBe(picked.length);
             expect(picked.map((b) => b.order)).toEqual([...picked.map((b) => b.order)].sort((x, y) => x - y));
             for (const b of picked) expect(pool).toContain(b);
@@ -177,7 +182,7 @@ describe("오늘 고르기 — 날짜마다 정해지고 날마다 돈다", () =
   });
 
   it("고를 단계가 3개 이하면 날마다 모두(바뀌지 않는다)", () => {
-    const pool3 = routinePool(openStages("vaginal", 6, maternity()));
+    const pool3 = poolOf("vaginal", 6, maternity());
     expect(pool3).toHaveLength(3);
     for (let n = 0; n < 5; n++) expect(keys(pickTodayStages(pool3, n))).toEqual(keys(pool3));
     expect(pickTodayStages([], 3)).toEqual([]);
@@ -222,9 +227,9 @@ describe("카드 모델 — 본문 분기 그대로", () => {
     }
   });
 
-  it("0주는 회복 우선기 하나, 제왕절개 7주는 코어 깨우기·골반저근(회복 우선기 빠짐) — 안내는 '골랐어요'", () => {
+  it("0주는 회복 우선기·골반저근, 제왕절개 7주는 코어 깨우기·골반저근(회복 우선기 빠짐) — 안내는 '골랐어요'", () => {
     const early = asRoutine(todayRoutine("plan", "cesarean", 0, maternity(), today));
-    expect(routineKeys(early)).toEqual(["recovery_priority"]);
+    expect(routineKeys(early)).toEqual(["recovery_priority", "pelvic_floor"]);
     expect(early.intro).toBe(TODAY_ROUTINE_TEXT.introPicked);
     const seven = asRoutine(todayRoutine("plan", "cesarean", 7, maternity(), today));
     expect(routineKeys(seven)).toEqual(["early_core_activation", "pelvic_floor"]);

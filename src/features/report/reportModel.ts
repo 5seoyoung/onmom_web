@@ -137,7 +137,7 @@ export const SYMPTOM_COLUMNS: readonly string[] = [
   REPORT_TEXT.colBleedingHeavy, // rules-1.2 — 산후 0일부터 묻는 다량 출혈(오로 두 칸은 10일부터)
   REPORT_TEXT.colLochiaIncreased,
   REPORT_TEXT.colLochiaRed,
-  RECORD_TEXT.feverTitle, // "발열 (38.0℃ 이상)" — 원문: RecordFlowView.swift:191
+  RECORD_WEB_TEXT.feverTitle, // "열·오한 (38.0℃ 이상)" — 기록 탭 카드 제목과 같다(rules-1.3에서 iOS 원문 "발열 (38.0℃ 이상)"을 바꿈)
   RECORD_TEXT.painTitle, // "통증 정도 (NRS)" — 원문: RecordFlowView.swift:205
   REPORT_TEXT.colResult,
 ];

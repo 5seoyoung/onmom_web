@@ -28,14 +28,8 @@ export const RECORD_TEXT = {
   lochiaTitle: "오로(분비물)", // 원문: RecordFlowView.swift:166
   lochiaIncreased: "어제보다 양이 늘었나요?", // 원문: RecordFlowView.swift:169
   lochiaRed: "색이 붉은색(선홍색)인가요?", // 원문: RecordFlowView.swift:175
-  feverTitle: "발열 (38.0℃ 이상)", // 원문: RecordFlowView.swift:191
-  feverDescription: "최근 발열이 있었나요?", // 원문: RecordFlowView.swift:194
   painTitle: "통증 정도 (NRS)", // 원문: RecordFlowView.swift:205
-  riskTitle: "위험 증상 (있으면 즉시 내원)", // 원문: RecordFlowView.swift:218
-  woundPain: "수술부위·회음부 통증 급격 악화", // 원문: RecordFlowView.swift:219
   dizziness: "어지러움·실신·균형장애", // 원문: RecordFlowView.swift:221
-  chestBreath: "흉통·가슴 압박·호흡곤란", // 원문: RecordFlowView.swift:223
-  calfSwelling: "한쪽 종아리 통증·부종", // 원문: RecordFlowView.swift:225
   neighborhoodTitle: "내 동네 (연계 안내용)", // 원문: RecordFlowView.swift:231
   neighborhoodPlaceholder: "예: 서울 강남구 역삼동", // 원문: RecordFlowView.swift:232
   neighborhoodHelp: "위험 신호가 있으면 이 동네 기준으로 가까운 산부인과를 안내해요.", // 원문: RecordFlowView.swift:239
@@ -63,10 +57,38 @@ export function moodNoteFor(serverStorage: boolean): string {
 }
 
 /**
- * 웹에서 더하거나 바꾼 기록 탭 문구(iOS에 없음) — 임상 사전 검토 §0-2 B1~B3(rules-1.2 위험 증상)·법률 사전 검토 H5(결과 문구).
+ * 웹에서 더하거나 바꾼 기록 탭 문구(iOS에 없음) — 임상 사전 검토 §0-2 B1~B3(rules-1.2 위험 증상)·법률 사전 검토 H5(결과 문구)·
+ * 임상 자체 검토 2026-11 §2(rules-1.3 — 발열·위험 증상 제목·상처·가슴·다리 토글을 바꾸고 새 토글 넷을 더함).
  * RECORD_TEXT(Swift 원문)와 섞지 않는다.
  */
 export const RECORD_WEB_TEXT = {
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 R-FEVER·T6: iOS 원문 "발열 (38.0℃ 이상)"·"최근 발열이 있었나요?"(RecordFlowView.swift:191·194)를
+  // 체온계 기준과 오한으로 — CDC 100.4°F, NICE NG194 1.2.4 "fever, shivering")
+  feverTitle: "열·오한 (38.0℃ 이상)",
+  feverDescription: "체온계로 잰 체온이 38.0℃ 이상이었거나, 몸이 덜덜 떨리는 오한이 있었어요",
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "위험 증상 (있으면 즉시 내원)"(RecordFlowView.swift:218) — 119·위기 상담 항목이 생겨 "즉시 내원"만이 아니다)
+  riskTitle: "위험 증상 (하나라도 있으면 체크하세요)",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T8: iOS 원문 "수술부위·회음부 통증 급격 악화"(RecordFlowView.swift:219)를 감염 신호까지)
+  woundPain: "수술·회음부 상처가 심해졌어요",
+  woundPainHint: "점점 더 아프거나, 붉게 붓거나, 고름·냄새 나는 진물이 나오거나, 벌어졌어요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T10: iOS 원문 "흉통·가슴 압박·호흡곤란"(RecordFlowView.swift:223) — 119 등급, 빠른 심장박동까지)
+  chestBreath: "가슴이 아프거나 숨이 차요",
+  chestBreathHint: "가슴이 조이거나 답답해요, 숨이 차요, 가만히 있어도 심장이 빨리 뛰어요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T9: iOS 원문 "한쪽 종아리 통증·부종"(RecordFlowView.swift:225)을 허벅지·팔, 붉음·열감까지)
+  limbSwelling: "한쪽 다리나 팔이 붓고 아파요",
+  limbSwellingHint: "종아리·허벅지나 팔이 붓고 아프거나, 붉고 뜨거워요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T7 — CDC "vaginal discharge that smells bad")
+  lochiaOdor: "오로(분비물)에서 심한 냄새가 나요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T12 — CDC "unable to drink for more than 8 hours or eat for more than 24 hours")
+  severeVomiting: "계속 토해서 물도 넘기지 못해요",
+  severeVomitingHint: "속이 몹시 메스꺼워 8시간 넘게 물을 못 마시거나, 하루 넘게 먹지 못해요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T13 — NICE NG194 1.2.4 "more than 24 hours despite self-management")
+  breastRedSwollen: "유방이 붉게 붓고 아픈 게 하루 넘게 이어져요",
+  breastRedSwollenHint: "수유·마사지를 해도 나아지지 않거나 점점 심해져요",
+  // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T15 — CDC "suddenly very tired and weak, not like chronic fatigue",
+  // "so tired that you don't get up to take care of your baby". 평소 피로와 구분되게 "갑자기"와 "아기를 돌보러 일어나지 못함"을 그대로 쓴다)
+  extremeTiredness: "갑자기 몹시 지치고 힘이 없어요",
+  extremeTirednessHint: "평소 피곤함과 달리 갑자기 몹시 지쳐서, 아기를 돌보러 일어나기도 힘들어요",
   // 웹 신규 문구 — CPO 확인 필요 (산후 10일 전 오로 카드의 안내. iOS 원문 "…붉은 오로가 정상이에요…"를 바꿈 — '정상'이라고 말하지 않고,
   // 날짜와 상관없이 묻는 다량 출혈 토글을 가리킨다. 임상 사전 검토 L-GATE·B1)
   lochiaEarly:
@@ -170,18 +192,23 @@ export interface RiskToggle {
 }
 
 /**
- * 위험 증상 토글 — 화면 순서. iOS의 넷(RecordFlowView.swift:219-225)은 그 순서 그대로 두고, rules-1.2에 더한 여섯을 앞뒤에 둔다:
- * 다량 출혈은 맨 앞(산후 일수와 상관없이 가장 먼저 물을 것 — 임상 사전 검토 순위 1), 자간전증·자간증 신호와 위기 생각은 뒤.
+ * 위험 증상 토글 — 화면 순서(rules-1.3, 임상 자체 검토 §2 끝의 제안): 다량 출혈 → 오로 냄새 → 상처 → 어지러움 → 가슴·숨 → 다리·팔 →
+ * 두통·시야 → 얼굴·손 → 윗배 → 구토 → 유방 → 피로 → 경련 → 해칠 생각. 다량 출혈은 맨 앞(산후 일수와 상관없이 가장 먼저 물을 것 —
+ * 임상 사전 검토 순위 1), 위기 생각은 맨 뒤. iOS의 넷(RecordFlowView.swift:219-225) 중 어지러움 말고는 rules-1.3에서 라벨을 바꿨다.
  */
 export const RISK_TOGGLES: readonly RiskToggle[] = [
   { key: "bleedingHeavy", label: RECORD_WEB_TEXT.bleedingHeavy, description: RECORD_WEB_TEXT.bleedingHeavyHint },
-  { key: "woundPainWorsening", label: RECORD_TEXT.woundPain },
+  { key: "lochiaOdor", label: RECORD_WEB_TEXT.lochiaOdor },
+  { key: "woundPainWorsening", label: RECORD_WEB_TEXT.woundPain, description: RECORD_WEB_TEXT.woundPainHint },
   { key: "dizzinessFainting", label: RECORD_TEXT.dizziness },
-  { key: "chestPainBreathing", label: RECORD_TEXT.chestBreath },
-  { key: "calfPainSwelling", label: RECORD_TEXT.calfSwelling },
+  { key: "chestPainBreathing", label: RECORD_WEB_TEXT.chestBreath, description: RECORD_WEB_TEXT.chestBreathHint },
+  { key: "calfPainSwelling", label: RECORD_WEB_TEXT.limbSwelling, description: RECORD_WEB_TEXT.limbSwellingHint },
   { key: "headacheVision", label: RECORD_WEB_TEXT.headacheVision, description: RECORD_WEB_TEXT.headacheVisionHint },
   { key: "faceHandSwelling", label: RECORD_WEB_TEXT.faceHandSwelling },
   { key: "upperBellyPain", label: RECORD_WEB_TEXT.upperBellyPain },
+  { key: "severeVomiting", label: RECORD_WEB_TEXT.severeVomiting, description: RECORD_WEB_TEXT.severeVomitingHint },
+  { key: "breastRedSwollen", label: RECORD_WEB_TEXT.breastRedSwollen, description: RECORD_WEB_TEXT.breastRedSwollenHint },
+  { key: "extremeTiredness", label: RECORD_WEB_TEXT.extremeTiredness, description: RECORD_WEB_TEXT.extremeTirednessHint },
   { key: "seizure", label: RECORD_WEB_TEXT.seizure },
   { key: "harmThoughts", label: RECORD_WEB_TEXT.harmThoughts, description: RECORD_WEB_TEXT.harmThoughtsHint },
 ];
@@ -208,6 +235,10 @@ export function riskFlagsFromForm(form: SymptomForm): Record<RiskSymptomKey, boo
     upperBellyPain: form.upperBellyPain,
     seizure: form.seizure,
     harmThoughts: form.harmThoughts,
+    lochiaOdor: form.lochiaOdor,
+    severeVomiting: form.severeVomiting,
+    breastRedSwollen: form.breastRedSwollen,
+    extremeTiredness: form.extremeTiredness,
   };
 }
 
@@ -235,6 +266,10 @@ export const INITIAL_SYMPTOM_FORM: Readonly<SymptomForm> = Object.freeze({
   upperBellyPain: false,
   seizure: false,
   harmThoughts: false,
+  lochiaOdor: false,
+  severeVomiting: false,
+  breastRedSwollen: false,
+  extremeTiredness: false,
 });
 
 /**

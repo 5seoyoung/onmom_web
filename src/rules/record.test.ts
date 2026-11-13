@@ -35,10 +35,14 @@ const form = (over: Partial<SymptomForm> = {}): SymptomForm => ({
   upperBellyPain: false,
   seizure: false,
   harmThoughts: false,
+  lochiaOdor: false,
+  severeVomiting: false,
+  breastRedSwollen: false,
+  extremeTiredness: false,
   ...over,
 });
 
-const record = (over: Partial<SymptomRecord> = {}): SymptomRecord => ({
+const record =(over: Partial<SymptomRecord> = {}): SymptomRecord => ({
   id: "r",
   date: "2026-09-23T01:00:00.000Z",
   lochiaIncreased: false,
@@ -276,7 +280,9 @@ describe("hasSignalBesidesCrisis — PDF 리포트가 위기 체크를 넣지 �
   });
 
   it.each<[string, Partial<SymptomForm>]>([
-    ["토글", { chestPainBreathing: true }],
+    // 흉통은 rules-1.3에서 119가 되어 위기 상담보다 앞 — 대표 신호가 된다(아래 "대표 신호가 119이거나"). 가려지는 토글은 즉시 내원인 것으로
+    ["토글", { calfPainSwelling: true }],
+    ["새 토글(rules-1.3)", { lochiaOdor: true }],
     ["많은 출혈", { bleedingHeavy: true }],
     ["고열", { feverEvent: true }],
     ["심한 통증", { painNrs: 8 }],
@@ -289,6 +295,7 @@ describe("hasSignalBesidesCrisis — PDF 리포트가 위기 체크를 넣지 �
 
   it("대표 신호가 119이거나 다른 신호면 참", () => {
     expect(hasSignalBesidesCrisis(recordOf({ harmThoughts: true, seizure: true }))).toBe(true);
+    expect(hasSignalBesidesCrisis(recordOf({ harmThoughts: true, chestPainBreathing: true }))).toBe(true);
     expect(hasSignalBesidesCrisis(recordOf({ feverEvent: true }))).toBe(true);
   });
 
