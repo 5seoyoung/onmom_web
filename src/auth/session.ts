@@ -31,7 +31,8 @@
 //   같은 계정 id의 기록이라도 그 동의가 지금 Supabase 사용자를 만든 시각보다 앞서면(다른 기기에서 탈퇴한 뒤 같은 카카오 계정으로 다시 가입 —
 //   이 브라우저에 탈퇴 전 사본이 남았다) 같은 표시를 남긴다(consentPredatesUser) — 다시 동의받기 전에는 새 계정으로 올리지 않는다.
 // - watch(): 스토어의 계정이 바뀌면 동기화를 멈추거나 시작한다. 카카오에서 벗어나면 Supabase 세션도 끝낸다.
-// - 로그아웃·계정 삭제(설정 화면): signOut·deleteAccount.
+// - 로그아웃·계정 삭제(설정 화면): signOut·deleteAccount. 카카오 계정을 지울 때는 지우기 전에 카카오 연결 끊기를 요청한다(kakaoUnlink.ts —
+//   함수 비밀값 KAKAO_ADMIN_KEY가 없으면 건너뛴다). 끊지 못해도 삭제는 이어 가고 결과에 kakaoUnlinkFailed를 싣는다.
 //
 // 설정이 없으면 모든 함수가 네트워크 없이 지금까지와 같게 끝난다(게스트 = 이 브라우저 전용).
 
@@ -49,6 +50,7 @@ import { createAuthFlowStore, type AuthFlowStore, type PendingAuthFlow } from ".
 import { parseCallbackUrl, stripCallbackParams } from "./callbackUrl";
 import { authCallbackUrl, forgetStoredAuthSession, getSupabaseClient, hasStoredAuthSession } from "./client";
 import { accountFromSessionUser, accountFromUser, guestAccountFromUser, guestUserId, isAnonymousUser } from "./kakaoAccount";
+import { requestKakaoUnlink } from "./kakaoUnlink";
 import { createSupabaseRemote } from "./remote";
 import { browserCaptcha, type CaptchaResult } from "./turnstile";
 
@@ -82,7 +84,11 @@ export type SignOutResult =
   | { ok: false; reason: "guest" };
 
 export type DeleteAccountResult =
-  | { ok: true }
+  /**
+   * kakaoUnlinkFailed: 카카오 계정을 지우기 전에 카카오 연결 끊기를 시도했지만 끊지 못했다(auth/kakaoUnlink.ts — 함수가 "failed"로 답함).
+   * 삭제는 끝났다 — 화면은 카카오계정 설정에서 직접 끊으라고 한 줄 알린다. 기능이 꺼져 있으면(skipped) 이 칸이 없다.
+   */
+  | { ok: true; kakaoUnlinkFailed?: true }
   /** failed = 서버 삭제 실패(네트워크 등), noSession = 로그인이 끝나 서버에 삭제를 요청할 수 없음(다시 로그인 필요). 둘 다 아무것도 지우지 않았다. */
   | { ok: false; reason: "failed" | "noSession" };
 
@@ -923,6 +929,8 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
         const { session } = await currentSession(client);
         if (!session || !sessionIs(session, acct.id)) return { ok: false, reason: "noSession" };
         stopSync(); // 지우는 동안 올리지 않는다
+        // 지우기 전에 카카오 연결 끊기(세션이 살아 있을 때만 부를 수 있다). 끊지 못해도 삭제는 이어 간다 — 함수 비밀값이 없으면 "skipped"
+        const kakao = await requestKakaoUnlink(client.functions, { action: "kakao-unlink-self" });
         if (!(await deleteCurrentUser(client))) {
           // 서버 삭제 실패 — 아무것도 지우지 않고 동기화를 다시 켠다(감사 #18)
           if (store.getSnapshot().account?.id === acct.id) startSync(store, client, session.user.id, acct.id);
@@ -930,7 +938,7 @@ export function createAuthSessionManager(deps: AuthSessionDeps): AuthSessionMana
         }
         await signOutDeletedUser(client, deps.forgetStoredSession);
         store.actions.deleteAccount();
-        return { ok: true };
+        return kakao === "failed" ? { ok: true, kakaoUnlinkFailed: true } : { ok: true };
       } finally {
         managed -= 1;
       }

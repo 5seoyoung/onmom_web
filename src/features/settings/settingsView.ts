@@ -14,6 +14,7 @@ import type { AccountProvider } from "@/store/account";
 import { ROUTES } from "@/routes";
 import { PROFILE_TEXT, deliveryMethodLabel, goalLabel, neighborhoodValue } from "@/features/profile/profileView";
 import { STORAGE_REGION } from "@/features/privacy/dataItems";
+import { rememberKakaoUnlinkFailed } from "@/features/flow/postDeleteNotice";
 
 export const SETTINGS_TEXT = {
   title: "설정", // 원문: MoreView.swift:92
@@ -225,13 +226,20 @@ export async function performDeleteAccount(deps: {
   supabaseConfigured: boolean;
   deleteLocal: () => void;
   deleteAccountEverywhere: () => Promise<DeleteAccountResult>;
+  /**
+   * 삭제는 끝났지만 카카오 연결을 끊지 못했을 때(result.kakaoUnlinkFailed) — 로그인 화면이 한 번 안내하도록 표시를 남긴다
+   * (features/flow/postDeleteNotice.ts). 시험은 가짜를 넘긴다.
+   */
+  rememberKakaoUnlinkFailed?: () => void;
 }): Promise<AccountActionOutcome> {
   if (!deps.supabaseConfigured) {
     deps.deleteLocal();
     return { kind: "done" };
   }
   const result = await deps.deleteAccountEverywhere();
-  return result.ok ? { kind: "done" } : { kind: "failed", message: deleteFailureMessage(result.reason) };
+  if (!result.ok) return { kind: "failed", message: deleteFailureMessage(result.reason) };
+  if (result.kakaoUnlinkFailed) (deps.rememberKakaoUnlinkFailed ?? rememberKakaoUnlinkFailed)();
+  return { kind: "done" };
 }
 
 // MARK: 내 데이터 — 열람권(내려받기)·동의 내역. iOS에 없던 카드라 문구는 모두 웹 신규.

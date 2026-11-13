@@ -7,6 +7,7 @@
 //   admin_list_users(p_limit, p_offset) — 계정 메타데이터 목록(로그인 이메일 포함 — 0013, 건강 기록 없음)
 //   admin_find_user(p_id)               — 계정 ID 하나의 메타데이터(0005, 이메일은 0013)
 //   admin_delete_user(p_target, p_reason) — 이용자의 삭제 요청 처리(0005) — 서버가 admin_audit에 기록
+//   (Edge Function account kakao-unlink-admin) — 카카오 계정이면 위 삭제 직전에 카카오 연결 끊기(auth/kakaoUnlink.ts, 비밀값 없으면 건너뜀)
 //   admin_list_admins()                 — 관리자 목록(0005)
 //   admin_log_users_export(p_rows, p_reason) — CSV 내려받기를 사유와 함께 admin_audit에 남긴다(0009 → 0014 사유 필수). 파일을 만들기 전에 부르고,
 //                                         실패하면 파일을 만들지 않는다
@@ -22,6 +23,7 @@
 // 응답·오류를 콘솔에 남기지 않는다(계정 메타데이터도 개인정보).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { requestKakaoUnlink, type FunctionsInvoker } from "@/auth/kakaoUnlink";
 import {
   ADMIN_LIST_MAX,
   ADMIN_PAGE_SIZE,
@@ -86,6 +88,11 @@ export interface AdminClient {
   /** 이 브라우저에서만 로그아웃(무동작 자동 로그아웃) */
   signOut(): Promise<void>;
   mfa: AdminMfaClient;
+  /**
+   * Edge Function 호출(supabase-js client.functions) — 계정 삭제 전 카카오 연결 끊기(account 함수, auth/kakaoUnlink.ts).
+   * 없으면(시험의 가짜) 끊기를 건너뛴다 — 삭제는 그대로.
+   */
+  functions?: FunctionsInvoker;
 }
 
 /** 등록할 때 인증 앱에 보이는 이름 — 계정마다 같은 이름은 하나만 있을 수 있다(확인 전 등록을 지우고 다시 만든다) */
@@ -97,6 +104,7 @@ const authErrorOf = (error: { code?: string; message?: string } | null | undefin
 /** supabase-js 클라이언트 → AdminClient */
 export function adminClientFrom(client: SupabaseClient): AdminClient {
   return {
+    functions: client.functions,
     async getSessionUser() {
       const { data, error } = await client.auth.getSession();
       const user = data.session?.user ?? null;
@@ -420,14 +428,25 @@ export function deleteFailureOf(error: AdminRpcError | null | undefined): Delete
   return failureOf(error);
 }
 
-export type DeleteResult = { ok: true } | { ok: false; failure: DeleteFailure };
+/** kakaoUnlinkFailed: 지우기 전에 카카오 연결 끊기를 시도했지만 끊지 못했다(account 함수가 "failed") — 삭제는 끝났다 */
+export type DeleteResult = { ok: true; kakaoUnlinkFailed?: true } | { ok: false; failure: DeleteFailure };
 
-/** 이용자의 삭제 요청 처리 — 서버가 user_states + auth.users를 지우고 admin_audit에 남긴다. 사유는 선택(500자). */
-export async function deleteUser(client: AdminClient, targetId: string, reason: string | null): Promise<DeleteResult> {
+/**
+ * 이용자의 삭제 요청 처리 — 서버가 user_states + auth.users를 지우고 admin_audit에 남긴다. 사유는 선택(500자).
+ * 카카오 계정이면(opts.kakao) 지우기 전에 카카오 연결 끊기를 요청한다(account 함수 — 관리자 aal2 세션 확인, 비밀값 KAKAO_ADMIN_KEY가 없으면
+ * skipped). 끊지 못해도 삭제는 이어 간다.
+ */
+export async function deleteUser(
+  client: AdminClient,
+  targetId: string,
+  reason: string | null,
+  opts: { kakao?: boolean } = {},
+): Promise<DeleteResult> {
   try {
+    const kakao = opts.kakao ? await requestKakaoUnlink(client.functions, { action: "kakao-unlink-admin", target: targetId }) : "not_kakao";
     const { error } = await client.rpc("admin_delete_user", { p_target: targetId, p_reason: reason });
     if (error !== null) return { ok: false, failure: deleteFailureOf(error) };
-    return { ok: true };
+    return kakao === "failed" ? { ok: true, kakaoUnlinkFailed: true } : { ok: true };
   } catch {
     return { ok: false, failure: "failed" };
   }

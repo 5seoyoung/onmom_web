@@ -193,6 +193,18 @@ describe("performSignOut · performDeleteAccount — 설정의 로그아웃·계
     expect(deleteLocal).not.toHaveBeenCalled();
   });
 
+  it("삭제는 끝났지만 카카오 연결을 끊지 못했으면 로그인 화면용 표시를 남긴다 — 그 밖에는 남기지 않는다", async () => {
+    const remember = vi.fn();
+    const base = { supabaseConfigured: true, deleteLocal: vi.fn(), rememberKakaoUnlinkFailed: remember };
+    expect(await performDeleteAccount({ ...base, deleteAccountEverywhere: async () => ({ ok: true, kakaoUnlinkFailed: true }) })).toEqual({
+      kind: "done",
+    });
+    expect(remember).toHaveBeenCalledTimes(1);
+    await performDeleteAccount({ ...base, deleteAccountEverywhere: async () => ({ ok: true }) });
+    await performDeleteAccount({ ...base, deleteAccountEverywhere: async () => ({ ok: false, reason: "failed" }) });
+    expect(remember).toHaveBeenCalledTimes(1);
+  });
+
   it("있는 빌드의 게스트: 로그아웃을 부르면(버튼은 없다) 까닭만 알린다 — 아무것도 하지 않았다", async () => {
     const signOutLocal = vi.fn();
     const guest = vi.fn(async () => ({ ok: false as const, reason: "guest" as const }));

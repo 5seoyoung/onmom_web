@@ -125,6 +125,8 @@ export const ADMIN_TEXT = {
   deleteMismatch: "입력한 글자가 계정 ID 앞 8자리와 달라요.",
   deleting: "삭제하고 있어요",
   deleteDone: "계정을 삭제했어요. 삭제 기록은 admin_audit 표에 남았어요.",
+  // 웹 신규 문구 — CPO 확인 필요 (카카오 계정 삭제 전 연결 끊기 실패 — account 함수, 법률 자체 검토 2026-11 F4)
+  deleteKakaoUnlinkFailed: "카카오 연결은 끊지 못했어요. 이용자에게 카카오계정 설정 > 연결된 서비스 관리에서 끊도록 안내해 주세요.",
   deleteFailed: "계정을 삭제하지 못했어요. 잠시 후 다시 시도해주세요.",
   deleteNotFound: "이미 없는 계정이에요.",
   deleteSelf: "내 계정은 여기서 지울 수 없어요. 설정 > 계정 삭제를 써 주세요.",
