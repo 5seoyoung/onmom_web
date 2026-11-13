@@ -29,6 +29,8 @@
 //     문헌이 아니라 일반 칩으로), substances(생선·날생선·코데인·아스피린 문구, 트라마돌·먹는 세마글루타이드 행, 철분 별칭, 출처 칩),
 //     lifestyle_tips·guide_red_flags(15줄)·guide_cards(문구·출처), chat_fallback(출혈·기본·기분 답, 출혈 키워드).
 //     모두 웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag·features/record·guideContent·rules/chat·rules/substance·rules/exercise)에 있다.
+//     같은 날 법률 자체 검토: disclaimers.home_footer를 식약처 「의료기기와 개인용 건강관리(웰니스) 제품 판단기준」 권고 주의 문구로
+//     (쓰는 곳 components/ui/DisclaimerBanner·features/home/homeViewModel·components/shell/appNav·features/report/reportModel).
 import content from "./content.json";
 
 export type Content = typeof content;

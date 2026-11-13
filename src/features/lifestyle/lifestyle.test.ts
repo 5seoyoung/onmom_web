@@ -63,7 +63,7 @@ describe("LifestyleScreen 마크업", () => {
   it("근거 칩 5개 + 출처 칩 6개(정신건강 카드는 임산부수첩·질병관리청 둘), 면책 배너 문구", () => {
     expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(6);
     for (const chip of ["EPDS", "산후 몸조리", "빈혈 예방", "조기보행", "수유"]) indexOf(`>${escapeHtml(chip)}</span>`);
-    textAt("온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다.");
+    textAt("온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.");
     expect(html).toContain('href="/profile/"');
   });
 });

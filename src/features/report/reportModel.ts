@@ -302,7 +302,7 @@ export function buildReport(state: PersistedState, account: Account | null, now:
     meta,
     sections,
     footer: {
-      disclaimer: content.disclaimers.home_footer, // 원문 — 앱 바닥 면책(HomeView.swift:27, DisclaimerBanner·사이드바와 같은 문장)
+      disclaimer: content.disclaimers.home_footer, // 앱 바닥 면책(원래 HomeView.swift:27 — 2026-11-13 식약처 웰니스 권고 주의 문구로, DisclaimerBanner·사이드바와 같은 문장)
       rulesVersion: `${REPORT_TEXT.appRulesVersion} ${RULES_VERSION}`, // 이 앱의 지금 버전 — 기록마다의 버전은 각 줄(rulesVersionText·moodVersionText)
       origin: REPORT_TEXT.origin,
     },

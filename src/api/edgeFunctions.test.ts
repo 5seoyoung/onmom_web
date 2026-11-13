@@ -521,6 +521,8 @@ describe("시스템 프롬프트", () => {
     expect(edu).toContain("진단하지 않습니다");
     expect(edu).toContain("점수·등급·위험도를 매기지 않습니다");
     expect(edu).toContain("약의 용량·복용 방법·복용 중단 여부를 안내하지 않습니다");
+    // 2026-11-13 법률 자체 검토(의료기기 경계·안심 판정 금지): 괜찮다·병원에 안 가도 된다고 판단해 주지 않는다
+    expect(edu).toContain("사용자의 몸 상태가 괜찮다거나 병원에 가지 않아도 된다고 판단해 주지 않습니다. 걱정되는 증상이면 의료진에게 확인하도록 권합니다.");
     expect(edu).toContain("119");
     expect(edu).toContain("1577-0199");
     expect(edu).toContain("마크다운 표");

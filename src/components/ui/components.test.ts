@@ -102,11 +102,11 @@ describe("SectionTitle", () => {
 });
 
 describe("DisclaimerBanner", () => {
-  it("두 줄 원문(AnalyzeComponents.swift:124·127)", () => {
+  it("두 줄 — 식약처 웰니스 판단기준 권고 주의 문구 + 참고용(2026-11-13, 원래 AnalyzeComponents.swift:124·127)", () => {
     const html = render(h(DisclaimerBanner));
     expect(html).toContain('role="note"');
-    expect(html).toContain(">온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다.</p>");
-    expect(html).toContain(">진단·치료에 관한 판단은 반드시 의료진과 상담하세요.</p>");
+    expect(html).toContain(">온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.</p>");
+    expect(html).toContain(">제공되는 정보는 참고용입니다.</p>");
   });
 });
 

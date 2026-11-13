@@ -46,7 +46,8 @@ export const HOME_TEXT = {
   analyzeSubtitle: "내 정보를 확인하고 가능/금지 안내받기", // 원문: HomeView.swift:338
   metricsTitle: "회복 지표", // 원문: HomeView.swift:359
   quickRecord: "이상 증상 빠른 기록", // 원문: HomeView.swift:468
-  footer: content.disclaimers.home_footer, // = HomeView.swift:27
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-13: HomeView.swift:27 원문을 식약처 웰니스 판단기준 권고 주의 문구로 — content.json disclaimers.home_footer)
+  footer: content.disclaimers.home_footer,
 } as const;
 
 /**

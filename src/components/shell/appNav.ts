@@ -38,7 +38,7 @@ export const APP_NAV_TEXT = {
   servicesLabel: "더보기",
   // 웹 신규 문구 — CPO 확인 필요 (PC에서 키보드로 사이드바 메뉴 13개를 건너뛰는 링크. 초점을 받을 때만 보임)
   skipToContent: "본문 바로가기",
-  disclaimer: content.disclaimers.home_footer, // = HomeView.swift:27
+  disclaimer: content.disclaimers.home_footer, // 원래 HomeView.swift:27 — 2026-11-13 식약처 웰니스 판단기준 권고 주의 문구로(웹 신규 문구 — CPO 확인 필요)
 } as const;
 
 /** 메뉴 항목이 지금 화면인가 — 아래 화면도 포함(기록장 탭은 글쓰기·글 상세에서도, 설정은 프로필 편집에서도 켜진다). */
