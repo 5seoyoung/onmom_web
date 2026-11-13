@@ -26,7 +26,7 @@ describe("supabase.yml — 함수 Deno 타입 검사", () => {
   const command = /run: (deno check [^\n]+)/.exec(check)?.[1] ?? "";
 
   it("배포하는 함수 모두의 index.ts를 검사한다 — 배포 단계의 함수 목록과 같다", () => {
-    expect(deployedFunctions).toEqual(["chat", "send-reminders", "videos"]);
+    expect(deployedFunctions).toEqual(["account", "chat", "send-reminders", "videos"]);
     const checked = [...command.matchAll(/supabase\/functions\/([a-z-]+)\/index\.ts/g)].map((m) => m[1]).sort();
     expect(checked).toEqual(deployedFunctions);
     const deployed = /supabase functions deploy ([a-z -]+?) --project-ref/.exec(YML)?.[1].split(" ").sort();
