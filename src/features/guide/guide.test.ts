@@ -26,33 +26,32 @@ const indexOf = (text: string) => {
 const phoneAnchor = (number: string, color = "text-primary-text") =>
   `<a href="tel:${number.replace(/\D/g, "")}" aria-label="${escapeHtml(phoneCallLabel(number))}" class="whitespace-nowrap rounded-xs underline underline-offset-2 ${color}">${escapeHtml(number)}</a>`;
 /** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로). 전화번호는 tel: 링크 안에 들어간다. */
-const textAt = (text: string) =>
+const textAt = (text: string, color?: string) =>
   indexOf(
     splitPhoneNumbers(text)
-      .map((seg) => (seg.phone ? phoneAnchor(seg.text) : escapeHtml(seg.text)))
+      .map((seg) => (seg.phone ? phoneAnchor(seg.text, color) : escapeHtml(seg.text)))
       .join(""),
   );
+/** 위험 신호 카드(어두운 배경)의 줄 — 전화번호 링크가 흰 글자 */
+const redFlagAt = (text: string) => textAt(text, "text-white");
 
 describe("guideContent (GuideView.swift)", () => {
-  it("Swift 원문 문구", () => {
+  it("Swift 원문 문구 — 위험 신호 출처·각주는 2026-11-13 임상 자체 검토에서 출처를 넓힘", () => {
     expect(GUIDE_TEXT).toEqual({
       title: "회복 가이드",
       subtitle: "2023 임산부수첩·ACOG 지침 기반 산후 회복 안내",
       redFlagTitle: "즉시 병원에 가야 할 신호",
-      redFlagSource: "산욕기 이상소견 · 임산부수첩 2023",
+      redFlagSource: "산욕기 이상소견 · 임산부수첩 2023 · CDC Hear Her 2024 · AWHONN 2018 · NICE NG194",
       footnote:
-        "출처: 2023 임산부수첩(보건복지부·인구보건복지협회), ACOG Committee Opinion 736. 본 안내는 정보 제공이며 진단이 아닙니다.",
+        "출처: 2023 임산부수첩(보건복지부·인구보건복지협회), ACOG, CDC Hear Her, AWHONN, NICE(영국), 질병관리청, 식약처. 본 안내는 정보 제공이며 진단이 아닙니다.",
     });
   });
 
-  it("즉시 내원 신호 5줄 — content.json 순서 그대로", () => {
-    expect(guideRedFlags()).toEqual([
-      "다량의 선홍색 질출혈",
-      "38℃ 이상의 고열",
-      "아랫배의 심한 복통",
-      "유방이 딱딱해지고 심한 통증",
-      "회음절개부의 심한 통증",
-    ]);
+  it("즉시 내원 신호 15줄 — 기록 탭 rules-1.3 신호와 같은 목록, content.json 순서 그대로(임상 자체 검토 G1)", () => {
+    expect(guideRedFlags()).toEqual(content.guide_red_flags);
+    expect(guideRedFlags()).toHaveLength(15);
+    expect(guideRedFlags()[0]).toBe("다량의 질출혈(1시간 안에 패드 1장 이상이 흠뻑 젖거나 달걀만 한 핏덩이)");
+    expect(guideRedFlags().at(-1)).toBe("나 자신이나 아기를 해칠 것 같은 생각(109·1577-0199, 위급하면 119)");
     expect(guideRedFlags(["a", " ", ""])).toEqual(["a"]);
   });
 
@@ -69,14 +68,14 @@ describe("guideContent (GuideView.swift)", () => {
       "산후 검진·피임",
     ]);
     expect(cards.map((c) => c.sourceToken)).toEqual([
-      "src:임산부수첩 2023 · ACOG-736",
+      "src:임산부수첩 2023 · Merck Manual",
+      "src:임산부수첩 2023 · AWHONN 2018 · NICE NG194",
+      "src:임산부수첩 2023 · NICE NG194 · NICE NG192",
+      "src:ACOG FAQ131 · 임산부수첩 2023 · NICE NG210",
+      "src:임산부수첩 2023 · NICE NG194 · CDC Hear Her 2024",
       "src:임산부수첩 2023",
-      "src:임산부수첩 2023",
-      "src:ACOG-736 · 임산부수첩 2023",
-      "src:임산부수첩 2023",
-      "src:임산부수첩 2023",
-      "src:임산부수첩 2023(EPDS) · NICE NG194 · CDC Hear Her 2024",
-      "src:임산부수첩 2023 · ACOG-736",
+      "src:임산부수첩 2023(EPDS) · 질병관리청 · NICE NG194 · CDC Hear Her 2024",
+      "src:임산부수첩 2023 · ACOG-736 · NICE NG133 · NICE NG3",
     ]);
     expect(cards.map((c) => c.points)).toEqual(content.guide_cards.map((c) => c.points));
     expect(new Set(cards.map((c) => c.key)).size).toBe(8);
@@ -113,7 +112,8 @@ describe("GuideScreen 마크업", () => {
       indexOf(`>${escapeHtml(GUIDE_TEXT.title)}</h1>`),
       textAt(GUIDE_TEXT.subtitle),
       textAt(GUIDE_TEXT.redFlagTitle),
-      ...guideRedFlags().map(textAt),
+      // 위험 신호 카드는 어두운 배경 — 전화번호 링크가 흰 글자다
+      ...guideRedFlags().map(redFlagAt),
       textAt(GUIDE_TEXT.redFlagSource),
       ...guideCardViews().map((c) => indexOf(`>${escapeHtml(c.title)}</h2>`)),
       textAt(GUIDE_TEXT.footnote),
@@ -183,10 +183,12 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
     expect(renderToStaticMarkup(h(PhoneLinks, { text: "상담 109", link: false }))).toBe('<span>상담 <span class="whitespace-nowrap">109</span></span>');
   });
 
-  it("회복 가이드 화면의 전화번호는 산후 정신건강 카드의 1577-0199 두 곳과 위기 안내의 109·119 — tel: 링크", () => {
-    expect(html.match(/href="tel:/g)).toHaveLength(4);
+  it("회복 가이드 화면의 전화번호는 모두 tel: 링크 — 위험 신호 카드 넷(흰 글자), 오로 카드 119, 산후 정신건강 카드 넷", () => {
+    // 위험 신호 15줄 중 "(바로 119)"·"(109·1577-0199, 위급하면 119)" = 4, 오로 카드의 다량 출혈 줄 119 = 1, 정신건강 카드 1577-0199 두 곳 + 109·119 = 4
+    expect(html.match(/href="tel:/g)).toHaveLength(9);
     expect(html.split(phoneAnchor("1577-0199"))).toHaveLength(3);
     expect(html).toContain(phoneAnchor("109"));
     expect(html).toContain(phoneAnchor("119"));
+    for (const n of ["119", "109", "1577-0199"]) expect(html, n).toContain(phoneAnchor(n, "text-white"));
   });
 });

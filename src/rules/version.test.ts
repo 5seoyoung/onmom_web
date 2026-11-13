@@ -13,7 +13,7 @@ import { MOOD_CONSECUTIVE_THRESHOLD, MOOD_QUESTIONS, MOOD_SIGNAL_THRESHOLD, MOOD
 import { showsLochiaInputs } from "./record";
 import { checkRedFlags, LOCHIA_GATE_DAYS, metrics, PAIN_WATCH_NRS, RED_FLAG_CODES, SEVERE_PAIN_NRS, type SymptomInput } from "./redflag";
 import { MOOD_VERSION, RULES_VERSION } from "./version";
-import { LOSS_PLAN_BMI, LOSS_PLAN_RETAINED_KG, weightPlan } from "./weight";
+import { LOSS_PLAN_BMI, LOSS_PLAN_RETAINED_KG, WEIGHT_PLAN_FROM_DAY, weightPlan, weightPlanDue } from "./weight";
 
 /** 판정을 정하는 값 — 기준값 + 레드플래그 평가 순서·심각도(대표 신호를 바꾼다) */
 function rulesFingerprint() {
@@ -65,6 +65,34 @@ const RULES_FINGERPRINTS: Record<string, ReturnType<typeof rulesFingerprint>> = 
       "headache_vision:immediate",
       "face_hand_swelling:immediate",
       "upper_belly_pain:immediate",
+    ],
+  },
+  // 2026-11-13 — 임상 자체 검토(공식 지침 원문 대조): 흉통 119, 오로 "늘거나 또는 붉음", 오로 냄새·심한 구토·유방 붉음 하루 넘게·갑자기 몹시 지침.
+  // 같은 판의 골반저근 0주·체중 목표 28일은 아래 "rules-1.3 — 운동 단계·체중 목표" 시험이 지킨다.
+  "rules-1.3": {
+    LOCHIA_GATE_DAYS: 10,
+    SEVERE_PAIN_NRS: 8,
+    PAIN_WATCH_NRS: 4,
+    LOSS_PLAN_BMI: 23,
+    LOSS_PLAN_RETAINED_KG: 4.5,
+    redFlags: [
+      "heavy_bleeding_dizzy:emergency",
+      "seizure:emergency",
+      "cardioresp_flag:emergency",
+      "harm_thoughts:crisis",
+      "heavy_bleeding:immediate",
+      "pph_suspect:immediate",
+      "lochia_odor:immediate",
+      "severe_pain:immediate",
+      "fever_infection:immediate",
+      "neuro_flag:immediate",
+      "dvt_suspect:immediate",
+      "headache_vision:immediate",
+      "face_hand_swelling:immediate",
+      "upper_belly_pain:immediate",
+      "severe_vomiting:immediate",
+      "breast_red_swelling:immediate",
+      "extreme_tiredness:immediate",
     ],
   },
 };
@@ -123,12 +151,19 @@ describe("RULES_VERSION — 판정 기준값과 짝", () => {
       upperBellyPain: false,
       seizure: false,
       harmThoughts: false,
+      lochiaOdor: false,
+      severeVomiting: false,
+      breastRedSwollen: false,
+      extremeTiredness: false,
       ...over,
     });
     const code = (over: Partial<SymptomInput>) => checkRedFlags(input(over)).hospitalSignal?.code ?? null;
     const lochia = { lochiaIncreased: true, lochiaRed: true };
     expect(code({ ...lochia, postpartumDays: LOCHIA_GATE_DAYS - 1 })).toBeNull();
     expect(code({ ...lochia, postpartumDays: LOCHIA_GATE_DAYS })).toBe("pph_suspect");
+    // rules-1.3: 하나만이어도(늘거나 또는 붉음)
+    expect(code({ lochiaIncreased: true, postpartumDays: LOCHIA_GATE_DAYS })).toBe("pph_suspect");
+    expect(code({ lochiaRed: true, postpartumDays: LOCHIA_GATE_DAYS })).toBe("pph_suspect");
     expect(showsLochiaInputs(LOCHIA_GATE_DAYS - 1)).toBe(false);
     expect(showsLochiaInputs(LOCHIA_GATE_DAYS)).toBe(true);
     expect(code({ painNrs: SEVERE_PAIN_NRS - 1 })).toBeNull();
@@ -161,6 +196,26 @@ describe("RULES_VERSION — 판정 기준값과 짝", () => {
       metrics({ id: "r", date: "2026-09-23T01:00:00.000Z", lochiaIncreased: true, lochiaRed: true, feverEvent: false, painNrs: 0, redFlagCode: null, rulesVersion: null, postpartumDays })
         .find((m) => m.name === "오로(분비물)")?.status;
     expect([lochiaOf(LOCHIA_GATE_DAYS), lochiaOf(LOCHIA_GATE_DAYS - 1), lochiaOf(null)]).toEqual(["alert", undefined, "normal"]);
+  });
+});
+
+// rules-1.3에서 같은 판으로 바꾼 운동 단계·체중 목표 기준 — 위 판별 기록(rulesFingerprint)에는 이 값이 없어(옛 판의 줄을 고치지 않으려고)
+// 여기서 지금 판의 값을 따로 지킨다. 바꾸면 RULES_VERSION을 올리고 이 시험도 새 판에 맞춘다.
+describe("rules-1.3 — 운동 단계·체중 목표(임상 자체 검토 E-PF·W-WHEN)", () => {
+  it("골반저근은 분만 방식과 상관없이 0주, 나머지 주차는 rules-1.2 그대로", () => {
+    expect(RULES_VERSION).toBe("rules-1.3");
+    expect(content.stage_buckets.map((b) => `${b.key}:${b.start_week_cesarean}/${b.start_week_vaginal}`)).toEqual([
+      "recovery_priority:0/0",
+      "early_core_activation:2/2",
+      "pelvic_floor:0/0",
+      "functional_strengthening:8/6",
+      "full_core:12/12",
+    ]);
+  });
+
+  it("체중 목표 카드는 산후 28일부터", () => {
+    expect(WEIGHT_PLAN_FROM_DAY).toBe(28);
+    expect([null, 0, 27, 28, 60].map(weightPlanDue)).toEqual([false, false, false, true, true]);
   });
 });
 

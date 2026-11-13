@@ -42,7 +42,7 @@ describe("줄 만들기", () => {
     ]);
     expect(rows.map((r) => r.id)).toEqual(["new", "old"]);
     expect(rows[0]).toMatchObject({ flagged: true, label: RECORD_WEB_TEXT.recentFlagged, edited: true, editHref: recordEditHref("new") });
-    expect(rows[0].signals).toEqual(["발열", RECORD_TEXT.dizziness]);
+    expect(rows[0].signals).toEqual(["발열·오한", RECORD_TEXT.dizziness]);
     expect(rows[1]).toMatchObject({ flagged: false, label: RECORD_WEB_TEXT.recentNormal, edited: false, signals: [] });
     expect(rows[0].dateText).toBe("11월 1일 오후 3:05");
   });
@@ -180,8 +180,8 @@ describe("기록 수정 폼", () => {
   it("내 동네 칸은 뺄 수 있다(기록 수정 — 프로필 값이라)", () => {
     const html = renderToStaticMarkup(h(SymptomFormCards, { form: INITIAL_SYMPTOM_FORM, onChange: noop, showsLochia: true, showsNeighborhood: false }));
     expect(html).not.toContain(RECORD_TEXT.neighborhoodTitle);
-    expect(html).toContain(RECORD_TEXT.riskTitle);
-    expect(count(html, 'role="switch"')).toBe(13);
+    expect(html).toContain(RECORD_WEB_TEXT.riskTitle);
+    expect(count(html, 'role="switch"')).toBe(17);
   });
 
   it("기록 탭의 폼은 그대로 내 동네 칸이 있다", () => {

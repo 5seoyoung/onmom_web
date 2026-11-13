@@ -22,6 +22,15 @@
 //     화면 글자가 그대로인지는 content/uiCopy.test.ts가 옮기기 전 글자와 대조한다. 쓰는 곳: ui.home.metric_names → rules/redflag,
 //     ui.exercise·ui.profile → rules/exercise, ui.analyze → rules/recovery, ui.substance → rules/substance·features/substance/substanceModel,
 //     ui.chat → rules/chat, ui.support → rules/support.
+//  4. 2026-11-13 임상 자체 검토(docs/dev/clinical/CLINICAL_SELF_REVIEW_2026-11.md — 공식 지침 대조, 임상의가 쓴 것이 아님) 반영(rules-1.3):
+//     red_flags — cardioresp_flag 119 등급, pph_suspect "증가 또는 선홍", fever_infection 오한, severe_pain·dvt_suspect·neuro_flag 문구·칩,
+//     새 신호 넷(lochia_odor·severe_vomiting·breast_red_swelling·extreme_tiredness). home_metrics.lochia(살펴볼 신호 구간 없앰),
+//     ui.home.metric_names.fever("발열·오한"), stage_buckets(골반저근 0주, 회복 우선기 요약), caution_overlays(라벨·칩 — "src:산모수첩 확인항목"은
+//     문헌이 아니라 일반 칩으로), substances(생선·날생선·코데인·아스피린 문구, 트라마돌·먹는 세마글루타이드 행, 철분 별칭, 출처 칩),
+//     lifestyle_tips·guide_red_flags(15줄)·guide_cards(문구·출처), chat_fallback(출혈·기본·기분 답, 출혈 키워드).
+//     모두 웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag·features/record·guideContent·rules/chat·rules/substance·rules/exercise)에 있다.
+//     같은 날 법률 자체 검토: disclaimers.home_footer를 식약처 「의료기기와 개인용 건강관리(웰니스) 제품 판단기준」 권고 주의 문구로
+//     (쓰는 곳 components/ui/DisclaimerBanner·features/home/homeViewModel·components/shell/appNav·features/report/reportModel).
 import content from "./content.json";
 
 export type Content = typeof content;

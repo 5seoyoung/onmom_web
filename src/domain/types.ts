@@ -60,9 +60,12 @@ export interface MaternityRecord {
 
 /**
  * 기록 탭 "위험 증상" 카드의 토글 — 필드명은 rules/redflag SymptomInput과 같다(화면 순서·라벨은 features/record RISK_TOGGLES).
- * 앞 넷은 iOS SymptomInput에 있던 것(RedFlagEngine.swift:18-21), 뒤 여섯은 rules-1.2에 더한 신호(임상 사전 검토 §3 T1~T5·T11).
+ * 앞 넷은 iOS SymptomInput에 있던 것(RedFlagEngine.swift:18-21), 다음 여섯은 rules-1.2에 더한 신호(임상 사전 검토 §3 T1~T5·T11),
+ * 끝 넷은 rules-1.3에 더한 신호(임상 자체 검토 2026-11 §2 T7·T12·T13·T15 — 오로 냄새·심한 구토·유방 붉음 하루 넘게·갑자기 몹시 지침).
+ * rules-1.3에서 앞 넷 중 woundPainWorsening(상처 감염 신호까지)·calfPainSwelling(다리·팔)·chestPainBreathing(빠른 심장박동까지)은 뜻이 넓어졌다 —
+ * 칸 이름은 그대로 두고 기록의 rulesVersion으로 가린다.
  * rules-1.2부터 판정에 쓴 값을 기록에도 남긴다(임상 사전 검토 R-STORE·§3-3, DEV_NOTES §3 CPO 3) — 최근 기록·PDF 리포트에서
- * 어떤 신호였는지 되짚을 수 있게.
+ * 어떤 신호였는지 되짚을 수 있게. rules-1.3 전 기록에는 끝 넷의 칸이 없다(묻지 않은 것).
  */
 export const RISK_SYMPTOM_KEYS = [
   "woundPainWorsening",
@@ -75,6 +78,10 @@ export const RISK_SYMPTOM_KEYS = [
   "upperBellyPain",
   "seizure",
   "harmThoughts",
+  "lochiaOdor",
+  "severeVomiting",
+  "breastRedSwollen",
+  "extremeTiredness",
 ] as const;
 export type RiskSymptomKey = (typeof RISK_SYMPTOM_KEYS)[number];
 

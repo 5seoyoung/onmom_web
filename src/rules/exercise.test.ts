@@ -53,11 +53,12 @@ const APPEND = " · 임신중독증·고혈압으로 숨 참기(발살바) 동�
 const R3 = "골반통·치골결합 통증이 있어 한다리·비대칭 동작(클램·런지 등)은 피해요";
 
 describe("단계 버킷", () => {
-  it("content.json 값이 ExerciseRules.swift:43-54와 같다", () => {
+  // ExerciseRules.swift:43-54 그대로였으나 rules-1.3(임상 자체 검토 E-PF·E-0)에서 골반저근을 0주로, 회복 우선기·골반저근 요약을 바꿨다
+  it("content.json 값 — ExerciseRules.swift:43-54에서 rules-1.3의 골반저근 0주·요약 둘만 다르다", () => {
     expect(STAGE_BUCKETS).toEqual([
-      { key: "recovery_priority", order: 0, startWeekCesarean: 0, startWeekVaginal: 0, title: "회복 우선기", summary: "호흡·이완만. 윗몸일으키기 등 복부운동 금지" },
+      { key: "recovery_priority", order: 0, startWeekCesarean: 0, startWeekVaginal: 0, title: "회복 우선기", summary: "호흡·이완 위주. 윗몸일으키기 등 복부운동 금지" },
       { key: "early_core_activation", order: 1, startWeekCesarean: 2, startWeekVaginal: 2, title: "코어 깨우기", summary: "Drawing-in(심부 코어 활성)" },
-      { key: "pelvic_floor", order: 2, startWeekCesarean: 6, startWeekVaginal: 6, title: "골반저근", summary: "케겔(골반저근 운동)" },
+      { key: "pelvic_floor", order: 2, startWeekCesarean: 0, startWeekVaginal: 0, title: "골반저근", summary: "케겔(골반저근 가볍게 조이고 풀기) · 아프거나 불편하면 멈추기" },
       { key: "functional_strengthening", order: 3, startWeekCesarean: 8, startWeekVaginal: 6, title: "기능 강화", summary: "브릿지·클램·하체 근력" },
       { key: "full_core", order: 4, startWeekCesarean: 12, startWeekVaginal: 12, title: "코어 강화", summary: "복근·코어 강화·요가 (분만 무관)" },
     ]);
@@ -129,7 +130,7 @@ describe("영상 플랜 — exercisePlan", () => {
       ["v04", "recovery_priority", true, 0, null, true],
       ["V07", "early_core_activation", true, 2, null, true],
       ["a08", "early_core_activation", true, 2, null, true],
-      ["v03", "pelvic_floor", true, 6, null, true],
+      ["v03", "pelvic_floor", true, 0, null, true],
       ["v01", "functional_strengthening", false, 8, null, false],
       ["v02", "functional_strengthening", false, 8, null, false],
       ["v10", "full_core", false, 12, null, false],
@@ -141,7 +142,7 @@ describe("영상 플랜 — exercisePlan", () => {
       ["v04", "recovery_priority", true, 0, null, true],
       ["V07", "early_core_activation", true, 2, null, true],
       ["a08", "early_core_activation", true, 2, null, true],
-      ["v03", "pelvic_floor", true, 6, null, true],
+      ["v03", "pelvic_floor", true, 0, null, true],
       ["v01", "functional_strengthening", true, 6, null, true],
       ["v02", "functional_strengthening", true, 6, null, true],
       ["v10", "full_core", false, 12, null, false],
@@ -153,7 +154,7 @@ describe("영상 플랜 — exercisePlan", () => {
       ["v04", "recovery_priority", true, 0, null, true],
       ["V07", "early_core_activation", true, 2, null, true],
       ["a08", "early_core_activation", true, 2, null, true],
-      ["v03", "pelvic_floor", true, 6, null, true],
+      ["v03", "pelvic_floor", true, 0, null, true],
       ["v01", "functional_strengthening", true, 8, R3, false],
       ["v02", "functional_strengthening", true, 8, R3, false],
       ["v10", "full_core", false, 12, null, false],
@@ -236,15 +237,16 @@ describe("운동 탭 문구 — 섹션·배지·본문(ExerciseView.swift)", () 
 });
 
 describe("지금 단계 / 다음 단계 — 분만 방식별 경계", () => {
-  // [주차, 현재, 다음] — Swift HomeView 로직을 그대로 돌린 결과
+  // [주차, 현재, 다음] — Swift HomeView 로직을 돌린 결과에서 rules-1.3(골반저근 0주)만 다르다: 골반저근은 출산 직후부터 열려 있어
+  // "다음 단계"가 되지 않고, 지금 단계는 가장 늦게 열린 단계라(rules/exercise currentStage) 0~1주는 회복 우선기, 제왕절개 6~7주는 코어 깨우기
   const table: Record<DeliveryMethod, [number, string, string | null][]> = {
     vaginal: [
       [0, "recovery_priority", "early_core_activation"],
       [1, "recovery_priority", "early_core_activation"],
-      [2, "early_core_activation", "pelvic_floor"],
-      [3, "early_core_activation", "pelvic_floor"],
-      [4, "early_core_activation", "pelvic_floor"],
-      [5, "early_core_activation", "pelvic_floor"],
+      [2, "early_core_activation", "functional_strengthening"],
+      [3, "early_core_activation", "functional_strengthening"],
+      [4, "early_core_activation", "functional_strengthening"],
+      [5, "early_core_activation", "functional_strengthening"],
       [6, "functional_strengthening", "full_core"],
       [7, "functional_strengthening", "full_core"],
       [8, "functional_strengthening", "full_core"],
@@ -255,12 +257,12 @@ describe("지금 단계 / 다음 단계 — 분만 방식별 경계", () => {
     cesarean: [
       [0, "recovery_priority", "early_core_activation"],
       [1, "recovery_priority", "early_core_activation"],
-      [2, "early_core_activation", "pelvic_floor"],
-      [3, "early_core_activation", "pelvic_floor"],
-      [4, "early_core_activation", "pelvic_floor"],
-      [5, "early_core_activation", "pelvic_floor"],
-      [6, "pelvic_floor", "functional_strengthening"],
-      [7, "pelvic_floor", "functional_strengthening"],
+      [2, "early_core_activation", "functional_strengthening"],
+      [3, "early_core_activation", "functional_strengthening"],
+      [4, "early_core_activation", "functional_strengthening"],
+      [5, "early_core_activation", "functional_strengthening"],
+      [6, "early_core_activation", "functional_strengthening"],
+      [7, "early_core_activation", "functional_strengthening"],
       [8, "functional_strengthening", "full_core"],
       [11, "functional_strengthening", "full_core"],
       [12, "full_core", null],
@@ -276,11 +278,13 @@ describe("지금 단계 / 다음 단계 — 분만 방식별 경계", () => {
     }
   }
 
-  it("다음 단계 동률이면 목록 앞쪽이 이긴다 — 자연분만 2~5주는 골반저근·기능 강화 모두 6주 → '골반저근'", () => {
-    for (const week of [2, 3, 4, 5]) {
-      const next = nextStage("vaginal", week, maternity());
-      expect(next?.key).toBe("pelvic_floor");
-      expect(startWeek(STAGE_BUCKETS.find((b) => b.key === "functional_strengthening")!, "vaginal")).toBe(6);
+  it("골반저근은 0주부터 회복 우선기와 함께 열려 있지만 '지금 단계'는 회복 우선기 — 여는 주차가 같으면 order가 작은 쪽(제한 문구가 보이게)", () => {
+    for (const delivery of ["vaginal", "cesarean"] as const) {
+      const pf = STAGE_BUCKETS.find((b) => b.key === "pelvic_floor")!;
+      expect(startWeek(pf, delivery)).toBe(0);
+      expect(currentStage(delivery, 0, maternity())?.key).toBe("recovery_priority");
+      // 골반저근은 이미 열려 있어 다음 단계 후보가 아니다
+      for (const week of [0, 2, 5]) expect(nextStage(delivery, week, maternity())?.key, `${delivery} ${week}`).not.toBe("pelvic_floor");
     }
   });
 
@@ -289,10 +293,10 @@ describe("지금 단계 / 다음 단계 — 분만 방식별 경계", () => {
     expect(nextStage("cesarean", 8, maternity("pelvicPain", "diastasisRecti"))).toBeNull();
   });
 
-  it("차단된 단계는 지금 단계가 될 수 없다(감사 #4) — 제왕절개 9주 + 골반통 → 골반저근", () => {
-    expect(currentStage("cesarean", 9, maternity("pelvicPain"))?.key).toBe("pelvic_floor");
+  it("차단된 단계는 지금 단계가 될 수 없다(감사 #4) — 제왕절개 9주 + 골반통 → 막히지 않은 단계 중 가장 늦게 열린 코어 깨우기", () => {
+    expect(currentStage("cesarean", 9, maternity("pelvicPain"))?.key).toBe("early_core_activation");
     expect(currentStage("vaginal", 13, maternity("diastasisRecti"))?.key).toBe("functional_strengthening");
-    expect(currentStage("vaginal", 13, maternity("pelvicPain", "diastasisRecti", "preeclampsia"))?.key).toBe("pelvic_floor");
+    expect(currentStage("vaginal", 13, maternity("pelvicPain", "diastasisRecti", "preeclampsia"))?.key).toBe("early_core_activation");
   });
 
   it("주차 미도달 단계는 차단돼도 '제외' 줄에 나오지 않는다", () => {
@@ -305,10 +309,10 @@ describe("지금 단계 / 다음 단계 — 분만 방식별 경계", () => {
 });
 
 describe("운동 탭 '영상 준비 중' 현재 단계", () => {
-  it("제왕절개 9주 + 골반통 → 막힌 기능 강화가 아니라 골반저근(iOS 버그 수정, 감사 #4)", () => {
+  it("제왕절개 9주 + 골반통 → 막힌 기능 강화가 아니라 코어 깨우기(iOS 버그 수정 감사 #4, rules-1.3 지금 단계 규칙)", () => {
     expect(unavailableStage("cesarean", 9, maternity("pelvicPain"))).toEqual({
-      line: "지금은 9주차 · 골반저근 단계예요",
-      summary: "케겔(골반저근 운동)",
+      line: "지금은 9주차 · 코어 깨우기 단계예요",
+      summary: "Drawing-in(심부 코어 활성)",
     });
   });
 
@@ -325,7 +329,7 @@ describe("홈 '지금 회복 단계' 카드", () => {
     expect(homeStageCard("cesarean", 9, maternity("pelvicPain"), false)).toEqual({
       kind: "stage",
       heading: "지금 회복 단계 - 9주차",
-      current: "골반저근 · 케겔(골반저근 운동)",
+      current: "코어 깨우기 · Drawing-in(심부 코어 활성)",
       next: "12주차부터 '코어 강화' 단계가 열려요.",
       excluded: [`기능 강화 제외 - ${R3}`],
     });

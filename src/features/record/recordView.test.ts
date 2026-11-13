@@ -57,8 +57,9 @@ describe.skipIf(!HAS_SWIFT)("문구는 Swift 원문 그대로(원칙 5)", () => 
   });
 });
 
-it("발열 제목은 ℃(U+2103) 한 글자", () => {
-  expect(RECORD_TEXT.feverTitle).toBe("발열 (38.0℃ 이상)");
+it("발열 제목은 ℃(U+2103) 한 글자 — rules-1.3에서 오한을 합친 웹 문구", () => {
+  expect(RECORD_WEB_TEXT.feverTitle).toBe("열·오한 (38.0℃ 이상)");
+  expect(RECORD_WEB_TEXT.feverDescription).toContain("38.0℃");
 });
 
 describe("오늘의 질문 각주 — 저장 위치에 맞게(03 §8 웹 수정)", () => {
@@ -94,16 +95,20 @@ describe("폼 초기값 · 위험 증상 순서", () => {
     });
   });
 
-  it("위험 증상 — 다량 출혈이 맨 앞, iOS 넷은 Swift 순서 그대로, 자간전증·자간증 신호와 위기 생각이 뒤(rules-1.2)", () => {
+  it("위험 증상 — 다량 출혈이 맨 앞, 위기 생각이 맨 뒤(rules-1.3 — 임상 자체 검토 §2의 화면 순서)", () => {
     expect(RISK_TOGGLES.map((t) => t.label)).toEqual([
       "피가 많이 나요",
-      "수술부위·회음부 통증 급격 악화",
+      "오로(분비물)에서 심한 냄새가 나요",
+      "수술·회음부 상처가 심해졌어요",
       "어지러움·실신·균형장애",
-      "흉통·가슴 압박·호흡곤란",
-      "한쪽 종아리 통증·부종",
+      "가슴이 아프거나 숨이 차요",
+      "한쪽 다리나 팔이 붓고 아파요",
       "두통이 심하거나 눈이 잘 안 보여요",
       "얼굴이나 손이 갑자기 심하게 부었어요",
       "명치나 오른쪽 윗배가 심하게 아파요",
+      "계속 토해서 물도 넘기지 못해요",
+      "유방이 붉게 붓고 아픈 게 하루 넘게 이어져요",
+      "갑자기 몹시 지치고 힘이 없어요",
       "경련(발작)을 했어요",
       "나 자신이나 아기를 해칠 것 같은 생각이 들어요",
     ]);
@@ -117,6 +122,14 @@ describe("폼 초기값 · 위험 증상 순서", () => {
     expect(desc.headacheVision).toBe(RECORD_WEB_TEXT.headacheVisionHint);
     expect(desc.harmThoughts).toBe(RECORD_WEB_TEXT.harmThoughtsHint);
     expect(desc.dizzinessFainting).toBeNull();
+    // rules-1.3 — 넓힌 토글은 넓어진 기준을, 새 토글은 공식 문장의 기준(8시간·하루·평소 피로와 다름)을 설명 줄에
+    expect(desc.woundPainWorsening).toBe("점점 더 아프거나, 붉게 붓거나, 고름·냄새 나는 진물이 나오거나, 벌어졌어요");
+    expect(desc.chestPainBreathing).toContain("가만히 있어도 심장이 빨리 뛰어요");
+    expect(desc.calfPainSwelling).toContain("팔");
+    expect(desc.severeVomiting).toContain("8시간");
+    expect(desc.breastRedSwollen).not.toBeNull();
+    expect(desc.extremeTiredness).toContain("평소 피곤함과 달리");
+    expect(desc.lochiaOdor).toBeNull();
   });
 
   it("산후 10일 전 오로 안내는 '정상'이라고 말하지 않고, 날짜와 상관없는 다량 출혈 체크를 가리킨다", () => {
@@ -125,8 +138,11 @@ describe("폼 초기값 · 위험 증상 순서", () => {
     expect(RECORD_WEB_TEXT.lochiaEarly).toContain("위험 증상");
   });
 
-  it("RECORD_TEXT에는 Swift 원문만 — 바꾼 문구(10일 전 오로 안내·최근 기록 결과 글자)는 RECORD_WEB_TEXT로 옮겼다", () => {
-    for (const key of ["lochiaEarly", "recentNormal", "recentFlagged"]) expect(Object.keys(RECORD_TEXT)).not.toContain(key);
+  it("RECORD_TEXT에는 Swift 원문만 — 바꾼 문구(10일 전 오로 안내·최근 기록 결과 글자, rules-1.3의 발열·위험 증상 제목·상처·가슴·다리 토글)는 RECORD_WEB_TEXT로 옮겼다", () => {
+    for (const key of ["lochiaEarly", "recentNormal", "recentFlagged", "feverTitle", "feverDescription", "riskTitle", "woundPain", "chestBreath"]) {
+      expect(Object.keys(RECORD_TEXT)).not.toContain(key);
+    }
+    expect(Object.keys(RECORD_TEXT)).not.toContain("calfSwelling");
   });
 });
 
@@ -140,7 +156,7 @@ describe("바로 병원에 가야 하는 신호 목록 — 입력과 상관없�
       ["immediate", "즉시 내원"],
     ]);
     expect(groups.flatMap((g) => g.signs.map((s) => s.code)).sort()).toEqual([...RED_FLAG_CODES].sort());
-    expect(groups[0].signs.map((s) => s.code)).toEqual(["heavy_bleeding_dizzy", "seizure"]);
+    expect(groups[0].signs.map((s) => s.code)).toEqual(["heavy_bleeding_dizzy", "seizure", "cardioresp_flag"]);
     expect(groups[1].signs.map((s) => s.code)).toEqual(["harm_thoughts"]);
   });
 
@@ -280,18 +296,31 @@ describe("[확인하기] — 판정 + 저장할 기록", () => {
     ).toEqual([RECORD_TEXT.dizziness]);
     expect(
       firedRiskLabels({ ...base, woundPainWorsening: true, dizzinessFainting: false, chestPainBreathing: true, calfPainSwelling: true }),
-    ).toEqual([RECORD_TEXT.woundPain, RECORD_TEXT.chestBreath, RECORD_TEXT.calfSwelling]);
-    // rules-1.2 토글도 같은 화면 순서(다량 출혈이 맨 앞) — omit의 칸은 뺀다(PDF 리포트는 다량 출혈을 따로 칸에 둔다)
-    const many = { ...base, ...NO_RISK, bleedingHeavy: true, seizure: true, dizzinessFainting: true };
-    expect(firedRiskLabels(many)).toEqual([RECORD_WEB_TEXT.bleedingHeavy, RECORD_TEXT.dizziness, RECORD_WEB_TEXT.seizure]);
-    expect(firedRiskLabels(many, ["bleedingHeavy"])).toEqual([RECORD_TEXT.dizziness, RECORD_WEB_TEXT.seizure]);
-    // iOS 넷의 라벨은 RISK_TOGGLES에서도 RECORD_TEXT 원문 그대로
+    ).toEqual([RECORD_WEB_TEXT.woundPain, RECORD_WEB_TEXT.chestBreath, RECORD_WEB_TEXT.limbSwelling]);
+    // rules-1.2·1.3 토글도 같은 화면 순서(다량 출혈이 맨 앞) — omit의 칸은 뺀다(PDF 리포트는 다량 출혈을 따로 칸에 둔다)
+    const many = { ...base, ...NO_RISK, bleedingHeavy: true, seizure: true, dizzinessFainting: true, lochiaOdor: true, extremeTiredness: true };
+    expect(firedRiskLabels(many)).toEqual([
+      RECORD_WEB_TEXT.bleedingHeavy,
+      RECORD_WEB_TEXT.lochiaOdor,
+      RECORD_TEXT.dizziness,
+      RECORD_WEB_TEXT.extremeTiredness,
+      RECORD_WEB_TEXT.seizure,
+    ]);
+    expect(firedRiskLabels(many, ["bleedingHeavy"])).toEqual([
+      RECORD_WEB_TEXT.lochiaOdor,
+      RECORD_TEXT.dizziness,
+      RECORD_WEB_TEXT.extremeTiredness,
+      RECORD_WEB_TEXT.seizure,
+    ]);
+    // rules-1.3 전 기록에는 새 토글 칸이 없다 — 없는 칸은 줄을 그리지 않는다
+    expect(firedRiskLabels({ ...base, ...NO_RISK, lochiaOdor: undefined, dizzinessFainting: true })).toEqual([RECORD_TEXT.dizziness]);
+    // iOS 넷 중 어지러움만 Swift 원문 그대로, 셋은 rules-1.3 웹 문구
     const label = (key: string) => RISK_TOGGLES.find((t) => t.key === key)?.label;
     expect(["woundPainWorsening", "dizzinessFainting", "chestPainBreathing", "calfPainSwelling"].map(label)).toEqual([
-      RECORD_TEXT.woundPain,
+      RECORD_WEB_TEXT.woundPain,
       RECORD_TEXT.dizziness,
-      RECORD_TEXT.chestBreath,
-      RECORD_TEXT.calfSwelling,
+      RECORD_WEB_TEXT.chestBreath,
+      RECORD_WEB_TEXT.limbSwelling,
     ]);
   });
 
@@ -323,8 +352,12 @@ describe("화면 배치", () => {
   const check = (over: Partial<typeof INITIAL_SYMPTOM_FORM>) => submitSymptomCheck({ ...INITIAL_SYMPTOM_FORM, ...over }, "2026-09-01", NOW).result;
   const codes = (over: Partial<typeof INITIAL_SYMPTOM_FORM>) => resultCards(check(over)).map((c) => c.code);
 
-  it("같은 등급의 병원 신호는 모두 카드로 — 흉통의 '심하면 119'를 놓치지 않는다(iOS는 대표 하나)", () => {
-    expect(codes({ feverEvent: true, chestPainBreathing: true })).toEqual(["fever_infection", "cardioresp_flag"]);
+  it("같은 등급의 병원 신호는 모두 카드로(iOS는 대표 하나)", () => {
+    expect(codes({ feverEvent: true, calfPainSwelling: true })).toEqual(["fever_infection", "dvt_suspect"]);
+    expect(codes({ lochiaOdor: true, severeVomiting: true })).toEqual(["lochia_odor", "severe_vomiting"]);
+    // rules-1.3: 흉통·호흡곤란은 119 — 즉시 내원 카드와 겹치지 않고 119 카드만
+    expect(codes({ feverEvent: true, chestPainBreathing: true })).toEqual(["cardioresp_flag"]);
+    expect(codes({ seizure: true, chestPainBreathing: true })).toEqual(["seizure", "cardioresp_flag"]);
   });
 
   it("119 신호가 있으면 즉시 내원 카드는 겹쳐 보이지 않는다 — 다량 출혈 + 어지러움 → 119 카드 하나", () => {
@@ -419,7 +452,7 @@ describe("최근 기록 — 최신 5건 · 날짜 · 해당 없음/병원 확인
       { ...rec(1, "2026-09-23T15:05", "cardioresp_flag"), chestPainBreathing: true, dizzinessFainting: true, woundPainWorsening: false, calfPainSwelling: null },
       rec(2, "2026-09-22T00:05", "fever_infection"),
     ]);
-    expect(rows[0].signals).toEqual([RECORD_TEXT.dizziness, RECORD_TEXT.chestBreath]);
+    expect(rows[0].signals).toEqual([RECORD_TEXT.dizziness, RECORD_WEB_TEXT.chestBreath]);
     expect(rows[1].signals).toEqual([]);
   });
 

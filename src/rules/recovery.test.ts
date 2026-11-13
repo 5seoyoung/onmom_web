@@ -173,7 +173,45 @@ const SWIFT_VECTORS: SwiftVector[] = [
 // 2026-10-14 CPO 결정: 화면의 em dash(—)는 하이픈(-)으로 — 위 벡터는 Swift 출력 그대로 두고, 대조할 때만 라벨의 em dash를 하이픈으로 바꾼다.
 const toWebLabels = (items: RecItem[]): RecItem[] => items.map((i) => ({ ...i, label: i.label.replaceAll("—", "-") }));
 
-describe("회복 단계 분석 — Swift 벡터", () => {
+/**
+ * rules-1.3(2026-11-13 임상 자체 검토 E-PF·E-0·X-PE·C-GDM·X-PGP·X-CHIP)이 Swift 결과에서 바꾼 것만 덧씌운다 — 나머지는 Swift 벡터 그대로 비교한다.
+ * 골반저근 0주(아직 이른 단계였으면 가능 쪽으로, firedRules에도 stage:pelvic_floor), 회복 우선기·골반저근 요약, 골반통 용어, 임신중독증·임신성 당뇨 주의의
+ * 산후 확인 안내, 문헌이 아닌 칩("src:회복 단계 기준"·"src:산모수첩 확인항목")은 일반 칩으로.
+ */
+const STAGE_ORDER = ["recovery_priority", "early_core_activation", "pelvic_floor", "functional_strengthening", "full_core"];
+function rules13(v: SwiftVector): Pick<SwiftVector, "allowed" | "caution" | "forbidden" | "firedRules"> {
+  const chips = (c: string[]) => {
+    const out = c.map((x) => (x === "src:회복 단계 기준" ? "회복 단계 기준" : x === "src:산모수첩 확인항목" ? "산모수첩 확인 항목" : x));
+    return out.filter((x, i) => out.indexOf(x) === i);
+  };
+  const label = (l: string) =>
+    l
+      .replace("호흡·이완만.", "호흡·이완 위주.")
+      .replace("케겔(골반저근 운동)", "케겔(골반저근 가볍게 조이고 풀기) · 아프거나 불편하면 멈추기")
+      .replace("골반통·치골결합 이개 —", "골반통·치골결합 통증 —")
+      .replace(/^(임신중독증·고혈압 — .*금지)$/, "$1 · 출산 후 3~5일 사이 혈압 확인")
+      .replace(/^(임신성 당뇨 — .*올리기)$/, "$1 · 출산 후 혈당 검사 시기를 의료진에게 확인");
+  const fix = (items: RecItem[]) =>
+    items.map((i) => ({
+      ...i,
+      label: label(i.label),
+      evidenceChips: chips(i.evidenceChips).map((c) => (i.item === "pelvic_floor" && c === "6주차부터 가능" ? "0주차부터 가능" : c)),
+    }));
+  let allowed = fix(v.allowed);
+  let forbidden = fix(v.forbidden);
+  let firedRules = v.firedRules;
+  const pf = forbidden.find((i) => i.item === "pelvic_floor");
+  if (pf !== undefined) {
+    forbidden = forbidden.filter((i) => i !== pf);
+    const byStage = (a: string, b: string) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b);
+    allowed = [...allowed, { ...pf, evidenceChips: ["0주차부터 가능", "회복 단계 기준"] }].sort((a, b) => byStage(a.item, b.item));
+    const stages = [...firedRules.filter((r) => r.startsWith("stage:")), "stage:pelvic_floor"].sort((a, b) => byStage(a.slice(6), b.slice(6)));
+    firedRules = [...stages, ...firedRules.filter((r) => !r.startsWith("stage:"))];
+  }
+  return { allowed, caution: fix(v.caution), forbidden, firedRules };
+}
+
+describe("회복 단계 분석 — Swift 벡터(+ rules-1.3 차이)", () => {
   for (const v of SWIFT_VECTORS) {
     it(v.name, () => {
       const out = analyze(v.delivery, v.days, maternity(...v.flags))!;
@@ -184,13 +222,14 @@ describe("회복 단계 분석 — Swift 벡터", () => {
         sourceDocType: "manual_input",
         provenance: { ocrConfidence: 0, extractedBy: "manual" },
       });
+      const web = rules13(v);
       expect(out.recommendation).toEqual({
         hospitalSignal: null,
-        allowed: toWebLabels(v.allowed),
-        caution: toWebLabels(v.caution),
-        forbidden: toWebLabels(v.forbidden),
-        // 판은 앱 전체의 규칙 판(RULES_VERSION) — rules-1.2는 레드플래그만 바꿨고 이 분석의 판정은 Swift 벡터 그대로다
-        trace: { firedRules: v.firedRules, configVersion: "rules-1.2" },
+        allowed: toWebLabels(web.allowed),
+        caution: toWebLabels(web.caution),
+        forbidden: toWebLabels(web.forbidden),
+        // 판은 앱 전체의 규칙 판(RULES_VERSION) — rules-1.2는 레드플래그만 바꿨고, rules-1.3은 위 rules13의 차이만 더했다
+        trace: { firedRules: web.firedRules, configVersion: "rules-1.3" },
       });
     });
   }
@@ -267,7 +306,7 @@ describe("회복 단계 분석 — 입력·메타", () => {
 
   it("주차 미도달 단계가 차단돼도 firedRules에는 blocked로 남는다(Swift와 같음)", () => {
     const rec = recoveryRecommendation("cesarean", 3, maternity("pelvicPain"));
-    expect(rec.forbidden.find((f) => f.item === "functional_strengthening")?.evidenceChips).toEqual(["8주차부터 (현재 3주차)", "src:회복 단계 기준"]);
+    expect(rec.forbidden.find((f) => f.item === "functional_strengthening")?.evidenceChips).toEqual(["8주차부터 (현재 3주차)", "회복 단계 기준"]);
     expect(rec.trace.firedRules).toContain("blocked:functional_strengthening");
   });
 

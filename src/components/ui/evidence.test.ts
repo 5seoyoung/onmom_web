@@ -23,8 +23,9 @@ describe("parseEvidenceToken", () => {
   it("content.json 레드플래그 칩은 설명 칩과 출처 칩으로 나뉜다", () => {
     const parsed = content.red_flags[0].chips.map(parseEvidenceToken);
     expect(parsed).toEqual([
-      { text: "오로 증가+선홍색(10일 후)", isSource: false },
+      { text: "오로 증가 또는 선홍색(10일 후)", isSource: false },
       { text: "임산부수첩 2023", isSource: true },
+      { text: "NICE NG194", isSource: true },
     ]);
   });
 });

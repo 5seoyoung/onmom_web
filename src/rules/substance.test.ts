@@ -23,8 +23,8 @@ const answer = (a: Partial<LlmSubstanceAnswer>): LlmSubstanceAnswer => ({
 });
 
 describe("큐레이션 표 (02 §8)", () => {
-  it("21행 모두 첫 별칭으로 자기 행을 찾는다", () => {
-    expect(content.substances).toHaveLength(21);
+  it("23행(2026-11-13 트라마돌·먹는 세마글루타이드 행 추가) 모두 첫 별칭으로 자기 행을 찾는다", () => {
+    expect(content.substances).toHaveLength(23);
     for (const row of content.substances) {
       const r = lookupSubstance(row.aliases[0]);
       // 표 순서와 상관없다 — 모든 별칭의 시험은 substanceMatch.test.ts
@@ -35,15 +35,41 @@ describe("큐레이션 표 (02 §8)", () => {
     }
   });
 
-  it("코데인 → 피하세요(FDA)", () => {
+  it("코데인 → 피하세요(FDA·LactMed) — 아기 관찰 신호를 함께(2026-11-13, LactMed LM347)", () => {
     expect(lookupSubstance("코데인")).toEqual({
       query: "코데인",
       verdict: "avoid",
-      detail: "일부 산모에서 아기에게 과량 전달 위험이 있어 수유 중 권장되지 않습니다.",
-      evidenceChips: ["회피", "src:FDA"],
+      detail:
+        "일부 산모에서 아기에게 과량 전달 위험이 있어 수유 중 권장되지 않습니다. 아기가 평소보다 많이 자거나, 젖을 잘 못 빨거나, 숨쉬기 힘들어하거나, 축 늘어지면 바로 의사에게 연락하세요.",
+      evidenceChips: ["회피", "src:FDA", "src:LactMed"],
       source: "table",
     });
     expect(verdictLabel("avoid")).toBe("피하세요");
+  });
+
+  it("2026-11-13 새 행 — 트라마돌·울트라셋은 주의(FDA 비권고·아기 관찰), 먹는 세마글루타이드는 피하세요(LactMed)", () => {
+    for (const q of ["트라마돌", "울트라셋", "tramadol"]) {
+      const r = lookupSubstance(q);
+      expect(r.verdict, q).toBe("caution");
+      expect(r.detail, q).toContain("FDA");
+      expect(r.detail, q).toContain("축 늘어지면");
+    }
+    for (const q of ["리벨서스", "먹는 세마글루타이드", "경구 세마글루타이드"]) expect(lookupSubstance(q).verdict, q).toBe("avoid");
+    // 주사형은 표에 없다 — 정보 부족(안심 쪽 판정을 만들지 않는다)
+    for (const q of ["위고비", "오젬픽", "세마글루타이드 주사"]) expect(lookupSubstance(q).verdict, q).toBe("unknown");
+  });
+
+  it("2026-11-13 문구 — 생선은 식약처 기준(주 100g·400g), 날생선은 안심 문구 없이, 아스피린은 임의 중단 금지", () => {
+    expect(lookupSubstance("고등어").detail).toContain("일주일에 400g 이하");
+    expect(lookupSubstance("참치").detail).toContain("일주일에 100g 이하");
+    expect(lookupSubstance("참치").evidenceChips).toEqual(["섭취량 주의", "src:식약처 2017"]);
+    expect(lookupSubstance("생선회").detail).not.toContain("문제없");
+    expect(lookupSubstance("아스피린").verdict).toBe("avoid");
+    expect(lookupSubstance("아스피린").detail).toContain("임의로 끊지 말고");
+    // 출처 칩 — WHO 2022 지침에 없는 WHO-PNC·확인 못 한 ACOG 대신
+    expect(lookupSubstance("카페인").evidenceChips).toEqual(["용량 주의", "src:LactMed", "src:CDC"]);
+    expect(lookupSubstance("술").evidenceChips).toEqual(["회피", "src:CDC"]);
+    expect(lookupSubstance("담배").evidenceChips).toEqual(["회피", "src:LactMed"]);
   });
 
   it("낱말로 찾고 대소문자를 무시한다 — 별칭 뒤의 양·용량·영문 표기는 그대로 둔다", () => {
@@ -56,7 +82,7 @@ describe("큐레이션 표 (02 §8)", () => {
 
   it("표 순서대로 첫 일치가 아니다 — iOS의 부분일치 특성은 따르지 않는다", () => {
     // "생선회"는 별칭 그대로인 생선회 행이 이긴다(긴 별칭이 이긴다) — 예전에는 표 순서대로 앞 행(생선, 수은)에 먼저 걸렸다
-    expect(lookupSubstance("생선회").evidenceChips).toEqual(["위생 주의", "src:WHO-PNC"]);
+    expect(lookupSubstance("생선회").evidenceChips).toEqual(["위생 주의", "src:식약처 2017"]);
     // 다른 낱말 안의 별칭은 맞지 않는다 — 예전에는 회복 → 회 행, 파티 → 티 행, 커피우유 → 커피 행
     for (const q of ["회복", "파티", "커피우유"]) {
       expect(lookupSubstance(q).verdict, q).toBe("unknown");
@@ -124,14 +150,16 @@ describe("묶음 낱말·뜻이 넓은 낱말은 표가 답하지 않는다(임�
   });
 
   it("지운 별칭 말고 그 행의 품목은 그대로 답한다", () => {
-    for (const q of ["아목시실린", "철분", "철분제", "엽산", "종합비타민", "녹차", "홍차", "생선회", "초밥"]) {
+    for (const q of ["아목시실린", "철분", "철분제", "엽산", "녹차", "홍차", "생선회", "초밥"]) {
       expect(lookupSubstance(q).source, q).toBe("table");
       expect(lookupSubstance(q).verdict, q).not.toBe("unknown");
     }
+    // 2026-11-13: 근거 없는 "종합비타민" 별칭을 뺐다(임상 자체 검토 S9) — 정보 부족 → 의사·약사 상담
+    expect(lookupSubstance("종합비타민").verdict).toBe("unknown");
   });
 
   it("이미 있는 행에만 한글 별칭을 더했다 — 세티리진은 항히스타민 행, 말차·보이차·우롱차는 녹차·홍차 행(둘 다 주의)", () => {
-    expect(content.substances).toHaveLength(21);
+    expect(content.substances).toHaveLength(23);
     expect(lookupSubstance("세티리진").detail).toBe(lookupSubstance("cetirizine").detail);
     expect(lookupSubstance("세티리진 먹어도 되나요?").verdict).toBe("caution");
     for (const q of ["말차", "보이차", "우롱차"]) {
@@ -211,7 +239,7 @@ describe("표 우선, 미등재만 LLM (SubstanceCheckView.swift:97-102, 검수 
     const r = await resolveSubstance("코데인", { llmLookup });
     expect(llmLookup).not.toHaveBeenCalled();
     expect(r.verdict).toBe("avoid");
-    expect(r.evidenceChips).toEqual(["회피", "src:FDA"]);
+    expect(r.evidenceChips).toEqual(["회피", "src:FDA", "src:LactMed"]);
     expect(r.evidenceChips).not.toContain("AI 답변");
     expect(r.detail).not.toContain("AI 답변");
   });
@@ -385,6 +413,6 @@ describe("content.json 표 — 모든 별칭이 자기 행을 찾는다(회귀)"
       expect(lookupSubstance(q).verdict, q).toBe("unknown");
     }
     // 꼬리(들·이)만 붙으면 같은 품목
-    expect(lookupSubstance("날것들이").evidenceChips).toEqual(["위생 주의", "src:WHO-PNC"]);
+    expect(lookupSubstance("날것들이").evidenceChips).toEqual(["위생 주의", "src:식약처 2017"]);
   });
 });

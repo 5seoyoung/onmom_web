@@ -1,6 +1,9 @@
 // 회복 가이드 화면의 보기 모델 — iOS GuideView.swift.
-// 위험 신호 5줄·카드 8장은 content.json(guide_red_flags · guide_cards)에서 읽는다(재입력 금지).
+// 위험 신호(15줄 — rules-1.3)·카드 8장은 content.json(guide_red_flags · guide_cards)에서 읽는다(재입력 금지).
 // 웹 신규 문구 — CPO 확인 필요 (content.json guide_cards "산후 정신건강"의 넷째 요점 — 임상 사전 검토 B3: 109·1577-0199·119. 출처에 CDC Hear Her 2024 더함)
+// 웹 신규 문구 — CPO 확인 필요 (2026-11-13 임상 자체 검토 G1~G9: guide_red_flags를 기록 탭 신호와 같은 15줄로, guide_cards의 오로 양 기준·
+// 상처 감염·제왕절개 상처 관리·골반저근 운동·젖몸살 열(출처 없는 "4~16시간" 삭제)·수유 열량(출처 없는 숫자 삭제)·우울감 수치(질병관리청)·
+// 산후 혈압·혈당 안내 문장과 카드 출처. 아래 redFlagSource·footnote도 함께 바꿈)
 // 화면 문구 중 content.json에 없는 것만 Swift 원문을 글자 그대로 옮긴다.
 import content from "@/content";
 import { SOURCE_PREFIX } from "@/components/ui/evidence";
@@ -9,10 +12,11 @@ export const GUIDE_TEXT = {
   title: "회복 가이드", // 원문: GuideView.swift:97
   subtitle: "2023 임산부수첩·ACOG 지침 기반 산후 회복 안내", // 원문: GuideView.swift:99
   redFlagTitle: "즉시 병원에 가야 할 신호", // 원문: GuideView.swift:112
-  redFlagSource: "산욕기 이상소견 · 임산부수첩 2023", // 원문: GuideView.swift:122
-  // 원문: GuideView.swift:158 (검수 #29 — "…본 안내는 정보 제공이며 진단이 아닙니다." 그대로)
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "산욕기 이상소견 · 임산부수첩 2023"(GuideView.swift:122)에 rules-1.3 신호의 출처를 더함)
+  redFlagSource: "산욕기 이상소견 · 임산부수첩 2023 · CDC Hear Her 2024 · AWHONN 2018 · NICE NG194",
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문(GuideView.swift:158, 검수 #29)의 출처 목록을 카드 출처에 맞게 넓힘. "…본 안내는 정보 제공이며 진단이 아닙니다."는 그대로)
   footnote:
-    "출처: 2023 임산부수첩(보건복지부·인구보건복지협회), ACOG Committee Opinion 736. 본 안내는 정보 제공이며 진단이 아닙니다.",
+    "출처: 2023 임산부수첩(보건복지부·인구보건복지협회), ACOG, CDC Hear Her, AWHONN, NICE(영국), 질병관리청, 식약처. 본 안내는 정보 제공이며 진단이 아닙니다.",
 } as const;
 
 export interface GuideCardSource {

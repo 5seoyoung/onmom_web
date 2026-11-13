@@ -46,11 +46,12 @@ const plan = (over: Partial<PlanVideo>): PlanVideo => ({
   ...over,
 });
 
+// 2026-11-13: "발열" → "발열·오한"(rules-1.3 — 발열 토글에 오한을 합침, 임상 자체 검토 R-FEVER·T6. 웹 신규 문구 — CPO 확인 필요)
 describe("홈 회복 지표 이름 — RedFlagEngine.swift:72-75", () => {
   it("오로·발열·통증(0~10)", () => {
-    expect(metrics(record({ postpartumDays: 30 })).map((m) => m.name)).toEqual(["오로(분비물)", "발열", "통증 NRS 0/10"]);
-    expect(metrics(record({ postpartumDays: null })).map((m) => m.name)).toEqual(["오로(분비물)", "발열", "통증 NRS 0/10"]);
-    expect(metrics(record({ postpartumDays: 3 })).map((m) => m.name)).toEqual(["발열", "통증 NRS 0/10"]);
+    expect(metrics(record({ postpartumDays: 30 })).map((m) => m.name)).toEqual(["오로(분비물)", "발열·오한", "통증 NRS 0/10"]);
+    expect(metrics(record({ postpartumDays: null })).map((m) => m.name)).toEqual(["오로(분비물)", "발열·오한", "통증 NRS 0/10"]);
+    expect(metrics(record({ postpartumDays: 3 })).map((m) => m.name)).toEqual(["발열·오한", "통증 NRS 0/10"]);
     expect(Array.from({ length: 11 }, (_, n) => metrics(record({ painNrs: n }))[2].name)).toEqual([
       "통증 NRS 0/10",
       "통증 NRS 1/10",

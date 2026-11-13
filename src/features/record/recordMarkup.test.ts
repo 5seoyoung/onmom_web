@@ -46,21 +46,22 @@ describe("입력 폼", () => {
       }),
     );
 
-  it("산후 10일 전: 오로 토글 대신 안내문, 스위치는 발열 1 + 위험 증상 10(다량 출혈은 날짜와 상관없이 늘 묻는다)", () => {
+  it("산후 10일 전: 오로 토글 대신 안내문, 스위치는 발열 1 + 위험 증상 14(다량 출혈·오로 냄새는 날짜와 상관없이 늘 묻는다)", () => {
     const html = render(false);
     expect(html).toContain(RECORD_WEB_TEXT.lochiaEarly);
     expect(html).not.toContain(RECORD_TEXT.lochiaIncreased);
     expect(html).toContain(RECORD_WEB_TEXT.bleedingHeavy);
-    expect(count(html, 'role="switch"')).toBe(11);
+    expect(html).toContain(RECORD_WEB_TEXT.lochiaOdor);
+    expect(count(html, 'role="switch"')).toBe(15);
   });
 
-  it("산후 10일 이후: 오로 토글 2개(+11)", () => {
+  it("산후 10일 이후: 오로 토글 2개(+15)", () => {
     const html = render(true);
     expect(html).toContain(RECORD_TEXT.lochiaIncreased);
     expect(html).toContain(RECORD_TEXT.lochiaRed);
     expect(html).not.toContain(RECORD_WEB_TEXT.lochiaEarly);
     expect(html).toContain(RECORD_WEB_TEXT.bleedingHeavy);
-    expect(count(html, 'role="switch"')).toBe(13);
+    expect(count(html, 'role="switch"')).toBe(17);
   });
 
   it("rules-1.2 위험 증상 토글 — 라벨과, 기준이 필요한 토글의 설명 줄(스위치의 aria-describedby)", () => {
@@ -84,8 +85,8 @@ describe("입력 폼", () => {
 
   it("발열 제목·설명, 통증 0/10, 내 동네 입력에 라벨·도움말", () => {
     const html = render(true);
-    expect(html).toContain("발열 (38.0℃ 이상)");
-    expect(html).toContain(RECORD_TEXT.feverDescription);
+    expect(html).toContain("열·오한 (38.0℃ 이상)");
+    expect(html).toContain(RECORD_WEB_TEXT.feverDescription);
     expect(html).toContain(RECORD_TEXT.painTitle);
     expect(html).toContain('aria-valuetext="0/10"');
     const input = /<input type="text"[^>]*>/.exec(html)?.[0] ?? "";
@@ -125,7 +126,7 @@ describe("입력 폼", () => {
         }),
       );
     const locked = render(true);
-    expect(count(locked, 'disabled=""')).toBe(15);
+    expect(count(locked, 'disabled=""')).toBe(19);
     expect(/<input[^>]*type="range"[^>]*>/.exec(locked)?.[0]).toContain('disabled=""');
     expect(/<input[^>]*type="text"[^>]*>/.exec(locked)?.[0]).toContain('disabled=""');
     expect(count(render(), 'disabled=""')).toBe(0);
@@ -146,7 +147,7 @@ describe("결과", () => {
     const html = resultHtml({ feverEvent: true });
     expect(count(html, 'role="alert"')).toBe(1);
     expect(html).toContain("즉시 내원");
-    expect(html).toContain("38°C 이상의 발열은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
+    expect(html).toContain("38℃ 이상의 열이나 몸이 덜덜 떨리는 오한은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
     expect(html).toContain('<span class="sr-only">출처: </span>');
     expect(html).toContain("임산부수첩 2023");
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
@@ -159,10 +160,18 @@ describe("결과", () => {
   });
 
   it("같은 등급 신호가 둘이면 카드 둘 — 처음 것만 바로 읽힘(role=alert)", () => {
-    const html = resultHtml({ feverEvent: true, chestPainBreathing: true });
-    expect(html).toContain("38°C 이상의 발열은");
-    expect(html).toContain("흉통·가슴 압박·호흡곤란은 즉시 병원 확인이 필요한 신호예요. 심하면 119에 연락하세요.");
+    const html = resultHtml({ feverEvent: true, calfPainSwelling: true });
+    expect(html).toContain("38℃ 이상의 열이나");
+    expect(html).toContain("한쪽 다리(종아리·허벅지)나 팔이 붓고 아프거나 붉고 뜨거운 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
     expect(count(html, 'role="alert"')).toBe(1);
+  });
+
+  it("흉통·호흡곤란은 119 카드(rules-1.3) — 119 전화 버튼, 함께 걸린 즉시 내원 카드는 겹치지 않음", () => {
+    const html = resultHtml({ feverEvent: true, chestPainBreathing: true });
+    expect(html).toContain(">119 연락</p>");
+    expect(html).not.toContain(">즉시 내원</p>");
+    expect(html).toContain("지금 바로 119에 연락해야 하는 신호예요");
+    expect(html).toContain(`>${RECORD_WEB_TEXT.call119}</span>`);
   });
 
   it("119 신호(경련): '119 연락' 카드 안에 119 전화 버튼, 가까운 산부인과도", () => {
@@ -192,7 +201,7 @@ describe("결과", () => {
 
   it("위기 상담 + 발열: 위기 상담 카드가 먼저(바로 읽힘), 발열 카드와 가까운 산부인과도", () => {
     const html = resultHtml({ harmThoughts: true, feverEvent: true });
-    expect(html.indexOf("위기 상담 연락")).toBeLessThan(html.indexOf("38°C 이상의 발열은"));
+    expect(html.indexOf("위기 상담 연락")).toBeLessThan(html.indexOf("38℃ 이상의 열이나"));
     expect(count(html, 'role="alert"')).toBe(1);
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
   });
@@ -225,8 +234,10 @@ describe("결과", () => {
     expect(list).toContain(`>${RECORD_WEB_TEXT.warningTitle}</h2>`);
     expect(list).toContain(RECORD_WEB_TEXT.warningIntro);
     expect([...list.matchAll(/<h3 [^>]*>([^<]+)<\/h3>/g)].map((m) => m[1])).toEqual(["119 연락", "위기 상담 연락", "즉시 내원"]);
-    expect(count(list, "<li class=\"flex flex-col gap-1\">")).toBe(13);
-    for (const name of ["경련(발작)", "나·아기를 해칠 것 같은 생각", "심한 두통·시야 이상", "전신 고열 38°C+"]) expect(list, name).toContain(name);
+    expect(count(list, "<li class=\"flex flex-col gap-1\">")).toBe(17);
+    for (const name of ["경련(발작)", "나·아기를 해칠 것 같은 생각", "심한 두통·시야 이상", "38.0℃ 이상 열·오한", "흉통·호흡곤란·빠른 심장박동", "오로의 심한 냄새"]) {
+      expect(list, name).toContain(name);
+    }
     for (const source of ["AWHONN 2018", "CDC Hear Her 2024", "NICE NG194", "NICE NG133", "임산부수첩 2023"]) {
       expect(list, source).toContain(`<span class="sr-only">출처: </span>${source}`);
     }
@@ -304,7 +315,7 @@ describe("최근 기록 카드", () => {
     ]);
     const html = renderToStaticMarkup(h(RecentRecordsCard, { rows }));
     expect(count(html, RECORD_TEXT.dizziness)).toBe(1);
-    expect(html).not.toContain(RECORD_TEXT.woundPain);
+    expect(html).not.toContain(RECORD_WEB_TEXT.woundPain);
     expect(html).toContain("병원 확인 신호");
     expect(html).toContain("해당 없음");
   });

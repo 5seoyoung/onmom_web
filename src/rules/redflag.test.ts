@@ -29,6 +29,10 @@ const input = (over: Partial<SymptomInput> = {}): SymptomInput => ({
   upperBellyPain: false,
   seizure: false,
   harmThoughts: false,
+  lochiaOdor: false,
+  severeVomiting: false,
+  breastRedSwollen: false,
+  extremeTiredness: false,
   ...over,
 });
 
@@ -47,40 +51,56 @@ const record = (over: Partial<SymptomRecord> = {}): SymptomRecord => ({
 
 const code = (i: SymptomInput) => checkRedFlags(i).hospitalSignal?.code ?? null;
 
-// RedFlagEngine.swift:107-143 — rules-1.1까지의 여섯(서로의 순서는 rules-1.2에서도 그대로)
+// RedFlagEngine.swift:107-143 — rules-1.1까지의 여섯. rules-1.3에서 cardioresp_flag가 119가 되어 119 묶음으로 올라갔고, 나머지 다섯은 서로의 순서 그대로
 const SWIFT_ORDER = ["pph_suspect", "severe_pain", "fever_infection", "neuro_flag", "cardioresp_flag", "dvt_suspect"];
-// rules-1.2 평가 순서 — 등급 높은 규칙이 앞(119 → 위기 상담 → 즉시 내원), 다량 출혈은 오로 규칙 앞(임상 사전 검토 §3 T1~T5·T11)
+// 평가 순서 — 등급 높은 규칙이 앞(119 → 위기 상담 → 즉시 내원), 다량 출혈은 오로 규칙 앞(rules-1.2), 오로 냄새는 오로 규칙 바로 뒤·
+// 새 신호 셋은 맨 뒤(rules-1.3 — 임상 자체 검토 2026-11 §2)
 const RULES_ORDER = [
   "heavy_bleeding_dizzy",
   "seizure",
+  "cardioresp_flag",
   "harm_thoughts",
   "heavy_bleeding",
-  ...SWIFT_ORDER,
+  "pph_suspect",
+  "lochia_odor",
+  "severe_pain",
+  "fever_infection",
+  "neuro_flag",
+  "dvt_suspect",
   "headache_vision",
   "face_hand_swelling",
   "upper_belly_pain",
+  "severe_vomiting",
+  "breast_red_swelling",
+  "extreme_tiredness",
 ];
 
 describe("규칙 테이블", () => {
-  it("평가 순서 — Swift 여섯은 그 순서 그대로, 모든 규칙에 조건이 있다", () => {
+  it("평가 순서 — 119 묶음 → 위기 상담 → 즉시 내원, 모든 규칙에 조건이 있다", () => {
     expect(RED_FLAG_CODES).toEqual(RULES_ORDER);
     expect([...RED_FLAG_MATCHER_CODES].sort()).toEqual([...RULES_ORDER].sort());
-    expect(RED_FLAG_CODES.filter((c) => SWIFT_ORDER.includes(c))).toEqual(SWIFT_ORDER);
+    // Swift 여섯 중 119로 올라간 흉통 말고 다섯은 서로의 순서 그대로
+    const swiftFive = SWIFT_ORDER.filter((c) => c !== "cardioresp_flag");
+    expect(RED_FLAG_CODES.filter((c) => swiftFive.includes(c))).toEqual(swiftFive);
+    // 등급이 평가 순서대로 내려간다(같은 높이 안에서만 순서가 대표 신호를 정한다)
+    const ranks = RED_FLAG_CODES.map((c) => severityRank(redFlagSeverity(c)!));
+    expect([...ranks].sort((a, b) => b - a)).toEqual(ranks);
   });
 
-  it("Swift 여섯의 문구·등급은 원문 그대로다", () => {
+  it("rules-1.3 문구·등급 — 오로는 늘거나 또는 붉으면, 흉통·호흡곤란·빠른 심장박동은 119, 어지러움은 쓰러지면 119", () => {
     const s = checkRedFlags(input({ postpartumDays: 12, lochiaIncreased: true, lochiaRed: true })).hospitalSignal;
     expect(s).toEqual({
       code: "pph_suspect",
       severity: "immediate",
-      messagePatient:
-        "산후 10일이 지난 뒤에도 오로가 늘고 다시 붉어지는 것은 즉시 병원 확인이 필요한 신호예요. 바로 산부인과에 방문하세요.",
-      evidenceChips: ["오로 증가+선홍색(10일 후)", "src:임산부수첩 2023"],
+      messagePatient: "산후 10일이 지난 뒤 오로가 다시 늘거나 붉은색이 이어지는 것은 즉시 병원 확인이 필요한 신호예요. 바로 산부인과에 방문하세요.",
+      evidenceChips: ["오로 증가 또는 선홍색(10일 후)", "src:임산부수첩 2023", "src:NICE NG194"],
     });
-    expect(checkRedFlags(input({ chestPainBreathing: true })).hospitalSignal!.messagePatient).toBe(
-      "흉통·가슴 압박·호흡곤란은 즉시 병원 확인이 필요한 신호예요. 심하면 119에 연락하세요.",
-    );
-    for (const c of SWIFT_ORDER) expect(redFlagSeverity(c), c).toBe("immediate");
+    const chest = checkRedFlags(input({ chestPainBreathing: true })).hospitalSignal!;
+    expect(chest).toMatchObject({ code: "cardioresp_flag", severity: "emergency" });
+    expect(chest.messagePatient).toContain("지금 바로 119");
+    expect(chest.messagePatient).toContain("가만히 있어도 심장이 빨리 뛰는 것");
+    expect(checkRedFlags(input({ dizzinessFainting: true })).hospitalSignal!.messagePatient).toContain("쓰러졌거나 정신이 흐려지면 바로 119");
+    for (const c of SWIFT_ORDER.filter((x) => x !== "cardioresp_flag")) expect(redFlagSeverity(c), c).toBe("immediate");
   });
 
   it("출처 칩은 임상 사전 검토 §5에서 확인한 자료 이름만 — 예전에 칩이 없던 셋(어지러움·흉통·종아리)도 그 자료로(§2-1 제안)", () => {
@@ -93,10 +113,15 @@ describe("규칙 테이블", () => {
       expect(flag.chips[0].startsWith("src:"), flag.code).toBe(false);
     }
     expect(checkRedFlags(input({ dizzinessFainting: true })).hospitalSignal!.evidenceChips).toEqual(["어지러움·실신·균형장애", "src:CDC Hear Her 2024"]);
-    expect(checkRedFlags(input({ chestPainBreathing: true })).hospitalSignal!.evidenceChips).toEqual(["흉통·가슴 압박·호흡곤란", "src:AWHONN 2018"]);
-    expect(checkRedFlags(input({ calfPainSwelling: true })).hospitalSignal!.evidenceChips).toEqual([
-      "한쪽 종아리 통증·부종",
+    expect(checkRedFlags(input({ chestPainBreathing: true })).hospitalSignal!.evidenceChips).toEqual([
+      "흉통·호흡곤란·빠른 심장박동",
+      "src:AWHONN 2018",
       "src:CDC Hear Her 2024",
+    ]);
+    expect(checkRedFlags(input({ calfPainSwelling: true })).hospitalSignal!.evidenceChips).toEqual([
+      "다리·팔 붓기·통증·붉음·열감",
+      "src:CDC Hear Her 2024",
+      "src:AWHONN 2018",
       "src:NICE NG194",
     ]);
   });
@@ -111,14 +136,14 @@ describe("checkRedFlags — 02 §11 벡터", () => {
   it("12일 · 증가 · 붉음 → pph_suspect", () => {
     const r = checkRedFlags(input({ postpartumDays: 12, lochiaIncreased: true, lochiaRed: true }));
     expect(r.hospitalSignal?.code).toBe("pph_suspect");
-    expect(r.trace).toEqual({ firedRules: ["redflag:pph_suspect"], configVersion: "rules-1.2" });
+    expect(r.trace).toEqual({ firedRules: ["redflag:pph_suspect"], configVersion: "rules-1.3" });
   });
 
   it("5일 · 증가 · 붉음 → 신호 없음(10일 게이팅)", () => {
     const r = checkRedFlags(input({ postpartumDays: 5, lochiaIncreased: true, lochiaRed: true }));
     expect(r.hospitalSignal).toBeNull();
     expect(r.signals).toEqual([]);
-    expect(r.trace).toEqual({ firedRules: ["redflag:none"], configVersion: "rules-1.2" });
+    expect(r.trace).toEqual({ firedRules: ["redflag:none"], configVersion: "rules-1.3" });
   });
 
   it("NRS 8 → severe_pain, NRS 7 → 없음", () => {
@@ -143,9 +168,12 @@ describe("checkRedFlags — 경계", () => {
     expect(code(input({ postpartumDays: 10, lochiaIncreased: true, lochiaRed: true }))).toBe("pph_suspect");
   });
 
-  it("오로는 증가와 붉음이 둘 다여야 한다", () => {
-    expect(code(input({ postpartumDays: 30, lochiaIncreased: true }))).toBeNull();
-    expect(code(input({ postpartumDays: 30, lochiaRed: true }))).toBeNull();
+  it("오로는 늘거나 또는 붉으면 — 하나만이어도(rules-1.3 R-PPH, NICE NG194 1.2.13), 10일 전에는 없음", () => {
+    expect(code(input({ postpartumDays: 30, lochiaIncreased: true }))).toBe("pph_suspect");
+    expect(code(input({ postpartumDays: 30, lochiaRed: true }))).toBe("pph_suspect");
+    expect(code(input({ postpartumDays: 30 }))).toBeNull();
+    expect(code(input({ postpartumDays: 9, lochiaIncreased: true }))).toBeNull();
+    expect(code(input({ postpartumDays: 9, lochiaRed: true }))).toBeNull();
   });
 
   it("NRS 3·4·7은 신호 없음, 8·10은 severe_pain", () => {
@@ -165,7 +193,7 @@ describe("checkRedFlags — 경계", () => {
     expect(code(input({ calfPainSwelling: true }))).toBe("dvt_suspect");
   });
 
-  it("6개가 다 걸리면 trace는 규칙 순서, 대표는 첫 규칙(전부 immediate)", () => {
+  it("Swift 여섯이 다 걸리면 — 119가 된 흉통이 대표, trace는 규칙 순서", () => {
     const r = checkRedFlags(
       input({
         postpartumDays: 14,
@@ -179,21 +207,25 @@ describe("checkRedFlags — 경계", () => {
       }),
     );
     expect(r.trace.firedRules).toEqual([
+      "redflag:cardioresp_flag",
       "redflag:pph_suspect",
       "redflag:severe_pain",
       "redflag:fever_infection",
       "redflag:neuro_flag",
-      "redflag:cardioresp_flag",
       "redflag:dvt_suspect",
     ]);
-    expect(r.hospitalSignal?.code).toBe("pph_suspect");
+    expect(r.hospitalSignal?.code).toBe("cardioresp_flag");
+    // 흉통이 없으면 즉시 내원끼리 — 첫 규칙(오로)이 대표
+    expect(code(input({ postpartumDays: 14, lochiaIncreased: true, painNrs: 10, feverEvent: true, calfPainSwelling: true }))).toBe("pph_suspect");
   });
 
   it("결과의 칩을 고쳐도 규칙 테이블은 그대로다", () => {
     checkRedFlags(input({ feverEvent: true })).hospitalSignal!.evidenceChips.push("x");
     expect(checkRedFlags(input({ feverEvent: true })).hospitalSignal!.evidenceChips).toEqual([
-      "전신 고열 38°C+",
+      "38.0℃ 이상 열·오한",
       "src:임산부수첩 2023",
+      "src:CDC Hear Her 2024",
+      "src:NICE NG194",
     ]);
   });
 });
@@ -236,6 +268,8 @@ describe("rules-1.2 — 다량 출혈·자간전증·자간증 신호·위기 �
   });
 
   it("대표 신호 — 119·위기 상담이 즉시 내원보다 앞, 같은 높이면 평가 순서(119 신호가 앞)", () => {
+    expect(code(input({ chestPainBreathing: true, harmThoughts: true }))).toBe("cardioresp_flag");
+    expect(code(input({ chestPainBreathing: true, seizure: true }))).toBe("seizure");
     expect(code(input({ feverEvent: true, seizure: true }))).toBe("seizure");
     expect(code(input({ feverEvent: true, harmThoughts: true }))).toBe("harm_thoughts");
     expect(code(input({ seizure: true, harmThoughts: true }))).toBe("seizure");
@@ -266,6 +300,34 @@ describe("rules-1.2 — 다량 출혈·자간전증·자간증 신호·위기 �
 
 // 지금 규칙은 전부 immediate라 대표 선택이 순서와 같다. 임상 자문으로 content.json에 urgent가 섞여도
 // Swift처럼 "severity 최고 → 동률이면 먼저 걸린 것"을 고르고, severity를 하드코딩하지 않는지 본다(감사 #39).
+describe("rules-1.3 — 새 신호 넷과 넓힌 토글(임상 자체 검토 2026-11 §2 T7·T12·T13·T15)", () => {
+  it("오로 냄새·심한 구토·유방 붉음 하루 넘게·갑자기 몹시 지침 → 각각 즉시 내원(산후 일수와 상관없이)", () => {
+    const cases: [Partial<SymptomInput>, string][] = [
+      [{ lochiaOdor: true }, "lochia_odor"],
+      [{ severeVomiting: true }, "severe_vomiting"],
+      [{ breastRedSwollen: true }, "breast_red_swelling"],
+      [{ extremeTiredness: true }, "extreme_tiredness"],
+    ];
+    for (const [over, c] of cases) {
+      for (const postpartumDays of [0, 5, 40]) {
+        expect(checkRedFlags(input({ ...over, postpartumDays })).hospitalSignal, `${c} ${postpartumDays}`).toMatchObject({
+          code: c,
+          severity: "immediate",
+        });
+      }
+    }
+    expect(checkRedFlags(input({ lochiaOdor: true })).hospitalSignal!.messagePatient).toBe(
+      "오로(분비물)에서 심한 냄새가 나는 것은 즉시 병원 확인이 필요한 신호예요. 바로 산부인과에 방문하세요.",
+    );
+  });
+
+  it("발열 토글은 오한까지, 상처 토글은 감염 신호까지, 종아리 토글은 팔까지 — 문구가 넓어진 뜻을 말한다", () => {
+    expect(checkRedFlags(input({ feverEvent: true })).hospitalSignal!.messagePatient).toContain("몸이 덜덜 떨리는 오한");
+    expect(checkRedFlags(input({ woundPainWorsening: true })).hospitalSignal!.messagePatient).toContain("고름");
+    expect(checkRedFlags(input({ calfPainSwelling: true })).hospitalSignal!.messagePatient).toContain("팔");
+  });
+});
+
 describe("대표 신호 — severity 우선, 동률은 먼저 걸린 규칙", () => {
   afterEach(() => {
     vi.doUnmock("@/content");
@@ -344,17 +406,17 @@ describe("metrics — 홈 회복 지표", () => {
     expect(metrics(undefined)).toEqual([]);
   });
 
-  it("02 §11: 12일 · 증가만 · NRS 5 → 오로 관찰 · 발열 정상 · 통증 관찰", () => {
+  it("02 §11 벡터(rules-1.3): 12일 · 증가만 · NRS 5 → 오로 병원 확인 신호(레드플래그와 같은 조건) · 발열 해당 없음 · 통증 살펴볼 신호", () => {
     expect(metrics(record({ postpartumDays: 12, lochiaIncreased: true, painNrs: 5 }))).toEqual([
-      { name: "오로(분비물)", status: "watch" },
-      { name: "발열", status: "normal" },
+      { name: "오로(분비물)", status: "alert" },
+      { name: "발열·오한", status: "normal" },
       { name: "통증 NRS 5/10", status: "watch" },
     ]);
   });
 
   it("02 §11: 3일 · 증가+붉음 → 오로 항목 없음", () => {
     expect(metrics(record({ postpartumDays: 3, lochiaIncreased: true, lochiaRed: true }))).toEqual([
-      { name: "발열", status: "normal" },
+      { name: "발열·오한", status: "normal" },
       { name: "통증 NRS 0/10", status: "normal" },
     ]);
   });
@@ -366,8 +428,9 @@ describe("metrics — 홈 회복 지표", () => {
       )?.status ?? null;
     expect(lochia(9, true, true)).toBeNull();
     expect(lochia(10, true, true)).toBe("alert");
-    expect(lochia(10, false, true)).toBe("watch");
-    expect(lochia(10, true, false)).toBe("watch");
+    // rules-1.3: 하나만이어도 레드플래그(pph_suspect)와 같이 병원 확인 신호 — "살펴볼 신호" 구간이 없다
+    expect(lochia(10, false, true)).toBe("alert");
+    expect(lochia(10, true, false)).toBe("alert");
     expect(lochia(10, false, false)).toBe("normal");
     expect(lochia(null, true, true)).toBe("normal"); // 감사 #40: content.json gate 문구와 다르다
   });
@@ -378,8 +441,8 @@ describe("metrics — 홈 회복 지표", () => {
     expect(pain(7).name).toBe("통증 NRS 7/10");
   });
 
-  it("발열 → 확인 필요", () => {
-    expect(metrics(record({ feverEvent: true })).find((m) => m.name === "발열")?.status).toBe("alert");
+  it("발열·오한 → 병원 확인 신호", () => {
+    expect(metrics(record({ feverEvent: true })).find((m) => m.name === "발열·오한")?.status).toBe("alert");
   });
 
   it("상태 라벨 — 평가가 아니라 기록이 어떤 안내에 해당하는지(의료기기 경계)", () => {

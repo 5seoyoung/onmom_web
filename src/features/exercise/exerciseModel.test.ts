@@ -94,12 +94,12 @@ describe("영상 조회 결과", () => {
 describe("영상 준비 중 블록(D7)", () => {
   const unavailable: VideoLoad = { kind: "unavailable", message: EXERCISE_TEXT.unavailableBody };
 
-  it("제왕절개 9주 + 골반통 — 막힌 '기능 강화' 대신 '골반저근'을 현재 단계로, 제외 줄을 함께(감사 #4)", () => {
+  it("제왕절개 9주 + 골반통 — 막힌 '기능 강화' 대신 막히지 않은 단계 중 가장 늦게 열린 '코어 깨우기'를 현재 단계로(rules-1.3), 제외 줄을 함께(감사 #4)", () => {
     expect(exerciseBody(unavailable, "cesarean", 9, maternity("pelvicPain"))).toEqual({
       kind: "unavailable",
       title: "영상 준비 중",
       message: "운동 영상 추천은 준비 중이에요. 곧 만나보실 수 있어요.",
-      stage: { line: "지금은 9주차 · 골반저근 단계예요", summary: "케겔(골반저근 운동)" },
+      stage: { line: "지금은 9주차 · 코어 깨우기 단계예요", summary: "Drawing-in(심부 코어 활성)" },
       excluded: [`기능 강화 제외 - ${R_PELVIC}`],
     });
   });

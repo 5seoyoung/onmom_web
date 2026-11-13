@@ -107,7 +107,7 @@ describe("리포트 본문", () => {
     // 기록 2건, 최신순, 시각·결과 + 표의 나머지 열 이름(산후 일수·많은 출혈·오로 늘어남·붉은 오로·발열·통증)
     expect(count(blocks, /<li /)).toBe(2);
     expect(blocks.indexOf("병원 확인 신호")).toBeLessThan(blocks.indexOf("해당 없음"));
-    for (const label of ["산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "발열 (38.0℃ 이상)", "통증 정도 (NRS)"]) {
+    for (const label of ["산후 일수", "많은 출혈", "오로 늘어남", "붉은 오로", "열·오한 (38.0℃ 이상)", "통증 정도 (NRS)"]) {
       expect(count(blocks, `<dt class="text-text-secondary">${label}</dt>`)).toBe(2);
     }
     expect(blocks).toContain('<time dateTime="2026-10-14T01:00:00.000Z"');
@@ -171,7 +171,7 @@ describe("리포트 본문", () => {
 
   it("바닥글: 면책 원문 · 만든 곳 · 현재 앱의 안내 규칙 버전(작은 글씨)", () => {
     expect(html).toMatch(/<footer /);
-    expect(html).toContain("온맘은 의료기기가 아니며");
+    expect(html).toContain("온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며");
     expect(html).toContain(REPORT_TEXT.origin);
     expect(html).toMatch(new RegExp(`<p class="text-xs[^"]*">현재 앱의 안내 규칙 버전 ${escape(RULES_VERSION)}</p></footer>`));
   });

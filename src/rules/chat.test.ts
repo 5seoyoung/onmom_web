@@ -3,6 +3,8 @@ import content from "@/content";
 import {
   BLEEDING_BENIGN_WORDS,
   SELF_HARM_BENIGN_PHRASES,
+  VANISHING_SUBJECTS,
+  isSelfHarmMessage,
   withoutBleedingBenign,
 } from "../../supabase/functions/_shared/safety";
 import {
@@ -78,20 +80,31 @@ describe("오탐 줄이기 — 무해한 낱말을 지운 뒤 원래 키워드�
   /** 예전 규칙(iOS 그대로) — 지우지 않고 키워드만 */
   const oldHas = (text: string, keywords: readonly string[]) => keywords.some((k) => text.includes(k));
 
-  it("목록은 정한 낱말 그대로 — 출혈 '피'·'오로' 36개, 위기 '사라지' 12개", () => {
+  it("목록은 정한 낱말 그대로 — 출혈 '피'·'오로' 36개 + '패드' 4개, 위기 '사라지' 12개 + 몸 증상 주어 구절", () => {
     expect(BLEEDING_BENIGN_WORDS.map((b) => b.phrase)).toEqual([
       "피곤", "피로", "커피", "피부", "피임", "피자", "피아노", "피해", "피하", "피드", "피크", "피트니스", "피클", "피망",
       "피규어", "피어싱", "스피커", "해피", "슬리피", "피칭", "피날레", "피라미드", "피서", "피난", "피동", "피의자", "피어나",
       "레시피", "테라피", "에피소드", "오피스", "스피닝", "피스타치오", "피톤치드", "오로지", "오로라",
+      // 2026-11-13 출혈 키워드 "패드"를 품은 물건 이름
+      "수유 패드", "아이스 패드", "방수 패드", "패드형",
     ]);
-    expect(SELF_HARM_BENIGN_PHRASES.map((b) => b.phrase)).toEqual([
+    expect(SELF_HARM_BENIGN_PHRASES.slice(0, 12).map((b) => b.phrase)).toEqual([
       "붓기가 사라지", "부기가 사라지", "통증이 사라지", "증상이 사라지", "열이 사라지",
       "멍이 사라지", "자국이 사라지", "흉터가 사라지", "오로가 사라지", "오로가 다 사라지", "튼살이 사라지", "젖몸살이 사라지",
     ]);
+    // 2026-11-13: 몸 증상 주어 × 조사(이·가·은·는·도) × 사이 말("", 다·싹·거의·점점·조금씩) — "혹은"(접속사)만 뺀다
+    const generated = SELF_HARM_BENIGN_PHRASES.slice(12).map((b) => b.phrase);
+    expect(generated.length).toBe(VANISHING_SUBJECTS.length * 5 * 6 - 6);
+    for (const p of ["뱃살이 사라지", "기미가 사라지", "두통이 점점 사라지", "모유가 다 사라지", "젖이 사라지"]) expect(generated, p).toContain(p);
+    expect(generated.some((p) => p.startsWith("혹은 "))).toBe(false);
     // 모두 원래 키워드를 품은 낱말이다(그래서 예전에는 걸렸다)
-    for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(/피|오로/.test(phrase), phrase).toBe(true);
+    for (const { phrase } of BLEEDING_BENIGN_WORDS) expect(/피|오로|패드/.test(phrase), phrase).toBe(true);
     for (const { phrase } of SELF_HARM_BENIGN_PHRASES) expect(phrase).toContain("사라지");
-    expect(content.chat_fallback.bleeding_keywords).toEqual(["출혈", "피", "하혈", "핏덩이", "핏덩어리", "핏물", "혈괴", "선홍", "오로"]);
+    expect(content.chat_fallback.bleeding_keywords).toEqual([
+      "출혈", "피", "하혈", "핏덩이", "핏덩어리", "핏물", "혈괴", "선홍", "오로",
+      // 2026-11-13 임상 자체 검토 KW-B
+      "덩어리", "생리처럼", "생리보다", "생리만큼", "분비물", "패드",
+    ]);
     expect(content.chat_fallback.self_harm_keywords).toContain("사라지고");
   });
 
@@ -298,5 +311,70 @@ describe("표시 조건", () => {
     expect(shouldShowChatBanner({ llmConfigured: true, lastReplyFromFallback: null })).toBe(false);
     expect(shouldShowChatBanner({ llmConfigured: true, lastReplyFromFallback: true })).toBe(true);
     expect(shouldShowChatBanner({ llmConfigured: true, lastReplyFromFallback: false })).toBe(false);
+  });
+});
+
+// 2026-11-13 임상 자체 검토(docs/dev/clinical/CLINICAL_SELF_REVIEW_2026-11.md §7-1 예문 재실행) — 놓치던 표현·잘못 걸리던 표현을 시험으로 고정한다
+describe("2026-11 챗 키워드 — 임상 자체 검토 §7-1 예문", () => {
+  it.each([
+    "아기를 해칠 것 같아요",
+    "아기를 해치고 싶은 생각이 들어요",
+    "나를 해치고 싶어요",
+    "애를 던져버리고 싶어요",
+    "아기를 때릴 것 같아요",
+    "죽어야겠다",
+    "사는 게 의미가 없어요",
+    "아기랑 같이 죽을까",
+    "이 세상에 없었으면",
+    "태어나지 말걸",
+    "나 자신이나 아기를 해칠 것 같은 생각이 들어요",
+  ])("위기 표현 '%s'는 위기 안내로 간다(웹 선필터·서버 선필터가 같은 목록)", (text) => {
+    expect(isSelfHarmMessage(text)).toBe(true);
+  });
+
+  it.each(["커피가 아기 건강을 해칠까요?", "수유 다 끝내고 싶어요", "친구랑 같이 죽 먹을까", "힘들어 죽겠어요"])(
+    "위기가 아닌 말 '%s'는 위기 안내로 가지 않는다",
+    (text) => {
+      expect(isSelfHarmMessage(text)).toBe(false);
+    },
+  );
+
+  it.each(["뱃살이 사라지고 있어요", "기미가 사라지고 있어요", "두통이 점점 사라지고 있어요", "모유가 사라지고 있어요", "젖이 다 사라지고 있어요"])(
+    "몸 증상이 '사라지고' — '%s'는 위기 안내로 가지 않는다(웹 규칙 폴백·서버 선필터)",
+    (text) => {
+      expect(isSelfHarmMessage(text)).toBe(false);
+      expect(replyTo(text)).not.toBe(replies.self_harm);
+    },
+  );
+
+  it.each(["통증이 사라지고 나니 이제 내가 사라지고 싶어요", "뱃살이 사라지고 나도 사라지고 싶어", "그냥 혹은 사라지고 싶어요"])(
+    "증상 구절 뒤의 진짜 위기 표현 '%s'는 그대로 걸린다",
+    (text) => {
+      expect(isSelfHarmMessage(text)).toBe(true);
+    },
+  );
+
+  it.each(["덩어리가 나왔어요", "생리처럼 많이 나와요", "패드가 한 시간 만에 다 젖어요", "분비물이 늘었어요"])(
+    "출혈 표현 '%s' → 출혈 안내(양 기준·119)",
+    (text) => {
+      expect(replyTo(text)).toBe(replies.bleeding);
+    },
+  );
+
+  it.each(["수유패드 추천해 주세요", "수유 패드 뭐가 좋아요?", "생리는 언제 다시 해요?"])("'%s'는 출혈 안내가 아니다", (text) => {
+    expect(replyTo(text)).not.toBe(replies.bleeding);
+  });
+
+  it("출혈 답은 분비물 냄새·열·오한도 병원으로, AI가 꺼졌을 때의 기본 답에도 119·109가 있다(CH1·CH5)", () => {
+    expect(replies.bleeding).toContain("심한 냄새");
+    expect(replies.bleeding).toContain("오한");
+    for (const n of ["119", "109"]) expect(replies.default, n).toContain(n);
+    // 응급 표현이 키워드를 빠져나가 기본 답을 받아도 119가 보인다
+    for (const text of ["숨이 차요", "가슴이 아파요", "경련을 했어요"]) expect(replyTo(text), text).toContain("119");
+  });
+
+  it("기분 답에 안심 문구('도움을 받으면 좋아져요')가 없다", () => {
+    expect(replies.mood).not.toContain("좋아져요");
+    expect(replies.mood).toContain("혼자 견디지 마세요");
   });
 });

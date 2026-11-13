@@ -28,13 +28,13 @@ describe("lifestyleContent (LifestyleView.swift · OnmomEngine.swift:59-80)", ()
     expect(LIFESTYLE_TEXT.title).toBe("생활 권고");
   });
 
-  it("5장 — 표 순서, 분류·제목·칩 그대로", () => {
+  it("5장 — 표 순서, 분류·제목·칩 그대로(2026-11-13 임상 자체 검토 G7·G9 출처 칩)", () => {
     const tips = lifestyleTipViews();
     expect(tips.map((t) => [t.category, t.title, t.chips])).toEqual([
-      ["정신건강", "기분 살피기", ["EPDS", "src:임산부수첩 2023"]],
+      ["정신건강", "기분 살피기", ["EPDS", "src:임산부수첩 2023", "src:질병관리청"]],
       ["수면·안정", "충분한 수면과 안정", ["산후 몸조리", "src:임산부수첩 2023"]],
       ["영양", "단백질·철분 보충", ["빈혈 예방", "src:임산부수첩 2023"]],
-      ["활동", "가벼운 활동부터", ["조기보행", "src:ACOG-736"]],
+      ["활동", "가벼운 활동부터", ["조기보행", "src:ACOG FAQ131"]],
       ["수분", "수분과 카페인", ["수유", "src:임산부수첩 2023"]],
     ]);
     expect(tips.map((t) => t.detail)).toEqual(content.lifestyle_tips.map((t) => t.detail));
@@ -60,10 +60,10 @@ describe("LifestyleScreen 마크업", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("근거 칩 5개 + 출처 칩 5개, 면책 배너 문구", () => {
-    expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(5);
+  it("근거 칩 5개 + 출처 칩 6개(정신건강 카드는 임산부수첩·질병관리청 둘), 면책 배너 문구", () => {
+    expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(6);
     for (const chip of ["EPDS", "산후 몸조리", "빈혈 예방", "조기보행", "수유"]) indexOf(`>${escapeHtml(chip)}</span>`);
-    textAt("온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다.");
+    textAt("온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.");
     expect(html).toContain('href="/profile/"');
   });
 });

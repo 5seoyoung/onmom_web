@@ -18,7 +18,7 @@ import {
   type RecoveryStateLabel,
 } from "@/rules/record";
 import { METRIC_STATUS_LABEL, metrics, type RecoveryMetric } from "@/rules/redflag";
-import { weightPlan, type WeightPlan } from "@/rules/weight";
+import { weightPlan, weightPlanDue, type WeightPlan } from "@/rules/weight";
 import { ROUTES } from "@/routes";
 
 // MARK: - 화면 문구 (Swift 원문)
@@ -36,7 +36,9 @@ export const HOME_TEXT = {
   // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "…상태를 알려드려요"를 바꿈 — 앱이 상태를 평가해 준다는 말로 읽힌다. 법률 사전 검토 H5)
   emptyStateBody: "오로·통증·발열을 기록하면 해당하는 안내를 보여 드려요.",
   moodTitle: "요즘 힘든 날이 이어지고 있어요", // 원문: HomeView.swift:275
-  moodBody: "산후에는 열 명 중 한두 명이 겪는 일이고, 이야기를 나누면 나아져요. 혼자 견디지 마세요.", // 원문: HomeView.swift:279
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "…이야기를 나누면 나아져요. 혼자 견디지 마세요."(HomeView.swift:279)에서 안심 문구 "나아져요"를 뺌 —
+  // 임상 자체 검토 2026-11 M-CARD. 10~20%는 질병관리청 "우울감" 페이지와 같다)
+  moodBody: "산후에는 열 명 중 한두 명이 겪는 일이에요. 혼자 견디지 말고 가족이나 전문가와 이야기를 나누세요.",
   moodSupport: "지원사업 보기", // 원문: HomeView.swift:286
   moodLater: "나중에 볼게요", // 원문: HomeView.swift:293
   moodDisclaimer: content.disclaimers.mood_card, // = HomeView.swift:298
@@ -44,7 +46,8 @@ export const HOME_TEXT = {
   analyzeSubtitle: "내 정보를 확인하고 가능/금지 안내받기", // 원문: HomeView.swift:338
   metricsTitle: "회복 지표", // 원문: HomeView.swift:359
   quickRecord: "이상 증상 빠른 기록", // 원문: HomeView.swift:468
-  footer: content.disclaimers.home_footer, // = HomeView.swift:27
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-13: HomeView.swift:27 원문을 식약처 웰니스 판단기준 권고 주의 문구로 — content.json disclaimers.home_footer)
+  footer: content.disclaimers.home_footer,
 } as const;
 
 /**
@@ -54,14 +57,17 @@ export const HOME_TEXT = {
 export const HOME_CHAT_HREF = `${ROUTES.chat}?from=home`;
 
 /**
- * 마음 연계 카드의 전화 — 1577-0199·02-2276-2276은 원문(HomeView.swift:282-283). 02-2276-2276은 예약 상담 기관이라 위기 연락처가 아니므로
- * 자살예방상담전화 109와 위급할 때 119를 더했다(임상 사전 검토 M-CARD·B3, K3·K7 — 2026-11-04 대표 결정으로 "목록 변경 금지"를 이 갱신에 한해 풀었다).
+ * 마음 연계 카드의 전화 — 1577-0199·02-2276-2276은 원문(HomeView.swift:282-283). 2026-11-04에 자살예방상담전화 109와 위급할 때 119를 더했다
+ * (임상 사전 검토 M-CARD·B3, K3·K7 — 대표 결정으로 "목록 변경 금지"를 이 갱신에 한해 풀었다).
+ * 2026-11-13(임상 자체 검토 M-CARD·§8): 순서를 109 → 1577-0199 → 119로, 1577-0199의 이름을 공식 이름 "정신건강위기상담전화"로 통일했다.
+ * 02-2276-2276은 뺐다 — 센터 이름이 2024-01 "난임·임산부심리상담센터"로 바뀌었고 예약 상담이라 위기 전화가 아니며, 2024년 이후 공식 자료에서
+ * 번호를 확인하지 못했다(지원사업 화면의 같은 번호는 그대로 — 전화로 확인한 뒤 정리).
  */
 export const MOOD_CALLS: readonly { name: string; number: string }[] = [
-  { name: "정신건강복지센터", number: "1577-0199" },
   // 웹 신규 문구 — CPO 확인 필요
   { name: "자살예방상담전화 (24시간)", number: "109" },
-  { name: "중앙난임·우울증상담센터", number: "02-2276-2276" },
+  // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 이름 "정신건강복지센터"를 공식 전화 이름으로)
+  { name: "정신건강위기상담전화 (24시간)", number: "1577-0199" },
   // 웹 신규 문구 — CPO 확인 필요
   { name: "위급할 때", number: "119" },
 ];
@@ -133,7 +139,7 @@ export interface HomeViewModel {
   metrics: { items: RecoveryMetric[]; relativeTime: string | null; recordDate: string } | null;
   /** 지금 회복 단계 카드 — 레드플래그면 "운동 안내를 멈췄어요", 그릴 단계가 없으면 null */
   stageCard: HomeStageCard | null;
-  /** 체중 목표 카드 — 키·현재 체중이 있고 레드플래그가 아닐 때만 */
+  /** 체중 목표 카드 — 키·현재 체중이 있고, 산후 28일이 지났고(rules-1.3), 레드플래그가 아닐 때만 */
   weightPlan: WeightPlan | null;
 }
 
@@ -162,8 +168,9 @@ export function buildHomeViewModel(state: PersistedState, now: Date): HomeViewMo
       activeRedFlag || dayCount !== null
         ? homeStageCard(profile.deliveryMethod, weekFromDayCount(dayCount ?? 0), maternity, activeRedFlag)
         : null,
-    // 체중 목표 문구가 걷기 등 유산소를 권하므로 레드플래그 중에는 함께 숨긴다(HomeView.swift:443)
-    weightPlan: activeRedFlag ? null : weightPlan(profile),
+    // 체중 목표 문구가 걷기 등 유산소를 권하므로 레드플래그 중에는 함께 숨긴다(HomeView.swift:443).
+    // rules-1.3: 산후 28일(4주)부터만 — 그 전 감량 목표를 받치는 근거가 없다(rules/weight WEIGHT_PLAN_FROM_DAY, 임상 자체 검토 W-WHEN)
+    weightPlan: activeRedFlag || !weightPlanDue(dayCount) ? null : weightPlan(profile),
   };
 }
 

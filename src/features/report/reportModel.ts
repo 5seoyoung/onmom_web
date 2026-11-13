@@ -137,7 +137,7 @@ export const SYMPTOM_COLUMNS: readonly string[] = [
   REPORT_TEXT.colBleedingHeavy, // rules-1.2 — 산후 0일부터 묻는 다량 출혈(오로 두 칸은 10일부터)
   REPORT_TEXT.colLochiaIncreased,
   REPORT_TEXT.colLochiaRed,
-  RECORD_TEXT.feverTitle, // "발열 (38.0℃ 이상)" — 원문: RecordFlowView.swift:191
+  RECORD_WEB_TEXT.feverTitle, // "열·오한 (38.0℃ 이상)" — 기록 탭 카드 제목과 같다(rules-1.3에서 iOS 원문 "발열 (38.0℃ 이상)"을 바꿈)
   RECORD_TEXT.painTitle, // "통증 정도 (NRS)" — 원문: RecordFlowView.swift:205
   REPORT_TEXT.colResult,
 ];
@@ -302,7 +302,7 @@ export function buildReport(state: PersistedState, account: Account | null, now:
     meta,
     sections,
     footer: {
-      disclaimer: content.disclaimers.home_footer, // 원문 — 앱 바닥 면책(HomeView.swift:27, DisclaimerBanner·사이드바와 같은 문장)
+      disclaimer: content.disclaimers.home_footer, // 앱 바닥 면책(원래 HomeView.swift:27 — 2026-11-13 식약처 웰니스 권고 주의 문구로, DisclaimerBanner·사이드바와 같은 문장)
       rulesVersion: `${REPORT_TEXT.appRulesVersion} ${RULES_VERSION}`, // 이 앱의 지금 버전 — 기록마다의 버전은 각 줄(rulesVersionText·moodVersionText)
       origin: REPORT_TEXT.origin,
     },

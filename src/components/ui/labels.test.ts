@@ -29,10 +29,10 @@ describe("severityLabel", () => {
 });
 
 describe("splitFirstSentence", () => {
-  it("home_footer를 나누면 DisclaimerBanner 두 줄 원문(AnalyzeComponents.swift:124·127)과 글자까지 같다", () => {
+  it("home_footer를 나누면 DisclaimerBanner 두 줄 — 2026-11-13 식약처 웰니스 판단기준 권고 주의 문구 + 참고용 한 줄", () => {
     expect(splitFirstSentence(content.disclaimers.home_footer)).toEqual([
-      "온맘은 의료기기가 아니며, 제공되는 정보는 참고용입니다.",
-      "진단·치료에 관한 판단은 반드시 의료진과 상담하세요.",
+      "온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.",
+      "제공되는 정보는 참고용입니다.",
     ]);
   });
 

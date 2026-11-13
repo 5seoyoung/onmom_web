@@ -190,11 +190,11 @@ describe("결과 화면", () => {
     expect(forbidden.group.items[0]).toEqual({
       item: "full_core",
       label: "코어 강화 - 복근·코어 강화·요가 (분만 무관)",
-      evidenceChips: ["12주차부터 (현재 9주차)", "src:회복 단계 기준"],
+      evidenceChips: ["12주차부터 (현재 9주차)", "회복 단계 기준"],
     });
   });
 
-  it("주의 항목에는 content.json 칩(출처 포함)이 그대로 붙는다", () => {
+  it("주의 항목에는 content.json 칩이 그대로 붙는다(2026-11-13: '산모수첩 확인 항목'은 문헌이 아니라 일반 칩)", () => {
     const model = analyzeResultModel(analyze(P, { anemia: true }, { state: "notConfigured" }), false);
     const caution = model.blocks.find((b) => b.kind === "group" && b.group.key === "caution");
     expect(caution).toEqual({
@@ -203,7 +203,7 @@ describe("결과 화면", () => {
         key: "caution",
         title: "주의",
         tone: "accent",
-        items: [{ item: "anemia", label: "빈혈 - 어지럼·낙상 위험, 앉거나 누운 자세 위주로", evidenceChips: ["Hb<12", "src:산모수첩 확인항목"] }],
+        items: [{ item: "anemia", label: "빈혈 - 어지럼·낙상 위험, 앉거나 누운 자세 위주로", evidenceChips: ["Hb<12", "산모수첩 확인 항목"] }],
       },
     });
   });
