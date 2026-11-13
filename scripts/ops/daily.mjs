@@ -12,6 +12,7 @@
 // 토큰은 환경 변수로만 읽는다(파일을 읽지 않는다). 출력에 싣지 않는다.
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { hostname } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   apiFailure,
@@ -185,9 +186,10 @@ export function insertLedgerRow(text, row) {
   return lines.join("\n");
 }
 
-export function ledgerRow(now = new Date()) {
+/** 접속지(고시 §2 3호 — 접속기록 항목) — 이 명령을 돌린 컴퓨터 이름. IP는 바뀌고 이 컴퓨터가 모른다(공유기 뒤) */
+export function ledgerRow(now = new Date(), host = hostname()) {
   const when = formatKst(now).replace(" KST", "");
-  return `| ${when} | 개발(Claude Code, 대표 요청 — D20 첫 주 매일 보기) | Management API(액세스 토큰) — 읽기 전용 SQL·로그 조회(\`scripts/ops/daily.mjs\`) | AI를 켠 뒤 사용자 수·오류·사용량 확인 | 계정·서버 저장 행·동의 판·AI 동의·AI 호출의 개수, 함수 로그의 상태·코드별 개수, API 게이트웨이의 상태별 개수. 이메일·닉네임·계정 id·건강 기록은 받지 않음 | 없음 | 없음 |`;
+  return `| ${when} | 개발(Claude Code, 대표 요청 — D20 첫 주 매일 보기) | Management API(액세스 토큰) — 읽기 전용 SQL·로그 조회(\`scripts/ops/daily.mjs\`) · 접속지: 컴퓨터 ${host} | AI를 켠 뒤 사용자 수·오류·사용량 확인 | 계정·서버 저장 행·동의 판·AI 동의·AI 호출의 개수, 함수 로그의 상태·코드별 개수, API 게이트웨이의 상태별 개수. 이메일·닉네임·계정 id·건강 기록은 받지 않음 | 없음 | 없음 |`;
 }
 
 async function main() {

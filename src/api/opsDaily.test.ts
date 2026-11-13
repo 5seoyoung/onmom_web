@@ -95,8 +95,9 @@ describe("접근 대장 한 줄", () => {
   });
 
   it("한 줄은 일곱 칸이고 개수만 봤다고 적는다", () => {
-    const row = ledgerRow(new Date("2026-11-09T00:40:00Z"));
+    const row = ledgerRow(new Date("2026-11-09T00:40:00Z"), "onmom-mac");
     expect(row.startsWith("| 2026-11-09 09:40 |")).toBe(true);
+    expect(row).toContain("접속지: 컴퓨터 onmom-mac"); // 고시 §2 3호 — 접속기록의 접속지
     expect(row.split("|").length - 2).toBe(7);
     expect(row).toMatch(/건강 기록은 받지 않음/);
   });
