@@ -242,7 +242,7 @@ jobs:
       # 제3자 액션은 커밋으로 고정한다(태그는 옮길 수 있다) — 이 액션이 설치한 CLI가 계정 전체 토큰(SUPABASE_ACCESS_TOKEN)을 받는다.
       # 올릴 때: git ls-remote --tags https://github.com/supabase/setup-cli.git 로 새 태그의 커밋을 확인해 두 줄을 함께 바꾼다.
       # CLI 버전도 고정한다 — 새 버전은 이 줄을 바꿔 한 번 돌려 보고 올린다.
-      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+      - uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
         if: steps.check.outputs.run == 'true'
         with:
           version: 2.117.0
