@@ -187,5 +187,9 @@ export function splitPhoneNumbers(text: string): TextSegment[] {
   return out;
 }
 
-/** 전화 링크의 접근성 이름 — 원문 패턴: NearbyClinicsView.swift:128 `"\(clinic.name)에 전화 걸기"` (이름 자리에 번호) */
-export const phoneCallLabel = (number: string) => `${number}에 전화 걸기`;
+/**
+ * 전화 링크의 접근성 이름 — 원문 패턴 NearbyClinicsView.swift:128 `"\(clinic.name)에 전화 걸기"`(이름 자리에 번호)에서 조사 "에"를 뺐다.
+ * 보이는 글자(번호)가 이름 안에 낱말 그대로 있어야 한다(WCAG 2.5.3 — 음성으로 "119 누르기"). "119에"는 axe 4.14부터 다른 낱말로 본다.
+ */
+// 웹 신규 문구 — CPO 확인 필요 (화면 낭독 이름 "{번호} 전화 걸기" — 2026-11-18 "{번호}에 전화 걸기"에서 조사를 뺌)
+export const phoneCallLabel = (number: string) => `${number} 전화 걸기`;

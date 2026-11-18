@@ -128,7 +128,7 @@ describe("supportPhone — 전화 문의를 tel: 링크로 걸어도 되는지",
       href: "tel:129",
       label: "보건복지상담센터",
       number: "129",
-      ariaLabel: "보건복지상담센터 129에 전화 걸기",
+      ariaLabel: "보건복지상담센터 129 전화 걸기",
     });
     expect(supportPhone({ label: " 아이돌봄서비스 ", number: " 1577-2514 " })).toMatchObject({
       href: "tel:15772514",
@@ -217,7 +217,7 @@ describe("해결책 행의 전화번호(web/07 §5 — 전화 링크로)", () =>
     const [leave] = domainOf(2).solutions;
     const html = renderToStaticMarkup(h(SolutionCard, { title: "t", solutions: [{ ...leave, url: null, phone: null }] }));
     expect(html).toContain(
-      '고용노동부 - 고객상담 <a href="tel:1350" aria-label="1350에 전화 걸기" class="whitespace-nowrap rounded-xs underline underline-offset-2 text-primary-text">1350</a>',
+      '고용노동부 - 고객상담 <a href="tel:1350" aria-label="1350 전화 걸기" class="whitespace-nowrap rounded-xs underline underline-offset-2 text-primary-text">1350</a>',
     );
     expect(html.match(/<a /g)).toHaveLength(1);
   });
@@ -235,7 +235,7 @@ describe("해결책 행의 전화번호(web/07 §5 — 전화 링크로)", () =>
     // 전화 링크는 행 링크가 닫힌 뒤
     const tel = html.indexOf('<a href="tel:1350"');
     expect(tel).toBeGreaterThan(rowEnd);
-    expect(html).toContain('<a href="tel:1350" aria-label="고용노동부 고객상담센터 1350에 전화 걸기"');
+    expect(html).toContain('<a href="tel:1350" aria-label="고용노동부 고객상담센터 1350 전화 걸기"');
     expect(html).toContain('고용노동부 고객상담센터 <span class="whitespace-nowrap">1350</span>');
   });
 
@@ -248,10 +248,10 @@ describe("해결책 행의 전화번호(web/07 §5 — 전화 링크로)", () =>
         return html.match(/<a href="(tel:\d+)" aria-label="([^"]+)"/)?.slice(1);
       });
     expect(rendered).toEqual([
-      ["tel:129", "보건복지상담센터 129에 전화 걸기"],
-      ["tel:1350", "고용노동부 고객상담센터 1350에 전화 걸기"],
-      ["tel:15772514", "아이돌봄서비스 1577-2514에 전화 걸기"],
-      ["tel:15779337", "가족센터 1577-9337에 전화 걸기"],
+      ["tel:129", "보건복지상담센터 129 전화 걸기"],
+      ["tel:1350", "고용노동부 고객상담센터 1350 전화 걸기"],
+      ["tel:15772514", "아이돌봄서비스 1577-2514 전화 걸기"],
+      ["tel:15779337", "가족센터 1577-9337 전화 걸기"],
     ]);
   });
 

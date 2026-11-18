@@ -19,7 +19,7 @@ export interface SupportPhoneLink {
   label: string;
   /** 화면에 보이는 번호(표기 그대로) */
   number: string;
-  /** 접근성 이름 — 보이는 글자로 시작한다(PhoneLinks의 "{번호}에 전화 걸기" 앞에 이름) */
+  /** 접근성 이름 — 보이는 글자로 시작한다(PhoneLinks의 "{번호} 전화 걸기" 앞에 이름) */
   ariaLabel: string;
 }
 
@@ -35,7 +35,7 @@ export function supportPhone(phone: SupportPhone | null | undefined): SupportPho
   if (label === "" || !PHONE_NUMBER_PATTERN.test(number)) return null;
   const href = telHref(number);
   if (href === null || !TEL_PATTERN.test(href)) return null;
-  // 웹 신규 문구 — CPO 확인 필요 (전화 링크의 접근성 이름 "{이름} {번호}에 전화 걸기")
+  // 웹 신규 문구 — CPO 확인 필요 (전화 링크의 접근성 이름 "{이름} {번호} 전화 걸기")
   return { href, label, number, ariaLabel: `${label} ${phoneCallLabel(number)}` };
 }
 

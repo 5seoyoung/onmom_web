@@ -9,7 +9,6 @@
 // 하위 화면 제목(ScreenHeader 24 bold)처럼 왼쪽에 둔다 — 폰 기둥(최대 30rem)에서는 늘 한 줄 목록·가운데 제목(iOS 그대로).
 
 import Link from "next/link";
-import { useId } from "react";
 import { Clock, CircleUserRound, Lock, MessageSquare, SquarePen } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, EmptyState, SectionTitle, cx } from "@/components/ui";
@@ -95,35 +94,43 @@ function PostList({ posts }: { posts: readonly CommunityPost[] }) {
 function PostRow({ post }: { post: CommunityPost }) {
   const when = formatMonthDayTime(post.date);
   const count = post.comments.length;
-  // 링크 안에 <article>이 있으면 브라우저가 내용으로 링크 이름을 만들지 않는다(Chrome 접근성 트리에서 이름 "") —
-  // 제목을 링크 이름으로 잇는다. 본문·작성자·댓글 수는 읽기 모드에서 그대로 읽힌다.
-  const titleId = useId();
+  // 링크는 제목에만 둔다 — 링크 이름 = 보이는 제목(WCAG 2.5.3. 예전처럼 카드 전체를 링크로 감싸고 aria-labelledby로 제목만 이름으로
+  // 주면, 보이는 본문·작성자가 이름에 없어 axe 4.14 label-content-name-mismatch에 걸린다). 링크의 ::after가 카드 전체를 덮어
+  // 카드 어디를 눌러도 글로 간다. 초점 링은 링크 대신 카드 테두리에(:has). 본문·작성자·댓글 수는 읽기 모드에서 그대로 읽힌다.
   return (
-    <Link href={postHref(post.id)} aria-labelledby={titleId} className="block h-full rounded-card">
-      <Card as="article" className="flex h-full flex-col gap-1">
-        <h3 id={titleId} className="truncate text-base font-semibold text-text-primary">{post.title}</h3>
-        {post.body ? (
-          <p className="line-clamp-2 text-[0.8125rem] whitespace-pre-wrap wrap-break-word text-text-secondary">{post.body}</p>
+    <Card
+      as="article"
+      className="relative flex h-full flex-col gap-1 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 has-[a:focus-visible]:outline-focus-ring"
+    >
+      <h3 className="truncate text-base font-semibold text-text-primary">
+        <Link
+          href={postHref(post.id)}
+          className="after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none"
+        >
+          {post.title}
+        </Link>
+      </h3>
+      {post.body ? (
+        <p className="line-clamp-2 text-[0.8125rem] whitespace-pre-wrap wrap-break-word text-text-secondary">{post.body}</p>
+      ) : null}
+      {/* 2열에서 옆 카드보다 짧으면 작성자 줄을 카드 아래에 붙인다(한 줄 목록에서는 차이 없음) */}
+      <p className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6875rem] text-text-secondary">
+        <span className="inline-flex items-center gap-1">
+          <CircleUserRound aria-hidden className="size-3.5 shrink-0" />
+          {post.authorName}
+        </span>
+        {when ? (
+          <span className="inline-flex items-center gap-1">
+            <Clock aria-hidden className="size-3.5 shrink-0" />
+            <time dateTime={post.date}>{when}</time>
+          </span>
         ) : null}
-        {/* 2열에서 옆 카드보다 짧으면 작성자 줄을 카드 아래에 붙인다(한 줄 목록에서는 차이 없음) */}
-        <p className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.6875rem] text-text-secondary">
-          <span className="inline-flex items-center gap-1">
-            <CircleUserRound aria-hidden className="size-3.5 shrink-0" />
-            {post.authorName}
-          </span>
-          {when ? (
-            <span className="inline-flex items-center gap-1">
-              <Clock aria-hidden className="size-3.5 shrink-0" />
-              <time dateTime={post.date}>{when}</time>
-            </span>
-          ) : null}
-          <span className="inline-flex items-center gap-1">
-            <MessageSquare aria-hidden className="size-3.5 shrink-0" />
-            <span aria-hidden>{count}</span>
-            <span className="sr-only">{commentCountLabel(count)}</span>
-          </span>
-        </p>
-      </Card>
-    </Link>
+        <span className="inline-flex items-center gap-1">
+          <MessageSquare aria-hidden className="size-3.5 shrink-0" />
+          <span aria-hidden>{count}</span>
+          <span className="sr-only">{commentCountLabel(count)}</span>
+        </span>
+      </p>
+    </Card>
   );
 }

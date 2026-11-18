@@ -41,7 +41,7 @@ const indexOf = (text: string) => {
   expect(i, text).toBeGreaterThanOrEqual(0);
   return i;
 };
-/** 전화번호 하나가 그려지는 모양 — tel: 링크(숫자만) · "{번호}에 전화 걸기" · 한 줄로 묶임 · 글자는 그대로 */
+/** 전화번호 하나가 그려지는 모양 — tel: 링크(숫자만) · "{번호} 전화 걸기" · 한 줄로 묶임 · 글자는 그대로 */
 const phoneAnchor = (number: string, color = "text-primary-text") =>
   `<a href="tel:${number.replace(/\D/g, "")}" aria-label="${escapeHtml(phoneCallLabel(number))}" class="whitespace-nowrap rounded-xs underline underline-offset-2 ${color}">${escapeHtml(number)}</a>`;
 /** 글자 그대로의 문구 찾기(React가 이스케이프한 형태로). 전화번호는 tel: 링크 안에 들어간다. */
@@ -305,10 +305,10 @@ describe("전화번호 — 글자는 그대로, 번호만 떼어 tel: 링크(web
     expect(splitPhoneNumbers("오로 변화")).toEqual([{ text: "오로 변화", phone: false }]);
   });
 
-  it("PhoneLinks — tel: 링크(숫자만) + '{번호}에 전화 걸기', 글자는 그대로", () => {
+  it("PhoneLinks — tel: 링크(숫자만) + '{번호} 전화 걸기', 글자는 그대로", () => {
     const markup = renderToStaticMarkup(h(PhoneLinks, { text: "위급하면 119입니다. 상담 1577-0199" }));
     expect(markup).toBe(`<span>위급하면 ${phoneAnchor("119")}입니다. 상담 ${phoneAnchor("1577-0199")}</span>`);
-    expect(phoneCallLabel("109")).toBe("109에 전화 걸기");
+    expect(phoneCallLabel("109")).toBe("109 전화 걸기");
     // 어두운 배경용 색
     expect(renderToStaticMarkup(h(PhoneLinks, { text: "119", linkClassName: "text-white" }))).toBe(`<span>${phoneAnchor("119", "text-white")}</span>`);
     // link=false — 링크 없이 한 줄로 묶기만(이미 링크인 행 안)

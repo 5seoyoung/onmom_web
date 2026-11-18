@@ -184,7 +184,7 @@ function SolutionRow({ solution }: { solution: SupportSolution }) {
 }
 
 // 전화 문의 — 행 아래 한 줄(웹 신규). 글자 시작을 행의 글자에 맞춘다(아이콘 40 + 간격 16 = 56).
-// 번호 링크의 모양·이름은 PhoneLinks와 같은 틀(코랄 밑줄, "{번호}에 전화 걸기" — 앞에 누구의 번호인지), 누르기 쉽게 높이 44.
+// 번호 링크의 모양·이름은 PhoneLinks와 같은 틀(코랄 밑줄, "{번호} 전화 걸기" — 앞에 누구의 번호인지), 누르기 쉽게 높이 44.
 function PhoneAction({ phone }: { phone: SupportPhoneLink }) {
   return (
     <a

@@ -106,7 +106,7 @@ describe("ChatBubble — 어디서 온 답인지 표시 · 전화 링크는 앱 
     const text = content.chat_fallback.replies.self_harm;
     const html = bubble({ id: 2, role: "assistant", origin: "rules", text });
     expect(telHrefs(html)).toEqual(["15770199", "109", "119"]);
-    for (const n of ["1577-0199", "109", "119"]) expect(html).toContain(`aria-label="${n}에 전화 걸기"`);
+    for (const n of ["1577-0199", "109", "119"]) expect(html).toContain(`aria-label="${n} 전화 걸기"`);
     // 링크를 빼면 원문 그대로(번호 표기·앞뒤 문장 변경 없음)
     expect(html.replace(/<[^>]+>/g, "")).toContain(escapeHtml(text));
     expect(html).toContain(`>${CHAT_ORIGIN_CAPTION.rules}</p>`);
