@@ -12,6 +12,7 @@ import {
   INITIAL_SYMPTOM_FORM,
   RECORD_TEXT,
   RECORD_WEB_TEXT,
+  RISK_TOGGLES,
   moodCardModel,
   recentRecordRows,
   recordLayout,
@@ -64,7 +65,11 @@ describe("입력 폼", () => {
     expect(count(html, 'role="switch"')).toBe(17);
   });
 
-  it("rules-1.2 위험 증상 토글 — 라벨과, 기준이 필요한 토글의 설명 줄(스위치의 aria-describedby)", () => {
+  /** 설명 줄 <p>의 id — 그려지지 않았으면 undefined */
+  const hintId = (html: string, hint: string) =>
+    new RegExp(`<p id="([^"]+)" class="mt-0\\.5 text-\\[0\\.8125rem\\] text-text-secondary">${hint}</p>`).exec(html)?.[1];
+
+  it("rules-1.2 위험 증상 토글 — 라벨은 늘, 기준 설명 줄은 꺼져 있으면 그리지 않는다(aria-describedby도 없음 — 2026-11-15 산부인과 전문의 의견)", () => {
     const html = render(false);
     for (const label of [
       RECORD_WEB_TEXT.bleedingHeavy,
@@ -76,19 +81,53 @@ describe("입력 폼", () => {
     ]) {
       expect(html, label).toContain(label);
     }
-    for (const hint of [RECORD_WEB_TEXT.bleedingHeavyHint, RECORD_WEB_TEXT.headacheVisionHint, RECORD_WEB_TEXT.harmThoughtsHint]) {
-      const id = new RegExp(`<p id="([^"]+)" class="mt-0\\.5 text-\\[0\\.8125rem\\] text-text-secondary">${hint}</p>`).exec(html)?.[1];
+    for (const { description, descriptionAlways } of RISK_TOGGLES) {
+      if (description === undefined || descriptionAlways) continue;
+      expect(html, description).not.toContain(description);
+    }
+    // 설명을 가리키는 스위치는 발열(늘 보이는 카드 설명)과 해칠 생각(켜기 전에 알아야 하는 안내) 둘뿐
+    const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? [];
+    expect(switches.filter((tag) => tag.includes("aria-describedby=")).length).toBe(2);
+    for (const hint of [RECORD_WEB_TEXT.feverDescription, RECORD_WEB_TEXT.harmThoughtsHint]) {
+      const id = hintId(html, hint);
       expect(id, hint).toBeTruthy();
       expect(html).toContain(`aria-describedby="${id}"`);
     }
+  });
+
+  it("위험 증상을 켜면 그 토글 바로 아래에 기준 설명 줄 — 스위치의 aria-describedby가 그 줄을 가리킨다", () => {
+    const html = renderToStaticMarkup(
+      h(SymptomFormCards, {
+        form: { ...INITIAL_SYMPTOM_FORM, bleedingHeavy: true, headacheVision: true },
+        onChange: noop,
+        showsLochia: false,
+      }),
+    );
+    for (const [label, hint] of [
+      [RECORD_WEB_TEXT.bleedingHeavy, RECORD_WEB_TEXT.bleedingHeavyHint],
+      [RECORD_WEB_TEXT.headacheVision, RECORD_WEB_TEXT.headacheVisionHint],
+    ]) {
+      const id = hintId(html, hint);
+      expect(id, hint).toBeTruthy();
+      // 라벨 → 설명 → 스위치 순서(같은 줄 안), 스위치가 그 설명을 가리킨다
+      const row = new RegExp(`>${label}</label><p id="${id}"[^>]*>${hint}</p></div><button[^>]*aria-describedby="${id}"`);
+      expect(html, label).toMatch(row);
+    }
+    // 켜지 않은 토글의 기준은 그대로 숨는다
+    expect(html).not.toContain(RECORD_WEB_TEXT.chestBreathHint);
   });
 
   it("발열 제목·설명, 통증 0/10, 내 동네 입력에 라벨·도움말", () => {
     const html = render(true);
     expect(html).toContain("열·오한 (38.0℃ 이상)");
     expect(html).toContain(RECORD_WEB_TEXT.feverDescription);
-    expect(html).toContain(RECORD_TEXT.painTitle);
+    expect(html).toContain(`>${RECORD_WEB_TEXT.painTitle}</label>`);
+    expect(html).not.toContain("NRS"); // 2026-11-15 산부인과 전문의 의견 — 척도 이름 대신 양 끝의 뜻
     expect(html).toContain('aria-valuetext="0/10"');
+    const range = /<input[^>]*type="range"[^>]*>/.exec(html)?.[0] ?? "";
+    const [minId, maxId] = (/aria-describedby="([^"]+)"/.exec(range)?.[1] ?? "").split(" ");
+    expect(html).toContain(`<p id="${minId}" class="flex flex-col items-start"><span>0</span><span>${RECORD_WEB_TEXT.painMin}</span></p>`);
+    expect(html).toContain(`<p id="${maxId}" class="flex flex-col items-end text-end"><span>10</span><span>${RECORD_WEB_TEXT.painMax}</span></p>`);
     const input = /<input type="text"[^>]*>/.exec(html)?.[0] ?? "";
     expect(input).toContain('value="서울 동대문구 회기동"');
     expect(input).toContain('placeholder="예: 서울 강남구 역삼동"');
@@ -147,7 +186,7 @@ describe("결과", () => {
     const html = resultHtml({ feverEvent: true });
     expect(count(html, 'role="alert"')).toBe(1);
     expect(html).toContain("즉시 내원");
-    expect(html).toContain("38℃ 이상의 열이나 몸이 덜덜 떨리는 오한은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
+    expect(html).toContain("38℃ 이상의 열이나 몸이 덜덜 떨리는 오한은 즉시 병원 확인이 필요한 신호예요. 의사 진료를 권해요.");
     expect(html).toContain('<span class="sr-only">출처: </span>');
     expect(html).toContain("임산부수첩 2023");
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
@@ -162,7 +201,7 @@ describe("결과", () => {
   it("같은 등급 신호가 둘이면 카드 둘 — 처음 것만 바로 읽힘(role=alert)", () => {
     const html = resultHtml({ feverEvent: true, calfPainSwelling: true });
     expect(html).toContain("38℃ 이상의 열이나");
-    expect(html).toContain("한쪽 다리(종아리·허벅지)나 팔이 붓고 아프거나 붉고 뜨거운 것은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
+    expect(html).toContain("한쪽 다리(종아리·허벅지)나 팔이 붓고 아프거나 붉고 뜨거운 것은 즉시 병원 확인이 필요한 신호예요. 의사 진료를 권해요.");
     expect(count(html, 'role="alert"')).toBe(1);
   });
 

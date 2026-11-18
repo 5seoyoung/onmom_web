@@ -212,6 +212,27 @@ describe("Toggle", () => {
     expect(alert).toContain("bg-state-alert");
   });
 
+  it('descriptionWhen="checked": 꺼져 있으면 설명도 aria-describedby도 없고, 켜면 라벨 아래 설명 + aria-describedby', () => {
+    const off = render(h(Toggle, { label: "라벨", description: "기준", descriptionWhen: "checked", id: "t2" }));
+    expect(off).not.toContain("기준");
+    expect(off).not.toContain("aria-describedby");
+    expect(off).not.toContain('id="t2-description"');
+    const on = render(h(Toggle, { label: "라벨", description: "기준", descriptionWhen: "checked", checked: true, id: "t2" }));
+    expect(on).toContain('aria-describedby="t2-description"');
+    expect(on).toContain('>라벨</label><p id="t2-description" class="mt-0.5 text-[0.8125rem] text-text-secondary">기준</p>');
+  });
+
+  it('descriptionWhen="checked"는 위 맞춤 — 라벨 첫 줄을 스위치 가운데에 두고, 켜서 설명이 생겨도 스위치·라벨 자리가 그대로', () => {
+    for (const checked of [false, true]) {
+      const html = render(h(Toggle, { label: "l", description: "d", descriptionWhen: "checked", checked }));
+      expect(html).toContain('<div class="flex w-full items-start justify-between gap-4"><div class="min-w-0 flex-1 pt-2.5">');
+    }
+    // 기본(늘 보임)은 예전 그대로 가운데 맞춤
+    expect(render(h(Toggle, { label: "l", description: "d" }))).toContain(
+      '<div class="flex w-full items-center justify-between gap-4"><div class="min-w-0 flex-1">',
+    );
+  });
+
   it("고대비 모드 대비: 트랙 윤곽선 + 손잡이 채움(배경·그림자가 지워져도 보이게)", () => {
     const html = render(h(Toggle, { label: "l" }));
     expect(html).toContain("forced-colors:outline-[CanvasText]");
@@ -227,6 +248,17 @@ describe("NrsSlider", () => {
     expect(html).toContain('max="10"');
     expect(html).toContain('step="1"');
     expect(html).toContain('aria-valuetext="3/10"');
+  });
+
+  it("scaleLabels: 슬라이더 아래 양 끝에 0·10과 뜻 — 슬라이더의 aria-describedby(없으면 둘 다 없음)", () => {
+    const html = render(h(NrsSlider, { label: "통증", id: "n", scaleLabels: { min: "안 아파요", max: "제일 아파요" } }));
+    expect(/<input[^>]*type="range"[^>]*>/.exec(html)?.[0]).toContain('aria-describedby="n-min n-max"');
+    expect(html).toContain('<p id="n-min" class="flex flex-col items-start"><span>0</span><span>안 아파요</span></p>');
+    expect(html).toContain('<p id="n-max" class="flex flex-col items-end text-end"><span>10</span><span>제일 아파요</span></p>');
+    expect(html).toContain('aria-valuetext="0/10"'); // 값 글자는 그대로 "n/10"
+    const plain = render(h(NrsSlider, { label: "통증", id: "n" }));
+    expect(plain).not.toContain("aria-describedby");
+    expect(plain).not.toContain('id="n-min"');
   });
 
   it('보이는 "n/10"은 aria-hidden 글자 — live region(<output>)이 아니라 한 번만 읽힌다', () => {

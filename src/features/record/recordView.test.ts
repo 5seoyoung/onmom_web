@@ -172,6 +172,9 @@ describe("바로 병원에 가야 하는 신호 목록 — 입력과 상관없�
   it("등급마다 할 일 한 줄 — 위기 상담은 109·1577-0199·119·112", () => {
     for (const g of groups) expect(g.action, g.severity).not.toBe("");
     for (const n of ["109", "1577-0199", "119", "112"]) expect(groups[1].action, n).toContain(n);
+    // 즉시 내원은 규칙 문구와 같은 말투(2026-11-15 산부인과 전문의 의견) — 119는 그대로
+    expect(groups[0].action).toBe("지금 바로 119에 연락하세요.");
+    expect(groups[2].action).toBe("의사 진료를 권해요.");
   });
 
   it("규칙 표를 넘기면 그 표로 만든다 — 이름 칩이 없는 규칙은 빼고, 모르는 등급은 글자를 지어내지 않는다", () => {

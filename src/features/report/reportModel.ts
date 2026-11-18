@@ -130,7 +130,7 @@ export interface Report {
   footer: { disclaimer: string; rulesVersion: string; origin: string };
 }
 
-/** 증상 기록 표의 열 — 발열·통증·산후 일수는 앱 원문(기록 탭·설정), 나머지는 새 문구 */
+/** 증상 기록 표의 열 — 발열·산후 일수는 앱 화면 글자(기록 탭·설정), 통증은 iOS 원문(REPORT_TEXT.colPain), 나머지는 새 문구 */
 export const SYMPTOM_COLUMNS: readonly string[] = [
   REPORT_TEXT.colRecordedAt,
   SETTINGS_TEXT.dayCount, // "산후 일수" — 원문: MoreView.swift:49
@@ -138,7 +138,7 @@ export const SYMPTOM_COLUMNS: readonly string[] = [
   REPORT_TEXT.colLochiaIncreased,
   REPORT_TEXT.colLochiaRed,
   RECORD_WEB_TEXT.feverTitle, // "열·오한 (38.0℃ 이상)" — 기록 탭 카드 제목과 같다(rules-1.3에서 iOS 원문 "발열 (38.0℃ 이상)"을 바꿈)
-  RECORD_TEXT.painTitle, // "통증 정도 (NRS)" — 원문: RecordFlowView.swift:205
+  REPORT_TEXT.colPain, // "통증 정도 (NRS)" — 원문: RecordFlowView.swift:205(기록 화면은 2026-11-15부터 "통증 정도" — 리포트는 척도 이름을 그대로)
   REPORT_TEXT.colResult,
 ];
 
