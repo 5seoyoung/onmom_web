@@ -13,8 +13,10 @@ import {
   RedFlagCard,
   SecondaryButton,
   SectionTitle,
+  SourceDisclosure,
   cx,
   primaryButtonClass,
+  splitEvidenceTokens,
 } from "@/components/ui";
 import { FilledOctagonAlert } from "@/features/exercise/FilledOctagonAlert";
 import type { AnalysisTone } from "@/rules/recovery";
@@ -119,10 +121,12 @@ const TONE: Record<AnalysisTone, { Icon: typeof CircleCheck; icon: string; count
   alert: { Icon: CircleX, icon: "fill-state-alert", count: "bg-state-alert/15 text-state-alert-text", dot: "bg-state-alert" },
 };
 
+// 항목에는 설명 칩만, 출처(src:)는 묶음 끝의 "출처 보기" 하나에 중복 없이(2026-11-15 산부인과 전문의 화면 검토 — 지금 운동 항목 칩에는 출처가 없어 그려지지 않는다)
 function RecGroup({ group }: { group: RecGroupModel }) {
   const headingId = useId();
   const tone = TONE[group.tone];
   const last = group.items.length - 1;
+  const { sources } = splitEvidenceTokens(group.items.flatMap((item) => item.evidenceChips));
   return (
     <Card as="section" aria-labelledby={headingId} className="flex flex-col gap-4">
       <h2 id={headingId} className="flex items-center gap-1.5">
@@ -138,12 +142,13 @@ function RecGroup({ group }: { group: RecGroupModel }) {
                 <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", tone.dot)} />
                 <span className="text-base font-semibold text-text-primary">{item.label}</span>
               </p>
-              <EvidenceChipList tokens={item.evidenceChips} />
+              <EvidenceChipList tokens={splitEvidenceTokens(item.evidenceChips).notes} />
             </div>
             {idx !== last ? <hr className="border-divider" /> : null}
           </li>
         ))}
       </ul>
+      <SourceDisclosure sources={sources} />
     </Card>
   );
 }

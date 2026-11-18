@@ -21,8 +21,8 @@ const hangulInCode = (src: string) =>
   );
 
 describe("문구 모듈로 옮긴 글자 — 보이는 글자는 그대로", () => {
-  it("공용 컴포넌트의 [뒤로]·출처 낭독 말", () => {
-    expect(UI_TEXT).toEqual({ back: "뒤로", sourceHint: "출처: " });
+  it("공용 컴포넌트의 [뒤로]·출처 낭독 말·출처 펼침 단추", () => {
+    expect(UI_TEXT).toEqual({ back: "뒤로", sourceHint: "출처: ", sourceSummary: "출처 보기" });
     expect(renderToStaticMarkup(h(EvidenceChip, { token: "src:2023 임산부수첩" }))).toContain('<span class="sr-only">출처: </span>2023 임산부수첩');
   });
 
@@ -55,7 +55,7 @@ describe("문구 모듈로 옮긴 글자 — 보이는 글자는 그대로", () 
 
   it("새 문구는 표시가 있다 — 웹 신규 문구는 CPO 확인 표시, iOS 원문은 원문 표시", () => {
     const ui = read("./uiText.ts");
-    expect(ui.match(/웹 신규 문구 — CPO 확인 필요/g)).toHaveLength(2);
+    expect(ui.match(/웹 신규 문구 — CPO 확인 필요/g)).toHaveLength(3);
     expect(read("../../features/meta/shareMeta.ts")).toMatch(/웹 신규 문구 — CPO 확인 필요[^\n]*\nexport const APP_DESCRIPTION/);
     expect(read("../../features/chat/chatModel.ts")).toContain('title: "AI 상담", // 원문: ChatView.swift:51');
     expect(read("../../features/substance/substanceModel.ts")).toContain("title: content.ui.substance.title, // 원문: SubstanceCheckView.swift:56");

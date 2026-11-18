@@ -1,10 +1,29 @@
-// 회복 가이드 — 보기 모델과 서버 렌더 마크업(문구가 Swift·content.json 그대로, 순서, 출처 칩).
+// 회복 가이드 — 보기 모델과 서버 렌더 마크업(문구가 Swift·content.json 그대로, 순서, 주제 탭, 출처 보기).
+// 누르기·키보드·해시는 guideTopics.test.ts(jsdom).
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import content from "@/content";
 import { GuideScreen } from "./GuideScreen";
-import { GUIDE_TEXT, guideCardViews, guideRedFlags, phoneCallLabel, SAFETY_SHORT_NUMBERS, sourceToken, splitPhoneNumbers } from "./guideContent";
+import { splitEvidenceTokens } from "@/components/ui";
+import {
+  GUIDE_TEXT,
+  GUIDE_TOPIC_TEXT,
+  LOCHIA_TIMELINE,
+  guideCardViews,
+  guideRedFlags,
+  guideTopics,
+  nextTopicIndex,
+  phoneCallLabel,
+  SAFETY_SHORT_NUMBERS,
+  sourceToken,
+  splitPhoneNumbers,
+  topicIndexFromHash,
+  topicPanelId,
+  topicTabId,
+} from "./guideContent";
 import { PhoneLinks } from "./PhoneLinks";
 import { SF_ICON_FALLBACK, hasSfIcon, sfIcon } from "./sfIcons";
 
@@ -93,6 +112,74 @@ describe("guideContent (GuideView.swift)", () => {
   });
 });
 
+describe("주제별 보기 — 해시·키보드·오로 그림 문구(2026-11-15 산부인과 전문의 화면 검토)", () => {
+  const topics = guideTopics();
+
+  it("카드 8장 = 주제 8개, 순서 그대로 · 해시는 영문 짧은 이름(content.json 제목이 바뀌면 여기서 알린다)", () => {
+    expect(topics.map((t) => t.card)).toEqual(guideCardViews());
+    expect(topics.map((t) => t.slug)).toEqual(["stages", "lochia", "wound-care", "exercise", "breastfeeding", "nutrition", "mental-health", "checkup"]);
+  });
+
+  it("매핑에 없는 제목·겹치는 해시는 topic-{순번} — 주제가 사라지지 않는다", () => {
+    const [a, b] = guideCardViews();
+    const views = [{ ...a, title: "새 제목" }, b, { ...b, key: "dup" }];
+    expect(guideTopics(views).map((t) => t.slug)).toEqual(["topic-1", "lochia", "topic-3"]);
+    expect(guideTopics([{ ...a, title: "toString" }]).map((t) => t.slug)).toEqual(["topic-1"]);
+  });
+
+  it("해시 → 주제 순번: '#' 있든 없든, %-표기 풀어서, 모르면·깨졌으면 첫 주제", () => {
+    expect(topicIndexFromHash("#lochia", topics)).toBe(1);
+    expect(topicIndexFromHash("checkup", topics)).toBe(7);
+    expect(topicIndexFromHash("#mental%2Dhealth", topics)).toBe(6);
+    for (const hash of ["", "#", "#nope", "#%E0%A4%A", "#Lochia"]) expect(topicIndexFromHash(hash, topics), hash).toBe(0);
+  });
+
+  it("탭 키: →·← 돌아감, Home·End, 나머지(↑·↓ 포함)는 null", () => {
+    expect(nextTopicIndex("ArrowRight", 0, 8)).toBe(1);
+    expect(nextTopicIndex("ArrowRight", 7, 8)).toBe(0);
+    expect(nextTopicIndex("ArrowLeft", 0, 8)).toBe(7);
+    expect(nextTopicIndex("Home", 5, 8)).toBe(0);
+    expect(nextTopicIndex("End", 2, 8)).toBe(7);
+    for (const key of ["ArrowDown", "ArrowUp", "Tab", "Enter", " "]) expect(nextTopicIndex(key, 3, 8), key).toBeNull();
+    expect(nextTopicIndex("ArrowRight", 0, 0)).toBeNull();
+  });
+
+  it("탭·패널 id는 해시와 다르다(해시를 바꿔도 그 요소로 튀지 않게)", () => {
+    for (const t of topics) {
+      expect(topicTabId(t.slug)).not.toBe(t.slug);
+      expect(topicPanelId(t.slug)).not.toBe(t.slug);
+    }
+  });
+
+  it("오로 그림의 글자는 오로 카드 요점(content.json)을 짧게 옮긴 것뿐 — 근거 문구가 원문에 그대로 있다", () => {
+    const lochia = content.guide_cards.find((c) => c.title === "오로(분비물) 변화");
+    expect(lochia).toBeDefined();
+    const [course, warning] = lochia!.points;
+    // 첫째 요점: 처음 며칠 혈액 같은 오로 → 3~4일 후 양이 줄고 → 10일 후부터 노란색으로 바뀌어 3~4주간
+    expect(LOCHIA_TIMELINE.phases.map((p) => [p.when, p.what, p.mark])).toEqual([
+      ["처음 며칠", "혈액 같은 오로", "blood"],
+      ["3~4일 후", "양이 줄어요", "less"],
+      ["10일 후부터", "노란색으로 바뀌어 3~4주간 이어져요", "yellow"],
+    ]);
+    for (const quote of ["처음 며칠", "혈액 같은 오로", "3~4일 후 양이 줄", "10일 후부터 노란색으로 바뀌어 3~4주간 이어져요"]) {
+      expect(course, quote).toContain(quote);
+    }
+    // 둘째 요점: 10일이 지나도 선홍색이 계속되거나, 양이 다시 늘거나, 악취가 나면 진료가 필요해요
+    expect(LOCHIA_TIMELINE.warningSigns).toEqual(["선홍색이 계속돼요", "양이 다시 늘어요", "악취가 나요"]);
+    for (const quote of ["10일이 지나도", "선홍색이 계속", "양이 다시 늘", "악취가 나", "진료가 필요해요"]) expect(warning, quote).toContain(quote);
+  });
+
+  it("새 문구는 CPO 확인 표시가 있다", () => {
+    const src = readFileSync(fileURLToPath(new URL("./guideContent.ts", import.meta.url)), "utf8");
+    const block = (name: string) => src.slice(src.indexOf(`export const ${name}`), src.indexOf("} as const;", src.indexOf(`export const ${name}`)));
+    expect(block("GUIDE_TOPIC_TEXT")).toMatch(/웹 신규 문구 — CPO 확인 필요[^\n]*\n\s*topicsLabel:/);
+    for (const field of ["caption", "phases", "warningTitle", "warningSigns"]) {
+      expect(block("LOCHIA_TIMELINE"), field).toMatch(new RegExp(`웹 신규 문구 — CPO 확인 필요[^\\n]*\\n\\s*${field}:`));
+    }
+    expect(GUIDE_TOPIC_TEXT.topicsLabel).toBe("회복 가이드 주제");
+  });
+});
+
 describe("sfIcons", () => {
   it("content.json의 가이드·생활 권고 아이콘은 모두 매핑돼 있다", () => {
     const names = [...content.guide_cards.map((c) => c.icon_sf), ...content.lifestyle_tips.map((t) => t.icon_sf)];
@@ -107,32 +194,77 @@ describe("sfIcons", () => {
 });
 
 describe("GuideScreen 마크업", () => {
-  it("순서: 제목 → 부제 → 위험 신호 카드 → 카드 8장 → 각주", () => {
+  const topics = guideTopics();
+  /** <details>…</details> 밖 — 접어도 늘 보이는 마크업 */
+  const always = html.replace(/<details[\s\S]*?<\/details>/g, "");
+
+  it("순서: 제목 → 부제 → 주제 탭 8개 → 주제 카드 8장(패널) → 위험 신호 카드 → 각주", () => {
     const order = [
       indexOf(`>${escapeHtml(GUIDE_TEXT.title)}</h1>`),
       textAt(GUIDE_TEXT.subtitle),
+      indexOf(`role="tablist" aria-label="${GUIDE_TOPIC_TEXT.topicsLabel}"`),
+      ...topics.map((t) => indexOf(`id="${topicTabId(t.slug)}"`)),
+      ...topics.map((t) => indexOf(`>${escapeHtml(t.card.title)}</h2>`)),
       textAt(GUIDE_TEXT.redFlagTitle),
       // 위험 신호 카드는 어두운 배경 — 전화번호 링크가 흰 글자다
       ...guideRedFlags().map(redFlagAt),
       textAt(GUIDE_TEXT.redFlagSource),
-      ...guideCardViews().map((c) => indexOf(`>${escapeHtml(c.title)}</h2>`)),
       textAt(GUIDE_TEXT.footnote),
     ];
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("모든 요점이 글자 그대로 나오고, 카드마다 출처 칩이 하나씩", () => {
+  it("주제 탭: 이름은 카드 제목, 정적 HTML은 첫 주제를 고름(roving tabindex), 탭 ↔ 패널이 서로 가리킨다", () => {
+    const tabs = [...html.matchAll(/<button type="button" role="tab" id="([^"]+)" aria-selected="(true|false)" aria-controls="([^"]+)" tabindex="(-1|0)"[^>]*>([\s\S]*?)<\/button>/g)];
+    expect(tabs.map((m) => m[1])).toEqual(topics.map((t) => topicTabId(t.slug)));
+    expect(tabs.map((m) => m[2])).toEqual(["true", ...Array<string>(7).fill("false")]);
+    expect(tabs.map((m) => m[3])).toEqual(topics.map((t) => topicPanelId(t.slug)));
+    expect(tabs.map((m) => m[4])).toEqual(["0", ...Array<string>(7).fill("-1")]);
+    // 보이는 이름 = 제목(아이콘은 장식)
+    expect(tabs.map((m) => m[5].replace(/<span aria-hidden="true"[\s\S]*?<\/span>/, "").replace(/<[^>]+>/g, ""))).toEqual(topics.map((t) => t.card.title));
+    for (const t of topics) {
+      expect(html).toContain(`role="tabpanel" id="${topicPanelId(t.slug)}" aria-labelledby="${topicTabId(t.slug)}" tabindex="0"`);
+    }
+  });
+
+  it("고른 주제 카드만 보이고 나머지는 hidden — 그래도 모든 요점은 정적 HTML에 글자 그대로", () => {
+    const panels = [...html.matchAll(/role="tabpanel" id="([^"]+)"[^>]*?( hidden="")?>/g)];
+    expect(panels.map((m) => m[1])).toEqual(topics.map((t) => topicPanelId(t.slug)));
+    expect(panels.map((m) => m[2] !== undefined)).toEqual([false, ...Array<boolean>(7).fill(true)]);
     for (const point of content.guide_cards.flatMap((c) => c.points)) textAt(point);
-    expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(8);
+  });
+
+  it("주제 카드마다 큰 머리(아이콘 원 64 + 제목 20 bold) — 오로 주제에만 변화 그림", () => {
+    expect(html.match(/<span aria-hidden="true" class="flex size-16 [^"]*">/g)).toHaveLength(8);
+    expect(html.match(/<h2 class="min-w-0 text-xl font-bold text-text-primary">/g)).toHaveLength(8);
+    expect(html.match(/<figure/g)).toHaveLength(1);
+    const lochiaPanel = html.slice(html.indexOf(`id="${topicPanelId("lochia")}"`), html.indexOf(`id="${topicPanelId("wound-care")}"`));
+    expect(lochiaPanel).toContain("<figure");
+    for (const p of LOCHIA_TIMELINE.phases) expect(lochiaPanel).toContain(`>${p.when}</span>`);
+  });
+
+  it("출처: 카드에 칩으로 늘어놓지 않고, 카드마다 '출처 보기' 하나 + 위험 신호 카드 하나(흰 글씨)", () => {
+    expect(html.match(/<details/g)).toHaveLength(9);
+    expect(always).not.toContain("sr-only\">출처: ");
+    expect(always).not.toContain("bg-primary/10");
+    // 카드 출처 " · "는 이름 하나씩, 위험 신호 카드 출처 줄은 원문 한 줄 그대로
+    const cardSources = guideCardViews().map((c) => splitEvidenceTokens(c.sourceToken ? [c.sourceToken] : []).sources);
+    expect(cardSources[0]).toEqual(["임산부수첩 2023", "Merck Manual"]);
+    for (const name of cardSources.flat()) expect(html, name).toContain(`<span class="sr-only">출처: </span>${escapeHtml(name)}</li>`);
+    expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(cardSources.flat().length + 1);
+    expect(html).toContain(`<span class="sr-only">출처: </span>${escapeHtml(GUIDE_TEXT.redFlagSource)}</li>`);
+    expect(html).toMatch(/<section aria-labelledby="guide-red-flags"[\s\S]*<summary class="[^"]*text-white[^"]*">/);
   });
 
   it("뒤로 가기는 프로필로(끝 슬래시)", () => {
     expect(html).toContain('href="/profile/"');
   });
 
-  it("위험 신호 카드는 제목으로 이름이 붙은 영역", () => {
+  it("위험 신호 카드는 제목으로 이름이 붙은 영역 — 주제 패널 밖(어느 주제든 늘 보인다)", () => {
     expect(html).toContain('aria-labelledby="guide-red-flags"');
     expect(html).toContain(`id="guide-red-flags"`);
+    const lastPanel = html.lastIndexOf('role="tabpanel"');
+    expect(html.indexOf('aria-labelledby="guide-red-flags"')).toBeGreaterThan(lastPanel);
   });
 });
 

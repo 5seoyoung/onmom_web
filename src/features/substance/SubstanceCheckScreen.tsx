@@ -7,7 +7,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { Search } from "lucide-react";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
-import { Card, ChipFlow, DisclaimerBanner, EvidenceChip, PrimaryButton, SubPageHeader, cx } from "@/components/ui";
+import { Card, DisclaimerBanner, EvidenceChipList, PrimaryButton, SubPageHeader, cx } from "@/components/ui";
 import { substanceHeader, type SubstanceResult } from "@/rules/substance";
 import { useAppStore } from "@/store/useAppStore";
 import { SUBSTANCE_TEXT, canCheckSubstance, checkSubstance, substanceResultChips, verdictBadge } from "./substanceModel";
@@ -124,11 +124,8 @@ export function SubstanceResultCard({ result }: { result: SubstanceResult }) {
         </span>
       </div>
       <p className="text-[0.8125rem] text-text-secondary">{result.detail}</p>
-      <ChipFlow>
-        {substanceResultChips(result).map((token, i) => (
-          <EvidenceChip key={`${i}-${token}`} token={token} />
-        ))}
-      </ChipFlow>
+      {/* 설명 칩(수유 가능·AI 답변 등)은 보이고, 출처는 "출처 보기" 하나로 접는다(2026-11-15 산부인과 전문의 화면 검토) */}
+      <EvidenceChipList tokens={substanceResultChips(result)} />
     </Card>
   );
 }

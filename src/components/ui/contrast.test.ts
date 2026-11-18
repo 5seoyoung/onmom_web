@@ -182,6 +182,13 @@ describe("공용 컴포넌트는 글자에 글자 전용 토큰을 쓴다(원색
     expect(here("./EvidenceChip.tsx")).toContain("bg-primary/10 text-primary-text");
   });
 
+  it("SourceDisclosure('출처 보기'): 흰 표면 위 textSecondary, 짙은 코랄 카드 위 흰 글씨 — 둘 다 4.5:1 이상, 초점 링 3:1 이상", () => {
+    expect(here("./EvidenceChip.tsx")).toContain('tone === "inverse" ? "text-white" : "text-text-secondary"');
+    expect(contrast(C["text-secondary"], C.surface)).toBeGreaterThanOrEqual(AA_TEXT);
+    expect(contrast(WHITE, C["state-alert-strong"])).toBeGreaterThanOrEqual(AA_TEXT);
+    expect(contrast(C["focus-ring"], C["state-alert-strong"])).toBeGreaterThanOrEqual(AA_NON_TEXT);
+  });
+
   it("MeasurementField placeholder는 text-subtle-aa, NrsSlider 값은 primary-text, SideNav 활성 항목은 primary-text", () => {
     expect(here("./MeasurementField.tsx")).toContain("placeholder:text-text-subtle-aa");
     expect(here("./NrsSlider.tsx")).toContain("font-bold text-primary-text");

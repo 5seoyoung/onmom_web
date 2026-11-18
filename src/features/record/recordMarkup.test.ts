@@ -7,6 +7,7 @@ import { MoodQuestionCard } from "./MoodQuestionCard";
 import { RecentRecordsCard } from "./RecentRecordsCard";
 import { NoMatchResultCard, RecordResult } from "./RecordResult";
 import { RecordScreen } from "./RecordScreen";
+import { RED_FLAG_GUIDES } from "@/rules/redflag";
 import { WarningSignsCard } from "./WarningSignsCard";
 import {
   INITIAL_SYMPTOM_FORM,
@@ -143,13 +144,17 @@ describe("결과", () => {
     );
   };
 
-  it("병원 신호: 레드플래그 카드(바로 읽힘) + 출처 칩 + 가까운 산부인과(키 없음 → 준비 중)", () => {
+  it("병원 신호: 레드플래그 카드(바로 읽힘) + 접힌 출처 보기 + 가까운 산부인과(키 없음 → 준비 중)", () => {
     const html = resultHtml({ feverEvent: true });
     expect(count(html, 'role="alert"')).toBe(1);
     expect(html).toContain("즉시 내원");
     expect(html).toContain("38℃ 이상의 열이나 몸이 덜덜 떨리는 오한은 즉시 병원 확인이 필요한 신호예요. 바로 방문하세요.");
-    expect(html).toContain('<span class="sr-only">출처: </span>');
-    expect(html).toContain("임산부수첩 2023");
+    // 레드플래그 카드 안: 설명 칩은 보이고, 출처는 흰 글씨 "출처 보기" 하나 안에
+    const card = html.slice(html.indexOf('role="alert"'), html.indexOf("</details>") + "</details>".length);
+    expect(count(card, "<details")).toBe(1);
+    expect(card).toMatch(/<summary class="[^"]*text-white[^"]*">/);
+    expect(card.slice(card.indexOf("<details"))).toContain('<span class="sr-only">출처: </span>임산부수첩 2023');
+    expect(card.slice(0, card.indexOf("<details"))).not.toContain("임산부수첩 2023");
     expect(html).toContain("가까운 산부인과 찾기는 준비 중이에요.");
     expect(html).not.toContain(`>${RECORD_WEB_TEXT.call119}</span>`); // 119 등급 카드에만
   });
@@ -229,20 +234,32 @@ describe("결과", () => {
     }
   });
 
-  it("전체 신호 목록: 제목·안내, 등급 묶음(h3), 신호마다 출처 칩, 할 일의 전화번호는 tel: 링크", () => {
+  it("전체 신호 목록: 제목·안내, 등급 묶음(h3), 신호 이름 목록, 할 일의 전화번호는 tel: 링크", () => {
     const list = renderToStaticMarkup(h(WarningSignsCard));
     expect(list).toContain(`>${RECORD_WEB_TEXT.warningTitle}</h2>`);
     expect(list).toContain(RECORD_WEB_TEXT.warningIntro);
     expect([...list.matchAll(/<h3 [^>]*>([^<]+)<\/h3>/g)].map((m) => m[1])).toEqual(["119 연락", "위기 상담 연락", "즉시 내원"]);
-    expect(count(list, "<li class=\"flex flex-col gap-1\">")).toBe(17);
+    expect(count(list, '<li class="flex items-start gap-1.5 text-[0.9375rem] text-text-primary">')).toBe(17);
     for (const name of ["경련(발작)", "나·아기를 해칠 것 같은 생각", "심한 두통·시야 이상", "38.0℃ 이상 열·오한", "흉통·호흡곤란·빠른 심장박동", "오로의 심한 냄새"]) {
-      expect(list, name).toContain(name);
-    }
-    for (const source of ["AWHONN 2018", "CDC Hear Her 2024", "NICE NG194", "NICE NG133", "임산부수첩 2023"]) {
-      expect(list, source).toContain(`<span class="sr-only">출처: </span>${source}`);
+      expect(list, name).toContain(`<span>${name}</span>`);
     }
     for (const tel of ["tel:119", "tel:109", "tel:15770199", "tel:112"]) expect(list, tel).toContain(`href="${tel}"`);
     expect(list).not.toContain('role="alert"');
+  });
+
+  it("전체 신호 목록의 출처: 신호마다 칩을 달지 않고, 목록 끝 '출처 보기' 하나에 중복 없이(2026-11-15 산부인과 전문의 화면 검토)", () => {
+    const list = renderToStaticMarkup(h(WarningSignsCard));
+    expect(count(list, "<details")).toBe(1);
+    expect(list).not.toMatch(/<details[^>]* open/);
+    const [always, folded] = [list.slice(0, list.indexOf("<details")), list.slice(list.indexOf("<details"))];
+    expect(always).not.toContain("출처: ");
+    expect(always).not.toContain("bg-primary/10");
+    expect(folded).toContain(">출처 보기<");
+    // 규칙 칩의 "src:" 출처 합집합 — 하나씩, 한 번만
+    const sources = [...new Set(RED_FLAG_GUIDES.flatMap((g) => g.chips.filter((c) => c.startsWith("src:")).map((c) => c.slice(4))))];
+    expect(sources).toEqual(expect.arrayContaining(["AWHONN 2018", "CDC Hear Her 2024", "NICE NG194", "NICE NG133", "임산부수첩 2023"]));
+    expect(count(folded, '<span class="sr-only">출처: </span>')).toBe(sources.length);
+    for (const source of sources) expect(count(folded, `<span class="sr-only">출처: </span>${source}</li>`), source).toBe(1);
   });
 });
 

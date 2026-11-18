@@ -14,6 +14,7 @@ import {
   SectionTitle,
   SelectableGroup,
   SelectableRow,
+  SourceDisclosure,
   StatusBadge,
   StepIndicator,
   Toggle,
@@ -59,8 +60,60 @@ describe("EvidenceChip", () => {
   });
 
   it("칩 목록은 목록(ul/li)으로 나온다", () => {
-    const html = render(h(EvidenceChipList, { tokens: ["a", "src:b"] }));
+    const html = render(h(EvidenceChipList, { tokens: ["a", "b"] }));
     expect(html.match(/<li/g)).toHaveLength(2);
+    expect(html).not.toContain("<details");
+  });
+});
+
+/** <details>…</details> 밖 — 접어도 늘 보이는 마크업 */
+const outsideDetails = (html: string) => html.replace(/<details[\s\S]*?<\/details>/g, "");
+
+describe("EvidenceChipList — 설명 칩은 보이고, 출처는 '출처 보기' 하나로 접는다(2026-11-15 산부인과 전문의 화면 검토)", () => {
+  const tokens = ["오로 증가", "src:임산부수첩 2023", "src:NICE NG194", "src:임산부수첩 2023"];
+
+  it("설명 칩은 늘 보이고, 출처 칩은 접힌 <details> 안에만(중복 없이)", () => {
+    const html = render(h(EvidenceChipList, { tokens }));
+    const always = outsideDetails(html);
+    expect(always).toContain(">오로 증가</span>");
+    expect(always).not.toContain("임산부수첩");
+    expect(always).not.toContain("bg-primary/10"); // 코랄 출처 칩이 화면에 늘어서지 않는다
+    expect(html.match(/<details/g)).toHaveLength(1);
+    expect(html).not.toMatch(/<details[^>]* open/);
+    expect(html.match(/<span class="sr-only">출처: <\/span>임산부수첩 2023/g)).toHaveLength(1);
+    expect(html).toContain('<span class="sr-only">출처: </span>NICE NG194');
+    expect(html).not.toContain("src:");
+  });
+
+  it("출처만 있으면 칩 줄 없이 '출처 보기'만", () => {
+    const html = render(h(EvidenceChipList, { tokens: ["src:FDA"] }));
+    expect(html).not.toContain('class="flex flex-wrap');
+    expect(html).toContain(">출처 보기<");
+  });
+});
+
+describe("SourceDisclosure", () => {
+  it("출처가 없으면 아무것도 그리지 않는다", () => {
+    expect(render(h(SourceDisclosure, { sources: [] }))).toBe("");
+  });
+
+  it("작은 보조 글씨 단추(summary) — 누르는 자리 44px, 낭독 이름 '출처 보기', 아이콘은 장식", () => {
+    const html = render(h(SourceDisclosure, { sources: ["A", "B"] }));
+    const summary = /<summary class="([^"]*)">([\s\S]*?)<\/summary>/.exec(html);
+    expect(summary).not.toBeNull();
+    expect(summary![1]).toContain("min-h-11");
+    expect(summary![1]).toContain("text-xs");
+    expect(summary![1]).toContain("text-text-secondary");
+    expect(visibleText(summary![2])).toBe("출처 보기");
+    for (const svg of summary![2].match(/<svg[^>]*>/g) ?? []) expect(svg).toContain('aria-hidden="true"');
+    expect(html.match(/<li>/g)).toHaveLength(2);
+    expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(2);
+  });
+
+  it("inverse(짙은 코랄 카드 위): 단추·목록 모두 흰 글씨", () => {
+    const html = render(h(SourceDisclosure, { sources: ["A"], tone: "inverse" }));
+    expect(html).not.toContain("text-text-secondary");
+    expect(html.match(/text-white/g)).toHaveLength(2);
   });
 });
 
@@ -118,6 +171,15 @@ describe("RedFlagCard", () => {
     expect(html).toContain("bg-state-alert-strong");
     expect(html).not.toContain("src:");
     expect(html).not.toContain('role="alert"');
+  });
+
+  it("설명 칩은 흰 테두리 칩으로 보이고, 출처는 흰 글씨 '출처 보기' 하나로 접힌다", () => {
+    const html = render(h(RedFlagCard, { severity: "immediate", message: "문구", chips: ["근거", "src:출처1", "src:출처2"] }));
+    expect(outsideDetails(html)).toContain('inset-ring-white/60">근거</span>');
+    expect(outsideDetails(html)).not.toContain("출처1");
+    expect(html.match(/<details/g)).toHaveLength(1);
+    expect(html).toMatch(/<summary class="[^"]*text-white[^"]*">/);
+    expect(html).toContain('<span class="sr-only">출처: </span>출처2');
   });
 
   it("announce면 role=alert", () => {
