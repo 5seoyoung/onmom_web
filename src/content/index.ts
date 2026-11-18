@@ -41,6 +41,9 @@
 //     substances 23행의 detail과 substance_unknown.detail — 첫 문장에 일반적인 결론을 쉬운 해요체로, 사실·수치·판정·칩은 그대로
 //     (표시는 rules/substance 머리말). support_domains의 해결책 19곳 url(공식 페이지 — 비어 있던 곳 모두)과 넷에 새 키 phone
 //     {label, number}(표시는 rules/support 머리말, 허용 호스트는 api/safeUrl SUPPORT_LINK_HOSTS). 모두 웹 신규 문구(CPO 확인 필요).
+//     같은 날 공식 페이지와 다른 이름·설명 4곳을 맞춤: "정신건강 심리상담 바우처(옛 전국민 마음투자)"(복지부 사업명, 신청은 행정복지센터·복지로),
+//     "가족센터 공동육아나눔터"(성평등가족부·가족센터 운영), "생애초기 건강관리사업"(정식 이름), 미숙아·선천성이상아 의료비는
+//     2024년부터 소득과 관계없이(정부24 SME000000110 "'24년부터 가구 소득과 관계없이 지원").
 import content from "./content.json";
 
 export type Content = typeof content;

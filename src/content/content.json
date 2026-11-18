@@ -958,7 +958,7 @@
       ],
       "solutions": [
         {
-          "name": "육아종합지원센터 공동육아나눔터",
+          "name": "가족센터 공동육아나눔터",
           "note": "지역 내 돌봄 품앗이·놀이 공간",
           "url": "https://www.mogef.go.kr/sp/fam/sp_fam_f002.do"
         },
@@ -998,12 +998,12 @@
       ],
       "solutions": [
         {
-          "name": "전국민 마음투자 지원사업",
-          "note": "전문 심리상담 바우처 발급(보건소)",
+          "name": "정신건강 심리상담 바우처(옛 전국민 마음투자)",
+          "note": "전문 심리상담 바우처 - 행정복지센터·복지로에서 신청",
           "url": "https://www.mohw.go.kr/menu.es?mid=a10706040800"
         },
         {
-          "name": "산후 초기 건강관리사업",
+          "name": "생애초기 건강관리사업",
           "note": "산모 집중관리(보건복지부·보건소)",
           "url": "https://www.e-health.go.kr/gh/caSrvcGud/selectParSupGudInfo.do?appFlg=06&menuId=200007"
         },
@@ -1039,7 +1039,7 @@
       "solutions": [
         {
           "name": "미숙아·선천성이상아 의료비 지원",
-          "note": "보건소 - 소득 기준 의료비 지원",
+          "note": "보건소 - 의료비 지원(2024년부터 소득과 관계없이)",
           "url": "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/SME000000110"
         },
         {
