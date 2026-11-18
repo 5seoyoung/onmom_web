@@ -6,4 +6,6 @@ export const UI_TEXT = {
   back: "뒤로",
   // 웹 신규 문구 — CPO 확인 필요 (출처 칩 앞에 화면 낭독용으로만 붙는 말. 화면에는 돋보기 아이콘만 보인다 — GuideView.swift:158의 "출처: " 표기를 따름)
   sourceHint: "출처: ",
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-15 산부인과 전문의 화면 검토: 출처 칩을 카드마다 접어 두는 작은 펼침 단추의 이름)
+  sourceSummary: "출처 보기",
 } as const;

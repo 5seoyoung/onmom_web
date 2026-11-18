@@ -60,8 +60,11 @@ describe("LifestyleScreen 마크업", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
-  it("근거 칩 5개 + 출처 칩 6개(정신건강 카드는 임산부수첩·질병관리청 둘), 면책 배너 문구", () => {
+  it("근거 칩 5개 + 출처 6개(정신건강 카드는 임산부수첩·질병관리청 둘), 면책 배너 문구", () => {
     expect(html.match(/<span class="sr-only">출처: <\/span>/g)).toHaveLength(6);
+    // 출처는 칩으로 늘어놓지 않고 카드마다 접힌 "출처 보기" 하나(2026-11-15 산부인과 전문의 화면 검토)
+    expect(html.match(/<details/g)).toHaveLength(5);
+    expect(html.replace(/<details[\s\S]*?<\/details>/g, "")).not.toContain("출처: ");
     for (const chip of ["EPDS", "산후 몸조리", "빈혈 예방", "조기보행", "수유"]) indexOf(`>${escapeHtml(chip)}</span>`);
     textAt("온맘은 의료기기가 아니므로 질병 유무를 판단할 수 없으며, 질병 유무 판단을 위해서는 의사의 검진이 필요합니다.");
     expect(html).toContain('href="/profile/"');

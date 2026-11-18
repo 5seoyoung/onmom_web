@@ -1,7 +1,7 @@
 import { Children, isValidElement, type ReactNode } from "react";
-import { FileSearch } from "lucide-react";
+import { ChevronDown, FileSearch } from "lucide-react";
 import { cx } from "./cx";
-import { parseEvidenceToken } from "./evidence";
+import { parseEvidenceToken, splitEvidenceTokens } from "./evidence";
 import { UI_TEXT } from "./uiText";
 
 /**
@@ -14,6 +14,9 @@ import { UI_TEXT } from "./uiText";
  * inverse = RedFlagCard 안(AnalyzeResultView.swift:221-228): 둘 다 흰 글씨, 아이콘 없음. iOS의 흰 22% 채움은 짙은 코랄 카드 위에서도
  *   3.31:1이라 채움 없이 흰 60% 테두리만 둔다 — 글자 대비는 카드 면 그대로 4.63:1(DEV_NOTES §3 CPO 12)
  * 06 §5의 "divider 배경 / 출처는 회색"은 오기(검수 #26).
+ *
+ * 2026-11-15 산부인과 전문의 화면 검토: 화면에는 출처 칩을 늘어놓지 않는다. EvidenceChipList가 설명 칩만 보이고
+ * 출처는 SourceDisclosure(접힌 "출처 보기") 하나로 모은다. 출처 칩 모양은 이 컴포넌트를 바로 쓰는 곳을 위해 남겨 둔다.
  */
 export type EvidenceChipTone = "default" | "inverse";
 
@@ -73,20 +76,75 @@ export function ChipFlow({ children, label, className }: ChipFlowProps) {
   );
 }
 
+export interface SourceDisclosureProps {
+  /** 출처 이름("src:" 접두 없이) — 보통 splitEvidenceTokens(…).sources. 비면 아무것도 그리지 않는다 */
+  sources: readonly string[];
+  /** inverse = 짙은 코랄 카드(RedFlagCard·회복 가이드 위험 신호 카드) 위의 흰 글씨 */
+  tone?: EvidenceChipTone;
+  className?: string;
+}
+
+/**
+ * 출처 접어 두기 — 카드·묶음마다 하나. 브라우저 기본 <details>라 스크립트 없이 열리고 닫힌다(서버 컴포넌트에서도 쓴다).
+ * - 단추(summary): 작은 보조 글씨(12) + 돋보기·펼침 아이콘(장식). 누르는 자리는 44px(min-h-11) — 위아래 -my-2로 카드 간격은 그대로 보이게.
+ *   default는 textSecondary(흰 표면 7.0:1), inverse는 흰 글씨(짙은 코랄 4.63:1 — DEV_NOTES §3 CPO 12). 초점 링은 전역 :focus-visible(neutral —
+ *   짙은 코랄 위에서도 3:1, contrast.test).
+ * - 펼치면 출처 이름 목록. 이름마다 스크린리더용 "출처: "를 앞에 둔다(칩일 때와 같은 낭독).
+ */
+export function SourceDisclosure({ sources, tone = "default", className }: SourceDisclosureProps) {
+  if (sources.length === 0) return null;
+  const textTone = tone === "inverse" ? "text-white" : "text-text-secondary";
+  return (
+    <details className={cx("group/sources", className)}>
+      <summary
+        className={cx(
+          "-my-2 flex min-h-11 w-fit cursor-pointer list-none items-center gap-1 rounded-button text-xs font-medium [&::-webkit-details-marker]:hidden",
+          textTone,
+        )}
+      >
+        <FileSearch aria-hidden className="size-3.5 shrink-0" strokeWidth={2.25} />
+        {UI_TEXT.sourceSummary}
+        <ChevronDown
+          aria-hidden
+          className="size-3.5 shrink-0 transition-transform group-open/sources:rotate-180 motion-reduce:transition-none"
+          strokeWidth={2.25}
+        />
+      </summary>
+      <ul className={cx("flex flex-col gap-0.5 pt-2.5 text-xs", textTone)}>
+        {sources.map((source) => (
+          <li key={source}>
+            <span className="sr-only">{UI_TEXT.sourceHint}</span>
+            {source}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
 export interface EvidenceChipListProps {
   tokens: readonly string[];
   tone?: EvidenceChipTone;
+  /** 설명 칩 목록의 접근성 이름(선택) */
   label?: string;
   className?: string;
 }
 
-/** 칩 토큰 배열을 그대로 칩 줄로. 빈 배열이면 아무것도 그리지 않는다. */
+/**
+ * 칩 토큰 배열 → 설명 칩 줄(늘 보임) + 출처 접어 두기 하나(출처가 있을 때만, 중복 없이). 둘 다 없으면 아무것도 그리지 않는다.
+ * 항목마다 출처가 붙는 긴 목록(기록 탭의 전체 신호 목록 등)은 항목에는 설명 칩만 주고, 목록 끝에 SourceDisclosure를 하나 둔다.
+ */
 export function EvidenceChipList({ tokens, tone = "default", label, className }: EvidenceChipListProps) {
+  const { notes, sources } = splitEvidenceTokens(tokens);
+  if (notes.length === 0 && sources.length === 0) return null;
   return (
-    <ChipFlow label={label} className={className}>
-      {tokens.map((token, i) => (
-        <EvidenceChip key={`${i}-${token}`} token={token} tone={tone} />
-      ))}
-    </ChipFlow>
+    <div className={cx("flex flex-col gap-1", className)}>
+      <ChipFlow label={label}>
+        {notes.map((token, i) => (
+          <EvidenceChip key={`${i}-${token}`} token={token} tone={tone} />
+        ))}
+      </ChipFlow>
+      <SourceDisclosure sources={sources} tone={tone} />
+    </div>
   );
 }

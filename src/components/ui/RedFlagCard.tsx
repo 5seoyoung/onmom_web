@@ -22,6 +22,7 @@ export interface RedFlagCardProps {
 // 병원 신호 카드 — AnalyzeResultView.swift:202-239.
 // 배경 전면 + 흰 글씨 — iOS의 stateAlert(흰 글씨 2.76:1) 대신 짙은 코랄 state-alert-strong(4.63:1, DEV_NOTES §3 CPO 12).
 // ⚠ 22 + 라벨 15 bold, 문구 18 bold, 칩은 채움 없는 흰 테두리 캡슐(iOS의 흰 22% 채움이면 3.31:1), 패딩 24.
+// 출처 칩은 늘어놓지 않고 흰 글씨 "출처 보기" 하나로 접어 둔다(EvidenceChipList — 2026-11-15 산부인과 전문의 화면 검토).
 export function RedFlagCard({ severity, message, chips = [], announce = false, children }: RedFlagCardProps) {
   // 모르는 severity 코드는 라벨 없이 아이콘만 — 원시 코드를 화면에 내지 않는다
   const label = severityLabel(severity);

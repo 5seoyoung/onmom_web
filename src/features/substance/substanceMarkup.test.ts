@@ -1,4 +1,4 @@
-// 약물·음식 체크 결과 카드의 서버 렌더 마크업 — 표의 출처 칩·판정 배지. AI 표시는 없다(AI는 상담에만 쓴다).
+// 약물·음식 체크 결과 카드의 서버 렌더 마크업 — 표의 근거 칩·접힌 출처·판정 배지. AI 표시는 없다(AI는 상담에만 쓴다).
 import { createElement as h } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -25,12 +25,17 @@ describe("머리 안내 — 일반 정보이고 복용 전 상담이 필요하�
 });
 
 describe("SubstanceResultCard", () => {
-  it("표 결과(코데인): 확인된 출처 칩 — 숨은 '출처: ' + 돋보기 아이콘, AI 표시 없음", () => {
+  it("표 결과(코데인): 설명 칩 '회피'는 보이고, 확인된 출처(FDA·LactMed)는 '출처 보기' 하나 안에 — 숨은 '출처: ', AI 표시 없음", () => {
     const html = renderToStaticMarkup(h(SubstanceResultCard, { result: lookupSubstance("코데인") }));
     expect(html).toContain(">코데인</h2>");
     expect(html).toContain(`>${content.verdict_labels.avoid}</span>`);
-    expect(html).toContain('<span class="sr-only">출처: </span>FDA');
-    expect(html).toContain("<svg"); // 돋보기 아이콘(확인된 출처)
+    const always = html.slice(0, html.indexOf("<details"));
+    expect(always).toContain(">회피</span>");
+    expect(always).not.toContain("FDA");
+    expect(html.match(/<details/g)).toHaveLength(1);
+    expect(html).toContain(">출처 보기<");
+    expect(html).toContain('<span class="sr-only">출처: </span>FDA</li>');
+    expect(html).toContain('<span class="sr-only">출처: </span>LactMed</li>');
     expect(html).not.toContain("AI");
   });
 
@@ -38,6 +43,7 @@ describe("SubstanceResultCard", () => {
     const html = renderToStaticMarkup(h(SubstanceResultCard, { result: lookupSubstance("모르는약") }));
     expect(html).toContain(content.substance_unknown.detail);
     expect(html).toContain(">확인된 정보 없음</span>");
+    expect(html).not.toContain("<details"); // 출처가 없으면 '출처 보기'도 없다
     expect(html).not.toContain("AI");
     expect(html).not.toContain("<a ");
   });
