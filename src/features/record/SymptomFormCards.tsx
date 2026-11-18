@@ -6,9 +6,11 @@ import type { SymptomForm } from "@/rules/record";
 import { RECORD_TEXT, RECORD_WEB_TEXT, RISK_TOGGLES } from "./recordView";
 
 // 입력 폼 카드 5개 — RecordFlowView.swift:161-254.
-// 오로(10일 이상일 때만 토글 2개, 아니면 안내문) · 발열 · 통증 NRS · 위험 증상(켜짐 색 stateAlert) · 내 동네.
+// 오로(10일 이상일 때만 토글 2개, 아니면 안내문) · 발열 · 통증 정도(0~10, 양 끝의 뜻) · 위험 증상(켜짐 색 stateAlert) · 내 동네.
 // 위험 증상은 iOS의 넷에 rules-1.2의 여섯(다량 출혈·자간전증·자간증 신호·위기 생각)을 더했다 — 산후 일수와 상관없이 늘 묻는다.
-// 기준이 필요한 토글(다량 출혈 등)은 라벨 아래 설명 줄을 둔다(Toggle description = 스위치의 aria-describedby).
+// 기준이 필요한 토글(다량 출혈 등)의 설명 줄은 켰을 때만 그 토글 아래에 보인다(Toggle descriptionWhen="checked" — 보일 때만 스위치의
+// aria-describedby). 2026-11-15 산부인과 전문의 의견: 줄마다 회색 설명이 있으면 목록이 읽기 어렵다. 해칠 생각의 안내만 늘 보인다(RISK_TOGGLES).
+// 통증 제목은 "NRS" 없이 "통증 정도"이고 슬라이더 양 끝에 0·10의 뜻을 보인다(같은 의견 — 리포트 열 이름은 원문 그대로).
 
 export interface SymptomFormCardsProps {
   form: SymptomForm;
@@ -80,7 +82,8 @@ export function SymptomFormCards({
 
       <Card>
         <NrsSlider
-          label={RECORD_TEXT.painTitle}
+          label={RECORD_WEB_TEXT.painTitle}
+          scaleLabels={{ min: RECORD_WEB_TEXT.painMin, max: RECORD_WEB_TEXT.painMax }}
           value={form.painNrs}
           disabled={disabled}
           onValueChange={(v) => onChange({ painNrs: v })}
@@ -89,13 +92,14 @@ export function SymptomFormCards({
 
       <Card as="section" aria-labelledby={riskId} className="flex flex-col gap-2">
         <SectionTitle id={riskId}>{RECORD_WEB_TEXT.riskTitle}</SectionTitle>
-        {RISK_TOGGLES.map(({ key, label, description }, i) => (
+        {RISK_TOGGLES.map(({ key, label, description, descriptionAlways }, i) => (
           <div key={key} className="flex flex-col gap-2">
             {i > 0 ? <RowDivider /> : null}
             <Toggle
               variant="alert"
               label={label}
               description={description}
+              descriptionWhen={descriptionAlways ? "always" : "checked"}
               checked={form[key]}
               disabled={disabled}
               onCheckedChange={(v) => onChange({ [key]: v })}

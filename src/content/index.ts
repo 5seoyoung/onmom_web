@@ -31,6 +31,12 @@
 //     모두 웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag·features/record·guideContent·rules/chat·rules/substance·rules/exercise)에 있다.
 //     같은 날 법률 자체 검토: disclaimers.home_footer를 식약처 「의료기기와 개인용 건강관리(웰니스) 제품 판단기준」 권고 주의 문구로
 //     (쓰는 곳 components/ui/DisclaimerBanner·features/home/homeViewModel·components/shell/appNav·features/report/reportModel).
+//  5. 2026-11-15 산부인과 전문의 의견(시범 공개 앱을 보고): red_flags 즉시 내원 문구 끝의 명령 "바로 방문하세요."·"바로 산부인과에
+//     방문하세요."를 "의사 진료를 권해요."·"산부인과 진료를 권해요."로(pph_suspect·severe_pain·fever_infection·neuro_flag·dvt_suspect·
+//     headache_vision·face_hand_swelling·upper_belly_pain·lochia_odor·severe_vomiting·breast_red_swelling·extreme_tiredness).
+//     neuro_flag는 "혼자 이동하지 말고 보호자와 함께 방문하세요."를 "의사 진료를 권해요. 혼자 이동하지 말고 보호자와 함께 가세요."로.
+//     앞 문장("…즉시 병원 확인이 필요한 신호예요.")·119 문장·119 등급(emergency)·위기 상담(crisis) 문구와 등급·판정은 그대로(RULES_VERSION 그대로).
+//     웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag 머리말)에 있다.
 import content from "./content.json";
 
 export type Content = typeof content;

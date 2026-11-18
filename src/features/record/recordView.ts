@@ -28,7 +28,7 @@ export const RECORD_TEXT = {
   lochiaTitle: "오로(분비물)", // 원문: RecordFlowView.swift:166
   lochiaIncreased: "어제보다 양이 늘었나요?", // 원문: RecordFlowView.swift:169
   lochiaRed: "색이 붉은색(선홍색)인가요?", // 원문: RecordFlowView.swift:175
-  painTitle: "통증 정도 (NRS)", // 원문: RecordFlowView.swift:205
+  // 통증 슬라이더 제목 원문 "통증 정도 (NRS)"(RecordFlowView.swift:205)는 화면에서 RECORD_WEB_TEXT.painTitle로 바꿨다 — PDF 리포트 열 이름(REPORT_TEXT.colPain)에만 남는다
   dizziness: "어지러움·실신·균형장애", // 원문: RecordFlowView.swift:221
   neighborhoodTitle: "내 동네 (연계 안내용)", // 원문: RecordFlowView.swift:231
   neighborhoodPlaceholder: "예: 서울 강남구 역삼동", // 원문: RecordFlowView.swift:232
@@ -66,6 +66,12 @@ export const RECORD_WEB_TEXT = {
   // 체온계 기준과 오한으로 — CDC 100.4°F, NICE NG194 1.2.4 "fever, shivering")
   feverTitle: "열·오한 (38.0℃ 이상)",
   feverDescription: "체온계로 잰 체온이 38.0℃ 이상이었거나, 몸이 덜덜 떨리는 오한이 있었어요",
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-15 산부인과 전문의 의견: 일반 사용자는 "NRS"를 모른다 — iOS 원문 "통증 정도 (NRS)"(RecordFlowView.swift:205)에서
+  // 척도 이름을 뺐다. 의료진이 읽는 PDF 리포트의 열 이름은 원문 그대로 — REPORT_TEXT.colPain)
+  painTitle: "통증 정도",
+  // 웹 신규 문구 — CPO 확인 필요 (통증 슬라이더 양 끝 0·10의 뜻 — 같은 의견의 "0: 하나도 안 아픔, 10: 세상에서 제일 아픔"을 해요체로)
+  painMin: "하나도 안 아파요",
+  painMax: "세상에서 제일 아파요",
   // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "위험 증상 (있으면 즉시 내원)"(RecordFlowView.swift:218) — 119·위기 상담 항목이 생겨 "즉시 내원"만이 아니다)
   riskTitle: "위험 증상 (하나라도 있으면 체크하세요)",
   // 웹 신규 문구 — CPO 확인 필요 (rules-1.3 T8: iOS 원문 "수술부위·회음부 통증 급격 악화"(RecordFlowView.swift:219)를 감염 신호까지)
@@ -125,8 +131,8 @@ const WARNING_ACTION: Readonly<Record<string, string>> = {
   emergency: "지금 바로 119에 연락하세요.",
   // 웹 신규 문구 — CPO 확인 필요
   crisis: "혼자 견디지 말고 자살예방상담전화 109(24시간)나 정신건강위기상담전화 1577-0199에 연락하세요. 지금 위험하다면 119나 112에 연락하세요.",
-  // 웹 신규 문구 — CPO 확인 필요
-  immediate: "바로 병원에 가세요.",
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-15 산부인과 전문의 의견: "바로 병원에 가세요."를 즉시 내원 규칙 문구와 같은 말투로)
+  immediate: "의사 진료를 권해요.",
   // 웹 신규 문구 — CPO 확인 필요
   urgent: "오늘 안에 진료를 받으세요.",
 };
@@ -187,8 +193,13 @@ export const CRISIS_CALLS: readonly { name: string; number: string }[] = [
 export interface RiskToggle {
   key: RiskSymptomKey;
   label: string;
-  /** 라벨 아래 설명(기준을 구체적으로) — 스위치의 aria-describedby */
+  /**
+   * 라벨 아래 설명(기준을 구체적으로) — 켰을 때만 그 토글 바로 아래에 보인다(스위치의 aria-describedby도 그때만).
+   * 2026-11-15 산부인과 전문의 의견: 줄마다 회색 설명이 있으면 목록이 읽기 어렵다 — 켠 항목에서 기준을 확인하게 한다.
+   */
   description?: string;
+  /** 설명을 켜기 전에도 늘 보일지 — 기준이 아니라 켜기 전에 알아야 하는 안내(해칠 생각: 체크하면 무엇을 알려 주는지)만 */
+  descriptionAlways?: boolean;
 }
 
 /**
@@ -210,7 +221,8 @@ export const RISK_TOGGLES: readonly RiskToggle[] = [
   { key: "breastRedSwollen", label: RECORD_WEB_TEXT.breastRedSwollen, description: RECORD_WEB_TEXT.breastRedSwollenHint },
   { key: "extremeTiredness", label: RECORD_WEB_TEXT.extremeTiredness, description: RECORD_WEB_TEXT.extremeTirednessHint },
   { key: "seizure", label: RECORD_WEB_TEXT.seizure },
-  { key: "harmThoughts", label: RECORD_WEB_TEXT.harmThoughts, description: RECORD_WEB_TEXT.harmThoughtsHint },
+  // 해칠 생각의 안내("체크하면 … 상담 전화를 알려 드려요")는 체크를 망설이지 않게 하는 말이라 켜기 전에 보여야 한다 — 늘 보인다
+  { key: "harmThoughts", label: RECORD_WEB_TEXT.harmThoughts, description: RECORD_WEB_TEXT.harmThoughtsHint, descriptionAlways: true },
 ];
 
 /**

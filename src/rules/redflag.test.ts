@@ -92,7 +92,7 @@ describe("규칙 테이블", () => {
     expect(s).toEqual({
       code: "pph_suspect",
       severity: "immediate",
-      messagePatient: "산후 10일이 지난 뒤 오로가 다시 늘거나 붉은색이 이어지는 것은 즉시 병원 확인이 필요한 신호예요. 바로 산부인과에 방문하세요.",
+      messagePatient: "산후 10일이 지난 뒤 오로가 다시 늘거나 붉은색이 이어지는 것은 즉시 병원 확인이 필요한 신호예요. 산부인과 진료를 권해요.",
       evidenceChips: ["오로 증가 또는 선홍색(10일 후)", "src:임산부수첩 2023", "src:NICE NG194"],
     });
     const chest = checkRedFlags(input({ chestPainBreathing: true })).hospitalSignal!;
@@ -124,6 +124,31 @@ describe("규칙 테이블", () => {
       "src:AWHONN 2018",
       "src:NICE NG194",
     ]);
+  });
+
+  it("2026-11-15 산부인과 전문의 의견 — 즉시 내원 문구는 명령 대신 진료를 권하고, 119·위기 상담 문구는 그대로", () => {
+    const message = (code: string) => content.red_flags.find((f) => f.code === code)!.message;
+    for (const flag of content.red_flags) {
+      expect(flag.message, flag.code).not.toContain("방문하세요");
+      if (flag.severity !== "immediate") continue;
+      expect(flag.message, flag.code).toContain("즉시 병원 확인이 필요한 신호예요.");
+      // 다량 출혈은 처음부터 방문 문장 없이 119 문장만 있었다 — 그대로 둔다
+      if (flag.code !== "heavy_bleeding") expect(flag.message, flag.code).toMatch(/(의사|산부인과) 진료를 권해요\./);
+    }
+    expect(message("pph_suspect")).toContain("산부인과 진료를 권해요.");
+    expect(message("lochia_odor")).toContain("산부인과 진료를 권해요.");
+    expect(message("neuro_flag")).toBe(
+      "어지러움·실신·균형장애는 즉시 병원 확인이 필요한 신호예요. 의사 진료를 권해요. 혼자 이동하지 말고 보호자와 함께 가세요. 쓰러졌거나 정신이 흐려지면 바로 119에 연락하세요.",
+    );
+    expect(message("heavy_bleeding")).toContain("어지럽거나 쓰러질 것 같으면 119에 연락하세요.");
+    // 119 등급·위기 상담은 누그러뜨리지 않는다
+    for (const code of ["heavy_bleeding_dizzy", "seizure", "cardioresp_flag"]) {
+      expect(message(code), code).toContain("지금 바로 119에 연락해야 하는 신호예요.");
+      expect(message(code), code).not.toContain("권해요");
+    }
+    expect(message("harm_thoughts")).toBe(
+      "혼자 견디지 마세요. 지금 곁에 있는 가족에게 알리고 자살예방상담전화 109(24시간)나 정신건강위기상담전화 1577-0199에 연락하세요. 지금 위험하다면 119나 112에 연락하세요.",
+    );
   });
 
   it("질병명을 말하지 않는다 — 문구·칩에 질환 이름이 없다(의료기기 경계)", () => {
@@ -317,7 +342,7 @@ describe("rules-1.3 — 새 신호 넷과 넓힌 토글(임상 자체 검토 202
       }
     }
     expect(checkRedFlags(input({ lochiaOdor: true })).hospitalSignal!.messagePatient).toBe(
-      "오로(분비물)에서 심한 냄새가 나는 것은 즉시 병원 확인이 필요한 신호예요. 바로 산부인과에 방문하세요.",
+      "오로(분비물)에서 심한 냄새가 나는 것은 즉시 병원 확인이 필요한 신호예요. 산부인과 진료를 권해요.",
     );
   });
 

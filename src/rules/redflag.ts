@@ -14,6 +14,12 @@
 // 유방 붉음 하루 넘게(T13)·갑자기 몹시 지침(T15) 신호를 더했다(모두 즉시 내원 — CDC "immediately", NICE "without delay").
 // 웹 신규 문구 — CPO 확인 필요 (content.json red_flags의 pph_suspect·severe_pain·fever_infection·neuro_flag·cardioresp_flag·dvt_suspect 문구·칩,
 // lochia_odor·severe_vomiting·breast_red_swelling·extreme_tiredness 문구·칩, ui.home.metric_names.fever "발열·오한")
+//
+// 2026-11-15 산부인과 전문의 의견: 즉시 내원 문구 끝의 명령("바로 (산부인과에) 방문하세요.")을 "의사 진료를 권해요."·"산부인과 진료를 권해요."로
+// 누그러뜨렸다. "…즉시 병원 확인이 필요한 신호예요."·119 문장·"혼자 이동하지 말고 보호자와 함께"는 그대로, 119 등급·위기 상담 문구는 손대지 않았다.
+// 문구만 바꿨다 — 조건·등급·RULES_VERSION은 그대로다.
+// 웹 신규 문구 — CPO 확인 필요 (content.json red_flags의 pph_suspect·severe_pain·fever_infection·neuro_flag·dvt_suspect·headache_vision·
+// face_hand_swelling·upper_belly_pain·lochia_odor·severe_vomiting·breast_red_swelling·extreme_tiredness 문구)
 
 import content from "@/content";
 import { compileTemplate } from "@/content/template";
