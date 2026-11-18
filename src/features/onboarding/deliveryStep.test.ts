@@ -31,9 +31,11 @@ describe("출산일 입력 — 검증 상태(OnboardingFlowView.swift:145-160)",
     expect(dateInput(html)).not.toContain("aria-invalid");
   });
 
-  it("직접 입력한 미래 날짜: 안내는 원문 그대로(강조) + aria-invalid — 새 문구 없이 보조기기에만 알린다", () => {
+  it("미래 날짜(아이폰 날짜 창은 max를 무시한다): 안내가 이유를 말하고(강조) aria-invalid — '선택해주세요'만 보여 막히지 않게", () => {
     const html = render({ deliveryDate: "2026-09-28" });
-    expect(html).toContain(ONBOARDING_TEXT.deliveryDateNotPicked);
+    expect(html).toContain(`text-primary-text">${ONBOARDING_TEXT.deliveryDateFuture}</p>`);
+    expect(html).not.toContain(ONBOARDING_TEXT.deliveryDateNotPicked);
+    expect(html).toContain('aria-live="polite"');
     expect(dateInput(html)).toContain('aria-invalid="true"');
   });
 

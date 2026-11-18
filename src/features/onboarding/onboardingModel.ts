@@ -100,6 +100,8 @@ export const ONBOARDING_TEXT = {
   deliveryDateLabel: "출산일",
   deliveryDatePicked: "회복 주차 계산에 사용돼요",
   deliveryDateNotPicked: "날짜를 눌러 선택해주세요",
+  // 웹 신규 문구 — CPO 확인 필요 (아이폰 날짜 창은 max를 무시해 내일 이후도 고를 수 있다 — 고른 뒤 "선택해주세요"만 보여 막혔던 문제, 2026-11-15 팀 제보)
+  deliveryDateFuture: "오늘 이후 날짜예요. 출산한 날을 골라 주세요.",
   breastfeedingLabel: "모유수유 중이에요",
   // 웹 신규 문구 — CPO 확인 필요 (iOS 원문 "약·음식 안전 분류가 수유 기준으로 바뀌어요"를 바꿈 — 개인에게 안전을 판정해 주는 말로 읽히지 않게. 법률 사전 검토 H5)
   breastfeedingDescription: "약·음식 일반 정보가 수유 기준으로 바뀌어요",
@@ -184,9 +186,20 @@ export function isDeliveryDateInvalid(value: string, today: LocalDateString): bo
   return value !== "" && today !== "" && !isDeliveryDatePicked(value, today);
 }
 
-/** 출산일 아래 안내 — 고르기 전에는 강조색(OnboardingFlowView.swift:149-152). */
-export function deliveryDateHint(picked: boolean): { text: string; emphasized: boolean } {
-  return picked
+/**
+ * 출산일이 오늘(로컬 달력)보다 뒤인가 — 올바른 날짜일 때만. 아이폰(Safari·Chrome)의 날짜 창은 max를 무시해 미래 날짜를 고를 수 있다.
+ * 오늘을 아직 모르면(서버 렌더) 판단하지 않는다.
+ */
+export function isDeliveryDateFuture(value: string, today: LocalDateString): boolean {
+  const d = parseLocalDate(value);
+  const t = parseLocalDate(today);
+  return d !== null && t !== null && d.getTime() > t.getTime();
+}
+
+/** 출산일 아래 안내 — 고르기 전에는 강조색(OnboardingFlowView.swift:149-152). 미래 날짜를 골랐으면 그 이유를 강조색으로 알린다. */
+export function deliveryDateHint(value: string, today: LocalDateString): { text: string; emphasized: boolean } {
+  if (isDeliveryDateFuture(value, today)) return { text: ONBOARDING_TEXT.deliveryDateFuture, emphasized: true };
+  return isDeliveryDatePicked(value, today)
     ? { text: ONBOARDING_TEXT.deliveryDatePicked, emphasized: false }
     : { text: ONBOARDING_TEXT.deliveryDateNotPicked, emphasized: true };
 }

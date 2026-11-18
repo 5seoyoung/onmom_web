@@ -99,8 +99,12 @@ describe("출산일", () => {
   });
 
   it("안내 문구 — 고르기 전에는 강조", () => {
-    expect(deliveryDateHint(false)).toEqual({ text: "날짜를 눌러 선택해주세요", emphasized: true });
-    expect(deliveryDateHint(true)).toEqual({ text: "회복 주차 계산에 사용돼요", emphasized: false });
+    expect(deliveryDateHint("", TODAY)).toEqual({ text: "날짜를 눌러 선택해주세요", emphasized: true });
+    expect(deliveryDateHint("2026-09-27", TODAY)).toEqual({ text: "회복 주차 계산에 사용돼요", emphasized: false });
+    // 아이폰 날짜 창은 max를 무시한다 — 내일을 고르면 "선택해주세요" 대신 이유를 알린다(2026-11-15 팀 제보)
+    expect(deliveryDateHint("2026-09-28", TODAY)).toEqual({ text: "오늘 이후 날짜예요. 출산한 날을 골라 주세요.", emphasized: true });
+    // 오늘을 아직 모르면(서버 렌더) 미래라고 하지 않는다
+    expect(deliveryDateHint("2026-09-28", "")).toEqual({ text: "날짜를 눌러 선택해주세요", emphasized: true });
   });
 });
 

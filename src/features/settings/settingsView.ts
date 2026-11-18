@@ -352,6 +352,8 @@ export const PROFILE_EDIT_TEXT = {
   save: "저장", // 원문: MoreView.swift:176
   basics: "기본 정보", // 원문: MoreView.swift:197
   deliveryDate: "출산일", // 원문: MoreView.swift:199
+  // 웹 신규 문구 — CPO 확인 필요 (아이폰 날짜 창은 max를 무시해 미래 날짜를 고를 수 있다 — 온보딩 안내와 같은 말, 2026-11-15 팀 제보)
+  deliveryDateFuture: "오늘 이후 날짜예요. 출산한 날을 골라 주세요.",
   deliveryMethod: "분만 방식", // 원문: MoreView.swift:203
   goal: "목표", // 원문: MoreView.swift:213
   // 복직 예정일 — ProfileEditView에는 없고 온보딩 2단계에만 있던 입력(작업 지시: 목표 + 복직일). 문구는 온보딩 원문.

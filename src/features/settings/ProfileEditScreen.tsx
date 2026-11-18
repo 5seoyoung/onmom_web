@@ -63,12 +63,16 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
   const [draft, setDraft] = useState(initial);
   const ids = {
     deliveryDate: useId(),
+    deliveryDateHint: useId(),
     returnToWork: useId(),
     returnToWorkHint: useId(),
     neighborhood: useId(),
     deliveryName: useId(),
     goalName: useId(),
   };
+
+  // 출산일이 오늘보다 뒤인가 — 저장을 막는 같은 확인(draftProblem)으로 안내를 정한다
+  const dateIsFuture = draftProblem(draft, today) === "deliveryDateFuture";
 
   function set<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -114,8 +118,14 @@ function ProfileEditForm({ initial, today, exit }: { initial: ProfileDraft; toda
             max={today}
             value={draft.deliveryDate}
             onChange={(e) => set("deliveryDate", e.target.value)}
+            aria-describedby={dateIsFuture ? ids.deliveryDateHint : undefined}
+            aria-invalid={dateIsFuture || undefined}
             className="min-h-11 rounded-button bg-background px-3 text-base text-text-primary"
           />
+          {/* 아이폰 날짜 창은 max를 무시한다 — 미래 날짜를 고르면 [저장]이 안 되는 이유를 날짜 아래에 보인다 */}
+          <p id={ids.deliveryDateHint} aria-live="polite" className="w-full text-[0.8125rem] text-primary-text empty:hidden">
+            {dateIsFuture ? PROFILE_EDIT_TEXT.deliveryDateFuture : null}
+          </p>
         </div>
 
         <SegmentedChoice

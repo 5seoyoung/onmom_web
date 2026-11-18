@@ -18,7 +18,6 @@ import {
   deliveryDateHint,
   GOAL_OPTIONS,
   isDeliveryDateInvalid,
-  isDeliveryDatePicked,
   ONBOARDING_TEXT as T,
   returnDateHint,
   showsReturnDateCard,
@@ -94,7 +93,7 @@ export function WelcomeStep({ headingRef }: { headingRef: HeadingRef }) {
 export function DeliveryStep({ draft, onChange, headingRef, today }: StepProps & { today: string }) {
   const dateId = useId();
   const hintId = useId();
-  const hint = deliveryDateHint(isDeliveryDatePicked(draft.deliveryDate, today));
+  const hint = deliveryDateHint(draft.deliveryDate, today);
   return (
     <div className="flex flex-col gap-6 px-6 pt-6">
       <StepHeader title={T.deliveryTitle} subtitle={T.deliverySubtitle} headingRef={headingRef} />
@@ -107,7 +106,12 @@ export function DeliveryStep({ draft, onChange, headingRef, today }: StepProps &
             <label htmlFor={dateId} className="text-sm font-medium text-text-secondary">
               {T.deliveryDateLabel}
             </label>
-            <p id={hintId} className={cx("text-[0.8125rem]", hint.emphasized ? "text-primary-text" : "text-text-secondary")}>
+            {/* 미래 날짜를 고르면 안내가 바뀐다 — 화면 낭독기도 바뀐 안내를 읽도록 polite로 알린다 */}
+            <p
+              id={hintId}
+              aria-live="polite"
+              className={cx("text-[0.8125rem]", hint.emphasized ? "text-primary-text" : "text-text-secondary")}
+            >
               {hint.text}
             </p>
           </div>
@@ -119,7 +123,7 @@ export function DeliveryStep({ draft, onChange, headingRef, today }: StepProps &
             value={draft.deliveryDate}
             onChange={(e) => onChange({ deliveryDate: e.target.value })}
             aria-describedby={hintId}
-            // 직접 입력한 미래 날짜·형식 오류 — 안내 문구(원문)는 그대로 두고 잘못된 값임을 보조기기에 알린다. 비어 있으면 오류가 아니다.
+            // 미래 날짜·형식 오류 — 잘못된 값임을 보조기기에 알린다(미래 날짜면 안내도 그 이유로 바뀐다). 비어 있으면 오류가 아니다.
             aria-invalid={isDeliveryDateInvalid(draft.deliveryDate, today) || undefined}
             className={DATE_INPUT_CLASS}
           />

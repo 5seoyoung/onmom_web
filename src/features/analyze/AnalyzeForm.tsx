@@ -12,6 +12,7 @@ import {
   ANALYZE_TEXT,
   CLINICAL_TOGGLES,
   canStartAnalysis,
+  isFutureDeliveryDate,
   todayInputValue,
   type AnalyzeFormValues,
 } from "./analyzeModel";
@@ -31,9 +32,12 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
   const [values, setValues] = useState(initial);
   const today = day === null ? undefined : todayInputValue(day);
   const canStart = day !== null && canStartAnalysis(values, day);
+  // 아이폰 날짜 창은 max를 무시한다 — 미래 날짜를 고르면 [분석 시작]이 꺼진 이유를 날짜 아래에 보인다
+  const dateIsFuture = day !== null && isFutureDeliveryDate(values.deliveryDate, day);
 
   const deliveryTitleId = useId();
   const dateId = useId();
+  const dateHintId = useId();
 
   function setMaternity(key: keyof MaternityRecord, on: boolean) {
     setValues((v) => ({ ...v, maternity: { ...v.maternity, [key]: on } }));
@@ -96,8 +100,13 @@ export function AnalyzeForm({ initial, error, onSubmit }: AnalyzeFormProps) {
           max={today}
           value={values.deliveryDate}
           onChange={(e) => setValues((v) => ({ ...v, deliveryDate: e.target.value }))}
+          aria-describedby={dateIsFuture ? dateHintId : undefined}
+          aria-invalid={dateIsFuture || undefined}
           className="min-h-11 shrink-0 rounded-full bg-divider px-3 text-base text-text-primary"
         />
+        <p id={dateHintId} aria-live="polite" className="w-full text-[0.8125rem] text-primary-text empty:hidden">
+          {dateIsFuture ? ANALYZE_TEXT.deliveryDateFuture : null}
+        </p>
       </Card>
 
       <Card className="flex flex-col gap-4">

@@ -30,6 +30,8 @@ export const ANALYZE_TEXT = {
   intro: "산모수첩·진료기록을 보면서 아래 정보를 확인해주세요. 입력한 내용만으로 지금 가능한 운동과 피해야 할 동작을 정리해드려요.",
   deliverySection: "분만 방식", // 원문: AnalyzeFlowView.swift:80
   deliveryDate: "출산일", // 원문: AnalyzeFlowView.swift:91
+  // 웹 신규 문구 — CPO 확인 필요 (아이폰 날짜 창은 max를 무시해 미래 날짜를 고를 수 있다 — 온보딩 안내와 같은 말, 2026-11-15 팀 제보)
+  deliveryDateFuture: "오늘 이후 날짜예요. 출산한 날을 골라 주세요.",
   historySection: "임신·분만 이력 (산모수첩·EMR)", // 원문: AnalyzeFlowView.swift:100
   weightSection: "체중 (선택 - 체중 관리·강도 조절)", // 원문: AnalyzeFlowView.swift:113
   height: "키(cm)", // 원문: AnalyzeFlowView.swift:114
@@ -92,6 +94,11 @@ export function isValidDeliveryDate(value: string, now: Date): boolean {
   const d = parseLocalDate(value);
   if (d === null) return false;
   return value <= toLocalDateString(now);
+}
+
+/** 출산일이 오늘(로컬 달력)보다 뒤인가 — 올바른 날짜일 때만. [분석 시작]이 꺼진 이유를 날짜 아래에 알린다. */
+export function isFutureDeliveryDate(value: string, now: Date): boolean {
+  return parseLocalDate(value) !== null && value > toLocalDateString(now);
 }
 
 /** [분석 시작] 활성 — iOS는 분만 방식만 봤다(:124). 웹은 출산일도 필수(D10: 비어 있을 수 있어서). */

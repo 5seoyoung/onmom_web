@@ -12,6 +12,7 @@ import {
   analyzeResultModel,
   canStartAnalysis,
   formValuesFromSaved,
+  isFutureDeliveryDate,
   isValidDeliveryDate,
   maternityPatchFromForm,
   profilePatchFromForm,
@@ -111,6 +112,13 @@ describe("출산일 · [분석 시작] 활성", () => {
     expect(isValidDeliveryDate("2026-09-24", NOW)).toBe(false);
     expect(isValidDeliveryDate("2026-02-31", NOW)).toBe(false);
     expect(isValidDeliveryDate("", NOW)).toBe(false);
+  });
+
+  it("미래 날짜는 이유를 따로 알린다 — 아이폰 날짜 창은 max를 무시한다(2026-11-15 팀 제보)", () => {
+    expect(isFutureDeliveryDate("2026-09-24", NOW)).toBe(true);
+    expect(isFutureDeliveryDate("2026-09-23", NOW)).toBe(false);
+    expect(isFutureDeliveryDate("", NOW)).toBe(false); // 비어 있음은 미래가 아니다
+    expect(isFutureDeliveryDate("2026-02-31", NOW)).toBe(false); // 없는 날짜도 미래가 아니다
   });
 
   it("분만 방식과 출산일이 모두 있어야 시작할 수 있다(D10)", () => {
