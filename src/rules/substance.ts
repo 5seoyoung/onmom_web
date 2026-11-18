@@ -19,6 +19,12 @@
 // 코데인(아기 관찰 신호)·아스피린(처방약 임의 중단 금지·아기 멍/출혈 관찰) 문구, 철분 행 별칭에서 근거 없는 "종합비타민" 삭제, 카페인·차·
 // 카페인음료·술·니코틴의 출처 칩(WHO 2022 지침에 없는 WHO-PNC·확인 못 한 ACOG 대신 LactMed·CDC). 판정을 안심 쪽으로 바꾼 행은 없다.
 // 웹 신규 문구 — CPO 확인 필요 (위 행들의 detail·chips)
+//
+// 2026-11-18(지역 산부인과 전문의 검토 2026-11-15 — "먹어도 되는지가 먼저, 말투가 딱딱하다"): 23행 detail과 substance_unknown.detail을
+// 다시 썼다. 첫 문장이 일반적인 결론을 쉬운 해요체로 말하고, 다음 문장이 핵심 주의를 말한다. 판정·칩·별칭은 그대로이고, 사실·수치
+// (FDA 트라마돌 비권고, 먹는 세마글루타이드, 생선 주 100g·400g, 카페인 하루 200–300mg, 아기 관찰 신호, 처방약 임의 중단 금지 등)는
+// 빼거나 더하지 않았다. 개인 판정이 아닌 일반 정보로("~로 알려져 있어요", "드셔도 돼요" 같은 개인 허락 말투 없이 — 법률 자체 검토).
+// 웹 신규 문구 — CPO 확인 필요 (content.json substances 23행 detail·substance_unknown.detail)
 
 import content from "@/content";
 import { createSubstanceMatcher } from "./substanceMatch";

@@ -48,10 +48,35 @@ describe("지원사업 체크리스트 (SupportProgramView.swift)", () => {
     ]);
   });
 
-  it("링크는 iOS에 공식 URL이 있는 곳에만 — 공통 안내와 우울증상담센터 전화", () => {
-    const linked = SUPPORT_DOMAINS.flatMap((d) => d.solutions).filter((s) => s.url !== null);
-    expect(linked).toEqual([
-      { name: "중앙난임·우울증상담센터 02-2276-2276", note: "산후우울 상담 · 눌러서 전화", url: "tel:0222762276" },
+  it("모든 해결책에 공식 링크가 있다 — 2026-11-18 전문의 검토(사이트나 전화로 바로 이어지게)", () => {
+    const solutions = SUPPORT_DOMAINS.flatMap((d) => d.solutions);
+    expect(solutions).toHaveLength(20);
+    expect(solutions.filter((s) => s.url === null).map((s) => s.name)).toEqual([]);
+    // iOS에 있던 전화 링크는 그대로
+    expect(solutions.find((s) => s.url?.startsWith("tel:"))).toEqual({
+      name: "중앙난임·우울증상담센터 02-2276-2276",
+      note: "산후우울 상담 · 눌러서 전화",
+      url: "tel:0222762276",
+    });
+  });
+
+  it("전화 문의(phone)는 정부 공식 페이지에 적힌 번호가 있는 넷에만", () => {
+    const phones = SUPPORT_DOMAINS.flatMap((d) => d.solutions)
+      .filter((s) => s.phone)
+      .map((s) => [s.name, s.phone]);
+    expect(phones).toEqual([
+      ["긴급복지지원제도", { label: "보건복지상담센터", number: "129" }],
+      ["육아휴직 급여·육아기 근로시간 단축", { label: "고용노동부 고객상담센터", number: "1350" }],
+      ["아이돌봄 서비스", { label: "아이돌봄서비스", number: "1577-2514" }],
+      ["가족센터 부부·가족 상담", { label: "가족센터", number: "1577-9337" }],
+    ]);
+  });
+
+  it("사업 이름·설명은 그대로(링크만 더했다)", () => {
+    const economy = SUPPORT_DOMAINS.find((d) => d.id === 2)!;
+    expect(economy.solutions.map((s) => [s.name, s.note])).toEqual([
+      ["육아휴직 급여·육아기 근로시간 단축", "고용노동부 - 고객상담 1350"],
+      ["국공립 어린이집 우선입소", "다자녀·맞벌이 등 가점 상담·신청 연계"],
     ]);
   });
 

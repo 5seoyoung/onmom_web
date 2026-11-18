@@ -7,7 +7,8 @@
 // - 목록은 [지역 고르기]를 누를 때 받는다(이 사이트의 정적 파일 하나 — regionalPrograms.ts). 첫 화면 무게에 들어가지 않는다.
 // - 고른 지역은 이 컴포넌트의 상태(useState)에만 있다 — 앱 상태(useAppStore)·localStorage·서버 어디에도 저장하지 않고, 요청에도 싣지 않는다.
 //   새로 모으는 개인정보 항목이 생기지 않게(처리방침·동의를 바꾸지 않게) 일부러 그렇게 둔다. 화면을 떠나면 잊는다.
-// - 링크는 supportLink(정부24 https만)를 거쳐 새 탭(noopener noreferrer)으로 연다.
+// - 링크는 목록 검사(regionalCore parseDataset — 정부24 https://www.gov.kr만)와 supportLink를 거쳐 새 탭(noopener noreferrer)으로 연다.
+//   supportLink의 허용 호스트는 2026-11-18부터 지원사업 공식 페이지 호스트 여럿이지만, 이 목록의 주소는 parseDataset이 정부24로만 묶는다.
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { flushSync } from "react-dom";
 import { SquareArrowUpRight } from "lucide-react";

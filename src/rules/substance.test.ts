@@ -35,12 +35,12 @@ describe("큐레이션 표 (02 §8)", () => {
     }
   });
 
-  it("코데인 → 피하세요(FDA·LactMed) — 아기 관찰 신호를 함께(2026-11-13, LactMed LM347)", () => {
+  it("코데인 → 피하세요(FDA·LactMed) — 결론 먼저, 아기 관찰 신호를 함께(2026-11-13 LactMed LM347, 2026-11-18 문구)", () => {
     expect(lookupSubstance("코데인")).toEqual({
       query: "코데인",
       verdict: "avoid",
       detail:
-        "일부 산모에서 아기에게 과량 전달 위험이 있어 수유 중 권장되지 않습니다. 아기가 평소보다 많이 자거나, 젖을 잘 못 빨거나, 숨쉬기 힘들어하거나, 축 늘어지면 바로 의사에게 연락하세요.",
+        "수유 중에는 권장되지 않는 약이에요. 일부 산모에서는 아기에게 약이 너무 많이 전달될 위험이 있어요. 아기가 평소보다 많이 자거나, 젖을 잘 못 빨거나, 숨쉬기 힘들어하거나, 축 늘어지면 바로 의사에게 연락하세요.",
       evidenceChips: ["회피", "src:FDA", "src:LactMed"],
       source: "table",
     });
@@ -112,6 +112,75 @@ describe("큐레이션 표 (02 §8)", () => {
 
   it("빈 별칭은 어떤 입력에도 일치하지 않는다(Swift와 같게)", () => {
     expect(localizedCaseInsensitiveContains("아무거나", "")).toBe(false);
+  });
+});
+
+describe("2026-11-18 문구(전문의 검토) — 결론 먼저, 쉬운 해요체, 일반 정보로, 사실·수치는 그대로", () => {
+  const detailOf = (q: string) => lookupSubstance(q).detail;
+  const sentences = (text: string) => text.split(/(?<=\.)\s+/);
+
+  it("모든 설명은 해요체 문장으로만 — '~습니다'·'권장.' 같은 딱딱한 끝이 없다", () => {
+    for (const text of [...content.substances.map((r) => r.detail), content.substance_unknown.detail]) {
+      for (const s of sentences(text)) expect(s, text).toMatch(/요\.$/);
+      expect(text).not.toMatch(/니다/);
+    }
+  });
+
+  it("개인에게 허락·안전을 판정하는 말투가 없다(법률 자체 검토 — 일반 정보)", () => {
+    for (const row of content.substances) {
+      for (const phrase of ["드셔도 돼요", "먹어도 돼요", "안전합니다", "안전해요", "안전한 것으로"]) {
+        expect(row.detail, row.aliases[0]).not.toContain(phrase);
+      }
+    }
+    // "수유 중 가능" 행은 첫 문장이 일반 정보로 결론을 말한다
+    for (const row of content.substances.filter((r) => r.verdict === "safe")) {
+      expect(sentences(row.detail)[0], row.aliases[0]).toContain("알려져 있어요");
+    }
+  });
+
+  it("전문의가 든 예시 그대로 — 타이레놀·홍삼", () => {
+    expect(detailOf("타이레놀")).toBe("수유 중에도 먹을 수 있는 약으로 알려져 있어요. 정해진 용량을 지켜 주세요.");
+    expect(detailOf("홍삼")).toBe("수유 중 안전성 근거가 충분하지 않아요. 전문가와 상의해 신중하게 사용하세요.");
+  });
+
+  it("'피하세요' 행은 첫 문장에서 권하지 않음을 말한다", () => {
+    for (const row of content.substances.filter((r) => r.verdict === "avoid")) {
+      expect(sentences(row.detail)[0], row.aliases[0]).toMatch(/권장되지 않|피하는 것을 권해요/);
+    }
+  });
+
+  it("사실·수치는 그대로 남았다", () => {
+    const babySigns = "아기가 평소보다 많이 자거나, 젖을 잘 못 빨거나, 숨쉬기 힘들어하거나, 축 늘어지면 바로 의사에게 연락하세요.";
+    expect(detailOf("코데인")).toContain(babySigns);
+    expect(detailOf("트라마돌")).toContain(babySigns);
+    expect(detailOf("트라마돌")).toContain("미국 FDA는 수유 중에는 트라마돌을 권하지 않아요.");
+    expect(detailOf("아스피린")).toContain("처방받아 먹고 있는 약이라면 임의로 끊지 말고 처방 의사와 상의하세요.");
+    expect(detailOf("아스피린")).toContain("멍이나 출혈");
+    expect(detailOf("리벨서스")).toContain("먹는 세마글루타이드(리벨서스 등)에는 흡수를 돕는 성분이 들어 있어 아기에게 쌓일 수 있어요.");
+    expect(detailOf("참치")).toContain("참다랑어·새치류·상어류처럼 수은이 많은 생선은 일주일에 100g 이하(주 1회 정도)");
+    expect(detailOf("참치")).toContain("고등어·갈치·멸치·참치통조림 같은 일반 생선은 일주일에 400g 이하");
+    expect(detailOf("생선회")).toContain("참치회(참다랑어 등)는 수은이 많아 일주일에 100g 이하");
+    expect(detailOf("생선회")).toContain("식중독");
+    for (const q of ["카페인", "녹차", "콜라"]) expect(detailOf(q), q).toContain("200–300mg 이하");
+    expect(detailOf("카페인")).toContain("아기 잠");
+    expect(detailOf("감기약")).toContain("슈도에페드린 성분은 모유량을 줄일 수 있어");
+    expect(detailOf("감기약")).toContain("약사와 상담하세요");
+    expect(detailOf("나프록센")).toContain("반감기");
+    expect(detailOf("나프록센")).toContain("이부프로펜");
+    expect(detailOf("세티리진")).toContain("2세대 항히스타민");
+    expect(detailOf("아목시실린")).toContain("페니실린계");
+    expect(detailOf("설트랄린")).toContain("반드시 의료진과 상의해 결정하세요");
+    expect(detailOf("한약")).toContain("한의사·의료진과 상담하세요");
+    expect(detailOf("초콜릿")).toContain("카페인·테오브로민");
+    expect(detailOf("담배")).toContain("모유량");
+    expect(detailOf("철분")).toContain("일반적인 용량");
+    expect(detailOf("이부프로펜")).toContain("짧은 기간");
+    expect(detailOf("매운음식")).toContain("아기가 보채면");
+  });
+
+  it("정보 부족 설명은 쉬운 말로 — '큐레이션' 같은 낯선 말 없이, 상담 안내는 그대로", () => {
+    expect(UNKNOWN_DETAIL).not.toContain("큐레이션");
+    expect(UNKNOWN_DETAIL).toContain("의료진·약사와 상담하세요");
   });
 });
 

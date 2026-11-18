@@ -37,6 +37,10 @@
 //     neuro_flag는 "혼자 이동하지 말고 보호자와 함께 방문하세요."를 "의사 진료를 권해요. 혼자 이동하지 말고 보호자와 함께 가세요."로.
 //     앞 문장("…즉시 병원 확인이 필요한 신호예요.")·119 문장·119 등급(emergency)·위기 상담(crisis) 문구와 등급·판정은 그대로(RULES_VERSION 그대로).
 //     웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag 머리말)에 있다.
+//  6. 2026-11-18 같은 검토(2026-11-15 산부인과 전문의, 실서비스 화면) 반영:
+//     substances 23행의 detail과 substance_unknown.detail — 첫 문장에 일반적인 결론을 쉬운 해요체로, 사실·수치·판정·칩은 그대로
+//     (표시는 rules/substance 머리말). support_domains의 해결책 19곳 url(공식 페이지 — 비어 있던 곳 모두)과 넷에 새 키 phone
+//     {label, number}(표시는 rules/support 머리말, 허용 호스트는 api/safeUrl SUPPORT_LINK_HOSTS). 모두 웹 신규 문구(CPO 확인 필요).
 import content from "./content.json";
 
 export type Content = typeof content;
