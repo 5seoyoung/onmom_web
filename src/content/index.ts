@@ -31,6 +31,10 @@
 //     모두 웹 신규 문구(CPO 확인 필요) — 표시는 쓰는 곳(rules/redflag·features/record·guideContent·rules/chat·rules/substance·rules/exercise)에 있다.
 //     같은 날 법률 자체 검토: disclaimers.home_footer를 식약처 「의료기기와 개인용 건강관리(웰니스) 제품 판단기준」 권고 주의 문구로
 //     (쓰는 곳 components/ui/DisclaimerBanner·features/home/homeViewModel·components/shell/appNav·features/report/reportModel).
+//  5. 2026-11-18 지역 산부인과 전문의 검토(2026-11-15, 실서비스 화면) 반영:
+//     substances 23행의 detail과 substance_unknown.detail — 첫 문장에 일반적인 결론을 쉬운 해요체로, 사실·수치·판정·칩은 그대로
+//     (표시는 rules/substance 머리말). support_domains의 해결책 19곳 url(공식 페이지 — 비어 있던 곳 모두)과 넷에 새 키 phone
+//     {label, number}(표시는 rules/support 머리말, 허용 호스트는 api/safeUrl SUPPORT_LINK_HOSTS). 모두 웹 신규 문구(CPO 확인 필요).
 import content from "./content.json";
 
 export type Content = typeof content;

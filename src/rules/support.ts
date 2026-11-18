@@ -3,14 +3,28 @@
 // 체크한 문항이 속한 영역의 전국 공통 정부·지자체 사업을 결정론적으로 보여준다(표 순서 그대로).
 // 모든 산모에게는 체크와 무관하게 '정부24 행복출산 원스톱'을 안내한다.
 // 링크는 공식 URL이 확인된 항목에만 있다(content.json의 url) — 검색 결과 링크로 대체하지 않는다.
+//
+// 2026-11-18(지역 산부인과 전문의 검토 2026-11-15 — "모든 사업이 사이트나 전화로 바로 이어지게"): url이 비어 있던 해결책 19곳에
+// 공식 페이지를 넣었다(정부24·복지로·보건복지부·성평등가족부·아이사랑·중앙육아종합지원센터·가족센터·e보건소 — 하나씩 열어 사업 이름을
+// 확인했다. 호스트 검토는 api/safeUrl.ts SUPPORT_LINK_HOSTS). 전화로 잇는 것이 자연스러운 넷(긴급복지 129·육아휴직 1350·아이돌봄
+// 1577-2514·가족센터 상담 1577-9337 — 정부 공식 페이지에 적힌 번호)에는 새 키 phone을 더했다. 사업 이름·설명(name·note)은 그대로다.
+// 웹 신규 문구 — CPO 확인 필요 (content.json support_domains의 url·phone)
 
 import content from "@/content";
+
+/** 전화 문의 — 이름(누구의 번호인지)과 번호(숫자·하이픈). 화면은 supportPhone(features/support)으로 검사한 뒤 tel: 링크로 그린다. */
+export interface SupportPhone {
+  label: string;
+  number: string;
+}
 
 export interface SupportSolution {
   name: string;
   note: string;
   /** 공식 페이지/전화 링크. null이면 링크 없이 안내만 표시한다. */
   url: string | null;
+  /** 행 아래에 따로 그리는 전화 링크(행 링크와 겹치지 않게). 없으면 그리지 않는다. */
+  phone?: SupportPhone | null;
 }
 
 export interface SupportQuestion {

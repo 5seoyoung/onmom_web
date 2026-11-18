@@ -14,10 +14,22 @@ const ALLOWED_HOSTS: ReadonlySet<string> = new Set([
  * 지원사업 공식 페이지 호스트 — 지원사업 화면(features/support supportLink)만 safeExternalUrl에 더해 넘긴다.
  * 영상·카카오 장소처럼 서버 응답에서 온 주소에는 허용하지 않는다.
  * content.json의 링크는 공식 URL이 확인된 항목에만 있다(SupportProgramView.swift:7-9).
- * 검토한 호스트: www.gov.kr(정부24, 행복출산 원스톱 — support_universal.url).
+ * 검토한 호스트(모두 정부·공공기관 — 2026-11-18 support_domains의 공식 페이지를 넣으며 하나씩 열어 확인):
+ * www.gov.kr(정부24 — 행복출산 원스톱·보조금24 상세), www.bokjiro.go.kr(복지로, 한국사회보장정보원), www.mohw.go.kr(보건복지부),
+ * www.mogef.go.kr(성평등가족부), www.childcare.go.kr(임신육아종합포털 아이사랑), central.childcare.go.kr(중앙육아종합지원센터),
+ * www.familynet.or.kr(가족센터), www.e-health.go.kr(공공보건포털 e보건소).
  * 새 링크가 content.json에 생기면 호스트를 검토한 뒤 여기에 더한다. 목록에 없으면 링크 없이 글자로만 보인다.
  */
-export const SUPPORT_LINK_HOSTS: ReadonlySet<string> = new Set(["www.gov.kr"]);
+export const SUPPORT_LINK_HOSTS: ReadonlySet<string> = new Set([
+  "www.gov.kr",
+  "www.bokjiro.go.kr",
+  "www.mohw.go.kr",
+  "www.mogef.go.kr",
+  "www.childcare.go.kr",
+  "central.childcare.go.kr",
+  "www.familynet.or.kr",
+  "www.e-health.go.kr",
+]);
 
 const NO_EXTRA_HOSTS: ReadonlySet<string> = new Set();
 

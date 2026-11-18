@@ -1,12 +1,43 @@
 // 지원사업 추천 화면의 보기 모델 — iOS SupportProgramView.swift.
 // 추천 규칙(체크 → 영역)은 rules/support가 정한다. 여기서는 "무엇을 어떤 조건에서 보일지"와 링크 검사만 한다.
 import { safeExternalUrl, SUPPORT_LINK_HOSTS } from "@/api/safeUrl";
-import { checkedSupportDomains, type SupportDomain } from "@/rules/support";
+import { telHref } from "@/domain/phone";
+import { phoneCallLabel } from "@/features/guide/guideContent";
+import { checkedSupportDomains, type SupportDomain, type SupportPhone } from "@/rules/support";
 
 export type SupportLink = { kind: "web"; href: string } | { kind: "tel"; href: string };
 
 /** tel:은 숫자(국제번호 + 허용)만 — 그 밖의 글자가 섞이면 링크로 만들지 않는다. */
 const TEL_PATTERN = /^tel:\+?\d{3,15}$/;
+
+/** 전화 문의 번호의 표기 — 숫자 2~4자리 뒤에 하이픈 묶음 0~2개(129 · 1350 · 1577-2514 · 02-6454-8500). */
+const PHONE_NUMBER_PATTERN = /^\d{2,4}(?:-\d{3,4}){0,2}$/;
+
+export interface SupportPhoneLink {
+  href: string;
+  /** 화면에 보이는 글자 — 누구의 번호인지 */
+  label: string;
+  /** 화면에 보이는 번호(표기 그대로) */
+  number: string;
+  /** 접근성 이름 — 보이는 글자로 시작한다(PhoneLinks의 "{번호}에 전화 걸기" 앞에 이름) */
+  ariaLabel: string;
+}
+
+/**
+ * 해결책의 전화 문의(content.json phone)를 화면에 걸어도 되는지 검사한다.
+ * 이름이 비었거나 번호 표기가 PHONE_NUMBER_PATTERN 밖이면 null(그리지 않음) — 지어낸 글자가 눌리는 링크가 되지 않게.
+ */
+export function supportPhone(phone: SupportPhone | null | undefined): SupportPhoneLink | null {
+  if (phone === null || typeof phone !== "object") return null;
+  if (typeof phone.label !== "string" || typeof phone.number !== "string") return null;
+  const label = phone.label.trim();
+  const number = phone.number.trim();
+  if (label === "" || !PHONE_NUMBER_PATTERN.test(number)) return null;
+  const href = telHref(number);
+  if (href === null || !TEL_PATTERN.test(href)) return null;
+  // 웹 신규 문구 — CPO 확인 필요 (전화 링크의 접근성 이름 "{이름} {번호}에 전화 걸기")
+  return { href, label, number, ariaLabel: `${label} ${phoneCallLabel(number)}` };
+}
 
 /**
  * 해결책 링크를 화면에 걸어도 되는지 검사한다.

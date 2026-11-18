@@ -4,12 +4,14 @@
 // 순서: 안내문 → 모든 산모 공통 카드 → 6영역 체크리스트(16문항) → [추천 받기](1개 이상 체크 시) → 체크한 영역의 해결책 카드 → 하단 안내.
 // 체크 상태는 이 화면에만 있고 저장하지 않는다(iOS @State와 같음). 사용자 저장 데이터를 읽지 않아 하이드레이션 대기가 없다.
 // 링크: 공식 URL이 확인된 항목만 행 전체가 링크(supportViewModel supportLink — 새 탭 https 또는 tel:). 링크가 없는 행의 이름·설명에 든
-// 전화번호(고용노동부 고객상담 1350)는 번호만 tel: 링크(PhoneLinks — web/07 §5). 행 링크 안에는 링크를 겹치지 않는다.
+// 전화번호는 번호만 tel: 링크(PhoneLinks — web/07 §5). 행 링크 안에는 링크를 겹치지 않는다.
+// 2026-11-18(전문의 검토 — 모든 사업이 사이트나 전화로 바로 이어지게): 해결책 모두에 공식 페이지 링크가 있고, 전화 문의(content.json phone)가
+// 있는 행은 행 아래에 전화 링크를 따로 그린다(supportPhone — 행 링크의 형제, 겹치지 않음).
 // PC(넓은 화면, 컨테이너 쿼리 48rem 이상): 왼쪽 체크리스트 + [추천 받기], 오른쪽 공통 카드 + 추천 결과.
 // 문서 순서는 폰과 같다(공통 카드 → 체크리스트 → 버튼 → 결과) — 격자 위치만 바꾸므로 읽는 순서·탭 순서가 그대로다.
 import { useState } from "react";
 import { flushSync } from "react-dom";
-import { Circle, CircleCheck, Hand, SquareArrowUpRight } from "lucide-react";
+import { Circle, CircleCheck, Hand, Phone, SquareArrowUpRight } from "lucide-react";
 import { EXTERNAL_LINK_PROPS } from "@/api/safeUrl";
 import { PAGE_FRAME } from "@/components/shell/pageFrame";
 import { Card, PrimaryButton, SectionTitle, SubPageHeader, cx } from "@/components/ui";
@@ -23,7 +25,7 @@ import {
   type SupportQuestion,
   type SupportSolution,
 } from "@/rules/support";
-import { supportLink, supportResultHeadingId, supportResultsView } from "./supportViewModel";
+import { supportLink, supportPhone, supportResultHeadingId, supportResultsView, type SupportPhoneLink } from "./supportViewModel";
 import { RegionalProgramsSection } from "./RegionalProgramsSection";
 import { ROUTES } from "@/routes";
 
@@ -159,7 +161,7 @@ export function SolutionCard({
       </SectionTitle>
       <ul className="flex flex-col gap-2">
         {solutions.map((solution) => (
-          <li key={solution.name}>
+          <li key={solution.name} className="flex flex-col">
             <SolutionRow solution={solution} />
           </li>
         ))}
@@ -170,7 +172,35 @@ export function SolutionCard({
 
 // 해결책 행 — SupportProgramView.swift:191-209. 공식 링크가 있는 항목만 행 전체가 링크이고 화살표 아이콘이 붙는다.
 // 링크가 없는 행은 글자 속 전화번호만 tel: 링크. 행이 통째로 링크면(전화·페이지) 안에 링크를 겹치지 않고 번호를 한 줄로 묶기만 한다.
+// 전화 문의가 있으면 행 아래에 전화 링크를 따로 둔다(웹 신규).
 function SolutionRow({ solution }: { solution: SupportSolution }) {
+  const phone = supportPhone(solution.phone);
+  return (
+    <>
+      <SolutionMain solution={solution} />
+      {phone ? <PhoneAction phone={phone} /> : null}
+    </>
+  );
+}
+
+// 전화 문의 — 행 아래 한 줄(웹 신규). 글자 시작을 행의 글자에 맞춘다(아이콘 40 + 간격 16 = 56).
+// 번호 링크의 모양·이름은 PhoneLinks와 같은 틀(코랄 밑줄, "{번호}에 전화 걸기" — 앞에 누구의 번호인지), 누르기 쉽게 높이 44.
+function PhoneAction({ phone }: { phone: SupportPhoneLink }) {
+  return (
+    <a
+      href={phone.href}
+      aria-label={phone.ariaLabel}
+      className="ml-14 inline-flex min-h-11 items-center gap-1 self-start rounded-chip text-[0.8125rem] font-semibold text-primary-text underline underline-offset-2"
+    >
+      <Phone aria-hidden className="size-4 shrink-0" />
+      <span>
+        {phone.label} <span className="whitespace-nowrap">{phone.number}</span>
+      </span>
+    </a>
+  );
+}
+
+function SolutionMain({ solution }: { solution: SupportSolution }) {
   const link = supportLink(solution.url);
   const content = (
     <>
