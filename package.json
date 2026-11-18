@@ -14,25 +14,25 @@
     "e2e:server": "E2E_SERVER=1 playwright test"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
-    "lucide-react": "^1.61.0",
-    "next": "16.4.3",
+    "@supabase/supabase-js": "^2.119.0",
+    "lucide-react": "^1.70.0",
+    "next": "16.4.5",
     "pretendard": "^1.3.9",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.64.1",
+    "@playwright/test": "1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^24.19.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "axe-core": "4.13.0",
+    "axe-core": "4.14.0",
     "eslint": "^9",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "jsdom": "30.1.3",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
