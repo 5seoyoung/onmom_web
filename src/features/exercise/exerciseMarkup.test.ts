@@ -60,6 +60,8 @@ describe("영상 목록(프록시 살아 있음) — 실제 영상 카드", () =
     }
     expect(count(html, EXERCISE_TEXT.watchVideo)).toBe(3);
     expect(html).not.toContain('href="http://example.com/video"');
+    // 볼 수 있는 영상이 있으면 영어 영상이라는 안내를 한 번 보인다(2026-11-15 개원의 첨삭)
+    expect(count(html, EXERCISE_TEXT.videoLanguageNote)).toBe(1);
   });
 
   it("배지: 가능 / 지금은 권장 안 함 / 12주에 열림 — 잠긴 카드는 사유(차단) 또는 단계 요약을 보인다", () => {

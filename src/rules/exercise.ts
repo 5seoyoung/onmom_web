@@ -268,6 +268,9 @@ export const EXERCISE_TEXT = {
   failedFallback: "영상을 불러오지 못했어요.", // 원문: ExerciseView.swift:89
   retry: "다시 시도", // 원문: ExerciseView.swift:184
   watchVideo: "영상 보기", // 원문: ExerciseView.swift:239
+  // 웹 신규 문구 — CPO 확인 필요 (2026-11-15 개원의 첨삭: 영어 영상을 그대로 주는 것은 무책임 — 지금 영상 서버의 영상은 모두 해외 병원의 영어 영상
+  // 하나(구간별)라 그 사실을 밝힌다. 한국어 영상으로 바꾸면(docs/dev/clinical/KOREAN_VIDEO_CANDIDATES.md) 이 줄을 지운다)
+  videoLanguageNote: "지금 운동 영상은 해외 병원의 영어 영상이에요. 한국어 영상으로 바꾸는 중이니, 그동안은 단계 설명을 먼저 봐 주세요.",
 } as const;
 
 export const HOME_STAGE_TEXT = {

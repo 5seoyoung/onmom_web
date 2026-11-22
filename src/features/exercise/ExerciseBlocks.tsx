@@ -28,6 +28,9 @@ export function ExerciseBodyView({ body, onRetry }: { body: ExerciseBody; onRetr
       </div>
       {body.kind === "plan" ? (
         <>
+          {body.sections.some((s) => s.cards.some((c) => c.action.kind === "watch")) ? (
+            <p className={cx("text-[0.8125rem] text-text-secondary", BLOCK_WIDTH)}>{EXERCISE_TEXT.videoLanguageNote}</p>
+          ) : null}
           {body.sections.map((section) => (
             <PlanSection key={section.title} title={section.title} count={section.count} cards={section.cards} />
           ))}
