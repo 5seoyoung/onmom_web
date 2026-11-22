@@ -32,8 +32,12 @@ import { PolicySections, PolicyWebNote } from "./PrivacyPolicy";
 import { PRIVACY_POLICY_SECTIONS, PRIVACY_POLICY_WEB_NOTE } from "./policyText";
 import { OPERATOR_NAME, PRIVACY_OFFICER, SERVICE_URL, WEB_POLICY_DRAFT_LABEL, webPolicySections } from "./webPolicyText";
 
-const web = policyFor({ serverStorage: true });
-const ios = policyFor({ serverStorage: false });
+// 이 파일은 2026-11-06 시행판(11-20 개정 전 본문)을 확인한다 — 시각을 개정 전날로 고정한다.
+// 고정하지 않으면 11-20부터 policyFor가 개정판을 돌려줘 날짜가 지나는 순간 깨진다(2026-11-20~22 매일 배포가 여기서 멈췄다).
+// 개정판(11-20~)이 제때 보이는지는 editions.test.ts가 날짜별로 확인한다.
+const BEFORE_REVISION = new Date("2026-11-19T12:00:00+09:00");
+const web = policyFor({ serverStorage: true, now: BEFORE_REVISION });
+const ios = policyFor({ serverStorage: false, now: BEFORE_REVISION });
 const WEB_TEXT = web.sections.map((s) => `${s.title}\n${s.body}`).join("\n");
 const section = (prefix: string) => web.sections.find((s) => s.title.includes(prefix))!.body;
 
